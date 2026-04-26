@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from data_loader import get_rules, get_yaml_rules, get_yaml_raw, find_yaml_for_rule, get_referenced_rules
+from data_loader import get_rules, get_yaml_rules, get_yaml_raw, find_yaml_for_rule, get_referenced_rules, extract_rule_section_from_yaml
 from lineage_service import get_lineage
 from rule_parser import extract_sap_fields
 from sap_mapper import lookup_sap_field
@@ -67,7 +67,8 @@ def _build_rule_response(rule_id: str) -> dict:
     yaml_match = find_yaml_for_rule(rule_id)
     if yaml_match:
         yaml_filename = yaml_match["yaml_file"]
-        technical_rule = get_yaml_raw(yaml_filename)
+        raw_yaml = get_yaml_raw(yaml_filename)
+        technical_rule = extract_rule_section_from_yaml(raw_yaml, rule_id)
         yaml_ref = yaml_filename
         log.info("[INFO] technical_rule sourced from YAML: %s", yaml_filename)
     else:
@@ -208,3 +209,65 @@ def chat(body: ChatRequest):
     history = [{"role": m.role, "content": m.content} for m in body.history] or None
     result = handle_message(body.message, body.context_rule_id, history=history)
     return result
+
+
+@app.get("/tree")
+def get_rule_tree():
+    df = get_rules().copy()
+
+    def _s(val) -> str:
+        s = str(val or "").strip()
+        return "General" if s.lower() in ("nan", "none", "") else s
+
+    def _sev(val) -> int:
+        try:
+            return int(float(val))
+        except (ValueError, TypeError):
+            return 1
+
+    df["_sub"] = df["sub_domain"].apply(_s) if "sub_domain" in df.columns else "General"
+    df["_cat"] = df["quality_category"].apply(_s) if "quality_category" in df.columns else "General"
+
+    root_children = []
+    for subdomain, sd_df in df.groupby("_sub"):
+        cat_children = []
+        for category, cat_df in sd_df.groupby("_cat"):
+            rules = []
+            for _, row in cat_df.sort_values("rule_id").iterrows():
+                desc = _s(row.get("rule_description", ""))
+                desc = "" if desc == "General" else desc[:120]
+                table = _s(row.get("table_name_checked", ""))
+                table = "" if table == "General" else table
+                rules.append({
+                    "id":          str(row["rule_id"]),
+                    "name":        str(row["rule_id"]),
+                    "type":        "rule",
+                    "description": desc,
+                    "severity":    _sev(row.get("severity", "")),
+                    "table":       table,
+                })
+            cat_children.append({
+                "id":       f"cat__{subdomain}__{category}",
+                "name":     category,
+                "type":     "category",
+                "count":    len(rules),
+                "children": rules,
+            })
+        cat_children.sort(key=lambda x: x["name"])
+        root_children.append({
+            "id":       f"sd__{subdomain}",
+            "name":     subdomain,
+            "type":     "subdomain",
+            "count":    len(sd_df),
+            "children": cat_children,
+        })
+
+    root_children.sort(key=lambda x: x["name"])
+
+    return {
+        "id":       "root",
+        "name":     "Customer Rules",
+        "type":     "root",
+        "count":    len(df),
+        "children": root_children,
+    }

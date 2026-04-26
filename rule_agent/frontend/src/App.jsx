@@ -2,10 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import ChatBox from './components/ChatBox.jsx'
 import RuleCard from './components/RuleCard.jsx'
 import RuleBrowser from './components/RuleBrowser.jsx'
+import TreeView from './components/TreeView.jsx'
+import GraphView from './components/GraphView.jsx'
 import Tooltip from './components/Tooltip.jsx'
 
 const RULE_HISTORY_KEY = 'rule_agent_rule_history'
 const PINNED_RULES_KEY = 'pinned_rules'
+const THEME_KEY        = 'rule_agent_theme'
 const MAX_RECENT = 20
 
 const LogoMark = () => (
@@ -21,6 +24,26 @@ const BrowserToggleIcon = () => (
   </svg>
 )
 
+const TreeToggleIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <circle cx="7" cy="2" r="1.4" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="2.5" cy="11.5" r="1.4" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="11.5" cy="11.5" r="1.4" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M7 3.4v3.6M7 7H2.5M7 7h4.5M2.5 10.1V7M11.5 10.1V7"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+)
+
+const GraphToggleIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <circle cx="7"  cy="2"  r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="2"  cy="11" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="12" cy="11" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="7"  cy="7.5" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M7 3.5v2.5M7 9l-5 1.5M7 9l5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+)
+
 const PanelIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
     <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
@@ -31,6 +54,21 @@ const PanelIcon = () => (
 const CloseIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
     <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  </svg>
+)
+
+const SunIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+    <circle cx="7.5" cy="7.5" r="2.8" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M7.5 1v1.4M7.5 12.6V14M14 7.5h-1.4M2.4 7.5H1M11.9 3.1l-1 1M4.1 10.9l-1 1M11.9 11.9l-1-1M4.1 4.1l-1-1"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+)
+
+const MoonIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path d="M12 9.3A6 6 0 0 1 4.7 2a5.5 5.5 0 1 0 7.3 7.3z"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 )
 
@@ -62,8 +100,18 @@ export default function App() {
   const [pinnedRules, setPinnedRules] = useState(() => loadFromStorage(PINNED_RULES_KEY, []))
   const [activeRuleId, setActiveRuleId]   = useState(null)
   const [showBrowser, setShowBrowser]     = useState(false)
+  const [showTree,    setShowTree]        = useState(false)
+  const [showGraph,   setShowGraph]       = useState(false)
   const [chatPrefill, setChatPrefill]     = useState('')
   const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem(THEME_KEY) || 'dark' } catch { return 'dark' }
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    try { localStorage.setItem(THEME_KEY, theme) } catch {}
+  }, [theme])
 
   useEffect(() => {
     try { localStorage.setItem(RULE_HISTORY_KEY, JSON.stringify(recentRules)) } catch {}
@@ -137,19 +185,46 @@ export default function App() {
           <span className="topbar-sub">by Coca-Cola HBC</span>
         </div>
         <div className="topbar-actions">
+          <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <button
+              className="theme-toggle-btn"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </button>
+          </Tooltip>
           <span className="pro-badge">PRO</span>
           <span className="status-pill">
             <span className="status-dot" />
             228 Active Rules
           </span>
           <span className="topbar-divider" />
-          <Tooltip content="Browse and search all 228 data quality rules">
+          <Tooltip content="Browse and search all data quality rules">
             <button
               className={`browser-toggle-btn${showBrowser ? ' active' : ''}`}
-              onClick={() => setShowBrowser(v => !v)}
+              onClick={() => { setShowBrowser(v => !v); setShowTree(false); setShowGraph(false) }}
             >
               <BrowserToggleIcon />
               <span>Browse Rules</span>
+            </button>
+          </Tooltip>
+          <Tooltip content="Explore rules as a hierarchical tree">
+            <button
+              className={`browser-toggle-btn${showTree ? ' active' : ''}`}
+              onClick={() => { setShowTree(v => !v); setShowBrowser(false); setShowGraph(false) }}
+            >
+              <TreeToggleIcon />
+              <span>Rule Tree</span>
+            </button>
+          </Tooltip>
+          <Tooltip content="Visualise all rules as an interactive node graph">
+            <button
+              className={`browser-toggle-btn graph-toggle-btn${showGraph ? ' active' : ''}`}
+              onClick={() => { setShowGraph(v => !v); setShowBrowser(false); setShowTree(false) }}
+            >
+              <GraphToggleIcon />
+              <span>Graph View</span>
             </button>
           </Tooltip>
           <Tooltip content={sidebarOpen ? 'Close rule panel' : activeRuleId ? `View ${activeRuleId}` : 'Open rule panel'}>
@@ -167,13 +242,27 @@ export default function App() {
         </div>
       </header>
 
-      <div className="app-body">
-        {showBrowser && (
+      <div className="app-body" style={{ position: 'relative' }}>
+        {showGraph && (
+          <GraphView
+            onRuleSelected={id => { loadRuleById(id); setShowGraph(false) }}
+            onClose={() => setShowGraph(false)}
+          />
+        )}
+
+        {(showBrowser || showTree) && !showGraph && (
           <div className="browser-panel">
-            <RuleBrowser
-              onRuleSelected={loadRuleById}
-              onClose={() => setShowBrowser(false)}
-            />
+            {showTree ? (
+              <TreeView
+                onRuleSelected={loadRuleById}
+                onClose={() => setShowTree(false)}
+              />
+            ) : (
+              <RuleBrowser
+                onRuleSelected={loadRuleById}
+                onClose={() => setShowBrowser(false)}
+              />
+            )}
           </div>
         )}
 
