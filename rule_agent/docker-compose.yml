@@ -1,0 +1,29 @@
+version: "3.9"
+
+# Usage:
+#   1. Copy backend/.env.example → backend/.env and fill in real values.
+#   2. docker compose up --build
+#
+# The frontend static files are served by the backend's uvicorn server in this
+# minimal setup. For production, serve frontend via nginx and proxy /api to
+# the backend container (see README for reverse proxy configuration).
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      # Mount data directory read-only — keep sensitive Excel files off the image
+      - ./backend/data:/app/data:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

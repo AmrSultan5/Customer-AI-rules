@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import Tooltip from './Tooltip.jsx'
+import { apiGet, apiPost } from '../api.js'
 
 const STORAGE_KEY = 'rule_agent_chat_history'
 
@@ -171,10 +172,10 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
         content: m.text,
       }))
 
-      const chatRes = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, context_rule_id: activeRuleId ?? null, history }),
+      const chatRes = await apiPost('/chat', {
+        message: text,
+        context_rule_id: activeRuleId ?? null,
+        history,
       })
       if (!chatRes.ok) throw new Error(`Chat API error ${chatRes.status}`)
       const chatData = await chatRes.json()
@@ -182,7 +183,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
       setMessages(prev => [...prev, { role: 'agent', text: chatData.response, ts: Date.now() }])
 
       if (chatData.rule_id) {
-        const ruleRes = await fetch(`/api/rule/${chatData.rule_id}`)
+        const ruleRes = await apiGet(`/rule/${chatData.rule_id}`)
         if (ruleRes.ok) onRuleLoaded(await ruleRes.json())
       }
     } catch (err) {
@@ -197,7 +198,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
   async function handleRuleLinkClick(ruleId) {
     try {
-      const res = await fetch(`/api/rule/${ruleId}`)
+      const res = await apiGet(`/rule/${ruleId}`)
       if (res.ok) onRuleLoaded(await res.json())
     } catch {}
   }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Tooltip from './Tooltip.jsx'
+import { apiGet } from '../api.js'
 
 function getCatColor() {
   return '#E8000D'
@@ -33,7 +34,7 @@ export default function RuleBrowser({ onRuleSelected, onClose }) {
   const searchRef = useRef(null)
 
   useEffect(() => {
-    fetch('/api/rules')
+    apiGet('/rules')
       .then(r => r.json())
       .then(data => { setRules(data); setLoading(false) })
       .catch(() => setLoading(false))

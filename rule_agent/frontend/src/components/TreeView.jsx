@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Tooltip from './Tooltip.jsx'
+import { apiGet } from '../api.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ export default function TreeView({ onRuleSelected, onClose }) {
 
   // Fetch tree data once
   useEffect(() => {
-    fetch('/api/tree')
+    apiGet('/tree')
       .then(r => { if (!r.ok) throw new Error('fetch'); return r.json() })
       .then(data => {
         setTree(data)

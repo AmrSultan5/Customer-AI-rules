@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ChatBox from './components/ChatBox.jsx'
 import RuleCard from './components/RuleCard.jsx'
 import RuleBrowser from './components/RuleBrowser.jsx'
 import TreeView from './components/TreeView.jsx'
 import GraphView from './components/GraphView.jsx'
 import Tooltip from './components/Tooltip.jsx'
+import { apiGet } from './api.js'
 
 const RULE_HISTORY_KEY = 'rule_agent_rule_history'
 const PINNED_RULES_KEY = 'pinned_rules'
@@ -99,6 +100,8 @@ export default function App() {
   const [recentRules, setRecentRules] = useState(() => loadFromStorage(RULE_HISTORY_KEY, []))
   const [pinnedRules, setPinnedRules] = useState(() => loadFromStorage(PINNED_RULES_KEY, []))
   const [activeRuleId, setActiveRuleId]   = useState(null)
+  const [activeRuleData, setActiveRuleData] = useState(null)
+  const ruleDataCache = useRef(new Map())
   const [showBrowser, setShowBrowser]     = useState(false)
   const [showTree,    setShowTree]        = useState(false)
   const [showGraph,   setShowGraph]       = useState(false)
@@ -123,20 +126,40 @@ export default function App() {
 
   const pinnedIds = new Set(pinnedRules.map(r => r.rule_id))
   const allTabs   = [...pinnedRules, ...recentRules]
-  const activeRule = allTabs.find(r => r.rule_id === activeRuleId) ?? null
+
+  function _extractStub(ruleData) {
+    return {
+      rule_id:          ruleData.rule_id,
+      description:      ruleData.description ?? '',
+      quality_category: ruleData.quality_category ?? '',
+      severity:         ruleData.severity ?? '',
+      table_checked:    ruleData.table_checked ?? '',
+    }
+  }
 
   function onRuleLoaded(ruleData) {
     const id = ruleData.rule_id
-    if (pinnedIds.has(id)) { setActiveRuleId(id); setSidebarOpen(true); return }
-    if (recentRules.find(r => r.rule_id === id)) { setActiveRuleId(id); setSidebarOpen(true); return }
-    setRecentRules(prev => [...prev, ruleData].slice(-MAX_RECENT))
+    ruleDataCache.current.set(id, ruleData)
+    setActiveRuleData(ruleData)
     setActiveRuleId(id)
     setSidebarOpen(true)
+    if (!pinnedIds.has(id)) {
+      setRecentRules(prev => {
+        if (prev.find(r => r.rule_id === id)) return prev
+        return [...prev, _extractStub(ruleData)].slice(-MAX_RECENT)
+      })
+    }
   }
 
   const loadRuleById = useCallback(async (ruleId) => {
+    if (ruleDataCache.current.has(ruleId)) {
+      setActiveRuleData(ruleDataCache.current.get(ruleId))
+      setActiveRuleId(ruleId)
+      setSidebarOpen(true)
+      return
+    }
     try {
-      const res = await fetch(`/api/rule/${ruleId}`)
+      const res = await apiGet(`/rule/${ruleId}`)
       if (res.ok) onRuleLoaded(await res.json())
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,7 +175,15 @@ export default function App() {
     }
     if (activeRuleId === ruleId) {
       const remaining = allTabs.filter(r => r.rule_id !== ruleId)
-      setActiveRuleId(remaining[remaining.length - 1]?.rule_id ?? null)
+      const nextId = remaining[remaining.length - 1]?.rule_id ?? null
+      setActiveRuleId(nextId)
+      if (nextId) {
+        const cached = ruleDataCache.current.get(nextId)
+        setActiveRuleData(cached ?? null)
+        if (!cached) loadRuleById(nextId)
+      } else {
+        setActiveRuleData(null)
+      }
     }
   }
 
@@ -289,7 +320,7 @@ export default function App() {
                 <button
                   key={rule.rule_id}
                   className={`rule-tab pinned${rule.rule_id === activeRuleId ? ' active' : ''}`}
-                  onClick={() => setActiveRuleId(rule.rule_id)}
+                  onClick={() => loadRuleById(rule.rule_id)}
                 >
                   <span className="rule-tab-pin-indicator" aria-label="Pinned">
                     <PinIcon filled />
@@ -326,7 +357,7 @@ export default function App() {
                 <button
                   key={rule.rule_id}
                   className={`rule-tab${rule.rule_id === activeRuleId ? ' active' : ''}`}
-                  onClick={() => setActiveRuleId(rule.rule_id)}
+                  onClick={() => loadRuleById(rule.rule_id)}
                 >
                   <span className="rule-tab-id">{rule.rule_id}</span>
                   <Tooltip content="Pin tab">
@@ -351,9 +382,9 @@ export default function App() {
           )}
 
           <div className="rule-panel-body">
-            {activeRule ? (
+            {activeRuleData ? (
               <RuleCard
-                rule={activeRule}
+                rule={activeRuleData}
                 onAskAboutRule={handleAskAboutRule}
                 onRuleSelected={loadRuleById}
               />

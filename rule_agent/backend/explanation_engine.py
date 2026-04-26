@@ -57,12 +57,14 @@ def explain_rule(rule_logic: str, sap_context: str = "") -> str:
         user_msg += f"\n\nField reference (do not use these names in the explanation):\n{sap_context}"
 
     deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "cch-gpt-4o")
+    timeout = float(os.environ.get("AZURE_OPENAI_TIMEOUT", "30"))
 
     try:
         client = _get_client()
         response = client.chat.completions.create(
             model=deployment,
             max_tokens=1000,
+            timeout=timeout,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
@@ -72,8 +74,9 @@ def explain_rule(rule_logic: str, sap_context: str = "") -> str:
         log.info("[INFO] ExplanationEngine: generated explanation (%d chars)", len(text))
         return text
     except Exception as e:
-        log.error("[ERROR] ExplanationEngine failed: %s", e)
-        return f"Unable to generate explanation: {str(e)}"
+        # Log error type server-side only; do not return provider details to callers.
+        log.error("[ERROR] ExplanationEngine failed: %s", type(e).__name__)
+        return "Unable to generate a business explanation for this rule at this time."
 
 
 def call_azure_openai(
@@ -88,20 +91,25 @@ def call_azure_openai(
     Injected between the system prompt and the current user message.
     """
     deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "cch-gpt-4o")
+    timeout = float(os.environ.get("AZURE_OPENAI_TIMEOUT", "30"))
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": user_msg})
+    # WARNING: user_msg may contain prompt-injection attempts via rule content or chat
+    # history. The system prompt is fixed; treat all user/history content as untrusted.
     try:
         client = _get_client()
         response = client.chat.completions.create(
             model=deployment,
             max_tokens=max_tokens,
+            timeout=timeout,
             messages=messages,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        log.error("[ERROR] Azure OpenAI generic call failed: %s", e)
+        # Log type only — avoid logging message content that may contain sensitive data.
+        log.error("[ERROR] Azure OpenAI generic call failed: %s", type(e).__name__)
         raise
 
 
