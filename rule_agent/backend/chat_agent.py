@@ -162,12 +162,13 @@ def _find_rule_by_description(message: str) -> dict[str, Any]:
 
     catalog_lines: list[str] = []
     for _, row in rules.iterrows():
-        rid  = _safe(row.get("rule_id", ""))
-        desc = _safe(row.get("rule_description", ""))[:100]
-        cat  = _safe(row.get("quality_category", ""))
-        tbl  = _safe(row.get("table_name_checked", ""))
+        rid    = _safe(row.get("rule_id", ""))
+        desc   = _safe(row.get("rule_description", ""))[:100]
+        cat    = _safe(row.get("quality_category", ""))
+        tbl    = _safe(row.get("table_name_checked", ""))
+        domain = _safe(row.get("domain", ""))
         if rid:
-            catalog_lines.append(f"{rid} | {cat} | {tbl} | {desc}")
+            catalog_lines.append(f"{rid} | {domain} | {cat} | {tbl} | {desc}")
 
     catalog = "\n".join(catalog_lines)
     user_msg = f"RULE CATALOG:\n{catalog}\n\nUSER IS LOOKING FOR: {message}"

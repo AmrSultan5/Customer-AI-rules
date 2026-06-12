@@ -22,7 +22,7 @@ SAP_FILE_Z11 = DATA_DIR / "MDG Official Z11.xlsx"
 
 # Full governance repo dropped under data/
 _GOVERNANCE_ROOT = DATA_DIR / "daar-governance-data-quality-processes" / "governance_data_quality_processes"
-GOLDEN_DIR    = _GOVERNANCE_ROOT / "configs" / "processes" / "data_quality" / "ca"
+GOLDEN_DIR     = _GOVERNANCE_ROOT / "configs" / "processes" / "data_quality"  # all domains (ca / cz / it)
 CUSTOM_OPS_DIR = _GOVERNANCE_ROOT / "custom_operations"
 
 # Sheets whose first column is a row-label (Field Label / SAP Table etc.) — i.e. transposed layout
@@ -129,16 +129,18 @@ def load_rules() -> pd.DataFrame:
         if src != dst:
             df = df.rename(columns={src: dst})
 
-    # Apply mandatory filter: Customer + active
+    # Keep only active rules (is_active = 1) across all domains
     before = len(df)
     df["is_active"] = pd.to_numeric(df["is_active"], errors="coerce")
-    df = df[df["domain"].str.strip().str.casefold() == "customer"]
     df = df[df["is_active"] == 1.0]
     log.info(
-        "[INFO] Rows after Customer/is_active=1 filter: %d (dropped %d)",
+        "[INFO] Rows after is_active=1 filter: %d (dropped %d)",
         len(df),
         before - len(df),
     )
+    if "domain" in df.columns:
+        domain_counts = df["domain"].value_counts().to_dict()
+        log.info("[INFO] Rules by domain: %s", domain_counts)
 
     df = df.reset_index(drop=True)
     return df
@@ -407,7 +409,12 @@ def load_yaml_rules() -> dict[str, dict]:
     log.info("[INFO] Found %d YAML files in %s", len(yaml_files), GOLDEN_DIR)
 
     for yf in yaml_files:
-        raw_text = yf.read_text(encoding="utf-8")
+        try:
+            raw_text = yf.read_text(encoding="utf-8")
+        except OSError as e:
+            # File exists in OneDrive metadata but is not locally downloaded (cloud-only)
+            log.warning("[WARNING] Skipping unreadable YAML %s: %s", yf.name, e)
+            continue
         try:
             data = yaml.safe_load(raw_text)
         except yaml.YAMLError as e:
