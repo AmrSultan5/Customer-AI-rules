@@ -53,3 +53,18 @@ export async function apiPost(path, body) {
     body: JSON.stringify(body),
   })
 }
+
+/**
+ * POST to /api path and return a ReadableStreamDefaultReader for SSE streaming.
+ * Throws if the response is not ok (4xx/5xx).
+ */
+export async function apiPostStream(path, body) {
+  const response = await apiFetch(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(`Stream API error ${response.status}`)
+  }
+  return response.body.getReader()
+}

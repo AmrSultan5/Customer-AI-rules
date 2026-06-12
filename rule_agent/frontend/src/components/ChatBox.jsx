@@ -1,24 +1,71 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import Tooltip from './Tooltip.jsx'
-import { apiGet, apiPost } from '../api.js'
+import YamlValidator from './YamlValidator.jsx'
+import { apiGet, apiPost, apiPostStream } from '../api.js'
+import { copyText, buildDatabricksNotebook, downloadFile, markdownToJira } from '../utils/exporters.js'
 
 const STORAGE_KEY = 'rule_agent_chat_history'
+const MODE_STORAGE_KEY = 'rule_agent_chat_mode'
 
-const INITIAL_MESSAGES = [
+const WELCOME_MESSAGES = {
+  analyst:
+    'Hello! I can explain any of the 228 Customer data quality rules in detail.\n\nAsk about a specific rule ID, describe what a rule does, or explore by category.',
+  engineer:
+    'Hello! You are in **Data Engineer** mode.\n\nPaste a user story or describe a rule change, and I will list the pipeline files to modify, the YAML to write, and how to test it. Answers can be downloaded as a Databricks notebook, and you can check edited pipeline YAML with the **Validate YAML** button above.',
+  pm:
+    'Hello! You are in **Project Manager** mode.\n\nDescribe a data quality issue or business need in plain language, and I will draft a user story for the engineering backlog — linked to any existing rules that already cover it. Finished drafts can be copied as Jira wiki markup.',
+}
+
+// `ts: null` doubles as the welcome marker for histories persisted before
+// the isWelcome flag existed.
+const initialMessagesFor = (mode) => [
   {
     role: 'agent',
-    text: 'Hello! I can explain any of the 228 Customer data quality rules in detail.\n\nAsk about a specific rule ID, describe what a rule does, or explore by category.',
+    text: WELCOME_MESSAGES[mode] ?? WELCOME_MESSAGES.analyst,
     ts: null,
+    isWelcome: true,
   },
 ]
 
-const SUGGESTIONS = [
-  'Find a rule that checks customer email is not empty',
-  'Explain rule RCCOMP_103.1',
-  'List all completeness rules',
-  'Which rules check KNA1?',
+const MODES = [
+  { id: 'analyst', label: 'Analyst' },
+  { id: 'engineer', label: 'Data Engineer' },
+  { id: 'pm', label: 'Project Manager' },
 ]
+
+function getStoredMode() {
+  try {
+    const stored = localStorage.getItem(MODE_STORAGE_KEY)
+    if (stored && MODES.some(m => m.id === stored)) return stored
+  } catch {}
+  return 'analyst'
+}
+
+const MODE_SUGGESTIONS = {
+  analyst: [
+    'Find a rule that checks customer email is not empty',
+    'Explain rule RCCOMP_103.1',
+    'List all completeness rules',
+    'Which rules check KNA1?',
+  ],
+  engineer: [
+    'Paste a user story to see which files to change',
+    'How do I change the threshold in rule RCACCU_383.6?',
+    'Which pipeline files implement postal code checks?',
+  ],
+  pm: [
+    'Customers are being created with invalid postal codes',
+    'We need a check that customer emails are unique',
+    'Help me write a story for tightening address validation',
+  ],
+}
+
+const MODE_PLACEHOLDERS = {
+  analyst: 'Ask about a rule, describe what it does, or follow up on a rule…',
+  engineer: 'Paste the user story to implement — I will list the files to change and how to test it…',
+  pm: 'Describe the issue or need in plain language — I will draft the user story…',
+}
 
 const RULE_ID_RE = /\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b/g
 
@@ -26,8 +73,31 @@ function addRuleLinks(text) {
   return text.replace(RULE_ID_RE, (match) => `[${match}](#rule:${match})`)
 }
 
+function CodeBlockPre({ children }) {
+  const preRef = useRef(null)
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    const ok = await copyText(preRef.current?.innerText ?? '')
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    }
+  }
+
+  return (
+    <div className="code-block-wrap">
+      <button className={`code-copy-btn${copied ? ' copied' : ''}`} onClick={copy}>
+        {copied ? 'Copied ✓' : 'Copy'}
+      </button>
+      <pre ref={preRef}>{children}</pre>
+    </div>
+  )
+}
+
 function makeMarkdownComponents(onRuleClick) {
   return {
+    pre: CodeBlockPre,
     a: ({ href, children }) => {
       if (href?.startsWith('#rule:')) {
         const ruleId = href.slice(6)
@@ -73,6 +143,100 @@ const TrashIcon = () => (
   </svg>
 )
 
+const ThumbIcon = ({ down, filled }) => (
+  <svg
+    width="12" height="12" viewBox="0 0 12 12" fill={filled ? 'currentColor' : 'none'}
+    style={down ? { transform: 'rotate(180deg)' } : undefined} aria-hidden="true"
+  >
+    <path d="M3.5 5.5v5H1.5v-5h2zm0 0l2.2-3.9a1 1 0 0 1 1.85.65L7.2 4.5h2.6a1 1 0 0 1 .97 1.24l-1 4a1 1 0 0 1-.97.76H3.5"
+      stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+  </svg>
+)
+
+const DownloadIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path d="M6 1.5v6M3.5 5L6 7.5 8.5 5M1.5 9.5v1h9v-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
+const CopyIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" stroke="currentColor" strokeWidth="1.2"/>
+    <path d="M8.5 3.5v-1a1 1 0 0 0-1-1h-5a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h1" stroke="currentColor" strokeWidth="1.2"/>
+  </svg>
+)
+
+function MessageActions({ msg, onFeedback }) {
+  const [jiraCopied, setJiraCopied] = useState(false)
+  const [mdCopied, setMdCopied]     = useState(false)
+  const notebook = msg.mode === 'engineer' ? buildDatabricksNotebook(msg.text) : null
+
+  async function copyJira() {
+    if (await copyText(markdownToJira(msg.text))) {
+      setJiraCopied(true)
+      setTimeout(() => setJiraCopied(false), 1600)
+    }
+  }
+
+  async function copyMarkdown() {
+    if (await copyText(msg.text)) {
+      setMdCopied(true)
+      setTimeout(() => setMdCopied(false), 1600)
+    }
+  }
+
+  function downloadNotebook() {
+    const name = msg.ruleId ?? new Date().toISOString().slice(0, 10)
+    downloadFile(`validation_${name}.py`, notebook, 'text/x-python')
+  }
+
+  return (
+    <div className="msg-actions">
+      <Tooltip content="Good answer">
+        <button
+          className={`msg-feedback-btn${msg.feedback === 'up' ? ' active' : ''}`}
+          onClick={() => onFeedback('up')}
+          aria-label="Good answer"
+          aria-pressed={msg.feedback === 'up'}
+        >
+          <ThumbIcon filled={msg.feedback === 'up'} />
+        </button>
+      </Tooltip>
+      <Tooltip content="Bad answer">
+        <button
+          className={`msg-feedback-btn down${msg.feedback === 'down' ? ' active' : ''}`}
+          onClick={() => onFeedback('down')}
+          aria-label="Bad answer"
+          aria-pressed={msg.feedback === 'down'}
+        >
+          <ThumbIcon down filled={msg.feedback === 'down'} />
+        </button>
+      </Tooltip>
+      {notebook && (
+        <Tooltip content="Download the SQL + PySpark validation cells as a Databricks notebook">
+          <button className="msg-action-btn" onClick={downloadNotebook}>
+            <DownloadIcon /> Databricks notebook
+          </button>
+        </Tooltip>
+      )}
+      {msg.mode === 'pm' && (
+        <>
+          <Tooltip content="Copy as Jira wiki markup">
+            <button className="msg-action-btn" onClick={copyJira}>
+              <CopyIcon /> {jiraCopied ? 'Copied ✓' : 'Copy for Jira'}
+            </button>
+          </Tooltip>
+          <Tooltip content="Copy the raw markdown">
+            <button className="msg-action-btn" onClick={copyMarkdown}>
+              <CopyIcon /> {mdCopied ? 'Copied ✓' : 'Copy markdown'}
+            </button>
+          </Tooltip>
+        </>
+      )}
+    </div>
+  )
+}
+
 function formatTime(ts) {
   if (!ts) return ''
   const d = new Date(ts)
@@ -83,6 +247,8 @@ function formatTime(ts) {
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+const NBSP = ' '
+
 export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, activeRuleId }) {
   const [messages, setMessages] = useState(() => {
     try {
@@ -92,11 +258,13 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
     } catch {}
-    return INITIAL_MESSAGES
+    return initialMessagesFor(getStoredMode())
   })
   const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [showValidator, setShowValidator] = useState(false)
+  const [mode, setMode] = useState(getStoredMode)
   const bottomRef        = useRef(null)
   const textareaRef      = useRef(null)
   const sessionStartRef  = useRef(0)
@@ -141,13 +309,27 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     }
   }, [prefill]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  function switchMode(nextMode) {
+    if (nextMode === mode || loading) return
+    setMode(nextMode)
+    try { localStorage.setItem(MODE_STORAGE_KEY, nextMode) } catch {}
+    // If the chat is untouched, swap the welcome message to the new persona's
+    setMessages(prev =>
+      prev.length === 1 && prev[0].role === 'agent' && (prev[0].isWelcome || prev[0].ts === null)
+        ? initialMessagesFor(nextMode)
+        : prev
+    )
+    // Scope conversation history to the current mode (mirrors the activeRuleId reset)
+    sessionStartRef.current = messages.length
+  }
+
   function clearHistory() {
     if (!confirmClear) {
       setConfirmClear(true)
       setTimeout(() => setConfirmClear(false), 2500)
       return
     }
-    setMessages(INITIAL_MESSAGES)
+    setMessages(initialMessagesFor(mode))
     sessionStartRef.current = 0
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
     setConfirmClear(false)
@@ -159,41 +341,153 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    setMessages(prev => [...prev, { role: 'user', text, ts: Date.now() }])
+
+    // Build history from session window before appending the new user message
+    const sessionMsgs = messages.slice(sessionStartRef.current)
+    const MAX_HISTORY = 20
+    const historyWindow = sessionMsgs.slice(-MAX_HISTORY)
+    const history = historyWindow.map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.text.slice(0, 8000),
+    }))
+
+    // Insert user message and streaming placeholder atomically
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', text, ts: Date.now() },
+      { role: 'agent', text: NBSP, ts: Date.now(), isStreaming: true, followups: [], mode },
+    ])
     setLoading(true)
 
     try {
-      // Build history from session start, capped at last 10 turns (20 messages)
-      const sessionMsgs = messages.slice(sessionStartRef.current)
-      const MAX_HISTORY = 20
-      const historyWindow = sessionMsgs.slice(-MAX_HISTORY)
-      const history = historyWindow.map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.text,
-      }))
-
-      const chatRes = await apiPost('/chat', {
+      const reader = await apiPostStream('/chat/stream', {
         message: text,
         context_rule_id: activeRuleId ?? null,
+        mode,
         history,
       })
-      if (!chatRes.ok) throw new Error(`Chat API error ${chatRes.status}`)
-      const chatData = await chatRes.json()
 
-      setMessages(prev => [...prev, { role: 'agent', text: chatData.response, ts: Date.now() }])
+      const decoder = new TextDecoder('utf-8', { stream: true })
+      let buffer = ''
 
-      if (chatData.rule_id) {
-        const ruleRes = await apiGet(`/rule/${chatData.rule_id}`)
-        if (ruleRes.ok) onRuleLoaded(await ruleRes.json())
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Split on double-newline (SSE event boundary), keep incomplete tail in buffer
+        const events = buffer.split('\n\n')
+        buffer = events.pop() ?? ''
+
+        for (const event of events) {
+          const line = event.trim()
+          if (!line.startsWith('data:')) continue
+
+          let parsed
+          try {
+            parsed = JSON.parse(line.slice(5).trim())
+          } catch {
+            continue
+          }
+
+          if (parsed.type === 'status') {
+            // Transient progress text (persona retrieval) — replaced by the first real chunk
+            setMessages(prev => {
+              const updated = [...prev]
+              const last = updated[updated.length - 1]
+              if (last?.isStreaming && (last.text === NBSP || last.isStatus)) {
+                updated[updated.length - 1] = { ...last, text: parsed.text, isStatus: true }
+              }
+              return updated
+            })
+            await new Promise(r => setTimeout(r, 0))
+          }
+
+          if (parsed.type === 'chunk') {
+            setMessages(prev => {
+              const updated = [...prev]
+              const last = updated[updated.length - 1]
+              if (last?.isStreaming) {
+                const existing = (last.text === NBSP || last.isStatus) ? '' : last.text
+                updated[updated.length - 1] = { ...last, text: existing + parsed.text, isStatus: false }
+              }
+              return updated
+            })
+            // Yield to the event loop so React flushes this update before the next chunk
+            await new Promise(r => setTimeout(r, 0))
+          }
+
+          if (parsed.type === 'done') {
+            setMessages(prev => {
+              const updated = [...prev]
+              const last = updated[updated.length - 1]
+              if (last?.isStreaming) {
+                updated[updated.length - 1] = {
+                  ...last,
+                  // A bubble still showing transient status text has no real answer
+                  text: last.isStatus ? '' : last.text,
+                  isStatus: false,
+                  isStreaming: false,
+                  ts: Date.now(),
+                  followups: parsed.suggested_followups ?? [],
+                  ruleId: parsed.rule_id ?? null,
+                }
+              }
+              return updated
+            })
+            if (parsed.rule_id) {
+              const ruleRes = await apiGet(`/rule/${parsed.rule_id}`)
+              if (ruleRes.ok) onRuleLoaded(await ruleRes.json())
+            }
+          }
+        }
       }
+
+      // Flush decoder and process any remaining buffer content
+      const tail = decoder.decode()
+      if (tail) buffer += tail
     } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        { role: 'agent', text: `Error: ${err.message}`, isError: true, ts: Date.now() },
-      ])
+      setMessages(prev => {
+        const updated = [...prev]
+        const last = updated[updated.length - 1]
+        if (last?.isStreaming || (last?.role === 'agent' && last?.text === NBSP)) {
+          updated[updated.length - 1] = {
+            role: 'agent', text: `Error: ${err.message}`,
+            isError: true, ts: Date.now(), followups: [],
+          }
+        } else {
+          updated.push({
+            role: 'agent', text: `Error: ${err.message}`,
+            isError: true, ts: Date.now(), followups: [],
+          })
+        }
+        return updated
+      })
     } finally {
       setLoading(false)
+      // If the stream ended without a done event, close any open streaming bubble
+      setMessages(prev => {
+        const last = prev[prev.length - 1]
+        if (last?.isStreaming) {
+          return [
+            ...prev.slice(0, -1),
+            { ...last, isStreaming: false, followups: [] },
+          ]
+        }
+        return prev
+      })
     }
+  }
+
+  function sendFeedback(index, msg, rating) {
+    if (msg.feedback === rating) return
+    setMessages(prev => prev.map((m, i) => (i === index ? { ...m, feedback: rating } : m)))
+    apiPost('/feedback', {
+      rating,
+      mode: msg.mode ?? mode,
+      rule_id: msg.ruleId ?? activeRuleId ?? null,
+    }).catch(() => {})
   }
 
   async function handleRuleLinkClick(ruleId) {
@@ -233,6 +527,27 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
             <span className="chat-msg-count">{userMsgCount}</span>
           )}
         </div>
+        <div className="mode-toggle" role="tablist" aria-label="Assistant mode">
+          {MODES.map(m => (
+            <button
+              key={m.id}
+              role="tab"
+              aria-selected={mode === m.id}
+              className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}
+              onClick={() => switchMode(m.id)}
+              disabled={loading}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {mode === 'engineer' && (
+          <Tooltip content="Check an edited pipeline YAML against the repository before committing">
+            <button className="yaml-validate-open-btn" onClick={() => setShowValidator(true)}>
+              Validate YAML
+            </button>
+          </Tooltip>
+        )}
         {hasHistory && (
           <Tooltip content={confirmClear ? 'Click again to confirm' : 'Clear chat history'}>
             <button
@@ -256,15 +571,32 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
                 <div className={`bubble ${msg.role}${msg.isError ? ' error' : ''}`}>
                   {msg.role === 'agent' && !msg.isError ? (
                     <div className="md-body">
-                      <ReactMarkdown components={mdComponents}>
-                        {addRuleLinks(msg.text)}
-                      </ReactMarkdown>
+                      {msg.isStreaming ? (
+                        <p>
+                          {msg.isStatus ? <em className="status-text">{msg.text}</em> : msg.text}
+                          <span className="streaming-cursor" aria-hidden="true" />
+                        </p>
+                      ) : (
+                        <ReactMarkdown components={mdComponents}>
+                          {addRuleLinks(msg.text)}
+                        </ReactMarkdown>
+                      )}
                     </div>
                   ) : (
                     <p style={{ whiteSpace: 'pre-line' }}>{msg.text}</p>
                   )}
                 </div>
-                {msg.ts && (
+                {msg.role === 'agent' && !msg.isError && !msg.isStreaming && msg.mode && msg.text && (
+                  <MessageActions msg={msg} onFeedback={rating => sendFeedback(i, msg, rating)} />
+                )}
+                {!msg.isStreaming && msg.followups?.length > 0 && (
+                  <div className="followup-chips">
+                    {msg.followups.map((q, qi) => (
+                      <button key={qi} className="followup-chip" onClick={() => send(q)}>{q}</button>
+                    ))}
+                  </div>
+                )}
+                {msg.ts && !msg.isStreaming && (
                   <span className={`msg-time ${msg.role}`}>{formatTime(msg.ts)}</span>
                 )}
               </div>
@@ -276,7 +608,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
           {messages.length === 1 && (
             <div className="suggestions">
-              {SUGGESTIONS.map((s, i) => (
+              {MODE_SUGGESTIONS[mode].map((s, i) => (
                 <button key={i} className="suggestion-chip" onClick={() => send(s)}>
                   {s}
                 </button>
@@ -284,21 +616,11 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
             </div>
           )}
 
-          {loading && (
-            <div className="msg-row agent">
-              <div className="msg-avatar agent-avatar"><AgentIcon /></div>
-              <div className="msg-content">
-                <div className="bubble agent">
-                  <div className="typing-dots">
-                    <span /><span /><span />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
       </div>
+
+      {showValidator && <YamlValidator onClose={() => setShowValidator(false)} />}
 
       <div className="chat-input-row">
         <div className="chat-input-inner">
@@ -309,8 +631,8 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
               value={input}
               onChange={onInputChange}
               onKeyDown={onKey}
-              placeholder="Ask about a rule, describe what it does, or follow up on a rule…"
-              rows={1}
+              placeholder={MODE_PLACEHOLDERS[mode]}
+              rows={mode === 'analyst' ? 1 : 3}
               disabled={loading}
             />
             <Tooltip content="Send message (Enter)">

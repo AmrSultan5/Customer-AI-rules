@@ -5,7 +5,7 @@ import RuleBrowser from './components/RuleBrowser.jsx'
 import TreeView from './components/TreeView.jsx'
 import GraphView from './components/GraphView.jsx'
 import Tooltip from './components/Tooltip.jsx'
-import { apiGet } from './api.js'
+import { apiGet, apiFetch } from './api.js'
 
 const RULE_HISTORY_KEY = 'rule_agent_rule_history'
 const PINNED_RULES_KEY = 'pinned_rules'
@@ -44,6 +44,7 @@ const GraphToggleIcon = () => (
     <path d="M7 3.5v2.5M7 9l-5 1.5M7 9l5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
   </svg>
 )
+
 
 const PanelIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -110,6 +111,15 @@ export default function App() {
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem(THEME_KEY) || 'dark' } catch { return 'dark' }
   })
+  const [rulesLoaded, setRulesLoaded] = useState(null)
+
+  // Fetch live rule count from /health (public endpoint, no auth needed)
+  useEffect(() => {
+    apiFetch('/health')
+      .then(r => r.json())
+      .then(d => { if (typeof d.rules_loaded === 'number') setRulesLoaded(d.rules_loaded) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -228,7 +238,7 @@ export default function App() {
           <span className="pro-badge">PRO</span>
           <span className="status-pill">
             <span className="status-dot" />
-            228 Active Rules
+            {rulesLoaded !== null ? `${rulesLoaded} Active Rules` : '— Active Rules'}
           </span>
           <span className="topbar-divider" />
           <Tooltip content="Browse and search all data quality rules">

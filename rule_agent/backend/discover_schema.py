@@ -88,7 +88,7 @@ def main() -> None:
     print("=" * 70)
 
     rules_path = DATA_DIR / "dim_rules_inventory.xlsx"
-    sap_path = DATA_DIR / "MDG Official Z11.xlsx"
+    sap_path = DATA_DIR / "MDG Official Z1_AI_AGENT.xlsx"
     golden_dir = DATA_DIR / "golden"
 
     if not rules_path.exists():

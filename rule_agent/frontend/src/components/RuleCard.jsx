@@ -344,6 +344,12 @@ export default function RuleCard({ rule, onAskAboutRule, onRuleSelected }) {
             </Tooltip>
           </div>
         </div>
+        {rule.yaml_reference && (
+          <div className="yaml-source-row">
+            <span className="yaml-source-label">Source file:</span>
+            <span className="yaml-source-pill">{rule.yaml_reference}</span>
+          </div>
+        )}
         <div className={`technical-rule-wrap${showTechnical ? ' expanded' : ''}`}>
           <pre className="technical-rule">{rule.technical_rule}</pre>
           {!showTechnical && <div className="technical-rule-fade" />}

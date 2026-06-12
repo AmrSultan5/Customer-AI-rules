@@ -25,7 +25,7 @@ def validate_sap(df: pd.DataFrame) -> None:
     missing = [c for c in REQUIRED_SAP_COLS if c not in df.columns]
     if missing:
         for m in missing:
-            log.error("[ERROR] Cannot find a column mapping to '%s' in MDG Official Z11.xlsx", m)
+            log.error("[ERROR] Cannot find a column mapping to '%s' in MDG Official Z1_AI_AGENT.xlsx", m)
         raise ValueError(f"Missing required columns in SAP dataframe: {missing}")
     log.info("[INFO] SchemaValidator: SAP dataframe OK — all required columns present.")
 

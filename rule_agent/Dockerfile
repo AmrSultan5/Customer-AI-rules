@@ -2,13 +2,15 @@
 # Build: docker build -t rule-agent-backend .
 # Run:   docker run -p 8000:8000 --env-file backend/.env rule-agent-backend
 
-FROM python:3.11-slim
+# Pin base image for reproducible builds. Update deliberately.
+FROM python:3.11.9-slim
 
 WORKDIR /app
 
 # Install dependencies first (layer cache)
 COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements-lock.txt ./requirements-lock.txt
+RUN pip install --no-cache-dir -r requirements-lock.txt
 
 # Copy application source (exclude data files — mount via volume in production)
 COPY backend/*.py ./

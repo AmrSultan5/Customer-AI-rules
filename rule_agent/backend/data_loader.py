@@ -17,9 +17,20 @@ log = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent / "data"
 RULES_FILE = DATA_DIR / "dim_rules_inventory.xlsx"
-SAP_FILE = DATA_DIR / "MDG Official Z11.xlsx"
+SAP_FILE = DATA_DIR / "MDG Official Z1_AI_AGENT.xlsx"
 GOLDEN_DIR = DATA_DIR / "golden"
 CUSTOM_OPS_DIR = DATA_DIR / "custom_operations"
+
+# Sheets whose first column is a row-label (Field Label / SAP Table etc.) — i.e. transposed layout
+_SKIP_SHEETS = {"Z11_Transposed", "Change log", "Template Navigation", "Hier levels"}
+# Row-label strings that identify the SAP Table and SAP Field rows in template sheets
+_LABEL_SAP_TABLE = {"sap table", "sap\ntable"}
+_LABEL_SAP_FIELD = {"sap field", "sap\nfield"}
+_LABEL_FIELD_LABEL = {"field label"}
+_LABEL_MDG_VAL = {"mdg validation rules", "mdg validations"}
+_LABEL_REQUIRED = {"required / optional", "required/optional"}
+_LABEL_FORMAT = {"sap field format"}
+_LABEL_REF_TABLE = {"reference table"}
 
 # Matches rule IDs embedded as expression literals: expression: "'RCCOMP_12.1'"
 _YAML_RULE_EXPR_RE = re.compile(
@@ -131,15 +142,223 @@ def load_rules() -> pd.DataFrame:
 
 # ---------- SAP mapper loader ------------------------------------------------
 
-def load_sap_map() -> pd.DataFrame:
-    """Load Sheet1 from Z11 which has SAP Table + SAP Field columns."""
-    log.info("[INFO] Loading SAP map from %s", SAP_FILE)
-    df = pd.read_excel(SAP_FILE, sheet_name="Sheet1", dtype=str)
-    df = _normalize_columns(df)
+def _parse_template_sheet(ws) -> list[dict]:
+    """
+    Parse a transposed MDG template sheet into a list of field-dicts.
+    Rows 1-10 contain row-labels in column 0 and field values in columns 1+.
+    Identifies each metadata row by its row-label text.
+    """
+    rows: list[list] = []
+    for i, row in enumerate(ws.iter_rows(values_only=True)):
+        if i >= 12:
+            break
+        rows.append(list(row))
 
-    log.info("[INFO] SAP sheet shape: %s", df.shape)
-    log.info("[INFO] SAP sheet columns: %s", list(df.columns))
+    if not rows:
+        return []
+
+    # Index each metadata row by label
+    idx: dict[str, int] = {}
+    for i, row in enumerate(rows):
+        label = str(row[0] or "").strip().lower().replace("\n", " ").replace("  ", " ")
+        if label in _LABEL_FIELD_LABEL:
+            idx["label"] = i
+        elif label in _LABEL_MDG_VAL:
+            idx["validation"] = i
+        elif label in _LABEL_REQUIRED:
+            idx["required"] = i
+        elif label in _LABEL_FORMAT:
+            idx["format"] = i
+        elif label in _LABEL_REF_TABLE:
+            idx["ref_table"] = i
+        elif label in _LABEL_SAP_TABLE:
+            idx["sap_table"] = i
+        elif label in _LABEL_SAP_FIELD:
+            idx["sap_field"] = i
+        elif "cchbc" in label or "field usage" in label:
+            idx["desc"] = i
+
+    # Need at minimum a SAP Table and SAP Field row to be useful
+    if "sap_table" not in idx or "sap_field" not in idx:
+        return []
+
+    n_cols = max(len(r) for r in rows)
+    results: list[dict] = []
+    for col in range(1, n_cols):
+        def _val(key: str) -> str:
+            ri = idx.get(key)
+            if ri is None:
+                return ""
+            v = rows[ri][col] if col < len(rows[ri]) else None
+            s = str(v or "").strip()
+            return "" if s.lower() in ("nan", "none", "") else s
+
+        sap_table = _val("sap_table").upper()
+        sap_field = _val("sap_field").upper()
+        if not sap_field:
+            continue
+
+        results.append({
+            "field_label": _val("label"),
+            "cchbc_field_usage_comments": _val("desc")[:200],
+            "mdg_validation_rules": _val("validation")[:300],
+            "required_optional": _val("required"),
+            "sap_field_format": _val("format"),
+            "reference_table": _val("ref_table"),
+            "sap_table": sap_table,
+            "sap_field": sap_field,
+        })
+
+    return results
+
+
+def load_sap_map() -> pd.DataFrame:
+    """
+    Load all SAP field metadata from both MDG Excel files.
+    Primary source: Z11_Transposed (clean reference sheet).
+    Additional fields: all template sheets from both files (parsed by row-label).
+    Deduplicates by TABLE-FIELD, preferring Z11_Transposed entries.
+    """
+    import openpyxl
+
+    all_records: list[dict] = []
+    seen_keys: set[str] = set()
+
+    # 1. Primary source: Z11_Transposed from new AI_AGENT file
+    log.info("[INFO] Loading primary SAP map from %s / Z11_Transposed", SAP_FILE)
+    df_primary = pd.read_excel(SAP_FILE, sheet_name="Z11_Transposed", dtype=str)
+    df_primary = _normalize_columns(df_primary)
+    for _, row in df_primary.iterrows():
+        table = str(row.get("sap_table", "") or "").strip().upper()
+        field = str(row.get("sap_field", "") or "").strip().upper()
+        if not field or field in ("NAN", "NONE"):
+            continue
+        key = f"{table}-{field}" if table else field
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_records.append({
+                "field_label": str(row.get("field_label", "") or "").strip(),
+                "cchbc_field_usage_comments": str(row.get("cchbc_field_usage_comments", "") or "").strip()[:200],
+                "mdg_validation_rules": str(row.get("mdg_validation_rules", "") or "").strip()[:300],
+                "required_optional": str(row.get("required_optional", "") or "").strip(),
+                "sap_field_format": str(row.get("sap_field_format", "") or "").strip(),
+                "reference_table": str(row.get("reference_table", "") or "").strip(),
+                "sap_table": table,
+                "sap_field": field,
+            })
+    log.info("[INFO] Z11_Transposed contributed %d primary entries", len(all_records))
+
+    # 2. Parse all template sheets
+    for excel_path in [SAP_FILE]:
+        if not excel_path.exists():
+            log.warning("[WARNING] File not found, skipping: %s", excel_path)
+            continue
+        try:
+            wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
+        except Exception as e:
+            log.warning("[WARNING] Could not open %s: %s", excel_path, e)
+            continue
+
+        for sname in wb.sheetnames:
+            if sname in _SKIP_SHEETS:
+                continue
+            ws = wb[sname]
+            try:
+                records = _parse_template_sheet(ws)
+            except Exception as e:
+                log.warning("[WARNING] Skipping sheet '%s': %s", sname, e)
+                continue
+
+            added = 0
+            for rec in records:
+                table = rec["sap_table"]
+                field = rec["sap_field"]
+                key = f"{table}-{field}" if table else field
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_records.append(rec)
+                    added += 1
+
+            if added:
+                log.info("[INFO] Sheet '%s' in %s added %d new field entries",
+                         sname, excel_path.name, added)
+
+        wb.close()
+
+    df = pd.DataFrame(all_records)
+    log.info("[INFO] Total SAP field entries across all sheets: %d", len(df))
     return df
+
+
+def load_reference_codes() -> dict[str, list[dict]]:
+    """
+    Load reference/code tables from both MDG Excel files.
+    Returns dict keyed by reference-table name (e.g. 'T077D', 'TPAUM').
+    Each value is a list of {code, description} dicts.
+    Reference sheets are identified by having a 'Table:' row or short code columns.
+    """
+    import openpyxl
+
+    # Sheets known to contain reference code data (not field-metadata templates)
+    _REF_SHEETS = {
+        "Recon.acc.", "Pmt Method Suppl", "Cash Mgmt Groups",
+        "Ext. Identification Types", "Bus Appointment Types",
+        "Mkt.Attr definitions", "Hier levels",
+    }
+
+    result: dict[str, list[dict]] = {}
+
+    for excel_path in [SAP_FILE]:
+        if not excel_path.exists():
+            continue
+        try:
+            wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
+        except Exception:
+            continue
+
+        for sname in wb.sheetnames:
+            if sname not in _REF_SHEETS:
+                continue
+            ws = wb[sname]
+            rows = [list(r) for r in ws.iter_rows(values_only=True)
+                    if any(c is not None for c in r)]
+
+            # Find the header row (first row where most cells are non-empty)
+            header_idx = 0
+            for i, row in enumerate(rows):
+                non_empty = sum(1 for c in row if c is not None)
+                if non_empty >= 2 and i > 0:
+                    header_idx = i
+                    break
+
+            # Determine reference-table name from a "Table:" row if present
+            ref_table_name = sname
+            for row in rows[:5]:
+                if str(row[0] or "").strip().lower().startswith("table"):
+                    val = str(row[1] or "").strip()
+                    if val:
+                        ref_table_name = val
+                    break
+
+            headers = [str(c or "").strip() for c in rows[header_idx]]
+            codes: list[dict] = []
+            for row in rows[header_idx + 1:]:
+                entry = {headers[i]: str(row[i] or "").strip()
+                         for i in range(min(len(headers), len(row)))
+                         if headers[i] and str(row[i] or "").strip()}
+                if entry:
+                    codes.append(entry)
+
+            if codes:
+                if ref_table_name not in result:
+                    result[ref_table_name] = codes
+                    log.info("[INFO] Reference sheet '%s' → key '%s' (%d codes)",
+                             sname, ref_table_name, len(codes))
+
+        wb.close()
+
+    log.info("[INFO] Loaded %d reference code tables", len(result))
+    return result
 
 
 # ---------- YAML loader ------------------------------------------------------
@@ -412,6 +631,11 @@ def get_sap_map() -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
+def get_reference_codes() -> dict[str, list[dict]]:
+    return load_reference_codes()
+
+
+@lru_cache(maxsize=1)
 def get_yaml_rules() -> dict[str, dict]:
     return load_yaml_rules()
 
@@ -419,6 +643,72 @@ def get_yaml_rules() -> dict[str, dict]:
 @lru_cache(maxsize=1)
 def get_custom_operations() -> dict[str, dict]:
     return load_custom_operations()
+
+
+@lru_cache(maxsize=128)
+def get_custom_op_source(module_key: str, max_chars: int = 6000) -> str:
+    """Return the source code of a custom operation module, truncated to max_chars.
+
+    The path is resolved strictly via the get_custom_operations() index — never
+    from raw user/LLM input — so there is no path-traversal risk.
+    Returns "" for unknown keys or read failures.
+    """
+    meta = get_custom_operations().get(module_key)
+    if not meta:
+        log.warning("[WARNING] get_custom_op_source: unknown module key %r", module_key)
+        return ""
+    path = DATA_DIR / meta["file"]
+    try:
+        source = path.read_text(encoding="utf-8")
+    except Exception as e:
+        log.warning("[WARNING] get_custom_op_source: could not read %s: %s", path, e)
+        return ""
+    if len(source) > max_chars:
+        source = source[:max_chars] + "\n# … truncated"
+    return source
+
+
+def clear_caches() -> None:
+    """Drop all cached data so the next access re-reads from disk."""
+    for fn in (
+        get_rules, get_sap_map, get_reference_codes,
+        get_yaml_rules, get_custom_operations, get_custom_op_source,
+    ):
+        fn.cache_clear()
+
+
+def reload_all() -> dict:
+    """Reload all data sources from disk, validating BEFORE swapping the caches.
+
+    Loads fresh copies first and runs schema validation on them; only when the
+    new data is good are the caches cleared and re-warmed. A broken Excel/YAML
+    edit therefore raises here while the app keeps serving the old data.
+    """
+    from schema_validator import validate_rules, validate_sap
+
+    new_rules = load_rules()
+    new_sap = load_sap_map()
+    validate_rules(new_rules)
+    validate_sap(new_sap)
+    new_yamls = load_yaml_rules()
+    new_ops = load_custom_operations()
+
+    clear_caches()
+    get_rules()
+    get_sap_map()
+    get_yaml_rules()
+    get_custom_operations()
+
+    log.info(
+        "[INFO] Data reloaded: %d rules, %d pipelines, %d custom ops, %d SAP fields",
+        len(new_rules), len(new_yamls), len(new_ops), len(new_sap),
+    )
+    return {
+        "rules_loaded": len(new_rules),
+        "yaml_pipelines": len(new_yamls),
+        "custom_ops": len(new_ops),
+        "sap_fields": len(new_sap),
+    }
 
 
 # ---------- cross-rule reference resolver ------------------------------------

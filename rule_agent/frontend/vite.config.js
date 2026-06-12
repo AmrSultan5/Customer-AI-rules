@@ -12,4 +12,6 @@ export default defineConfig({
       },
     },
   },
+  // Serve index.html for all non-asset paths so /admin works as a SPA route
+  appType: 'spa',
 })

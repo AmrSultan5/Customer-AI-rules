@@ -1,7 +1,7 @@
 """
 STEP 5 — SAPMapper
 Maps SAP TABLE-FIELD strings to business descriptions.
-Uses Sheet1 of MDG Official Z11.xlsx.
+Uses Z11_Transposed sheet of MDG Official Z1_AI_AGENT.xlsx.
 """
 
 import logging
@@ -20,15 +20,26 @@ def _build_lookup(df: pd.DataFrame) -> dict[str, dict]:
         field = str(row.get("sap_field", "") or "").strip().upper()
         label = str(row.get("field_label", "") or "").strip()
         desc = str(row.get("cchbc_field_usage_comments", "") or "").strip()
+        validation = str(row.get("mdg_validation_rules", "") or "").strip()
+        required = str(row.get("required_optional", "") or "").strip()
+        field_format = str(row.get("sap_field_format", "") or "").strip()
+        ref_table = str(row.get("reference_table", "") or "").strip()
 
         if not field or field in ("NAN", "NONE", ""):
             continue
+
+        def _clean(s: str) -> str:
+            return "" if s.upper() in ("NAN", "NONE", "") else s
 
         entry = {
             "field": f"{table}-{field}" if table else field,
             "business_name": label or field,
             "description": desc[:200] if desc else "",
             "table": table,
+            "mdg_validation_rules": _clean(validation)[:300],
+            "required": _clean(required),
+            "field_format": _clean(field_format),
+            "reference_table": _clean(ref_table),
         }
 
         if table:
@@ -57,21 +68,35 @@ def lookup_sap_field(field_str: str) -> dict:
     lkp = _get_lookup()
     key = field_str.strip().upper()
 
-    if key in lkp:
-        return lkp[key]
+    entry = lkp.get(key)
 
     # Try field-only fallback (after the dash)
-    if "-" in key:
+    if entry is None and "-" in key:
         field_only = key.split("-", 1)[1]
-        if field_only in lkp:
-            return lkp[field_only]
+        entry = lkp.get(field_only)
 
-    return {
-        "field": field_str,
-        "business_name": "Unknown field",
-        "description": "",
-        "table": key.split("-")[0] if "-" in key else "",
-    }
+    if entry is None:
+        return {
+            "field": field_str,
+            "business_name": "Unknown field",
+            "description": "",
+            "table": key.split("-")[0] if "-" in key else "",
+            "mdg_validation_rules": "",
+            "required": "",
+            "field_format": "",
+            "reference_table": "",
+            "valid_codes": [],
+        }
+
+    # Enrich with reference code list if this field has a ref table
+    ref_table = entry.get("reference_table", "")
+    valid_codes: list[dict] = []
+    if ref_table:
+        from data_loader import get_reference_codes
+        codes = get_reference_codes().get(ref_table, [])
+        valid_codes = codes[:20]  # cap at 20 for context size
+
+    return {**entry, "valid_codes": valid_codes}
 
 
 if __name__ == "__main__":
