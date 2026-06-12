@@ -17,9 +17,13 @@ log = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent / "data"
 RULES_FILE = DATA_DIR / "dim_rules_inventory.xlsx"
-SAP_FILE = DATA_DIR / "MDG Official Z1_AI_AGENT.xlsx"
-GOLDEN_DIR = DATA_DIR / "golden"
-CUSTOM_OPS_DIR = DATA_DIR / "custom_operations"
+SAP_FILE   = DATA_DIR / "MDG Official Z1_AI_AGENT.xlsx"
+SAP_FILE_Z11 = DATA_DIR / "MDG Official Z11.xlsx"
+
+# Full governance repo dropped under data/
+_GOVERNANCE_ROOT = DATA_DIR / "daar-governance-data-quality-processes" / "governance_data_quality_processes"
+GOLDEN_DIR    = _GOVERNANCE_ROOT / "configs" / "processes" / "data_quality" / "ca"
+CUSTOM_OPS_DIR = _GOVERNANCE_ROOT / "custom_operations"
 
 # Sheets whose first column is a row-label (Field Label / SAP Table etc.) — i.e. transposed layout
 _SKIP_SHEETS = {"Z11_Transposed", "Change log", "Template Navigation", "Hier levels"}
@@ -248,8 +252,8 @@ def load_sap_map() -> pd.DataFrame:
             })
     log.info("[INFO] Z11_Transposed contributed %d primary entries", len(all_records))
 
-    # 2. Parse all template sheets
-    for excel_path in [SAP_FILE]:
+    # 2. Parse all template sheets (primary AI_AGENT file + original Z11 file)
+    for excel_path in [SAP_FILE, SAP_FILE_Z11]:
         if not excel_path.exists():
             log.warning("[WARNING] File not found, skipping: %s", excel_path)
             continue
@@ -308,7 +312,7 @@ def load_reference_codes() -> dict[str, list[dict]]:
 
     result: dict[str, list[dict]] = {}
 
-    for excel_path in [SAP_FILE]:
+    for excel_path in [SAP_FILE, SAP_FILE_Z11]:
         if not excel_path.exists():
             continue
         try:

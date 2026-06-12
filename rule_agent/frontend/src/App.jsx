@@ -14,7 +14,13 @@ const MAX_RECENT = 20
 
 const LogoMark = () => (
   <div className="topbar-logo">
-    <span style={{ fontFamily: 'DM Serif Display, serif', fontSize: '16px', color: '#fff', lineHeight: 1, userSelect: 'none' }}>R</span>
+    {/* Ribbon wave — nod to the Coca-Cola dynamic ribbon */}
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+      <path
+        d="M2 10.5C5.2 6.6 8.2 12.6 11.2 9.2c1.6-1.8 2.7-3.1 3.8-4.2"
+        stroke="#fff" strokeWidth="1.9" strokeLinecap="round"
+      />
+    </svg>
   </div>
 )
 
@@ -221,53 +227,47 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-brand">
           <LogoMark />
-          <span className="topbar-product">Rule Intelligence</span>
-          <span className="topbar-brand-sep" />
-          <span className="topbar-sub">by Coca-Cola HBC</span>
+          <div className="topbar-brand-text">
+            <span className="topbar-product">Rule Intelligence</span>
+            <span className="topbar-sub">Coca-Cola HBC · Customer Data Quality</span>
+          </div>
         </div>
-        <div className="topbar-actions">
-          <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <button
-              className="theme-toggle-btn"
-              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-              aria-label="Toggle theme"
-            >
-              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            </button>
-          </Tooltip>
-          <span className="pro-badge">PRO</span>
-          <span className="status-pill">
-            <span className="status-dot" />
-            {rulesLoaded !== null ? `${rulesLoaded} Active Rules` : '— Active Rules'}
-          </span>
-          <span className="topbar-divider" />
+
+        <nav className="view-switcher" aria-label="View">
           <Tooltip content="Browse and search all data quality rules">
             <button
-              className={`browser-toggle-btn${showBrowser ? ' active' : ''}`}
+              className={`view-switch-btn${showBrowser ? ' active' : ''}`}
               onClick={() => { setShowBrowser(v => !v); setShowTree(false); setShowGraph(false) }}
             >
               <BrowserToggleIcon />
-              <span>Browse Rules</span>
+              <span>Browse</span>
             </button>
           </Tooltip>
           <Tooltip content="Explore rules as a hierarchical tree">
             <button
-              className={`browser-toggle-btn${showTree ? ' active' : ''}`}
+              className={`view-switch-btn${showTree ? ' active' : ''}`}
               onClick={() => { setShowTree(v => !v); setShowBrowser(false); setShowGraph(false) }}
             >
               <TreeToggleIcon />
-              <span>Rule Tree</span>
+              <span>Tree</span>
             </button>
           </Tooltip>
           <Tooltip content="Visualise all rules as an interactive node graph">
             <button
-              className={`browser-toggle-btn graph-toggle-btn${showGraph ? ' active' : ''}`}
+              className={`view-switch-btn${showGraph ? ' active' : ''}`}
               onClick={() => { setShowGraph(v => !v); setShowBrowser(false); setShowTree(false) }}
             >
               <GraphToggleIcon />
-              <span>Graph View</span>
+              <span>Graph</span>
             </button>
           </Tooltip>
+        </nav>
+
+        <div className="topbar-actions">
+          <span className="status-pill">
+            <span className="status-dot" />
+            {rulesLoaded !== null ? `${rulesLoaded} Active Rules` : '— Active Rules'}
+          </span>
           <Tooltip content={sidebarOpen ? 'Close rule panel' : activeRuleId ? `View ${activeRuleId}` : 'Open rule panel'}>
             <button
               className={`sidebar-toggle-btn${sidebarOpen ? ' active' : ''}${activeRuleId && !sidebarOpen ? ' has-rule' : ''}`}
@@ -278,6 +278,16 @@ export default function App() {
                 ? <span className="sidebar-toggle-rule-id">{activeRuleId}</span>
                 : <span>Rule Card</span>
               }
+            </button>
+          </Tooltip>
+          <span className="topbar-divider" />
+          <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <button
+              className="theme-toggle-btn"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
           </Tooltip>
         </div>

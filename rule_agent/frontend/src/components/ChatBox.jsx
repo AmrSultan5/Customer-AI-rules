@@ -67,6 +67,55 @@ const MODE_PLACEHOLDERS = {
   pm: 'Describe the issue or need in plain language — I will draft the user story…',
 }
 
+const MODE_HERO = {
+  analyst: {
+    title: 'How can I help you today?',
+    sub: 'Ask about any Customer data quality rule — by ID, by what it checks, or by category. I will explain it in plain business language.',
+  },
+  engineer: {
+    title: 'Data Engineer mode',
+    sub: 'Paste a user story or describe a rule change. I will list the pipeline files to modify, the YAML to write, and how to test it — downloadable as a Databricks notebook.',
+  },
+  pm: {
+    title: 'Project Manager mode',
+    sub: 'Describe a data quality issue or business need in plain language. I will draft a user story for the engineering backlog, linked to any rules that already cover it.',
+  },
+}
+
+const HeroMark = () => (
+  <div className="hero-mark" aria-hidden="true">
+    <svg width="26" height="26" viewBox="0 0 17 17" fill="none">
+      <path
+        d="M2 10.5C5.2 6.6 8.2 12.6 11.2 9.2c1.6-1.8 2.7-3.1 3.8-4.2"
+        stroke="#fff" strokeWidth="1.9" strokeLinecap="round"
+      />
+    </svg>
+  </div>
+)
+
+function ChatHero({ mode, onAsk }) {
+  const { title, sub } = MODE_HERO[mode] ?? MODE_HERO.analyst
+  return (
+    <div className="chat-hero">
+      <HeroMark />
+      <h1 className="hero-title">{title}</h1>
+      <p className="hero-sub">{sub}</p>
+      <div className="hero-cards">
+        {MODE_SUGGESTIONS[mode].map((s, i) => (
+          <button key={i} className="hero-card" onClick={() => onAsk(s)}>
+            <span className="hero-card-text">{s}</span>
+            <span className="hero-card-arrow" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6h8M6.5 2.5L10 6l-3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const RULE_ID_RE = /\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b/g
 
 function addRuleLinks(text) {
@@ -513,6 +562,10 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   const mdComponents = makeMarkdownComponents(handleRuleLinkClick)
   const userMsgCount = messages.filter(m => m.role === 'user').length
   const hasHistory = messages.length > 1
+  const isFreshChat =
+    messages.length === 1 &&
+    messages[0].role === 'agent' &&
+    (messages[0].isWelcome || messages[0].ts === null)
 
   return (
     <div className="chat-container">
@@ -562,7 +615,11 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
       <div className="chat-history">
         <div className="chat-history-inner">
-          {messages.map((msg, i) => (
+          {isFreshChat ? (
+            <ChatHero mode={mode} onAsk={s => send(s)} />
+          ) : (
+          messages.map((msg, i) =>
+            (msg.isWelcome || (msg.role === 'agent' && msg.ts === null)) ? null : (
             <div key={i} className={`msg-row ${msg.role}`}>
               {msg.role === 'agent' && (
                 <div className="msg-avatar agent-avatar"><AgentIcon /></div>
@@ -604,16 +661,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
                 <div className="msg-avatar user-avatar"><UserIcon /></div>
               )}
             </div>
-          ))}
-
-          {messages.length === 1 && (
-            <div className="suggestions">
-              {MODE_SUGGESTIONS[mode].map((s, i) => (
-                <button key={i} className="suggestion-chip" onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
+          ))
           )}
 
           <div ref={bottomRef} />
