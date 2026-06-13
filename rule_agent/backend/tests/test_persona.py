@@ -199,7 +199,7 @@ def test_load_persona_context_empty_selection_asks_for_detail(loader):
     ctx = persona_agent._load_persona_context({
         "rule_ids": [], "pipelines": [], "custom_ops": [], "needs_new_rule": False,
     })
-    assert "Ask the user for more detail" in ctx
+    assert "ask the user for more detail" in ctx
 
 
 def test_load_persona_context_includes_impact_block(loader, monkeypatch):

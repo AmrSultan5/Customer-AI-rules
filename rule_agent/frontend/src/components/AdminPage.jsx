@@ -4,35 +4,51 @@ import { apiFetch } from '../api.js'
 
 const SESSION_KEY = 'rule_agent_admin_token'
 
-const LogoMark = () => (
-  <div style={{
-    width: 36, height: 36, borderRadius: '50%',
-    background: '#E8000D', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 2px 16px rgba(232,0,13,0.35)',
-  }}>
-    <span style={{ fontFamily: 'DM Serif Display, serif', fontSize: '18px', color: '#fff', lineHeight: 1 }}>R</span>
-  </div>
+// Brand mark — same red disc + wave as the favicon for full identity consistency
+const BrandMark = ({ size = 36 }) => (
+  <svg width={size} height={size} viewBox="0 0 17 17" aria-hidden="true" style={{ display: 'block' }}>
+    <circle cx="8.5" cy="8.5" r="8.5" fill="#E8000D" />
+    <path
+      d="M2.5 10.5C5.4 6.9 8.2 12.4 11 9.3c1.5-1.7 2.5-2.9 3.5-3.9"
+      stroke="#fff" strokeWidth="1.9" strokeLinecap="round" fill="none"
+    />
+  </svg>
 )
 
-const HomeIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path d="M1.5 6.5L6.5 2l5 4.5V11a1 1 0 0 1-1 1h-2.5V8.5h-3V12H2.5a1 1 0 0 1-1-1V6.5z"
-      stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+const ArrowLeftIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 const UserIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <circle cx="7" cy="4.5" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
-    <path d="M2 12c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    <circle cx="7" cy="4.5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M2 12c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 )
 
 const LockIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-    <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-    <circle cx="7" cy="9.5" r="1" fill="currentColor"/>
+    <rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="7" cy="9.5" r="1" fill="currentColor" />
+  </svg>
+)
+
+const EyeIcon = ({ off }) => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path d="M1.5 7C1.5 7 3.5 3 7 3s5.5 4 5.5 4-2 4-5.5 4S1.5 7 1.5 7z" stroke="currentColor" strokeWidth="1.2" />
+    <circle cx="7" cy="7" r="1.8" stroke="currentColor" strokeWidth="1.2" />
+    {off && <path d="M2.5 11.5l9-9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />}
+  </svg>
+)
+
+const AlertIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+    <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M6.5 3.8v3.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="6.5" cy="9.3" r="0.8" fill="currentColor" />
   </svg>
 )
 
@@ -41,6 +57,7 @@ const LockIcon = () => (
 function AuthGate({ onAuthenticated }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPw,   setShowPw]   = useState(false)
   const [error,    setError]    = useState('')
   const [busy,     setBusy]     = useState(false)
 
@@ -74,13 +91,13 @@ function AuthGate({ onAuthenticated }) {
 
   return (
     <div className="adm-gate">
-      <div className="adm-gate-card">
-        <div className="adm-gate-logo"><LogoMark /></div>
-        <h1 className="adm-gate-title">Admin Sign In</h1>
+      <main className="adm-gate-card">
+        <div className="adm-gate-brand"><BrandMark size={46} /></div>
+        <span className="adm-gate-eyebrow">Coca-Cola HBC &middot; Admin Portal</span>
+        <h1 className="adm-gate-title">Rule Intelligence</h1>
         <p className="adm-gate-sub">Sign in to access the Rule Health Dashboard.</p>
 
         <form className="adm-gate-form" onSubmit={attempt}>
-          {/* Username */}
           <div className="adm-field">
             <label className="adm-field-label" htmlFor="adm-username">Username</label>
             <div className={`adm-field-wrap${hasError ? ' adm-field-error' : ''}`}>
@@ -99,7 +116,6 @@ function AuthGate({ onAuthenticated }) {
             </div>
           </div>
 
-          {/* Password */}
           <div className="adm-field">
             <label className="adm-field-label" htmlFor="adm-password">Password</label>
             <div className={`adm-field-wrap${hasError ? ' adm-field-error' : ''}`}>
@@ -107,32 +123,46 @@ function AuthGate({ onAuthenticated }) {
               <input
                 id="adm-password"
                 className="adm-field-input"
-                type="password"
+                type={showPw ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={password}
                 onChange={e => { setPassword(e.target.value); setError('') }}
                 autoComplete="current-password"
                 disabled={busy}
               />
+              <button
+                type="button"
+                className="adm-field-toggle"
+                onClick={() => setShowPw(s => !s)}
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                <EyeIcon off={showPw} />
+              </button>
             </div>
           </div>
 
-          {error && <p className="adm-gate-error">{error}</p>}
+          {error && (
+            <p className="adm-gate-alert" role="alert">
+              <AlertIcon />
+              {error}
+            </p>
+          )}
 
           <button
             className="adm-gate-submit"
             type="submit"
             disabled={busy || !username.trim() || !password}
           >
-            {busy ? 'Signing in…' : 'Sign In'}
+            {busy ? <><span className="adm-spinner" aria-hidden="true" /> Signing in…</> : 'Sign in'}
           </button>
         </form>
 
-        <a href="/" className="adm-gate-back"><HomeIcon /> Back to Rule Intelligence</a>
-      </div>
+        <a href="/" className="adm-gate-back"><ArrowLeftIcon /> Back to Rule Intelligence</a>
+      </main>
 
       <p className="adm-gate-footer">
-        Rule Intelligence &middot; Coca-Cola HBC &middot; Admin Portal
+        &copy; Coca-Cola HBC &middot; Internal use only
       </p>
     </div>
   )
@@ -159,14 +189,14 @@ export default function AdminPage() {
     <div className="adm-page">
       <header className="adm-topbar">
         <div className="adm-topbar-brand">
-          <LogoMark />
+          <BrandMark size={28} />
           <span className="adm-topbar-product">Rule Intelligence</span>
           <span className="adm-topbar-sep" />
-          <span className="adm-topbar-badge">ADMIN</span>
+          <span className="adm-chip">Admin</span>
         </div>
         <div className="adm-topbar-actions">
-          <a href="/" className="adm-topbar-btn"><HomeIcon /> Back to App</a>
-          <button className="adm-topbar-btn adm-topbar-btn-logout" onClick={handleLogout}>
+          <a href="/" className="adm-btn"><ArrowLeftIcon /> Back to app</a>
+          <button className="adm-btn adm-btn-danger" onClick={handleLogout}>
             Sign out
           </button>
         </div>

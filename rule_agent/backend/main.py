@@ -177,6 +177,10 @@ class ChatRequest(BaseModel):
     message: Annotated[str, Field(min_length=1, max_length=_MAX_PERSONA_MESSAGE_LEN)]
     context_rule_id: str | None = None
     mode: Literal["analyst", "engineer", "pm"] = "analyst"
+    # Analyst-only opt-in: when true, off-catalog questions get a direct general
+    # answer instead of being forced through rule search. Toggled by a button in
+    # the UI; default false keeps the strict rules-only behavior.
+    general: bool = False
     # max_length enforced at API schema level; frontend also caps at 20
     history: Annotated[list[ChatMessage], Field(max_length=_MAX_HISTORY)] = Field(
         default_factory=list
@@ -476,7 +480,9 @@ async def chat(request: Request, body: ChatRequest):
         )
     try:
         history = _history_for_agent(body)
-        result = handle_message(body.message, body.context_rule_id, history=history)
+        result = handle_message(
+            body.message, body.context_rule_id, history=history, allow_general=body.general,
+        )
         asyncio.create_task(track_chat_event(result.get("rule_id") or body.context_rule_id, None))
         return result
     except HTTPException:
@@ -521,7 +527,10 @@ async def chat_stream(request: Request, body: ChatRequest):
     async def _generator():
         resolved_rule_id = context_rule_id
         try:
-            async for event in stream_message(body.message, context_rule_id, history=history, mode=body.mode):
+            async for event in stream_message(
+                body.message, context_rule_id, history=history, mode=body.mode,
+                allow_general=body.general,
+            ):
                 # Capture the rule_id from the done event for analytics
                 if event.startswith("data:"):
                     try:

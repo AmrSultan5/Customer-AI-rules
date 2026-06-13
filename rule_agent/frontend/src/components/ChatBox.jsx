@@ -7,6 +7,7 @@ import { copyText, buildDatabricksNotebook, downloadFile, markdownToJira } from 
 
 const STORAGE_KEY = 'rule_agent_chat_history'
 const MODE_STORAGE_KEY = 'rule_agent_chat_mode'
+const GENERAL_STORAGE_KEY = 'rule_agent_general_mode'
 
 const WELCOME_MESSAGES = {
   analyst:
@@ -53,18 +54,20 @@ const MODE_SUGGESTIONS = {
     'Paste a user story to see which files to change',
     'How do I change the threshold in rule RCACCU_383.6?',
     'Which pipeline files implement postal code checks?',
+    'Which other rules does RCCOMP_149.2 impact?',
   ],
   pm: [
     'Customers are being created with invalid postal codes',
     'We need a check that customer emails are unique',
     'Help me write a story for tightening address validation',
+    'Duplicate customer records are reaching reporting',
   ],
 }
 
 const MODE_PLACEHOLDERS = {
   analyst: 'Ask about a rule, describe what it does, or follow up on a rule…',
-  engineer: 'Paste the user story to implement — I will list the files to change and how to test it…',
-  pm: 'Describe the issue or need in plain language — I will draft the user story…',
+  engineer: 'Paste a user story or describe a rule change…',
+  pm: 'Describe the issue or need in plain language…',
 }
 
 const MODE_HERO = {
@@ -314,6 +317,10 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   const [confirmClear, setConfirmClear] = useState(false)
   const [showValidator, setShowValidator] = useState(false)
   const [mode, setMode] = useState(getStoredMode)
+  const [generalMode, setGeneralMode] = useState(() => {
+    try { return localStorage.getItem(GENERAL_STORAGE_KEY) === '1' } catch {}
+    return false
+  })
   const bottomRef        = useRef(null)
   const textareaRef      = useRef(null)
   const sessionStartRef  = useRef(0)
@@ -335,11 +342,14 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     if (!loading) textareaRef.current?.focus()
   }, [loading])
 
-  // Reset session window when the active rule changes so history stays rule-scoped
+  // Reset session window when the active rule changes so history stays rule-scoped.
+  // Rule-scoping is an analyst-mode concept only. In engineer/pm mode the persona
+  // auto-pins a rule on its first answer, which would otherwise wipe the history
+  // window and break follow-ups ("why did you do this?", corrections, etc.).
   useEffect(() => {
     if (activeRuleId !== prevRuleIdRef.current) {
       prevRuleIdRef.current = activeRuleId
-      sessionStartRef.current = messages.length
+      if (mode === 'analyst') sessionStartRef.current = messages.length
     }
   }, [activeRuleId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -370,6 +380,15 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     )
     // Scope conversation history to the current mode (mirrors the activeRuleId reset)
     sessionStartRef.current = messages.length
+  }
+
+  function toggleGeneralMode() {
+    if (loading) return
+    setGeneralMode(prev => {
+      const next = !prev
+      try { localStorage.setItem(GENERAL_STORAGE_KEY, next ? '1' : '0') } catch {}
+      return next
+    })
   }
 
   function clearHistory() {
@@ -414,6 +433,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
         context_rule_id: activeRuleId ?? null,
         mode,
         history,
+        general: mode === 'analyst' && generalMode,
       })
 
       const decoder = new TextDecoder('utf-8', { stream: true })
@@ -570,7 +590,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   return (
     <div className="chat-container">
       <div className="chat-panel-header">
-        <div className="chat-panel-title">
+        <div className="chat-header-left">
           <span className="chat-panel-label">AI Assistant</span>
           <div className="chat-panel-live">
             <span className="chat-panel-live-dot" />
@@ -580,37 +600,68 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
             <span className="chat-msg-count">{userMsgCount}</span>
           )}
         </div>
-        <div className="mode-toggle" role="tablist" aria-label="Assistant mode">
-          {MODES.map(m => (
-            <button
-              key={m.id}
-              role="tab"
-              aria-selected={mode === m.id}
-              className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}
-              onClick={() => switchMode(m.id)}
-              disabled={loading}
-            >
-              {m.label}
-            </button>
-          ))}
+
+        <div className="chat-header-center">
+          <div className="mode-toggle" role="tablist" aria-label="Assistant mode">
+            {MODES.map(m => (
+              <button
+                key={m.id}
+                role="tab"
+                aria-selected={mode === m.id}
+                className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}
+                onClick={() => switchMode(m.id)}
+                disabled={loading}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
-        {mode === 'engineer' && (
-          <Tooltip content="Check an edited pipeline YAML against the repository before committing">
-            <button className="yaml-validate-open-btn" onClick={() => setShowValidator(true)}>
-              Validate YAML
-            </button>
-          </Tooltip>
-        )}
-        {hasHistory && (
-          <Tooltip content={confirmClear ? 'Click again to confirm' : 'Clear chat history'}>
-            <button
-              className={`clear-btn${confirmClear ? ' confirm' : ''}`}
-              onClick={clearHistory}
+
+        <div className="chat-header-right">
+          {mode === 'analyst' && (
+            <Tooltip
+              content={
+                generalMode
+                  ? 'General Q&A is ON — I can also answer questions beyond the rule catalog (git, Databricks, data quality concepts…). Click to return to rules only.'
+                  : 'Rules only — click to also allow general questions beyond the rule catalog'
+              }
             >
-              {confirmClear ? 'Confirm?' : <><TrashIcon />Clear</>}
+              <button
+                className={`header-action-btn${generalMode ? ' active' : ''}`}
+                onClick={toggleGeneralMode}
+                disabled={loading}
+                aria-pressed={generalMode}
+              >
+                <span className={`action-dot${generalMode ? ' on' : ''}`} aria-hidden="true" />
+                General Q&A
+              </button>
+            </Tooltip>
+          )}
+          {mode === 'engineer' && (
+            <Tooltip content="Check an edited pipeline YAML against the repository before committing">
+              <button className="header-action-btn" onClick={() => setShowValidator(true)}>
+                Validate YAML
+              </button>
+            </Tooltip>
+          )}
+          {hasHistory ? (
+            <Tooltip content={confirmClear ? 'Click again to confirm' : 'Clear chat history'}>
+              <button
+                className={`clear-btn${confirmClear ? ' confirm' : ''}`}
+                onClick={clearHistory}
+              >
+                {confirmClear ? 'Confirm?' : <><TrashIcon />Clear</>}
+              </button>
+            </Tooltip>
+          ) : (
+            /* Invisible placeholder keeps the header from reflowing when the
+               first message arrives. */
+            <button className="clear-btn is-hidden" tabIndex={-1} aria-hidden="true">
+              <TrashIcon />Clear
             </button>
-          </Tooltip>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="chat-history">
@@ -679,8 +730,12 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
               value={input}
               onChange={onInputChange}
               onKeyDown={onKey}
-              placeholder={MODE_PLACEHOLDERS[mode]}
-              rows={mode === 'analyst' ? 1 : 3}
+              placeholder={
+                mode === 'analyst' && generalMode
+                  ? 'Ask anything — rules, data quality concepts, tools, process…'
+                  : MODE_PLACEHOLDERS[mode]
+              }
+              rows={1}
               disabled={loading}
             />
             <Tooltip content="Send message (Enter)">

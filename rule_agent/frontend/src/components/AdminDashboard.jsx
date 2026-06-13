@@ -10,55 +10,10 @@ export const RefreshIcon = ({ spinning }) => (
   </svg>
 )
 
-const TrendUpIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path d="M1 10l3.5-4L7 8.5l4-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M8.5 2.5h3v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-)
-
-const ShieldIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path d="M6.5 1.5L11 3.5v3c0 2.8-2 4.5-4.5 5C4 11 2 9.3 2 6.5v-3l4.5-2z"
-      stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-    <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-)
-
-const EyeIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path d="M1 6.5C1 6.5 3 2.5 6.5 2.5S12 6.5 12 6.5 10 10.5 6.5 10.5 1 6.5 1 6.5z" stroke="currentColor" strokeWidth="1.3"/>
-    <circle cx="6.5" cy="6.5" r="1.8" stroke="currentColor" strokeWidth="1.3"/>
-  </svg>
-)
-
-const ChatIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path d="M2 2h9a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H7l-3 2V9H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"
-      stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-  </svg>
-)
-
-const GridIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <rect x="1" y="1" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-    <rect x="7.5" y="1" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-    <rect x="1" y="7.5" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-    <rect x="7.5" y="7.5" width="4.5" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-  </svg>
-)
-
 const ZapIcon = () => (
   <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
     <path d="M7.5 1.5L2 7.5h4.5L5.5 11.5l6-6.5H7L7.5 1.5z"
       stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-  </svg>
-)
-
-const ThumbsIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path d="M4 6v5.5H1.5V6H4zm0 0l2.4-4.2a1 1 0 0 1 1.84.68L7.8 5h2.7a1 1 0 0 1 .97 1.24l-1.05 4.5a1 1 0 0 1-.97.76H4"
-      stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
   </svg>
 )
 
@@ -83,10 +38,10 @@ function HorizontalBarChart({ data, maxBars = 10 }) {
   if (!data.length) return <EmptyChart label="No rule views yet — start exploring rules to populate this chart" />
   const slice  = data.slice(0, maxBars)
   const maxVal = Math.max(...slice.map(d => d.views), 1)
-  const ROW_H  = 36
-  const LABEL_W = 140
-  const BAR_W   = 320
-  const COUNT_W = 40
+  const ROW_H  = 30
+  const LABEL_W = 150
+  const BAR_W   = 580
+  const COUNT_W = 46
   const SVG_W   = LABEL_W + BAR_W + COUNT_W
   const SVG_H   = slice.length * ROW_H
 
@@ -102,10 +57,10 @@ function HorizontalBarChart({ data, maxBars = 10 }) {
               style={{ fill: isTop ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: isTop ? 600 : 400 }}>
               {d.rule_id}
             </text>
-            <rect x={LABEL_W} y={ROW_H / 2 - 9} width={BAR_W} height={18} rx={4} fill="var(--bg-hover)"/>
-            <rect x={LABEL_W} y={ROW_H / 2 - 9} width={filled} height={18} rx={4}
-              fill={isTop ? 'var(--accent)' : 'var(--info)'} opacity={isTop ? 1 : 0.72}/>
-            <text x={LABEL_W + BAR_W + 6} y={ROW_H / 2 + 4} className="adm-bar-count"
+            <rect x={LABEL_W} y={ROW_H / 2 - 7} width={BAR_W} height={14} rx={5} fill="var(--adm-track)"/>
+            <rect x={LABEL_W} y={ROW_H / 2 - 7} width={filled} height={14} rx={5}
+              fill={isTop ? 'var(--accent)' : 'var(--adm-bar)'}/>
+            <text x={LABEL_W + BAR_W + 8} y={ROW_H / 2 + 4} className="adm-bar-count"
               style={{ fill: isTop ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
               {d.views}
             </text>
@@ -118,7 +73,7 @@ function HorizontalBarChart({ data, maxBars = 10 }) {
 
 function Sparkline({ data }) {
   if (!data.length) return <EmptyChart label="No activity data yet" height={70} />
-  const W = 500; const H = 70; const PAD = 6
+  const W = 1200; const H = 110; const PAD = 8
   const maxV = Math.max(...data.map(d => d.views), 1)
   const pts = data.map((d, i) => [
     PAD + (i / Math.max(data.length - 1, 1)) * (W - PAD * 2),
@@ -131,13 +86,13 @@ function Sparkline({ data }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="adm-sparkline" aria-label="30-day activity sparkline">
       <defs>
         <linearGradient id="adm-spark-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3"/>
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28"/>
           <stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/>
         </linearGradient>
       </defs>
       <path d={area} fill="url(#adm-spark-grad)"/>
-      <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="3.5" fill="var(--accent)"/>
+      <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="4" fill="var(--accent)"/>
     </svg>
   )
 }
@@ -148,13 +103,13 @@ function CoverageArc({ pct }) {
   const filled = (pct / 100) * circ
   return (
     <svg viewBox="0 0 112 112" className="adm-donut" aria-label={`Coverage ${pct}%`}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth="11"/>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--accent)" strokeWidth="11"
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--adm-track)" strokeWidth="9"/>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--accent)" strokeWidth="9"
         strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
         transform={`rotate(-90 ${cx} ${cy})`}
         style={{ transition: 'stroke-dasharray 1s ease' }}/>
       <text x={cx} y={cy - 2} textAnchor="middle" className="adm-donut-pct">{pct}%</text>
-      <text x={cx} y={cy + 14} textAnchor="middle" className="adm-donut-label">Covered</text>
+      <text x={cx} y={cy + 15} textAnchor="middle" className="adm-donut-label">Covered</text>
     </svg>
   )
 }
@@ -210,21 +165,18 @@ const CALL_TYPE_LABELS = {
   other:        'Other',
 }
 
-// ── KPI Card ───────────────────────────────────────────────────────────────
+// ── Stat (KPI band cell) ───────────────────────────────────────────────────
 
-function KpiCard({ icon, label, value, sub, accent }) {
+function Stat({ label, value, sub, accent }) {
   const isLoading = value === undefined
   return (
-    <div className={`adm-kpi-card${accent ? ' adm-kpi-accent' : ''}`}>
-      <div className="adm-kpi-icon">{icon}</div>
-      <div className="adm-kpi-body">
-        {isLoading
-          ? <div className="adm-skeleton-row" style={{ width: '55%', height: '26px', marginBottom: 6 }} />
-          : <div className="adm-kpi-value">{value}</div>
-        }
-        <div className="adm-kpi-label">{label}</div>
-        {!isLoading && sub && <div className="adm-kpi-sub">{sub}</div>}
-      </div>
+    <div className={`adm-stat${accent ? ' adm-stat-accent' : ''}`}>
+      <span className="adm-stat-label">{label}</span>
+      {isLoading
+        ? <span className="adm-skeleton-row" style={{ width: '58%', height: 28 }} />
+        : <span className="adm-stat-value">{value}</span>
+      }
+      <span className="adm-stat-sub">{sub || ' '}</span>
     </div>
   )
 }
@@ -395,6 +347,7 @@ export default function AdminDashboard({ token, onRefresh }) {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
   const [spin,       setSpin]       = useState(false)
+  const [updatedAt,  setUpdatedAt]  = useState(null)
   // Rule count from the public /health endpoint — shows immediately, no auth
   const [ruleCount,  setRuleCount]  = useState(null)
   const [reloading,  setReloading]  = useState(false)
@@ -423,6 +376,7 @@ export default function AdminDashboard({ token, onRefresh }) {
       if (res.status === 401) throw new Error('invalid_token')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
+      setUpdatedAt(new Date())
       setError(null)
     } catch (e) {
       if (e.message === 'invalid_token') {
@@ -480,7 +434,10 @@ export default function AdminDashboard({ token, onRefresh }) {
     if (reloading) return
     setReloading(true); setReloadMsg(null)
     try {
-      const res = await fetchReload()
+      const res = await apiFetch('/admin/reload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       const body = await res.json().catch(() => ({}))
       if (res.ok && body.ok) {
         setReloadMsg({
@@ -500,13 +457,6 @@ export default function AdminDashboard({ token, onRefresh }) {
     }
   }
 
-  function fetchReload() {
-    return apiFetch('/admin/reload', {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-  }
-
   const ov = data?.overview ?? {}
   // Prefer the live health count; fall back to what analytics returns
   const totalRules = ruleCount ?? ov.total_rules
@@ -515,25 +465,31 @@ export default function AdminDashboard({ token, onRefresh }) {
 
   return (
     <div className="adm-content">
-      {/* Sub-header */}
-      <div className="adm-sub-header">
-        <div className="adm-sub-header-left">
-          <span className="adm-sub-title">Rule Health Dashboard</span>
-          <span className="adm-sub-desc">Business intelligence · live usage analytics</span>
+      {/* Hero header */}
+      <div className="adm-hero">
+        <div className="adm-hero-left">
+          <h1 className="adm-hero-title">Rule Health</h1>
+          <div className="adm-hero-meta">
+            <span className="adm-live"><span className="adm-live-dot" />Live</span>
+            <span className="adm-hero-sep">·</span>
+            <span>Auto-refreshes every 60s</span>
+            {updatedAt && (
+              <>
+                <span className="adm-hero-sep">·</span>
+                <span>Updated {updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="adm-sub-header-actions">
+        <div className="adm-hero-actions">
           {llmStatus && (
-            <span className={`adm-reload-status ${llmStatus.ok ? 'ok' : 'fail'}`}>
-              {llmStatus.text}
-            </span>
+            <span className={`adm-status ${llmStatus.ok ? 'ok' : 'fail'}`}>{llmStatus.text}</span>
           )}
           {reloadMsg && (
-            <span className={`adm-reload-status ${reloadMsg.ok ? 'ok' : 'fail'}`}>
-              {reloadMsg.text}
-            </span>
+            <span className={`adm-status ${reloadMsg.ok ? 'ok' : 'fail'}`}>{reloadMsg.text}</span>
           )}
           <button
-            className="adm-refresh-btn"
+            className="adm-btn"
             onClick={checkLlm}
             disabled={llmChecking}
             title="Probe Azure OpenAI connectivity (makes one real LLM call)"
@@ -542,7 +498,7 @@ export default function AdminDashboard({ token, onRefresh }) {
             {llmChecking ? 'Checking…' : 'Check LLM'}
           </button>
           <button
-            className="adm-refresh-btn"
+            className="adm-btn"
             onClick={reloadData}
             disabled={reloading}
             title="Re-read the rule inventory Excel, golden/ YAML pipelines, and custom operations from disk"
@@ -550,7 +506,7 @@ export default function AdminDashboard({ token, onRefresh }) {
             <DatabaseIcon />
             {reloading ? 'Reloading…' : 'Reload Data'}
           </button>
-          <button className="adm-refresh-btn" onClick={() => load()} disabled={loading}>
+          <button className="adm-btn" onClick={() => load()} disabled={loading}>
             <RefreshIcon spinning={spin} />
             Refresh
           </button>
@@ -558,149 +514,148 @@ export default function AdminDashboard({ token, onRefresh }) {
       </div>
 
       <div className="adm-scroll">
-        {error && error !== 'invalid_token' && (
-          <div className="adm-error-banner">
-            Could not load analytics data: {error}. Interact with rules to start populating data.
-          </div>
-        )}
-
-        {/* KPI row */}
-        <div className="adm-kpi-row">
-          {/* Active Rules loads from /health independently — always visible */}
-          <KpiCard
-            accent
-            icon={<GridIcon />}
-            label="Active Rules"
-            value={totalRules != null ? totalRules.toLocaleString() : undefined}
-            sub="Customer domain"
-          />
-          <KpiCard icon={<EyeIcon />}    label="Total Views"    value={loading ? undefined : ov.total_views?.toLocaleString()}          sub={loading ? '' : `${ov.views_today ?? 0} today`}/>
-          <KpiCard icon={<TrendUpIcon />} label="This Week"     value={loading ? undefined : ov.views_this_week?.toLocaleString()}      sub="Last 7 days"/>
-          <KpiCard icon={<ShieldIcon />} label="Rules Accessed" value={loading ? undefined : ov.unique_rules_accessed?.toLocaleString()} sub={loading ? '' : `of ${totalRules ?? '—'} total`}/>
-          <KpiCard icon={<ChatIcon />}   label="AI Chat Queries" value={loading ? undefined : ov.chat_queries_with_rule?.toLocaleString()} sub="Linked to a rule"/>
-          <KpiCard
-            icon={<ZapIcon />}
-            label="Tokens Used"
-            value={loading ? undefined : formatTokens(ov.total_tokens_used)}
-            sub={loading ? '' : `${formatTokens(ov.total_prompt_tokens) ?? 0} prompt · ${formatTokens(ov.total_completion_tokens) ?? 0} completion${ov.estimated_cost_usd != null ? ` · ≈ ${formatCost(ov.estimated_cost_usd)}` : ''}`}
-          />
-          <KpiCard
-            icon={<ThumbsIcon />}
-            label="Answer Feedback"
-            value={loading ? undefined : (fbTotal ? `${Math.round((fb.up / fbTotal) * 100)}%` : '—')}
-            sub={loading ? '' : (fbTotal ? `${fb.up} up · ${fb.down} down` : 'No votes yet')}
-          />
-        </div>
-
-        {/* Main grid */}
-        <div className="adm-grid">
-          {/* Top rules bar chart */}
-          <section className="adm-card">
-            <div className="adm-card-header">
-              <span className="adm-card-title">Most Asked Rules</span>
-              <span className="adm-card-badge">Top 15</span>
+        <div className="adm-scroll-inner">
+          {error && error !== 'invalid_token' && (
+            <div className="adm-error-banner">
+              Could not load analytics data: {error}. Interact with rules to start populating data.
             </div>
-            {loading ? <SkeletonRows n={7} /> : <HorizontalBarChart data={data?.top_rules ?? []} maxBars={15} />}
+          )}
+
+          {/* KPI band */}
+          <section className="adm-band" aria-label="Key metrics">
+            {/* Active Rules loads from /health independently — always visible */}
+            <Stat
+              accent
+              label="Active Rules"
+              value={totalRules != null ? totalRules.toLocaleString() : undefined}
+              sub="Customer domain"
+            />
+            <Stat label="Total Views"     value={loading ? undefined : ov.total_views?.toLocaleString()}             sub={loading ? '' : `${ov.views_today ?? 0} today`} />
+            <Stat label="This Week"       value={loading ? undefined : ov.views_this_week?.toLocaleString()}         sub="Last 7 days" />
+            <Stat label="Rules Accessed"  value={loading ? undefined : ov.unique_rules_accessed?.toLocaleString()}   sub={loading ? '' : `of ${totalRules ?? '—'} total`} />
+            <Stat label="AI Chat Queries" value={loading ? undefined : ov.chat_queries_with_rule?.toLocaleString()}  sub="Linked to a rule" />
+            <Stat
+              label="Tokens Used"
+              value={loading ? undefined : formatTokens(ov.total_tokens_used)}
+              sub={loading ? '' : `${formatTokens(ov.total_prompt_tokens) ?? 0} in · ${formatTokens(ov.total_completion_tokens) ?? 0} out${ov.estimated_cost_usd != null ? ` · ≈ ${formatCost(ov.estimated_cost_usd)}` : ''}`}
+            />
+            <Stat
+              label="Answer Feedback"
+              value={loading ? undefined : (fbTotal ? `${Math.round((fb.up / fbTotal) * 100)}%` : '—')}
+              sub={loading ? '' : (fbTotal ? `${fb.up} up · ${fb.down} down` : 'No votes yet')}
+            />
           </section>
 
-          {/* Right column */}
-          <div className="adm-right-col">
+          {/* Main grid */}
+          <div className="adm-grid">
+            {/* Top rules bar chart */}
             <section className="adm-card">
               <div className="adm-card-header">
-                <span className="adm-card-title">Catalogue Coverage</span>
+                <span className="adm-card-title">Most Asked Rules</span>
+                <span className="adm-card-badge">Top 15</span>
               </div>
-              <div className="adm-coverage-body">
-                {loading
-                  ? <div className="adm-skeleton-circle" />
-                  : <CoverageArc pct={ov.coverage_pct ?? 0} />
-                }
-                <div className="adm-coverage-text">
-                  <p className="adm-coverage-headline">
-                    {ov.unique_rules_accessed ?? 0} of {ov.total_rules ?? '—'} rules explored
-                  </p>
-                  <p className="adm-coverage-hint">
-                    {!ov.coverage_pct
-                      ? 'Start exploring rules to track coverage'
-                      : ov.coverage_pct < 50
-                      ? 'Significant discovery opportunity remains'
-                      : ov.coverage_pct < 80
-                      ? 'Good adoption — keep driving exploration'
-                      : 'Excellent catalogue engagement'}
-                  </p>
+              {loading ? <SkeletonRows n={7} /> : <HorizontalBarChart data={data?.top_rules ?? []} maxBars={15} />}
+            </section>
+
+            {/* Right column */}
+            <div className="adm-right-col">
+              <section className="adm-card">
+                <div className="adm-card-header">
+                  <span className="adm-card-title">Catalogue Coverage</span>
                 </div>
+                <div className="adm-coverage-body">
+                  {loading
+                    ? <div className="adm-skeleton-circle" />
+                    : <CoverageArc pct={ov.coverage_pct ?? 0} />
+                  }
+                  <div className="adm-coverage-text">
+                    <p className="adm-coverage-headline">
+                      {ov.unique_rules_accessed ?? 0} of {ov.total_rules ?? '—'} rules explored
+                    </p>
+                    <p className="adm-coverage-hint">
+                      {!ov.coverage_pct
+                        ? 'Start exploring rules to track coverage'
+                        : ov.coverage_pct < 50
+                        ? 'Significant discovery opportunity remains'
+                        : ov.coverage_pct < 80
+                        ? 'Good adoption — keep driving exploration'
+                        : 'Excellent catalogue engagement'}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="adm-card">
+                <div className="adm-card-header">
+                  <span className="adm-card-title">Recent Activity</span>
+                </div>
+                {loading ? <SkeletonRows n={5} widths={[70, 60, 75, 55, 65]} /> : <RecentActivity views={data?.recent_views ?? []} />}
+              </section>
+            </div>
+          </div>
+
+          {/* Insight grid — chat intents, trending, feedback by mode */}
+          <div className="adm-grid-3">
+            <section className="adm-card">
+              <div className="adm-card-header">
+                <span className="adm-card-title">Chat Intents</span>
+                <span className="adm-card-badge">What users ask</span>
               </div>
+              {loading ? <SkeletonRows n={5} /> : <IntentBars items={data?.intent_distribution ?? []} />}
             </section>
 
             <section className="adm-card">
               <div className="adm-card-header">
-                <span className="adm-card-title">Recent Activity</span>
+                <span className="adm-card-title">Trending Rules</span>
+                <span className="adm-card-badge">Last 30 days</span>
               </div>
-              {loading ? <SkeletonRows n={5} widths={[70, 60, 75, 55, 65]} /> : <RecentActivity views={data?.recent_views ?? []} />}
+              {loading ? <SkeletonRows n={5} /> : <TrendingRules rules={data?.trending_rules ?? []} />}
+            </section>
+
+            <section className="adm-card">
+              <div className="adm-card-header">
+                <span className="adm-card-title">Feedback by Mode</span>
+                <span className="adm-card-badge">Answer quality</span>
+              </div>
+              {loading ? <SkeletonRows n={5} /> : <FeedbackByMode byMode={data?.feedback?.by_mode ?? []} />}
             </section>
           </div>
-        </div>
 
-        {/* Insight grid — chat intents, trending, feedback by mode */}
-        <div className="adm-grid-3">
-          <section className="adm-card">
-            <div className="adm-card-header">
-              <span className="adm-card-title">Chat Intents</span>
-              <span className="adm-card-badge">What users ask</span>
-            </div>
-            {loading ? <SkeletonRows n={5} /> : <IntentBars items={data?.intent_distribution ?? []} />}
-          </section>
+          {/* Quality + cost grid */}
+          <div className="adm-grid-2">
+            <section className="adm-card">
+              <div className="adm-card-header">
+                <span className="adm-card-title">Most Downvoted Rules</span>
+                <span className="adm-card-badge">Review queue</span>
+              </div>
+              {loading ? <SkeletonRows n={4} /> : <DownvotedRules rules={data?.downvoted_rules ?? []} />}
+            </section>
 
-          <section className="adm-card">
-            <div className="adm-card-header">
-              <span className="adm-card-title">Trending Rules</span>
-              <span className="adm-card-badge">Last 30 days</span>
-            </div>
-            {loading ? <SkeletonRows n={5} /> : <TrendingRules rules={data?.trending_rules ?? []} />}
-          </section>
-
-          <section className="adm-card">
-            <div className="adm-card-header">
-              <span className="adm-card-title">Feedback by Mode</span>
-              <span className="adm-card-badge">Answer quality</span>
-            </div>
-            {loading ? <SkeletonRows n={5} /> : <FeedbackByMode byMode={data?.feedback?.by_mode ?? []} />}
-          </section>
-        </div>
-
-        {/* Quality + cost grid */}
-        <div className="adm-grid-2">
-          <section className="adm-card">
-            <div className="adm-card-header">
-              <span className="adm-card-title">Most Downvoted Rules</span>
-              <span className="adm-card-badge">Review queue</span>
-            </div>
-            {loading ? <SkeletonRows n={4} /> : <DownvotedRules rules={data?.downvoted_rules ?? []} />}
-          </section>
-
-          <section className="adm-card">
-            <div className="adm-card-header">
-              <span className="adm-card-title">Token Usage by Call Type</span>
-            </div>
-            {loading ? <SkeletonRows n={4} /> : <TokenBreakdown rows={data?.tokens_by_call_type ?? []} />}
-          </section>
-        </div>
-
-        {/* Sparkline */}
-        <section className="adm-card adm-card-spark">
-          <div className="adm-card-header">
-            <span className="adm-card-title">30-Day Activity Trend</span>
-            <span className="adm-card-badge">{data?.daily_activity?.length ?? 0} days with data</span>
+            <section className="adm-card">
+              <div className="adm-card-header">
+                <span className="adm-card-title">Token Usage by Call Type</span>
+              </div>
+              {loading ? <SkeletonRows n={4} /> : <TokenBreakdown rows={data?.tokens_by_call_type ?? []} />}
+            </section>
           </div>
-          {loading
-            ? <div className="adm-skeleton-spark" />
-            : data?.daily_activity?.length
-            ? <Sparkline data={fillDailySeries(data.daily_activity)} />
-            : <EmptyChart label="No activity data yet" height={70} />}
-        </section>
 
-        <p className="adm-footer">
-          Rule Intelligence &middot; Coca-Cola HBC &middot; Data Quality Platform
-        </p>
+          {/* Sparkline */}
+          <section className="adm-card adm-card-spark">
+            <div className="adm-card-header">
+              <span className="adm-card-title">30-Day Activity Trend</span>
+              <span className="adm-card-badge">{data?.daily_activity?.length ?? 0} days with data</span>
+            </div>
+            {loading
+              ? <div className="adm-skeleton-spark" />
+              : data?.daily_activity?.length
+              ? <Sparkline data={fillDailySeries(data.daily_activity)} />
+              : <EmptyChart label="No activity data yet" height={70} />}
+          </section>
+
+          <p className="adm-footer">
+            Rule Intelligence &middot; Coca-Cola HBC &middot; Data Quality Platform
+          </p>
+        </div>
       </div>
     </div>
   )

@@ -72,12 +72,86 @@ You are a router for a data quality rule assistant.
 The user has an active rule open in their panel. Decide whether their message is:
 - A follow-up question or request about that active rule → reply FOLLOWUP
 - A search or request to find a different or new rule by description → reply SEARCH
+- Anything not about the rules at all (greetings, the team's tools, processes,
+  documentation, git, Databricks, SAP, general data quality concepts, or any
+  other topic) → reply GENERAL
 
 Examples of FOLLOWUP: "what table does it check?", "explain the severity", "what does this mean?", "how does it work?"
 Examples of SEARCH: "find a rule that checks phone numbers", "is there a rule for email validation?", "what rule handles address conformity?"
+Examples of GENERAL: "is there a wiki page that explains the git flow?", "what does conformity mean in data quality?", "how do I run a notebook in Databricks?"
 
-Reply with exactly one word: FOLLOWUP or SEARCH. Nothing else.\
+Reply with exactly one word: FOLLOWUP, SEARCH, or GENERAL. Nothing else.\
 """
+
+_GENERAL_ROUTE_SYSTEM = """\
+You are a router for a data quality rule assistant.
+Decide whether the user's message is about the repository's data quality rules
+(finding, explaining, listing, counting, or comparing rules, their descriptions,
+SAP tables/columns, categories, severity, pipelines, or lineage) → reply RULES
+or about anything else (greetings, the team's tools, processes, documentation,
+git, Databricks, SAP in general, data quality concepts in general, or any other
+topic) → reply GENERAL
+
+Examples of RULES: "is there a rule for email validation?", "list all completeness rules", "which rules check KNA1?"
+Examples of GENERAL: "is there a wiki page that explains the git flow?", "what is a golden record?", "how do I connect to Databricks?", "hello"
+
+Reply with exactly one word: RULES or GENERAL. Nothing else.\
+"""
+
+_GENERAL_ASSISTANT_SYSTEM = """\
+You are the analyst assistant for a Customer data quality rule repository
+(YAML rule pipelines under golden/, custom Python operations under
+custom_operations/, rule inventory in data/dim_rules_inventory.xlsx, running
+on Databricks against SAP customer data).
+
+The user's current message is not a rule lookup — answer it directly and helpfully.
+
+Guidelines:
+- General or technical questions (data quality concepts, git, SQL, PySpark,
+  Databricks, SAP, agile process, etc.): answer accurately from general knowledge.
+- Questions about team-specific resources you cannot see (wiki pages, Confluence,
+  dashboards, tickets, contacts, URLs, environments): say plainly that you don't
+  have access to that resource, then help with what you DO know — e.g. explain
+  the underlying concept yourself or suggest where teams typically document it.
+  NEVER invent links, page names, document titles, or people.
+- Greetings and small talk: reply briefly and naturally.
+- When it fits, remind the user you can also look up and explain the repository's
+  data quality rules (by rule ID, description, category, or SAP table) — but
+  never force their question into a rule search.
+- Match answer length to the question; prefer short, direct answers.\
+"""
+
+
+def _route_no_rule_message(message: str) -> str:
+    """Return 'GENERAL' for off-catalog questions, 'RULES' for rule lookups.
+
+    Falls back to 'RULES' on any failure so the original search flow is preserved.
+    """
+    from explanation_engine import call_openai
+    try:
+        result = call_openai(_GENERAL_ROUTE_SYSTEM, message, max_tokens=5)
+        return "GENERAL" if "GENERAL" in result.upper() else "RULES"
+    except Exception as e:
+        log.warning("[WARN] General router failed, defaulting to RULES: %s", e)
+        return "RULES"
+
+
+def _answer_general(message: str, history: list[dict] | None = None) -> dict[str, Any]:
+    """Answer a general (non-rule) question as a helpful assistant."""
+    from explanation_engine import call_openai
+    try:
+        ai_text = call_openai(
+            _GENERAL_ASSISTANT_SYSTEM, message, max_tokens=700, history=history,
+        )
+        log.info("[INFO] _answer_general: answered general question")
+        return {"response": ai_text, "rule_id": None, "suggested_followups": []}
+    except Exception as e:
+        log.error("[ERROR] _answer_general failed: %s", e)
+        return {
+            "response": "I couldn't answer that right now. Please try again.",
+            "rule_id": None,
+            "suggested_followups": [],
+        }
 
 
 _EXPLICIT_INTENT_SYSTEM = """\
@@ -118,12 +192,17 @@ def _classify_intent_llm(message: str, rule_id: str) -> str:
 
 
 def _classify_search_intent(message: str, context_rule_id: str) -> str:
-    """Return 'SEARCH' if the user is looking for a different rule, 'FOLLOWUP' if asking about the active rule."""
+    """Return 'SEARCH' (find a different rule), 'GENERAL' (off-catalog question),
+    or 'FOLLOWUP' (about the active rule)."""
     from explanation_engine import call_openai
     user_msg = f"Active rule: {context_rule_id}\nUser message: {message}"
     try:
-        result = call_openai(_INTENT_CLASSIFIER_SYSTEM, user_msg, max_tokens=5)
-        return "SEARCH" if "SEARCH" in result.upper() else "FOLLOWUP"
+        result = call_openai(_INTENT_CLASSIFIER_SYSTEM, user_msg, max_tokens=5).upper()
+        if "SEARCH" in result:
+            return "SEARCH"
+        if "GENERAL" in result:
+            return "GENERAL"
+        return "FOLLOWUP"
     except Exception as e:
         log.warning("[WARN] Intent classifier failed, defaulting to FOLLOWUP: %s", e)
         return "FOLLOWUP"
@@ -306,7 +385,12 @@ def _answer_with_context(message: str, rule_id: str, history: list[dict] | None 
         }
 
 
-def _handle_no_rule_id(message: str, context_rule_id: str | None = None, history: list[dict] | None = None) -> dict[str, Any]:
+def _handle_no_rule_id(
+    message: str,
+    context_rule_id: str | None = None,
+    history: list[dict] | None = None,
+    allow_general: bool = False,
+) -> dict[str, Any]:
     from data_loader import get_rules
     rules = get_rules()
     low = message.lower()
@@ -389,13 +473,23 @@ def _handle_no_rule_id(message: str, context_rule_id: str | None = None, history
                     })
                 return {"response": response, "rule_id": None, "suggested_followups": followups}
 
+    # General mode only: conversational acknowledgements ("thanks", "ok") skip routing
+    if allow_general and _is_conversational(message):
+        return _answer_general(message, history=history)
+
     # If there's an active rule in the panel, classify intent before routing
     if context_rule_id:
-        if _classify_search_intent(message, context_rule_id) == "SEARCH":
+        route = _classify_search_intent(message, context_rule_id)
+        if route == "SEARCH":
             return _find_rule_by_description(message)
+        if route == "GENERAL" and allow_general:
+            return _answer_general(message, history=history)
+        # GENERAL with the flag off falls back to FOLLOWUP (rules-only behavior)
         return _answer_with_context(message, context_rule_id, history=history)
 
-    # No active rule — go straight to description search
+    # No active rule — in general mode, off-catalog questions get a direct answer
+    if allow_general and _route_no_rule_message(message) == "GENERAL":
+        return _answer_general(message, history=history)
     return _find_rule_by_description(message)
 
 
@@ -598,6 +692,7 @@ async def stream_message(
     context_rule_id: str | None = None,
     history: list[dict] | None = None,
     mode: str = "analyst",
+    allow_general: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat response as Server-Sent Events.
 
@@ -634,7 +729,9 @@ async def stream_message(
 
     # ── No rule ID in message ─────────────────────────────────────────────────
     if not rule_id:
-        result = _handle_no_rule_id(message, context_rule_id, history=history)
+        result = _handle_no_rule_id(
+            message, context_rule_id, history=history, allow_general=allow_general,
+        )
         text = result.get("response", "")
         rid = result.get("rule_id")
         async for part in _stream_text(text):
@@ -806,7 +903,12 @@ async def stream_message(
     yield _sse({"type": "done", "rule_id": rule_id, "suggested_followups": followups})
 
 
-def handle_message(message: str, context_rule_id: str | None = None, history: list[dict] | None = None) -> dict[str, Any]:
+def handle_message(
+    message: str,
+    context_rule_id: str | None = None,
+    history: list[dict] | None = None,
+    allow_general: bool = False,
+) -> dict[str, Any]:
     message = message.strip()
     if len(message) > 2000:
         raise ValueError("Message exceeds maximum length of 2000 characters.")
@@ -814,7 +916,9 @@ def handle_message(message: str, context_rule_id: str | None = None, history: li
         history = history[-_MAX_HISTORY:]
     rule_id = _extract_rule_id(message)
     if not rule_id:
-        return _handle_no_rule_id(message, context_rule_id, history=history)
+        return _handle_no_rule_id(
+            message, context_rule_id, history=history, allow_general=allow_general,
+        )
 
     from data_loader import get_rules
     from rule_parser import extract_sap_fields
