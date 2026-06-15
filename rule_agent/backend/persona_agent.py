@@ -57,8 +57,40 @@ _PM_FOLLOWUPS = [
     "Shorten this story",
 ]
 
-_STATUS_SELECTING = "Identifying affected rules and pipelines…"
-_STATUS_READING = "Reading pipeline definitions…"
+_STATUS_SELECTING = "Searching the rules and pipelines…"
+
+
+def _selection_status(selection: dict) -> str:
+    """Grounded progress line describing what Stage 1 actually selected (no LLM).
+
+    Surfaces the real rule IDs and pipeline files so the user sees a truthful
+    "found X in file Y — reading it" step, not an invented narrative.
+    """
+    from data_loader import find_yaml_for_rule, get_yaml_rules
+
+    rule_ids = selection.get("rule_ids", [])
+    pipelines = selection.get("pipelines", [])
+
+    files: list[str] = []
+    for rid in rule_ids:
+        m = find_yaml_for_rule(rid)
+        if m and _posix(m["yaml_file"]) not in files:
+            files.append(_posix(m["yaml_file"]))
+    yamls = get_yaml_rules()
+    for name in pipelines:
+        data = yamls.get(name)
+        if data and _posix(data["yaml_file"]) not in files:
+            files.append(_posix(data["yaml_file"]))
+
+    if rule_ids:
+        rule_part = ", ".join(rule_ids[:3]) + ("…" if len(rule_ids) > 3 else "")
+        file_part = (" in " + ", ".join(f"golden/{f}" for f in files[:2])) if files else ""
+        return f"Found {rule_part}{file_part} — reading the definitions…"
+    if selection.get("needs_new_rule"):
+        return "No existing rule covers this — planning a new rule…"
+    if pipelines:
+        return "Reading the matched pipeline definitions…"
+    return "No specific rules matched — preparing a response…"
 
 # ── System prompts ─────────────────────────────────────────────────────────────
 
@@ -604,7 +636,7 @@ async def stream_persona_message(
 
     try:
         selection = await _select_targets(message, history=history, context_rule_id=context_rule_id)
-        yield _sse({"type": "status", "text": _STATUS_READING})
+        yield _sse({"type": "status", "text": _selection_status(selection)})
         context = _load_persona_context(selection, mode=mode)
 
         label = "USER STORY" if is_engineer else "USER REQUEST"

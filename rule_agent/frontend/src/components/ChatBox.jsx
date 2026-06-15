@@ -2,6 +2,7 @@
 import ReactMarkdown from 'react-markdown'
 import Tooltip from './Tooltip.jsx'
 import YamlValidator from './YamlValidator.jsx'
+import RichInput from './RichInput.jsx'
 import { apiGet, apiPost, apiPostStream } from '../api.js'
 import { copyText, buildDatabricksNotebook, downloadFile, markdownToJira } from '../utils/exporters.js'
 
@@ -312,7 +313,6 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     } catch {}
     return initialMessagesFor(getStoredMode())
   })
-  const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [showValidator, setShowValidator] = useState(false)
@@ -321,8 +321,9 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     try { return localStorage.getItem(GENERAL_STORAGE_KEY) === '1' } catch {}
     return false
   })
+  const [editorHasContent, setEditorHasContent] = useState(false)
   const bottomRef        = useRef(null)
-  const textareaRef      = useRef(null)
+  const richInputRef     = useRef(null)
   const sessionStartRef  = useRef(0)
   const prevRuleIdRef    = useRef(activeRuleId)
 
@@ -335,11 +336,11 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   }, [messages, loading])
 
   useEffect(() => {
-    textareaRef.current?.focus()
+    richInputRef.current?.focus()
   }, [])
 
   useEffect(() => {
-    if (!loading) textareaRef.current?.focus()
+    if (!loading) richInputRef.current?.focus()
   }, [loading])
 
   // Reset session window when the active rule changes so history stays rule-scoped.
@@ -355,16 +356,8 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
   useEffect(() => {
     if (prefill) {
-      setInput(prefill)
+      richInputRef.current?.setContent(prefill)
       onPrefillConsumed?.()
-      setTimeout(() => {
-        const ta = textareaRef.current
-        if (ta) {
-          ta.focus()
-          ta.style.height = 'auto'
-          ta.style.height = ta.scrollHeight + 'px'
-        }
-      }, 0)
     }
   }, [prefill]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -404,11 +397,14 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   }
 
   async function send(overrideText) {
-    const text = (overrideText ?? input).trim()
+    let text
+    if (overrideText !== undefined) {
+      text = overrideText.trim()
+    } else {
+      text = richInputRef.current?.getMarkdown()?.trim() ?? ''
+      if (text) richInputRef.current?.clear()
+    }
     if (!text || loading) return
-
-    setInput('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     // Build history from session window before appending the new user message
     const sessionMsgs = messages.slice(sessionStartRef.current)
@@ -566,26 +562,17 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     } catch {}
   }
 
-  function onKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
-  }
-
-  function onInputChange(e) {
-    setInput(e.target.value)
-    e.target.style.height = 'auto'
-    e.target.style.height = e.target.scrollHeight + 'px'
-  }
-
   const mdComponents = makeMarkdownComponents(handleRuleLinkClick)
-  const userMsgCount = messages.filter(m => m.role === 'user').length
-  const hasHistory = messages.length > 1
-  const isFreshChat =
+  const userMsgCount  = messages.filter(m => m.role === 'user').length
+  const hasHistory    = messages.length > 1
+  const isFreshChat   =
     messages.length === 1 &&
     messages[0].role === 'agent' &&
     (messages[0].isWelcome || messages[0].ts === null)
+  const currentPlaceholder =
+    mode === 'analyst' && generalMode
+      ? 'Ask anything — rules, data quality concepts, tools, process…'
+      : MODE_PLACEHOLDERS[mode]
 
   return (
     <div className="chat-container">
@@ -700,7 +687,9 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
                       )}
                     </div>
                   ) : (
-                    <p style={{ whiteSpace: 'pre-line' }}>{msg.text}</p>
+                    <div className="md-body">
+                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                    </div>
                   )}
                 </div>
                 {msg.role === 'agent' && !msg.isError && !msg.isStreaming && msg.mode && msg.text && (
@@ -732,26 +721,19 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
       <div className="chat-input-row">
         <div className="chat-input-inner">
-          <div className="input-wrap" data-tour="chat-input" onClick={() => textareaRef.current?.focus()}>
-            <textarea
-              ref={textareaRef}
-              className="chat-input"
-              value={input}
-              onChange={onInputChange}
-              onKeyDown={onKey}
-              placeholder={
-                mode === 'analyst' && generalMode
-                  ? 'Ask anything — rules, data quality concepts, tools, process…'
-                  : MODE_PLACEHOLDERS[mode]
-              }
-              rows={1}
+          <div className="input-wrap" data-tour="chat-input" onClick={() => richInputRef.current?.focus()}>
+            <RichInput
+              ref={richInputRef}
+              onSend={() => send()}
+              placeholder={currentPlaceholder}
               disabled={loading}
+              onIsEmptyChange={(empty) => setEditorHasContent(!empty)}
             />
             <Tooltip content="Send message (Enter)">
               <button
                 className="send-btn"
                 onClick={() => send()}
-                disabled={loading || !input.trim()}
+                disabled={loading || !editorHasContent}
               >
                 <SendIcon />
               </button>
