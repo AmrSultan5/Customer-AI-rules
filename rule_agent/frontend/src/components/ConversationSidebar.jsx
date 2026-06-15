@@ -31,49 +31,49 @@ function PersonaPicker({ onPick, onCancel }) {
 
 const ChevronRightIcon = () => (
   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-    <path d="M3.5 2L7 5L3.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M3.5 2L7 5L3.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 const InstructionsIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <rect x="2" y="1.5" width="10" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25"/>
-    <path d="M4.5 4.5h5M4.5 7h3M4.5 9.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+    <rect x="2" y="1.5" width="10" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+    <path d="M4.5 4.5h5M4.5 7h3M4.5 9.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
   </svg>
 )
 
 const ProjectDeleteIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
     <path d="M2 4h10M5 4V2.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V4M3.5 4l.5 8h6l.5-8"
-      stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
+      stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 const SwitchUserIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
     <path d="M9.5 3.5L12 6M12 6L9.5 8.5M12 6H5M4.5 10.5L2 8M2 8L4.5 5.5M2 8H9"
-      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 const EditIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
     <path d="M8.5 1.5a1.2 1.2 0 0 1 1.7 1.7L3.5 9.9 1 10.5l.6-2.5 6.9-6.5z"
-      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 const MoveIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-    <rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
-    <path d="M1 4.5h10M4.5 1v3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+    <rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M1 4.5h10M4.5 1v3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 )
 
 const TrashMenuIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
     <path d="M1.5 3.5h9M4 3.5V2.5h4v1M3 3.5l.5 7h5l.5-7"
-      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
@@ -117,7 +117,7 @@ function ConversationRow({ conv, active, projects, onSelect, onChanged }) {
             <label className="conv-menu-move">
               <MoveIcon /> Move to
               <select value={conv.project_id ?? ''} onChange={move}>
-                <option value="">No project</option>
+                <option value="">Chats</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -176,7 +176,7 @@ export default function ConversationSidebar({
       const [pj, cv] = await Promise.all([listProjects(), listConversations()])
       setProjects(pj)
       setConversations(cv)
-    } catch {}
+    } catch { }
   }, [username])
 
   useEffect(() => { reload() }, [reload, reloadSignal])
@@ -297,7 +297,7 @@ export default function ConversationSidebar({
         {looseConvs.length > 0 && (
           <div className="conv-project">
             <div className="conv-project-header">
-              <span className="conv-project-name loose">No project</span>
+              <span className="conv-project-name loose">Chats</span>
             </div>
             <div className="conv-project-body">
               {looseConvs.map(c => (
