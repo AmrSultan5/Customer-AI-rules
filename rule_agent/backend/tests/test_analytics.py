@@ -1,12 +1,13 @@
 """
-Analytics unit tests — exercise the SQLite tracker and dashboard aggregation
-against a temporary database (no app server, no LLM calls).
+Analytics unit tests — exercise the SQLAlchemy tracker and dashboard aggregation
+against a fresh database (no app server, no LLM calls).
 """
 import asyncio
 
 import pytest
 
 import analytics
+import db
 
 EXPECTED_TOP_LEVEL_KEYS = {
     "overview", "top_rules", "daily_activity", "recent_views",
@@ -16,10 +17,9 @@ EXPECTED_TOP_LEVEL_KEYS = {
 
 
 @pytest.fixture
-def fresh_db(tmp_path, monkeypatch):
-    """Point the analytics module at an empty temporary database."""
-    monkeypatch.setattr(analytics, "DB_PATH", tmp_path / "analytics.db")
-    monkeypatch.setattr(analytics, "_DB_READY", False)
+def fresh_db():
+    """Drop and recreate all tables so each test starts from an empty database."""
+    asyncio.run(db.reset_db())
 
 
 def dashboard(total_rules=2):

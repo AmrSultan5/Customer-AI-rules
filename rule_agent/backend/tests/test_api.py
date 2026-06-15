@@ -415,12 +415,8 @@ def test_admin_dashboard_requires_auth():
     assert r.status_code == 401
 
 
-def test_admin_dashboard_shape(tmp_path, monkeypatch):
+def test_admin_dashboard_shape():
     """Dashboard payload must include every section the AdminDashboard UI renders."""
-    import analytics
-    monkeypatch.setattr(analytics, "DB_PATH", tmp_path / "analytics.db")
-    monkeypatch.setattr(analytics, "_DB_READY", False)
-
     r = client.get("/admin/dashboard", headers=AUTH)
     assert r.status_code == 200
     data = r.json()

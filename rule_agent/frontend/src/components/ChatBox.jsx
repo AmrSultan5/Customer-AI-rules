@@ -3,10 +3,9 @@ import ReactMarkdown from 'react-markdown'
 import Tooltip from './Tooltip.jsx'
 import YamlValidator from './YamlValidator.jsx'
 import RichInput from './RichInput.jsx'
-import { apiGet, apiPost, apiPostStream } from '../api.js'
+import { apiGet, apiPost, apiPostStream, getConversation, createConversation } from '../api.js'
 import { copyText, buildDatabricksNotebook, downloadFile, markdownToJira } from '../utils/exporters.js'
 
-const STORAGE_KEY = 'rule_agent_chat_history'
 const MODE_STORAGE_KEY = 'rule_agent_chat_mode'
 const GENERAL_STORAGE_KEY = 'rule_agent_general_mode'
 
@@ -29,6 +28,20 @@ const initialMessagesFor = (mode) => [
     isWelcome: true,
   },
 ]
+
+// Map a server conversation (with messages) to the internal message shape.
+function mapConversationMessages(detail) {
+  const msgs = detail?.messages ?? []
+  if (msgs.length === 0) return initialMessagesFor(detail?.persona ?? 'analyst')
+  return msgs.map(m => ({
+    role: m.role === 'assistant' ? 'agent' : 'user',
+    text: m.content,
+    ts: m.created_at ? Date.parse(m.created_at) : Date.now(),
+    followups: m.suggested_followups ?? [],
+    mode: m.role === 'assistant' ? (detail.persona ?? 'analyst') : undefined,
+    ruleId: m.rule_id ?? null,
+  }))
+}
 
 const MODES = [
   { id: 'analyst', label: 'Analyst' },
@@ -302,21 +315,19 @@ function formatTime(ts) {
 
 const NBSP = ' '
 
-export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, activeRuleId }) {
-  const [messages, setMessages] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      }
-    } catch {}
-    return initialMessagesFor(getStoredMode())
-  })
+export default function ChatBox({
+  onRuleLoaded, prefill, onPrefillConsumed, activeRuleId,
+  conversationId = null,
+  conversationPersona = null,
+  projectId = null,
+  onConversationCreated,
+  onConversationUpdated,
+  onStartNewChat,
+}) {
+  const [messages, setMessages] = useState(() => initialMessagesFor(getStoredMode()))
   const [loading, setLoading]       = useState(false)
-  const [confirmClear, setConfirmClear] = useState(false)
   const [showValidator, setShowValidator] = useState(false)
-  const [mode, setMode] = useState(getStoredMode)
+  const [mode, setMode] = useState(conversationPersona ?? getStoredMode)
   const [generalMode, setGeneralMode] = useState(() => {
     try { return localStorage.getItem(GENERAL_STORAGE_KEY) === '1' } catch {}
     return false
@@ -324,14 +335,38 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   const [editorHasContent, setEditorHasContent] = useState(false)
   const bottomRef        = useRef(null)
   const richInputRef     = useRef(null)
-  const sessionStartRef  = useRef(0)
-  const prevRuleIdRef    = useRef(activeRuleId)
+  const loadedConvRef    = useRef(null)   // conversation id whose messages are in state
+  const modeRef          = useRef(mode)
   const sliderRef        = useRef(null)
   const modeBtnRefs      = useRef({})
 
+  useEffect(() => { modeRef.current = mode }, [mode])
+
+  // Sync the persona toggle to the active conversation's persona.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
-  }, [messages])
+    if (conversationId != null && conversationPersona) setMode(conversationPersona)
+  }, [conversationId, conversationPersona])
+
+  // Load messages when the active conversation changes (skip if ChatBox just
+  // created it during send — loadedConvRef already points at it).
+  useEffect(() => {
+    let cancelled = false
+    if (conversationId == null) {
+      loadedConvRef.current = null
+      setMessages(initialMessagesFor(modeRef.current))
+      return
+    }
+    if (conversationId === loadedConvRef.current) return
+    ;(async () => {
+      try {
+        const detail = await getConversation(conversationId)
+        if (cancelled) return
+        loadedConvRef.current = conversationId
+        setMessages(mapConversationMessages(detail))
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [conversationId, conversationPersona])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -366,17 +401,6 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     slider.style.width = `${btn.offsetWidth}px`
   }, [mode])
 
-  // Reset session window when the active rule changes so history stays rule-scoped.
-  // Rule-scoping is an analyst-mode concept only. In engineer/pm mode the persona
-  // auto-pins a rule on its first answer, which would otherwise wipe the history
-  // window and break follow-ups ("why did you do this?", corrections, etc.).
-  useEffect(() => {
-    if (activeRuleId !== prevRuleIdRef.current) {
-      prevRuleIdRef.current = activeRuleId
-      if (mode === 'analyst') sessionStartRef.current = messages.length
-    }
-  }, [activeRuleId]) // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (prefill) {
       richInputRef.current?.setContent(prefill)
@@ -384,18 +408,15 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     }
   }, [prefill]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Switching persona starts a separate thread (a conversation is bound to one
+  // persona). Deselect the current conversation and reset to a fresh draft.
   function switchMode(nextMode) {
     if (nextMode === mode || loading) return
     setMode(nextMode)
     try { localStorage.setItem(MODE_STORAGE_KEY, nextMode) } catch {}
-    // If the chat is untouched, swap the welcome message to the new persona's
-    setMessages(prev =>
-      prev.length === 1 && prev[0].role === 'agent' && (prev[0].isWelcome || prev[0].ts === null)
-        ? initialMessagesFor(nextMode)
-        : prev
-    )
-    // Scope conversation history to the current mode (mirrors the activeRuleId reset)
-    sessionStartRef.current = messages.length
+    loadedConvRef.current = null
+    setMessages(initialMessagesFor(nextMode))
+    onStartNewChat?.(nextMode)
   }
 
   function toggleGeneralMode() {
@@ -407,16 +428,12 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     })
   }
 
-  function clearHistory() {
-    if (!confirmClear) {
-      setConfirmClear(true)
-      setTimeout(() => setConfirmClear(false), 2500)
-      return
-    }
+  // "New chat" — drop the active conversation and start a fresh draft (same persona).
+  function newChat() {
+    if (loading) return
+    loadedConvRef.current = null
     setMessages(initialMessagesFor(mode))
-    sessionStartRef.current = 0
-    try { localStorage.removeItem(STORAGE_KEY) } catch {}
-    setConfirmClear(false)
+    onStartNewChat?.(mode)
   }
 
   async function send(overrideText) {
@@ -429,14 +446,19 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
     }
     if (!text || loading) return
 
-    // Build history from session window before appending the new user message
-    const sessionMsgs = messages.slice(sessionStartRef.current)
-    const MAX_HISTORY = 20
-    const historyWindow = sessionMsgs.slice(-MAX_HISTORY)
-    const history = historyWindow.map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.text.slice(0, 8000),
-    }))
+    // Ensure a server-side conversation exists; history is loaded from the DB,
+    // so the client no longer sends a history window.
+    let cid = conversationId
+    let createdConv = null
+    if (cid == null) {
+      try {
+        createdConv = await createConversation({ persona: mode, project_id: projectId ?? null })
+        cid = createdConv.id
+        loadedConvRef.current = cid
+      } catch {
+        // fall through with cid=null → backend stays stateless for this turn
+      }
+    }
 
     // Insert user message and streaming placeholder atomically
     setMessages(prev => [
@@ -445,14 +467,16 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
       { role: 'agent', text: NBSP, ts: Date.now(), isStreaming: true, followups: [], mode },
     ])
     setLoading(true)
+    if (createdConv) onConversationCreated?.(createdConv)
 
     try {
       const reader = await apiPostStream('/chat/stream', {
         message: text,
         context_rule_id: activeRuleId ?? null,
         mode,
-        history,
+        history: [],
         general: mode === 'analyst' && generalMode,
+        conversation_id: cid,
       })
 
       const decoder = new TextDecoder('utf-8', { stream: true })
@@ -565,6 +589,9 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
         }
         return prev
       })
+      // Refresh the sidebar so the new conversation, its preview, and the
+      // auto-generated title appear.
+      if (cid != null) onConversationUpdated?.()
     }
   }
 
@@ -606,6 +633,12 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
             <span className="chat-panel-live-dot" />
             <span className="chat-panel-live-label">Live</span>
           </div>
+          {activeRuleId && (
+            <span className="active-rule-chip" title={`Rule ${activeRuleId} is in context`}>
+              <span className="active-rule-chip-dot" aria-hidden="true" />
+              {activeRuleId}
+            </span>
+          )}
           {userMsgCount > 0 && (
             <span className="chat-msg-count">{userMsgCount}</span>
           )}
@@ -658,19 +691,16 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
             </Tooltip>
           )}
           {hasHistory ? (
-            <Tooltip content={confirmClear ? 'Click again to confirm' : 'Clear chat history'}>
-              <button
-                className={`clear-btn${confirmClear ? ' confirm' : ''}`}
-                onClick={clearHistory}
-              >
-                {confirmClear ? 'Confirm?' : <><TrashIcon />Clear</>}
+            <Tooltip content="Start a new chat">
+              <button className="clear-btn" onClick={newChat}>
+                <TrashIcon />New chat
               </button>
             </Tooltip>
           ) : (
             /* Invisible placeholder keeps the header from reflowing when the
                first message arrives. */
             <button className="clear-btn is-hidden" tabIndex={-1} aria-hidden="true">
-              <TrashIcon />Clear
+              <TrashIcon />New chat
             </button>
           )}
         </div>
@@ -688,6 +718,14 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
                 <div className="msg-avatar agent-avatar"><AgentIcon /></div>
               )}
               <div className="msg-content">
+                {msg.role === 'agent' && !msg.isError && msg.isStreaming && msg.text === NBSP && !msg.isStatus ? (
+                  // Initial wait state — compact typing-dots bubble instead of a huge empty box
+                  <div className="bubble agent bubble-typing" aria-label="Thinking…">
+                    <div className="typing-dots">
+                      <span /><span /><span />
+                    </div>
+                  </div>
+                ) : (
                 <div className={`bubble ${msg.role}${msg.isError ? ' error' : ''}`}>
                   {msg.role === 'agent' && !msg.isError ? (
                     <div className="md-body">
@@ -717,6 +755,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
                     </div>
                   )}
                 </div>
+                )}
                 {msg.role === 'agent' && !msg.isError && !msg.isStreaming && msg.mode && msg.text && (
                   <MessageActions msg={msg} onFeedback={rating => sendFeedback(i, msg, rating)} />
                 )}

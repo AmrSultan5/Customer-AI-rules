@@ -6,7 +6,9 @@ import TreeView from './components/TreeView.jsx'
 import GraphView from './components/GraphView.jsx'
 import Tooltip from './components/Tooltip.jsx'
 import Onboarding from './components/Onboarding.jsx'
-import { apiGet, apiFetch } from './api.js'
+import ConversationSidebar from './components/ConversationSidebar.jsx'
+import Login from './components/Login.jsx'
+import { apiGet, apiFetch, getUsername, setUsername } from './api.js'
 
 const RULE_HISTORY_KEY = 'rule_agent_rule_history'
 const PINNED_RULES_KEY = 'pinned_rules'
@@ -129,7 +131,23 @@ export default function App() {
     try { return localStorage.getItem(THEME_KEY) || 'dark' } catch { return 'dark' }
   })
   const [rulesLoaded, setRulesLoaded] = useState(null)
+  const [rulesReady, setRulesReady] = useState(false)
   const [showTour, setShowTour] = useState(false)
+
+  // ── Workspace (username + active conversation) ──────────────────────────────
+  const [username, setUsernameState] = useState(() => getUsername())
+  const [activeConversation, setActiveConversation] = useState(null) // {id, persona, project_id} | null
+  const [convReload, setConvReload] = useState(0)
+  const bumpConvReload = useCallback(() => setConvReload(n => n + 1), [])
+
+  function handleSelectConversation(conv) {
+    setActiveConversation(conv ? { id: conv.id, persona: conv.persona, project_id: conv.project_id } : null)
+  }
+  function handleChangeUser() {
+    setUsername('')
+    setUsernameState('')
+    setActiveConversation(null)
+  }
 
   // Auto-launch the walkthrough on the first visit.
   useEffect(() => {
@@ -149,6 +167,7 @@ export default function App() {
       .then(r => r.json())
       .then(d => { if (typeof d.rules_loaded === 'number') setRulesLoaded(d.rules_loaded) })
       .catch(() => {})
+      .finally(() => setRulesReady(true))
   }, [])
 
   useEffect(() => {
@@ -246,6 +265,10 @@ export default function App() {
 
   const hasBothGroups = pinnedRules.length > 0 && recentRules.length > 0
 
+  if (!username) {
+    return <Login onDone={(name) => setUsernameState(name)} />
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -288,9 +311,13 @@ export default function App() {
         </nav>
 
         <div className="topbar-actions">
-          <span className="status-pill">
+          <span className={`status-pill${!rulesReady ? ' loading' : ''}`}>
             <span className="status-dot" />
-            {rulesLoaded !== null ? `${rulesLoaded} Active Rules` : '— Active Rules'}
+            {!rulesReady
+              ? 'Connecting…'
+              : rulesLoaded !== null
+                ? `${rulesLoaded} Active Rules`
+                : '— Offline'}
           </span>
           <Tooltip content={sidebarOpen ? 'Close rule panel' : activeRuleId ? `View ${activeRuleId}` : 'Open rule panel'}>
             <button
@@ -328,6 +355,14 @@ export default function App() {
       </header>
 
       <div className="app-body" style={{ position: 'relative' }}>
+        <ConversationSidebar
+          username={username}
+          onChangeUser={handleChangeUser}
+          activeConversationId={activeConversation?.id ?? null}
+          onSelectConversation={handleSelectConversation}
+          reloadSignal={convReload}
+        />
+
         {showGraph && (
           <GraphView
             onRuleSelected={id => { loadRuleById(id); setShowGraph(false) }}
@@ -357,6 +392,12 @@ export default function App() {
             prefill={chatPrefill}
             onPrefillConsumed={() => setChatPrefill('')}
             activeRuleId={activeRuleId}
+            conversationId={activeConversation?.id ?? null}
+            conversationPersona={activeConversation?.persona ?? null}
+            projectId={activeConversation?.project_id ?? null}
+            onConversationCreated={(conv) => { handleSelectConversation(conv); bumpConvReload() }}
+            onConversationUpdated={bumpConvReload}
+            onStartNewChat={() => setActiveConversation(null)}
           />
         </main>
 

@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from data_loader import (
     extract_rule_section_from_yaml,
@@ -50,6 +51,11 @@ from explanation_engine import build_sap_context, explain_rule
 from schema_validator import validate_rules, validate_sap
 from chat_agent import handle_message, stream_message
 from analytics import track_rule_view, track_chat_event, track_feedback, get_dashboard_data
+
+import db
+import conversation_service as cs
+import openai_client
+from db import get_session
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -143,6 +149,24 @@ def _check_admin_auth(
         )
 
 
+async def get_current_user(
+    x_user: Annotated[str | None, Header()] = None,
+    session: AsyncSession = Depends(get_session),
+):
+    """Resolve the workspace user from the X-User header (lightweight identity).
+
+    Get-or-creates the user so a fresh username transparently claims a workspace.
+    """
+    if not x_user or not x_user.strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "X-User header required."},
+        )
+    user = await cs.get_or_create_user(session, x_user.strip())
+    await session.commit()
+    return user
+
+
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
 
@@ -185,6 +209,39 @@ class ChatRequest(BaseModel):
     history: Annotated[list[ChatMessage], Field(max_length=_MAX_HISTORY)] = Field(
         default_factory=list
     )
+    # When set, the conversation is loaded/persisted server-side: history comes
+    # from the DB, both messages are stored, the persona is taken from the
+    # conversation, and project instructions (if any) are injected.
+    conversation_id: int | None = None
+
+
+# ── Chat workspace request models ───────────────────────────────────────────
+
+
+class UserLoginRequest(BaseModel):
+    username: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class ProjectCreateRequest(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    instructions: Annotated[str | None, Field(max_length=8000)] = None
+
+
+class ProjectUpdateRequest(BaseModel):
+    name: Annotated[str | None, Field(min_length=1, max_length=200)] = None
+    instructions: Annotated[str | None, Field(max_length=8000)] = None
+
+
+class ConversationCreateRequest(BaseModel):
+    persona: Literal["analyst", "engineer", "pm"] = "analyst"
+    project_id: int | None = None
+    title: Annotated[str | None, Field(max_length=200)] = None
+    context_rule_id: Annotated[str | None, Field(max_length=64)] = None
+
+
+class ConversationUpdateRequest(BaseModel):
+    title: Annotated[str | None, Field(max_length=200)] = None
+    project_id: int | None = None
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────────────
@@ -201,6 +258,8 @@ async def lifespan(app: FastAPI):
         validate_sap(sap)
         get_yaml_rules()
         log.info("[INFO] Data loaded. %d active Customer rules ready.", len(rules))
+        await db.init_db()
+        log.info("[INFO] Database schema ready.")
     except Exception as exc:
         log.critical(
             "[CRITICAL] Startup data load failed: %s — %s",
@@ -501,57 +560,134 @@ async def chat(request: Request, body: ChatRequest):
 
 @router.post("/chat/stream")
 @limiter.limit(_chat_rate_limit)
-async def chat_stream(request: Request, body: ChatRequest):
+async def chat_stream(
+    request: Request,
+    body: ChatRequest,
+    x_user: Annotated[str | None, Header()] = None,
+    session: AsyncSession = Depends(get_session),
+):
     """Streaming SSE variant of /chat.
 
     Returns Server-Sent Events; each event is a JSON object on a `data:` line.
     Event types: {"type":"chunk","text":"..."}, {"type":"status","text":"..."}
     (persona modes only) and {"type":"done","rule_id":"...","suggested_followups":[...]}.
     The existing /chat endpoint is unchanged for non-streaming clients.
+
+    When body.conversation_id is set, history is loaded from the DB, both the
+    user and assistant messages are persisted, the persona is taken from the
+    conversation, and any project instructions are injected as context.
     """
+    message = body.message.strip()
+
+    # ── Resolve persistence context (conversation / persona / instructions) ──
+    mode = body.mode
+    history = _history_for_agent(body)
+    extra_context: str | None = None
+    conv_id = body.conversation_id
+    user_id: int | None = None
+    context_rule_id = body.context_rule_id
+
+    if conv_id is not None:
+        if not x_user or not x_user.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "X-User header required for conversation persistence."},
+            )
+        user = await cs.get_or_create_user(session, x_user.strip())
+        user_id = user.id
+        conv = await cs.get_conversation(session, conv_id, user.id)
+        if conv is None:
+            raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
+        mode = conv.persona  # the conversation's persona drives the answer flow
+        context_rule_id = body.context_rule_id or conv.context_rule_id
+        db_hist = await cs.recent_history(session, conv_id)
+        if db_hist:
+            history = db_hist
+        if conv.project_id is not None:
+            extra_context = await cs.project_instructions(session, conv.project_id)
+        # Persist the user turn before streaming.
+        await cs.append_message(session, conv_id, "user", body.message)
+        await session.commit()
+
     # Validate before starting the generator — once StreamingResponse begins,
     # the HTTP 200 header is already sent and we cannot return a 4xx.
     # Analyst mode keeps the stricter cap; persona modes accept pasted user
     # stories up to the schema cap (_MAX_PERSONA_MESSAGE_LEN, enforced by Pydantic).
-    message = body.message.strip()
-    if body.mode == "analyst" and len(message) > _MAX_MESSAGE_LEN:
+    if mode == "analyst" and len(message) > _MAX_MESSAGE_LEN:
         raise HTTPException(
             status_code=400,
             detail={"detail": f"Message exceeds maximum length of {_MAX_MESSAGE_LEN} characters."},
         )
 
-    history = _history_for_agent(body)
-
-    context_rule_id = body.context_rule_id
+    user_message = body.message
 
     async def _generator():
         resolved_rule_id = context_rule_id
+        assistant_text = ""
+        followups: list = []
         try:
             async for event in stream_message(
-                body.message, context_rule_id, history=history, mode=body.mode,
-                allow_general=body.general,
+                body.message, context_rule_id, history=history, mode=mode,
+                allow_general=body.general, extra_context=extra_context,
             ):
-                # Capture the rule_id from the done event for analytics
                 if event.startswith("data:"):
                     try:
                         payload = json.loads(event[5:].strip())
-                        if payload.get("type") == "done" and payload.get("rule_id"):
-                            resolved_rule_id = payload["rule_id"]
+                        ptype = payload.get("type")
+                        if ptype == "chunk":
+                            assistant_text += payload.get("text", "")
+                        elif ptype == "done":
+                            if payload.get("rule_id"):
+                                resolved_rule_id = payload["rule_id"]
+                            followups = payload.get("suggested_followups", []) or []
                     except Exception:
                         pass
                 yield event
         except Exception as exc:
             log.error("[ERROR] /chat/stream generator failed: %s", type(exc).__name__)
-            yield f"data: {json.dumps({'type': 'chunk', 'text': 'The AI service is temporarily unavailable. Please try again.'})}\n\n"
+            assistant_text = assistant_text or "The AI service is temporarily unavailable. Please try again."
+            yield f"data: {json.dumps({'type': 'chunk', 'text': assistant_text})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'rule_id': None, 'suggested_followups': []})}\n\n"
         finally:
-            asyncio.create_task(track_chat_event(resolved_rule_id, None))
+            asyncio.create_task(track_chat_event(resolved_rule_id, None, user_id))
+            if conv_id is not None and assistant_text.strip():
+                # Awaited (not fire-and-forget): the `done` event has already been
+                # sent, so this only briefly delays closing the stream, and it
+                # guarantees the turn is saved before the request ends.
+                await _persist_assistant_turn(
+                    conv_id, assistant_text, resolved_rule_id, followups, user_message,
+                )
 
     return StreamingResponse(
         _generator(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+async def _persist_assistant_turn(
+    conversation_id: int,
+    assistant_text: str,
+    rule_id: str | None,
+    followups: list,
+    user_message: str,
+) -> None:
+    """Save the assistant reply, bump updated_at, and auto-title on first reply.
+
+    Runs in its own session (the request session is torn down once streaming
+    ends) and is fire-and-forget — failures never affect the user's stream.
+    """
+    try:
+        async with db.AsyncSessionLocal() as s:
+            await cs.append_message(
+                s, conversation_id, "assistant", assistant_text, rule_id, followups,
+            )
+            await cs.touch_conversation(s, conversation_id)
+            if await cs.needs_title(s, conversation_id):
+                title = await openai_client.generate_title_async(user_message, assistant_text)
+                await cs.set_title_if_empty(s, conversation_id, title)
+    except Exception as exc:
+        log.warning("[chat] persist assistant turn failed: %s", type(exc).__name__)
 
 
 @router.get("/tree")
@@ -657,6 +793,137 @@ async def admin_probe_llm():
         return JSONResponse(status_code=503, content={"llm": "degraded", "llm_error": type(exc).__name__})
 
 
+# ── Chat workspace router (users, projects, conversations) ───────────────────
+
+workspace_router = APIRouter(dependencies=[Depends(_check_auth)])
+
+
+@workspace_router.post("/users/login")
+async def users_login(body: UserLoginRequest, session: AsyncSession = Depends(get_session)):
+    """Lightweight login — claim (or create) a workspace by username."""
+    user = await cs.get_or_create_user(session, body.username)
+    await session.commit()
+    return {"user_id": user.id, "username": user.username}
+
+
+@workspace_router.get("/projects")
+async def get_projects(user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    return await cs.list_projects(session, user.id)
+
+
+@workspace_router.post("/projects")
+async def post_project(
+    body: ProjectCreateRequest,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await cs.create_project(session, user.id, body.name, body.instructions)
+
+
+@workspace_router.patch("/projects/{project_id}")
+async def patch_project(
+    project_id: int,
+    body: ProjectUpdateRequest,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await cs.update_project(
+        session, project_id, user.id, name=body.name, instructions=body.instructions
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail={"error": "Project not found."})
+    return result
+
+
+@workspace_router.delete("/projects/{project_id}")
+async def delete_project_endpoint(
+    project_id: int,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if not await cs.delete_project(session, project_id, user.id):
+        raise HTTPException(status_code=404, detail={"error": "Project not found."})
+    return {"ok": True}
+
+
+@workspace_router.get("/conversations")
+async def get_conversations(
+    project_id: int | None = None,
+    persona: str | None = None,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await cs.list_conversations(session, user.id, project_id, persona)
+
+
+@workspace_router.post("/conversations")
+async def post_conversation(
+    body: ConversationCreateRequest,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if body.project_id is not None and await cs.get_project(session, body.project_id, user.id) is None:
+        raise HTTPException(status_code=404, detail={"error": "Project not found."})
+    return await cs.create_conversation(
+        session, user.id, persona=body.persona, project_id=body.project_id,
+        title=body.title, context_rule_id=body.context_rule_id,
+    )
+
+
+@workspace_router.get("/conversations/{conversation_id}")
+async def get_conversation_detail(
+    conversation_id: int,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await cs.get_conversation_with_messages(session, conversation_id, user.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
+    return result
+
+
+@workspace_router.patch("/conversations/{conversation_id}")
+async def patch_conversation(
+    conversation_id: int,
+    body: ConversationUpdateRequest,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    conv = await cs.get_conversation(session, conversation_id, user.id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
+    if body.title is not None:
+        await cs.rename_conversation(session, conversation_id, user.id, body.title)
+    if "project_id" in body.model_fields_set:
+        moved = await cs.move_conversation(session, conversation_id, user.id, body.project_id)
+        if moved is None:
+            raise HTTPException(status_code=400, detail={"error": "Invalid target project."})
+    return await cs.get_conversation_with_messages(session, conversation_id, user.id)
+
+
+@workspace_router.delete("/conversations/{conversation_id}")
+async def delete_conversation_endpoint(
+    conversation_id: int,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if not await cs.delete_conversation(session, conversation_id, user.id):
+        raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
+    return {"ok": True}
+
+
+@workspace_router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(
+    conversation_id: int,
+    user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await cs.get_conversation_with_messages(session, conversation_id, user.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
+    return result["messages"]
+
+
 # ── Register routes ─────────────────────────────────────────────────────────
 
 # Register routes under both bare paths (dev proxy compatible) and /api prefix (production)
@@ -671,6 +938,12 @@ app.include_router(
     router,
     prefix="/api",
     generate_unique_id_function=lambda route: f"api_{route.name}",
+)
+app.include_router(workspace_router)
+app.include_router(
+    workspace_router,
+    prefix="/api",
+    generate_unique_id_function=lambda route: f"api_ws_{route.name}",
 )
 app.include_router(admin_router)
 app.include_router(

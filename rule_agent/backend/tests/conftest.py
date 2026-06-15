@@ -1,5 +1,7 @@
 import os
 import sys
+import tempfile
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
@@ -10,6 +12,11 @@ os.environ.setdefault("CHAT_RATE_LIMIT", "1")   # very low limit for 429 tests
 os.environ.setdefault("RULE_AGENT_ENV", "development")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("ANTHROPIC_API_KEY", "fake-key-for-tests")
+
+# Use a throwaway SQLite file for the DB layer (db.py reads this at import).
+# Tests reset the schema via db.reset_db() so the starting state is always clean.
+_TEST_DB = Path(tempfile.gettempdir()) / "rule_agent_test.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_TEST_DB.as_posix()}")
 
 # ── Minimal rule catalogue ─────────────────────────────────────────────────────
 MOCK_RULES = pd.DataFrame(
@@ -76,4 +83,18 @@ sys.modules["chat_agent"] = _chat_agent
 
 # Add backend directory to path so `import main` works
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import asyncio
+
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _init_test_schema():
+    """Create the database schema once before any test (lifespan does not run
+    for module-level TestClient instances)."""
+    import db
+
+    asyncio.run(db.reset_db())
+    yield
 

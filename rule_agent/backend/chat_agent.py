@@ -67,6 +67,13 @@ def _safe(val) -> str:
 
 _SEVERITY_MAP = {"1": "Critical", "2": "High", "3": "Medium", "4": "Low"}
 
+
+def _instructions_block(extra_context: str | None) -> str:
+    """Render project standing-instructions as a prefix block for the LLM prompt."""
+    if extra_context and extra_context.strip():
+        return f"## Project instructions\n{extra_context.strip()}\n\n"
+    return ""
+
 _INTENT_CLASSIFIER_SYSTEM = """\
 You are a router for a data quality rule assistant.
 The user has an active rule open in their panel. Decide whether their message is:
@@ -136,12 +143,17 @@ def _route_no_rule_message(message: str) -> str:
         return "RULES"
 
 
-def _answer_general(message: str, history: list[dict] | None = None) -> dict[str, Any]:
+def _answer_general(
+    message: str, history: list[dict] | None = None, extra_context: str | None = None
+) -> dict[str, Any]:
     """Answer a general (non-rule) question as a helpful assistant."""
     from explanation_engine import call_openai
     try:
         ai_text = call_openai(
-            _GENERAL_ASSISTANT_SYSTEM, message, max_tokens=700, history=history,
+            _GENERAL_ASSISTANT_SYSTEM,
+            _instructions_block(extra_context) + message,
+            max_tokens=700,
+            history=history,
         )
         log.info("[INFO] _answer_general: answered general question")
         return {"response": ai_text, "rule_id": None, "suggested_followups": []}
@@ -232,7 +244,7 @@ Always bold rule IDs using **RULE_ID** so the user can click them.\
 """
 
 
-def _find_rule_by_description(message: str) -> dict[str, Any]:
+def _find_rule_by_description(message: str, extra_context: str | None = None) -> dict[str, Any]:
     """Call Azure OpenAI to match a natural-language description to a rule."""
     from data_loader import get_rules
     from explanation_engine import call_openai
@@ -250,7 +262,7 @@ def _find_rule_by_description(message: str) -> dict[str, Any]:
             catalog_lines.append(f"{rid} | {domain} | {cat} | {tbl} | {desc}")
 
     catalog = "\n".join(catalog_lines)
-    user_msg = f"RULE CATALOG:\n{catalog}\n\nUSER IS LOOKING FOR: {message}"
+    user_msg = f"{_instructions_block(extra_context)}RULE CATALOG:\n{catalog}\n\nUSER IS LOOKING FOR: {message}"
 
     try:
         ai_text = call_openai(_DESCRIPTION_SYSTEM, user_msg, max_tokens=600)
@@ -278,7 +290,12 @@ def _find_rule_by_description(message: str) -> dict[str, Any]:
         }
 
 
-def _answer_with_context(message: str, rule_id: str, history: list[dict] | None = None) -> dict[str, Any]:
+def _answer_with_context(
+    message: str,
+    rule_id: str,
+    history: list[dict] | None = None,
+    extra_context: str | None = None,
+) -> dict[str, Any]:
     """Answer a follow-up question using full Excel + YAML + custom ops context for an active rule."""
     from data_loader import (
         get_rules, get_yaml_raw, find_yaml_for_rule,
@@ -290,7 +307,7 @@ def _answer_with_context(message: str, rule_id: str, history: list[dict] | None 
     rules = get_rules()
     match = rules[rules["rule_id"].str.upper() == rule_id.upper()]
     if match.empty:
-        return _find_rule_by_description(message)
+        return _find_rule_by_description(message, extra_context=extra_context)
 
     row = match.iloc[0]
     context_parts: list[str] = []
@@ -367,7 +384,7 @@ def _answer_with_context(message: str, rule_id: str, history: list[dict] | None 
             )
 
     context = "\n\n".join(context_parts)
-    user_msg = f"RULE CONTEXT:\n{context}\n\nUSER QUESTION: {message}"
+    user_msg = f"{_instructions_block(extra_context)}RULE CONTEXT:\n{context}\n\nUSER QUESTION: {message}"
 
     try:
         ai_text = call_openai(_FOLLOWUP_SYSTEM, user_msg, max_tokens=800, history=history)
@@ -390,6 +407,7 @@ def _handle_no_rule_id(
     context_rule_id: str | None = None,
     history: list[dict] | None = None,
     allow_general: bool = False,
+    extra_context: str | None = None,
 ) -> dict[str, Any]:
     from data_loader import get_rules
     rules = get_rules()
@@ -475,22 +493,22 @@ def _handle_no_rule_id(
 
     # General mode only: conversational acknowledgements ("thanks", "ok") skip routing
     if allow_general and _is_conversational(message):
-        return _answer_general(message, history=history)
+        return _answer_general(message, history=history, extra_context=extra_context)
 
     # If there's an active rule in the panel, classify intent before routing
     if context_rule_id:
         route = _classify_search_intent(message, context_rule_id)
         if route == "SEARCH":
-            return _find_rule_by_description(message)
+            return _find_rule_by_description(message, extra_context=extra_context)
         if route == "GENERAL" and allow_general:
-            return _answer_general(message, history=history)
+            return _answer_general(message, history=history, extra_context=extra_context)
         # GENERAL with the flag off falls back to FOLLOWUP (rules-only behavior)
-        return _answer_with_context(message, context_rule_id, history=history)
+        return _answer_with_context(message, context_rule_id, history=history, extra_context=extra_context)
 
     # No active rule — in general mode, off-catalog questions get a direct answer
     if allow_general and _route_no_rule_message(message) == "GENERAL":
-        return _answer_general(message, history=history)
-    return _find_rule_by_description(message)
+        return _answer_general(message, history=history, extra_context=extra_context)
+    return _find_rule_by_description(message, extra_context=extra_context)
 
 
 _MAX_HISTORY = 20
@@ -693,6 +711,7 @@ async def stream_message(
     history: list[dict] | None = None,
     mode: str = "analyst",
     allow_general: bool = False,
+    extra_context: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat response as Server-Sent Events.
 
@@ -709,6 +728,7 @@ async def stream_message(
         from persona_agent import stream_persona_message
         async for event in stream_persona_message(
             message, mode, context_rule_id=context_rule_id, history=history,
+            extra_context=extra_context,
         ):
             yield event
         return
@@ -731,6 +751,7 @@ async def stream_message(
     if not rule_id:
         result = _handle_no_rule_id(
             message, context_rule_id, history=history, allow_general=allow_general,
+            extra_context=extra_context,
         )
         text = result.get("response", "")
         rid = result.get("rule_id")
@@ -865,7 +886,7 @@ async def stream_message(
     from data_loader import get_rules as _get_rules_inner
     ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
 
-    user_msg = f"Rule logic:\n{logic}"
+    user_msg = f"{_instructions_block(extra_context)}Rule logic:\n{logic}"
     if ctx:
         user_msg += f"\n\nField reference (do not use these names in the explanation):\n{ctx}"
 
@@ -908,6 +929,7 @@ def handle_message(
     context_rule_id: str | None = None,
     history: list[dict] | None = None,
     allow_general: bool = False,
+    extra_context: str | None = None,
 ) -> dict[str, Any]:
     message = message.strip()
     if len(message) > 2000:
@@ -918,6 +940,7 @@ def handle_message(
     if not rule_id:
         return _handle_no_rule_id(
             message, context_rule_id, history=history, allow_general=allow_general,
+            extra_context=extra_context,
         )
 
     from data_loader import get_rules
@@ -1018,7 +1041,8 @@ def handle_message(
     else:  # explain or show
         from explanation_engine import explain_rule
         ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
-        response = explain_rule(logic, ctx)
+        instr = _instructions_block(extra_context)
+        response = explain_rule(logic, (instr + ctx) if instr else ctx)
 
         # Append a clear notice when the rule references other rules
         active_refs = [r for r in ref_rules if r.get("active")]

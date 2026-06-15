@@ -611,6 +611,7 @@ async def stream_persona_message(
     mode: str,
     context_rule_id: str | None = None,
     history: list[dict] | None = None,
+    extra_context: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream an engineer/pm persona response as SSE events.
 
@@ -637,8 +638,13 @@ async def stream_persona_message(
         yield _sse({"type": "status", "text": _selection_status(selection)})
         context = _load_persona_context(selection, mode=mode)
 
+        instr = (
+            f"## Project instructions\n{extra_context.strip()}\n\n"
+            if extra_context and extra_context.strip()
+            else ""
+        )
         label = "USER STORY" if is_engineer else "USER REQUEST"
-        user_msg = f"REPOSITORY CONTEXT:\n{context}\n\n{label}:\n{message}"
+        user_msg = f"{instr}REPOSITORY CONTEXT:\n{context}\n\n{label}:\n{message}"
 
         async for chunk_text in call_openai_stream(
             system, user_msg, max_tokens=max_tokens, history=history,
