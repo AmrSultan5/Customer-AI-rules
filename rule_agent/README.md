@@ -1,17 +1,17 @@
 # Rule Agent
 
-AI-powered data quality rule intelligence for Coca-Cola HBC. FastAPI backend + React/Vite frontend. Explains 228 Customer data quality rules in plain English via Azure OpenAI.
+AI-powered data quality rule intelligence for Coca-Cola HBC. FastAPI backend + React/Vite frontend. Explains 228 Customer data quality rules in plain English via the Anthropic (Claude) API, choosing a model tier per task (Haiku for routing, Sonnet for explanations/stories, Opus for Engineer file-edits).
 
 ---
 
-## ⚠️ SECURITY: Rotate Your Azure Key Immediately
+## ⚠️ SECURITY: Rotate Any Exposed API Key Immediately
 
-If `backend/.env` previously contained an Azure OpenAI API key and that file was ever committed to git, synced via OneDrive, or shared in any way, **the key must be treated as compromised and rotated before any deployment.**
+If `backend/.env` previously contained an Anthropic (or older OpenAI/Azure) API key and that file was ever committed to git, synced via OneDrive, or shared in any way, **the key must be treated as compromised and rotated before any deployment.**
 
-**How to rotate:**
-1. Azure Portal → Your Azure OpenAI resource → **Keys and Endpoint**
-2. Click **Regenerate Key 1** (or Key 2, whichever was used)
-3. Update `backend/.env` with the new key
+**How to rotate (Anthropic):**
+1. [Anthropic Console](https://console.anthropic.com/) → **Settings → API Keys**
+2. Revoke the exposed key and create a new one
+3. Update `backend/.env` with the new key (`ANTHROPIC_API_KEY=...`)
 4. Do **not** commit `backend/.env` — it is listed in `.gitignore`
 
 ---
@@ -41,21 +41,20 @@ The Vite dev server proxies `/api/*` to `http://localhost:8000`, stripping the `
 
 | Variable | Required | Description |
 |---|---|---|
-| `AZURE_OPENAI_ENDPOINT` | Yes | Azure OpenAI gateway URL |
-| `AZURE_OPENAI_DEPLOYMENT` | Yes | Model deployment name (e.g. `gpt-4o`) |
-| `AZURE_OPENAI_API_VERSION` | Yes | API version (e.g. `2024-02-15-preview`) |
-| `AZURE_OPENAI_API_KEY` | Yes | **Never commit this value** |
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key. **Never commit this value** |
+| `ANTHROPIC_MODEL_FAST` | No | Model for routing/intent/follow-up suggestions/persona selector. Default: `claude-haiku-4-5` |
+| `ANTHROPIC_MODEL_STANDARD` | No | Model for rule explanations, analyst answers, PM stories. Default: `claude-sonnet-4-6` |
+| `ANTHROPIC_MODEL_DEEP` | No | Model for Engineer persona file-edit generation. Default: `claude-opus-4-8` |
 | `RULE_AGENT_API_TOKEN` | Production | Bearer token for all protected endpoints. Generate: `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `RULE_AGENT_ENV` | No | Set to `production` to enforce token at startup. Default: `development` |
 | `CORS_ORIGINS` | No | Comma-separated allowed origins. Default: `http://localhost:5173,http://127.0.0.1:5173` |
 | `CHAT_RATE_LIMIT` | No | Max `/chat` requests per minute per IP. Default: `30` |
 | `MAX_MESSAGE_LENGTH` | No | Max chat message characters. Default: `2000` |
-| `AZURE_OPENAI_TIMEOUT` | No | LLM call timeout in seconds. Default: `30` |
 | `NOMINATIM_DOMAIN` | No | Hostname:port of the internal Nominatim geocoding service. No default; geocoding is disabled if unset. |
 | `NOMINATIM_VERIFY_TLS` | No | Set to `false` only on trusted internal networks. Default: `true`. |
 | `NOMINATIM_CA_BUNDLE` | No | Path to a custom CA certificate bundle (PEM) for corporate PKI. |
 
-In **production**, provision these as environment variables via your secret manager (Azure Key Vault, Kubernetes Secrets, etc.). Do **not** rely on a committed `.env` file.
+In **production**, provision these as environment variables via your secret manager (Kubernetes Secrets, Vault, etc.). Do **not** rely on a committed `.env` file.
 
 ### Frontend (`frontend/.env`)
 
@@ -175,7 +174,7 @@ CORS_ORIGINS=https://rule-agent.internal.example.com
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /health` | Public | Liveness: returns 200 if the process is running and data is loaded |
-| `GET /ready` | Public | Readiness: verifies Azure config is present and rules are loaded. Returns 503 if not ready. Does **not** call Azure OpenAI. |
+| `GET /ready` | Public | Readiness: verifies `ANTHROPIC_API_KEY` is present and rules are loaded. Returns 503 if not ready. Does **not** call the LLM. |
 
 Use `/ready` as your Kubernetes `readinessProbe` or load-balancer health check.
 
@@ -189,7 +188,7 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-Tests run against a fully mocked backend (no real data files, no Azure calls). See `tests/conftest.py` for the stub setup.
+Tests run against a fully mocked backend (no real data files, no Anthropic calls). See `tests/conftest.py` for the stub setup.
 
 ---
 

@@ -112,14 +112,18 @@ export default function Onboarding({ open, onClose }) {
 
   return createPortal(
     <div className="tour-root" role="dialog" aria-modal="true" aria-label="Product walkthrough">
-      {/* Scrim blocks interaction with the app behind the tour. Clicking it does nothing. */}
-      <div className={`tour-scrim${hl ? '' : ' solid'}`} />
-
-      {hl && (
-        <div
-          className="tour-highlight"
-          style={{ top: hl.top, left: hl.left, width: hl.width, height: hl.height }}
-        />
+      {hl ? (
+        <>
+          {/* Four blur+dim panels that together cover everything outside the spotlight */}
+          <div className="tour-blur-panel" style={{ top: 0, left: 0, right: 0, height: hl.top }} />
+          <div className="tour-blur-panel" style={{ top: hl.top + hl.height, left: 0, right: 0, bottom: 0 }} />
+          <div className="tour-blur-panel" style={{ top: hl.top, left: 0, width: hl.left, height: hl.height }} />
+          <div className="tour-blur-panel" style={{ top: hl.top, left: hl.left + hl.width, right: 0, height: hl.height }} />
+          {/* Spotlight ring */}
+          <div className="tour-highlight" style={{ top: hl.top, left: hl.left, width: hl.width, height: hl.height }} />
+        </>
+      ) : (
+        <div className="tour-scrim solid" />
       )}
 
       <div className="tour-pop" style={{ width: POP_WIDTH, ...popStyle }}>

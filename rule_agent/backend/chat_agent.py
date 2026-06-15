@@ -129,7 +129,7 @@ def _route_no_rule_message(message: str) -> str:
     """
     from explanation_engine import call_openai
     try:
-        result = call_openai(_GENERAL_ROUTE_SYSTEM, message, max_tokens=5)
+        result = call_openai(_GENERAL_ROUTE_SYSTEM, message, max_tokens=5, tier="fast")
         return "GENERAL" if "GENERAL" in result.upper() else "RULES"
     except Exception as e:
         log.warning("[WARN] General router failed, defaulting to RULES: %s", e)
@@ -181,7 +181,7 @@ def _classify_intent_llm(message: str, rule_id: str) -> str:
     user_msg = f"Rule mentioned: {rule_id}\nUser message: {message}"
     try:
         result = call_openai(
-            _EXPLICIT_INTENT_SYSTEM, user_msg, max_tokens=15,
+            _EXPLICIT_INTENT_SYSTEM, user_msg, max_tokens=15, tier="fast",
         ).strip().lower()
         valid = {"explain", "description", "sap_table", "sap_column",
                  "severity", "fields", "lineage", "workflow", "show"}
@@ -197,7 +197,7 @@ def _classify_search_intent(message: str, context_rule_id: str) -> str:
     from explanation_engine import call_openai
     user_msg = f"Active rule: {context_rule_id}\nUser message: {message}"
     try:
-        result = call_openai(_INTENT_CLASSIFIER_SYSTEM, user_msg, max_tokens=5).upper()
+        result = call_openai(_INTENT_CLASSIFIER_SYSTEM, user_msg, max_tokens=5, tier="fast").upper()
         if "SEARCH" in result:
             return "SEARCH"
         if "GENERAL" in result:
@@ -540,7 +540,7 @@ def _generate_followups(
         f"Available context: {available}"
     )
     try:
-        result = call_openai(_FOLLOWUPS_SYSTEM, user_msg, max_tokens=120)
+        result = call_openai(_FOLLOWUPS_SYSTEM, user_msg, max_tokens=120, tier="fast")
         parsed = json.loads(result)
         if isinstance(parsed, list):
             return [str(s) for s in parsed[:3]]

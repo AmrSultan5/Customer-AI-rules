@@ -89,10 +89,10 @@ def test_downvoted_rules_aggregation(fresh_db):
 
 def test_tokens_by_call_type(fresh_db):
     async def run():
-        await analytics.track_token_usage(100, 50, 150, "gpt-4o", "chat")
-        await analytics.track_token_usage(200, 100, 300, "gpt-4o", "chat")
-        await analytics.track_token_usage(1000, 400, 1400, "gpt-4o", "explain_rule")
-        await analytics.track_token_usage(10, 5, 15, "gpt-4o", "")  # blank → "other"
+        await analytics.track_token_usage(100, 50, 150, "claude-sonnet-4-6", "chat")
+        await analytics.track_token_usage(200, 100, 300, "claude-sonnet-4-6", "chat")
+        await analytics.track_token_usage(1000, 400, 1400, "claude-sonnet-4-6", "explain_rule")
+        await analytics.track_token_usage(10, 5, 15, "claude-sonnet-4-6", "")  # blank → "other"
         return await analytics.get_dashboard_data(2)
 
     data = asyncio.run(run())
@@ -143,7 +143,7 @@ def test_cost_appears_in_overview(fresh_db, monkeypatch):
     monkeypatch.setenv("RULE_AGENT_COMPLETION_COST_PER_1M", "1")
 
     async def run():
-        await analytics.track_token_usage(500_000, 500_000, 1_000_000, "gpt-4o", "chat")
+        await analytics.track_token_usage(500_000, 500_000, 1_000_000, "claude-sonnet-4-6", "chat")
         return await analytics.get_dashboard_data(2)
 
     data = asyncio.run(run())

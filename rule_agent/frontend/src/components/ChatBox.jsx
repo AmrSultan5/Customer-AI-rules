@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import Tooltip from './Tooltip.jsx'
 import YamlValidator from './YamlValidator.jsx'
@@ -326,6 +326,8 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   const richInputRef     = useRef(null)
   const sessionStartRef  = useRef(0)
   const prevRuleIdRef    = useRef(activeRuleId)
+  const sliderRef        = useRef(null)
+  const modeBtnRefs      = useRef({})
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
@@ -342,6 +344,27 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
   useEffect(() => {
     if (!loading) richInputRef.current?.focus()
   }, [loading])
+
+  // Position slider before first paint (no animation)
+  useLayoutEffect(() => {
+    const slider = sliderRef.current
+    const btn = modeBtnRefs.current[mode]
+    if (!slider || !btn) return
+    slider.style.transitionDuration = '0s'
+    slider.style.left  = `${btn.offsetLeft}px`
+    slider.style.width = `${btn.offsetWidth}px`
+    void slider.offsetWidth   // force reflow before re-enabling
+    slider.style.transitionDuration = ''
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Slide to new position on mode change (after paint so CSS transition fires)
+  useEffect(() => {
+    const slider = sliderRef.current
+    const btn = modeBtnRefs.current[mode]
+    if (!slider || !btn) return
+    slider.style.left  = `${btn.offsetLeft}px`
+    slider.style.width = `${btn.offsetWidth}px`
+  }, [mode])
 
   // Reset session window when the active rule changes so history stays rule-scoped.
   // Rule-scoping is an analyst-mode concept only. In engineer/pm mode the persona
@@ -590,9 +613,11 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
         <div className="chat-header-center">
           <div className="mode-toggle" data-tour="modes" role="tablist" aria-label="Assistant mode">
+            <div className="mode-toggle-slider" ref={sliderRef} aria-hidden="true" />
             {MODES.map(m => (
               <button
                 key={m.id}
+                ref={el => { modeBtnRefs.current[m.id] = el }}
                 role="tab"
                 aria-selected={mode === m.id}
                 className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}

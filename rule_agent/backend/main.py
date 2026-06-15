@@ -13,7 +13,7 @@ from typing import Annotated, Literal
 try:
     # Use the OS certificate store for TLS verification. Required on corporate
     # networks with TLS-intercepting proxies whose root CA is trusted by the OS
-    # but absent from Python's bundled certifi store (otherwise all OpenAI
+    # but absent from Python's bundled certifi store (otherwise all Anthropic
     # calls fail with CERTIFICATE_VERIFY_FAILED). Must run before any HTTPS
     # client is created.
     import truststore
@@ -339,16 +339,16 @@ health_router = APIRouter()
 
 @health_router.get("/health")
 def health():
-    """Lightweight liveness probe. Returns rules_loaded count; never calls Azure OpenAI."""
+    """Lightweight liveness probe. Returns rules_loaded count; never calls the LLM."""
     return {"status": "ok", "rules_loaded": len(get_rules())}
 
 
 @health_router.get("/ready")
 def ready():
-    """Readiness probe — checks config and data; does NOT call OpenAI."""
+    """Readiness probe — checks config and data; does NOT call the LLM."""
     issues = []
-    if not os.environ.get("OPENAI_API_KEY"):
-        issues.append("OPENAI_API_KEY not configured")
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        issues.append("ANTHROPIC_API_KEY not configured")
     rule_count = 0
     try:
         rule_count = len(get_rules())
@@ -648,7 +648,7 @@ async def admin_reload():
 
 @admin_router.get("/probe-llm")
 async def admin_probe_llm():
-    """Admin-only LLM connectivity check. Calls Azure OpenAI; never used as a recurring probe."""
+    """Admin-only LLM connectivity check. Calls the Anthropic API; never used as a recurring probe."""
     from explanation_engine import probe_llm
     try:
         await probe_llm()

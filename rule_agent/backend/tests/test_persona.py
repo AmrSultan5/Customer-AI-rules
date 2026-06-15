@@ -88,7 +88,7 @@ def loader(monkeypatch):
 def _set_selector_response(monkeypatch, payload):
     import explanation_engine
 
-    async def fake_call(system_prompt, user_msg, max_tokens=600, history=None, json_mode=False):
+    async def fake_call(system_prompt, user_msg, max_tokens=600, history=None, json_mode=False, tier="standard"):
         return payload
 
     monkeypatch.setattr(explanation_engine, "call_openai_async", fake_call)
@@ -306,7 +306,7 @@ def _collect(agen):
 def _patch_stream(monkeypatch, chunks=("Hello ", "world"), error=False):
     import explanation_engine
 
-    async def fake_stream(system_prompt, user_msg, max_tokens=800, history=None):
+    async def fake_stream(system_prompt, user_msg, max_tokens=800, history=None, tier="standard"):
         if error:
             raise RuntimeError("llm down")
         for c in chunks:

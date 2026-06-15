@@ -9,8 +9,7 @@ os.environ.setdefault("RULE_AGENT_API_TOKEN", "test-secret-token")
 os.environ.setdefault("CHAT_RATE_LIMIT", "1")   # very low limit for 429 tests
 os.environ.setdefault("RULE_AGENT_ENV", "development")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
-os.environ.setdefault("OPENAI_API_KEY", "fake-key-for-tests")
-os.environ.setdefault("OPENAI_MODEL", "gpt-4o")
+os.environ.setdefault("ANTHROPIC_API_KEY", "fake-key-for-tests")
 
 # ── Minimal rule catalogue ─────────────────────────────────────────────────────
 MOCK_RULES = pd.DataFrame(

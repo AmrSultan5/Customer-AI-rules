@@ -1,6 +1,20 @@
 """
 STEP 7 — ExplanationEngine
-Calls OpenAI to produce plain-English rule explanations.
+Calls the Anthropic (Claude) API to produce plain-English rule explanations and
+to power the chat / persona flows.
+
+Model selection is tiered per use case ("perfect model for each user"):
+
+  fast      cheap routing / classification / follow-up suggestions
+  standard  rule explanations, analyst answers, PM persona stories
+  deep      Engineer persona file-edit generation
+
+Each tier resolves from an env var AT CALL TIME (so a tier can be re-pointed
+without a code change — e.g. flip ANTHROPIC_MODEL_DEEP between Opus and Sonnet to
+A/B Engineer mode). Call sites pass only a tier name, never a model string.
+
+Public function names are intentionally kept (call_openai*, explain_rule); they
+are provider-agnostic now and referenced across the codebase and tests.
 """
 
 import logging
@@ -10,8 +24,8 @@ from functools import lru_cache
 
 import asyncio
 
+import anthropic
 import httpx
-from openai import AsyncOpenAI, OpenAI
 
 from analytics import track_token_usage, track_token_usage_sync
 
@@ -28,61 +42,111 @@ _SYSTEM_PROMPT = (
     "what related details the user could ask about instead (e.g. description, severity, SAP table, lineage)."
 )
 
-_client: OpenAI | None = None
-_async_client: AsyncOpenAI | None = None
+# ── Model tiers ──────────────────────────────────────────────────────────────
+# Resolved from the environment on every call so a tier can be re-pointed live
+# without code changes. No model string is hardcoded at any call site.
+_TIER_ENV = {
+    "fast":     "ANTHROPIC_MODEL_FAST",
+    "standard": "ANTHROPIC_MODEL_STANDARD",
+    "deep":     "ANTHROPIC_MODEL_DEEP",
+}
+_TIER_DEFAULT = {
+    "fast":     "claude-haiku-4-5",
+    "standard": "claude-sonnet-4-6",
+    "deep":     "claude-opus-4-8",
+}
 
 
-def _get_client() -> OpenAI:
+def _model(tier: str) -> str:
+    """Resolve a tier name to a concrete model id, reading the env var live."""
+    tier = tier if tier in _TIER_ENV else "standard"
+    return os.environ.get(_TIER_ENV[tier]) or _TIER_DEFAULT[tier]
+
+
+# JSON schema for the persona Stage-1 target selector (json_mode=True).
+# Structured outputs require additionalProperties:false and every key in required.
+_SELECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "rule_ids":       {"type": "array", "items": {"type": "string"}},
+        "pipelines":      {"type": "array", "items": {"type": "string"}},
+        "custom_ops":     {"type": "array", "items": {"type": "string"}},
+        "needs_new_rule": {"type": "boolean"},
+        "rationale":      {"type": "string"},
+    },
+    "required": ["rule_ids", "pipelines", "custom_ops", "needs_new_rule", "rationale"],
+    "additionalProperties": False,
+}
+
+_client: anthropic.Anthropic | None = None
+_async_client: anthropic.AsyncAnthropic | None = None
+
+
+def _require_key() -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY must be set in .env")
+    return api_key
+
+
+def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY must be set in .env"
-            )
-        _client = OpenAI(
-            api_key=api_key,
+        _client = anthropic.Anthropic(
+            api_key=_require_key(),
             max_retries=3,
             timeout=httpx.Timeout(30.0, connect=5.0),
         )
     return _client
 
 
-def _get_async_client() -> AsyncOpenAI:
+def _get_async_client() -> anthropic.AsyncAnthropic:
     global _async_client
     if _async_client is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY must be set in .env"
-            )
-        _async_client = AsyncOpenAI(
-            api_key=api_key,
+        _async_client = anthropic.AsyncAnthropic(
+            api_key=_require_key(),
             max_retries=3,
             timeout=httpx.Timeout(30.0, connect=5.0),
         )
     return _async_client
 
 
-async def probe_llm() -> None:
-    """Minimal OpenAI reachability probe. Raises on any failure.
+def _messages(user_msg: str, history: list[dict] | None) -> list[dict]:
+    """Build the Anthropic messages array (system goes in the top-level `system=`).
 
-    Uses a 5s total / 3s connect timeout so the /health endpoint fails fast.
-    Called only by the /health endpoint — do not use in the hot request path.
+    Anthropic requires the first message to be from the user, so any leading
+    assistant turns in the history are dropped.
     """
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    msgs = list(history or []) + [{"role": "user", "content": user_msg}]
+    while msgs and msgs[0].get("role") != "user":
+        msgs.pop(0)
+    return msgs
+
+
+def _text(response) -> str:
+    """Concatenate the text blocks of a non-streaming Anthropic response."""
+    return "".join(
+        block.text for block in response.content if getattr(block, "type", None) == "text"
+    ).strip()
+
+
+async def probe_llm() -> None:
+    """Minimal Anthropic reachability probe. Raises on any failure.
+
+    Uses a short timeout so the /health-style probe fails fast. Called only by
+    the admin probe endpoint — not in the hot request path.
+    """
     client = _get_async_client()
-    await client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": "ping"}],
+    await client.with_options(timeout=httpx.Timeout(5.0, connect=3.0)).messages.create(
+        model=_model("fast"),
         max_tokens=1,
-        timeout=httpx.Timeout(5.0, connect=3.0),
+        messages=[{"role": "user", "content": "ping"}],
     )
 
 
 @lru_cache(maxsize=256)
-def explain_rule(rule_logic: str, sap_context: str = "") -> str:
-    """Translate rule_logic into plain English via OpenAI."""
+def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard") -> str:
+    """Translate rule_logic into plain English via Claude."""
     if not rule_logic or rule_logic.strip() in ("", "nan", "None"):
         return "No technical rule definition available for this rule."
 
@@ -90,26 +154,24 @@ def explain_rule(rule_logic: str, sap_context: str = "") -> str:
     if sap_context:
         user_msg += f"\n\nField reference (do not use these names in the explanation):\n{sap_context}"
 
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    model = _model(tier)
 
     try:
         client = _get_client()
-        response = client.chat.completions.create(
+        response = client.messages.create(
             model=model,
             max_tokens=1000,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
+            system=_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
         )
         if response.usage:
             track_token_usage_sync(
-                response.usage.prompt_tokens,
-                response.usage.completion_tokens,
-                response.usage.total_tokens,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                response.usage.input_tokens + response.usage.output_tokens,
                 model, "explain_rule",
             )
-        text = response.choices[0].message.content.strip()
+        text = _text(response)
         log.info("[INFO] ExplanationEngine: generated explanation (%d chars)", len(text))
         return text
     except Exception as e:
@@ -123,37 +185,35 @@ def call_openai(
     user_msg: str,
     max_tokens: int = 600,
     history: list[dict] | None = None,
+    tier: str = "standard",
 ) -> str:
-    """Generic (non-cached) OpenAI call for ad-hoc queries.
+    """Generic (non-cached) Claude call for ad-hoc queries.
 
     history: optional list of prior turns as [{"role": "user"|"assistant", "content": "..."}].
     Injected between the system prompt and the current user message.
     """
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    if history:
-        messages.extend(history)
-    messages.append({"role": "user", "content": user_msg})
+    model = _model(tier)
     # WARNING: user_msg may contain prompt-injection attempts via rule content or chat
     # history. The system prompt is fixed; treat all user/history content as untrusted.
     try:
         client = _get_client()
-        response = client.chat.completions.create(
+        response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            messages=messages,
+            system=system_prompt,
+            messages=_messages(user_msg, history),
         )
         if response.usage:
             track_token_usage_sync(
-                response.usage.prompt_tokens,
-                response.usage.completion_tokens,
-                response.usage.total_tokens,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                response.usage.input_tokens + response.usage.output_tokens,
                 model, "chat",
             )
-        return response.choices[0].message.content.strip()
+        return _text(response)
     except Exception as e:
         # Log type only — avoid logging message content that may contain sensitive data.
-        log.error("[ERROR] OpenAI generic call failed: %s", type(e).__name__)
+        log.error("[ERROR] Claude generic call failed: %s", type(e).__name__)
         raise
 
 
@@ -163,40 +223,41 @@ async def call_openai_async(
     max_tokens: int = 600,
     history: list[dict] | None = None,
     json_mode: bool = False,
+    tier: str = "standard",
 ) -> str:
     """Async variant of call_openai — never blocks the event loop.
 
-    json_mode=True forces a JSON object response (response_format json_object).
+    json_mode=True constrains the response to the Stage-1 selector JSON schema
+    via structured outputs.
     """
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    if history:
-        messages.extend(history)
-    messages.append({"role": "user", "content": user_msg})
+    model = _model(tier)
     # WARNING: user_msg may contain prompt-injection attempts via rule content or chat
     # history. The system prompt is fixed; treat all user/history content as untrusted.
     kwargs: dict = {}
     if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
+        kwargs["output_config"] = {
+            "format": {"type": "json_schema", "schema": _SELECTION_SCHEMA}
+        }
     try:
         client = _get_async_client()
-        response = await client.chat.completions.create(
+        response = await client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            messages=messages,
+            system=system_prompt,
+            messages=_messages(user_msg, history),
             **kwargs,
         )
         if response.usage:
             asyncio.create_task(track_token_usage(
-                response.usage.prompt_tokens,
-                response.usage.completion_tokens,
-                response.usage.total_tokens,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                response.usage.input_tokens + response.usage.output_tokens,
                 model, "chat",
             ))
-        return response.choices[0].message.content.strip()
+        return _text(response)
     except Exception as e:
         # Log type only — avoid logging message content that may contain sensitive data.
-        log.error("[ERROR] OpenAI async call failed: %s", type(e).__name__)
+        log.error("[ERROR] Claude async call failed: %s", type(e).__name__)
         raise
 
 
@@ -205,38 +266,30 @@ async def call_openai_stream(
     user_msg: str,
     max_tokens: int = 800,
     history: list[dict] | None = None,
+    tier: str = "standard",
 ) -> AsyncGenerator[str, None]:
-    """Stream OpenAI response as text delta chunks.
+    """Stream a Claude response as text delta chunks.
 
     Yields individual text strings. Caller is responsible for the done event.
     """
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-    messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    if history:
-        messages.extend(history)
-    messages.append({"role": "user", "content": user_msg})
-
+    model = _model(tier)
     client = _get_async_client()
-    stream = await client.chat.completions.create(
+    async with client.messages.stream(
         model=model,
         max_tokens=max_tokens,
-        messages=messages,
-        stream=True,
-        stream_options={"include_usage": True},
-    )
-    async for chunk in stream:
-        if chunk.choices:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
-        # Final chunk carries usage when stream_options include_usage=True
-        if getattr(chunk, "usage", None):
-            asyncio.create_task(track_token_usage(
-                chunk.usage.prompt_tokens,
-                chunk.usage.completion_tokens,
-                chunk.usage.total_tokens,
-                model, "stream",
-            ))
+        system=system_prompt,
+        messages=_messages(user_msg, history),
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
+        final = await stream.get_final_message()
+    if final.usage:
+        asyncio.create_task(track_token_usage(
+            final.usage.input_tokens,
+            final.usage.output_tokens,
+            final.usage.input_tokens + final.usage.output_tokens,
+            model, "stream",
+        ))
 
 
 def build_sap_context(sap_fields: list[dict]) -> str:

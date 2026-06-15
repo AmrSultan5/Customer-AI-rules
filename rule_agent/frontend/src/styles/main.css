@@ -107,9 +107,9 @@ html::before {
   background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   padding: 0 22px;
   flex-shrink: 0;
@@ -123,6 +123,7 @@ html::before {
   align-items: center;
   gap: 11px;
   min-width: 0;
+  justify-self: start;
 }
 
 .topbar-brand-text {
@@ -177,6 +178,7 @@ html::before {
   display: flex;
   align-items: center;
   gap: 10px;
+  justify-self: end;
 }
 
 /* ─── View Switcher (segmented control) ──────────────────────────────────── */
@@ -189,6 +191,7 @@ html::before {
   border-radius: 9999px;
   padding: 3px;
   flex-shrink: 0;
+  justify-self: center;
 }
 
 .view-switch-btn {
@@ -1569,27 +1572,44 @@ textarea:focus-visible {
 
 /* ─── Chat Mode Toggle (Analyst / Data Engineer / Project Manager) ────────── */
 .mode-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 10px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 9999px;
-  padding: 2px;
+  padding: 3px;
+}
+
+.mode-toggle-slider {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: 9999px;
+  background: var(--accent-glow);
+  transition: left 0.24s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .mode-toggle-btn {
+  position: relative;
+  z-index: 1;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 4px 12px;
+  padding: 4px 26px;
   border-radius: 9999px;
   font-size: 11px;
   font-family: var(--font-body);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--ease), color var(--ease);
+  transition: color var(--ease);
 }
 
 .mode-toggle-btn:hover:not(:disabled):not(.active) {
@@ -1597,7 +1617,6 @@ textarea:focus-visible {
 }
 
 .mode-toggle-btn.active {
-  background: var(--accent-glow);
   color: var(--accent-hover);
 }
 
@@ -4468,23 +4487,34 @@ textarea:focus-visible {
   z-index: 1100;
 }
 
-/* Click-blocker. Transparent when a highlight provides the dimming via box-shadow;
-   solid dim for the welcome step that has no target. */
-.tour-scrim {
+/* Full-screen blur+dim for the welcome step (no target element). */
+.tour-scrim.solid {
   position: fixed;
   inset: 0;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   pointer-events: auto;
 }
-.tour-scrim.solid {
-  background: rgba(0, 0, 0, 0.62);
+
+/* Four panels that together cover everything outside the spotlight.
+   Each blurs and dims the content behind it. */
+.tour-blur-panel {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
+  transition: top var(--spring), left var(--spring),
+              width var(--spring), height var(--spring);
 }
 
+/* Spotlight ring drawn on top of the clear area. */
 .tour-highlight {
   position: fixed;
   border-radius: 10px;
   border: 1.5px solid var(--accent);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.62), 0 0 0 4px var(--accent-glow);
+  box-shadow: 0 0 0 4px var(--accent-glow);
   pointer-events: none;
   transition: top var(--spring), left var(--spring), width var(--spring), height var(--spring);
 }
@@ -4590,5 +4620,6 @@ textarea:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .tour-highlight,
+  .tour-blur-panel,
   .tour-pop { transition: none; animation: none; }
 }

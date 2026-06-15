@@ -492,7 +492,7 @@ export default function AdminDashboard({ token, onRefresh }) {
             className="adm-btn"
             onClick={checkLlm}
             disabled={llmChecking}
-            title="Probe Azure OpenAI connectivity (makes one real LLM call)"
+            title="Probe Anthropic connectivity (makes one real LLM call)"
           >
             <ZapIcon />
             {llmChecking ? 'Checking…' : 'Check LLM'}

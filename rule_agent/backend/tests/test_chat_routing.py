@@ -45,7 +45,7 @@ def llm(monkeypatch):
 
     fake = Fake()
 
-    def call_openai(system_prompt, user_msg, max_tokens=600, history=None):
+    def call_openai(system_prompt, user_msg, max_tokens=600, history=None, tier="standard"):
         fake.systems.append(system_prompt)
         if fake.fail_all:
             raise RuntimeError("LLM down")
@@ -118,9 +118,9 @@ def test_general_answer_failure_returns_graceful_message(llm, monkeypatch):
 
     real = sys.modules["explanation_engine"].call_openai
 
-    def flaky(system_prompt, user_msg, max_tokens=600, history=None):
+    def flaky(system_prompt, user_msg, max_tokens=600, history=None, tier="standard"):
         if _is_general_router(system_prompt):
-            return real(system_prompt, user_msg, max_tokens, history)
+            return real(system_prompt, user_msg, max_tokens, history, tier)
         raise RuntimeError("LLM down")
 
     monkeypatch.setattr(sys.modules["explanation_engine"], "call_openai", flaky)
