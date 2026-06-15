@@ -177,9 +177,7 @@ identify the exact row by rule_id and show the affected column(s) as
 never "update to reflect the new logic".
 
 ## Databricks validation
-How to verify the change. Provide BOTH:
-1. A `%sql` cell querying the real source tables named in the context.
-2. A PySpark cell (python) doing the equivalent check.
+How to verify the change. Provide a `%sql` cell querying the real source tables named in the context.
 Use only table names that appear in the provided context.
 
 Hard rules:
@@ -365,7 +363,7 @@ async def _select_targets(
 
     try:
         raw = await call_openai_async(
-            _TARGET_SELECTION_SYSTEM, user_msg, max_tokens=400, json_mode=True,
+            _TARGET_SELECTION_SYSTEM, user_msg, max_tokens=400, json_mode=True, tier="fast",
         )
         parsed = json.loads(_FENCE_RE.sub("", raw).strip())
         if not isinstance(parsed, dict):
@@ -644,6 +642,7 @@ async def stream_persona_message(
 
         async for chunk_text in call_openai_stream(
             system, user_msg, max_tokens=max_tokens, history=history,
+            tier="standard",
         ):
             yield _sse({"type": "chunk", "text": chunk_text})
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 import FieldTable from './FieldTable.jsx'
 import Tooltip from './Tooltip.jsx'
 
@@ -240,7 +241,9 @@ export default function RuleCard({ rule, onAskAboutRule, onRuleSelected }) {
         <div className="explanation-header">
           <span className="section-eyebrow accent">Business Explanation</span>
         </div>
-        <p className="explanation-text">{rule.business_explanation}</p>
+        <div className="explanation-text">
+          <ReactMarkdown>{rule.business_explanation}</ReactMarkdown>
+        </div>
       </div>
 
       {/* ── Metadata ────────────────────────── */}
