@@ -5,11 +5,13 @@ import RuleBrowser from './components/RuleBrowser.jsx'
 import TreeView from './components/TreeView.jsx'
 import GraphView from './components/GraphView.jsx'
 import Tooltip from './components/Tooltip.jsx'
+import Onboarding from './components/Onboarding.jsx'
 import { apiGet, apiFetch } from './api.js'
 
 const RULE_HISTORY_KEY = 'rule_agent_rule_history'
 const PINNED_RULES_KEY = 'pinned_rules'
 const THEME_KEY        = 'rule_agent_theme'
+const ONBOARDING_KEY   = 'rule_agent_onboarding_done'
 const MAX_RECENT = 20
 
 const LogoMark = () => (
@@ -80,6 +82,15 @@ const MoonIcon = () => (
   </svg>
 )
 
+const HelpIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+    <circle cx="7.5" cy="7.5" r="6" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M5.7 5.6a1.8 1.8 0 1 1 2.6 1.9c-.6.3-.8.7-.8 1.3"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    <circle cx="7.5" cy="10.8" r="0.7" fill="currentColor"/>
+  </svg>
+)
+
 const PinIcon = ({ filled }) => (
   <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
     <path
@@ -118,6 +129,19 @@ export default function App() {
     try { return localStorage.getItem(THEME_KEY) || 'dark' } catch { return 'dark' }
   })
   const [rulesLoaded, setRulesLoaded] = useState(null)
+  const [showTour, setShowTour] = useState(false)
+
+  // Auto-launch the walkthrough on the first visit.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ONBOARDING_KEY) !== '1') setShowTour(true)
+    } catch {}
+  }, [])
+
+  const closeTour = useCallback(() => {
+    setShowTour(false)
+    try { localStorage.setItem(ONBOARDING_KEY, '1') } catch {}
+  }, [])
 
   // Fetch live rule count from /health (public endpoint, no auth needed)
   useEffect(() => {
@@ -233,7 +257,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="view-switcher" aria-label="View">
+        <nav className="view-switcher" data-tour="views" aria-label="View">
           <Tooltip content="Browse and search all data quality rules">
             <button
               className={`view-switch-btn${showBrowser ? ' active' : ''}`}
@@ -270,6 +294,7 @@ export default function App() {
           </span>
           <Tooltip content={sidebarOpen ? 'Close rule panel' : activeRuleId ? `View ${activeRuleId}` : 'Open rule panel'}>
             <button
+              data-tour="rule-card"
               className={`sidebar-toggle-btn${sidebarOpen ? ' active' : ''}${activeRuleId && !sidebarOpen ? ' has-rule' : ''}`}
               onClick={() => setSidebarOpen(v => !v)}
             >
@@ -281,6 +306,15 @@ export default function App() {
             </button>
           </Tooltip>
           <span className="topbar-divider" />
+          <Tooltip content="Take the tour">
+            <button
+              className="help-btn"
+              onClick={() => setShowTour(true)}
+              aria-label="Take the walkthrough"
+            >
+              <HelpIcon />
+            </button>
+          </Tooltip>
           <Tooltip content={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             <button
               className="theme-toggle-btn"
@@ -414,6 +448,8 @@ export default function App() {
           </div>
         </aside>
       </div>
+
+      <Onboarding open={showTour} onClose={closeTour} />
     </div>
   )
 }

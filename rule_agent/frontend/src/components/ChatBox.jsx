@@ -602,7 +602,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
         </div>
 
         <div className="chat-header-center">
-          <div className="mode-toggle" role="tablist" aria-label="Assistant mode">
+          <div className="mode-toggle" data-tour="modes" role="tablist" aria-label="Assistant mode">
             {MODES.map(m => (
               <button
                 key={m.id}
@@ -679,11 +679,20 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
                 <div className={`bubble ${msg.role}${msg.isError ? ' error' : ''}`}>
                   {msg.role === 'agent' && !msg.isError ? (
                     <div className="md-body">
-                      {msg.isStreaming ? (
+                      {msg.isStreaming && msg.isStatus ? (
+                        // Transient progress line — plain italic, not markdown
                         <p>
-                          {msg.isStatus ? <em className="status-text">{msg.text}</em> : msg.text}
+                          <em className="status-text">{msg.text}</em>
                           <span className="streaming-cursor" aria-hidden="true" />
                         </p>
+                      ) : msg.isStreaming ? (
+                        // Answer text: render markdown live so it's formatted as it streams
+                        <>
+                          <ReactMarkdown components={mdComponents}>
+                            {addRuleLinks(msg.text)}
+                          </ReactMarkdown>
+                          <span className="streaming-cursor" aria-hidden="true" />
+                        </>
                       ) : (
                         <ReactMarkdown components={mdComponents}>
                           {addRuleLinks(msg.text)}
@@ -723,7 +732,7 @@ export default function ChatBox({ onRuleLoaded, prefill, onPrefillConsumed, acti
 
       <div className="chat-input-row">
         <div className="chat-input-inner">
-          <div className="input-wrap" onClick={() => textareaRef.current?.focus()}>
+          <div className="input-wrap" data-tour="chat-input" onClick={() => textareaRef.current?.focus()}>
             <textarea
               ref={textareaRef}
               className="chat-input"
