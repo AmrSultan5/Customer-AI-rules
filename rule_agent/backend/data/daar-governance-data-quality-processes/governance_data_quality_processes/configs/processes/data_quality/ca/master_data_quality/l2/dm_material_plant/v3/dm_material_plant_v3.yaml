@@ -1,0 +1,337 @@
+transform:
+  name: dm_material_plant
+  operations:
+
+# Read MARC
+
+  - kind: read_dataio
+    name: read_marc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: marc
+      schema_version: v1
+
+  - kind: add
+    name: add_concat
+    params:
+        - column: werks_substr
+          expression: substring(werks,0,2)
+        - column: key_concat
+          expression: concat(matnr, werks)
+        - column: lpad_key
+          expression: "CASE WHEN(length(key_concat) < 24) THEN concat('4', lpad(key_concat, 24, '0')) ELSE key_concat END"
+
+  - kind: select
+    name: select_marc
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        key_concat: key_concat
+        lpad_key: lpad_key
+        werks_substr: werks_substr
+        ausdt: ausdt
+        ausme: ausme
+        beskz: beskz
+        dismm: dismm
+        kzaus: kzaus
+        lvorm: lvorm
+        ncost: ncost
+        maabc: maabc
+        minbe: minbe
+        mmsta: mmsta
+        mmstd: mmstd
+        mtvfp: mtvfp
+        stawn: stawn
+        qmatv: qmatv
+        trame: trame
+        umlmc: umlmc
+        herkl: herkl
+        losgr: losgr
+        sap_cluster: sap_cluster_m
+      distinct: true
+    skip_next: false
+
+# Read T141T
+
+  - kind: read_dataio
+    name: read_t141t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t141t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_a1
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a1
+    params:
+      columns:
+        mtstb: mtstb
+        mmsta: mmsta
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+# Read T006A
+
+  - kind: read_dataio
+    name: read_t006a
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t006a
+      schema_version: v1
+
+  - kind: filter
+    name: filter_a2
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a2
+    params:
+      columns:
+        msehi: msehi
+        msehl: msehl
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+# Read T001W
+
+  - kind: read_dataio
+    name: read_t001w
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t001w
+      schema_version: v1
+
+  - kind: select
+    name: select_a3
+    params:
+      columns:
+        werks: werks
+        name1: name1
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+# Read plant_code_mapping
+
+  - kind: read_dataio
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+      schema_version: v1
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_cdhdr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdhdr
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdhdr
+    params:
+      - condition:
+          objectclas = 'MATERIAL'
+
+  - kind: cast
+    name: cast_to_date
+    params:
+      - column: udate
+        to: date
+
+  - kind: group
+    name: group_ch
+    params:
+      - aggs:
+          udate: max
+        by:
+        - changenr
+        - sap_cluster
+  
+  - kind: select
+    name: select_cdhdr
+    params:
+      columns:
+        changenr: changenr_cdhdr
+        max_udate: udate_cdhdr
+        sap_cluster: sap_cluster_cdhdr
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cdpos
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdpos
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdpos
+    params:
+      - condition:
+          objectclas = 'MATERIAL' AND chngind = 'I' AND tabname = 'MARC'
+
+  - kind: add
+    name: add_tabkey
+    params:
+      - column: trim_tabkey
+        expression: 'replace(tabkey, " ", "") as str'
+
+  - kind: select
+    name: select_cdpos
+    params:
+      columns:
+        objectid: objectid_cdpos
+        changenr: changenr_cdpos
+        trim_tabkey: trim_tabkey
+        sap_cluster: sap_cluster_cdpos
+      distinct: true
+
+  - kind: join
+    name: join_m_a1_a2_pcm_a3
+    context_name: select_marc
+    params:
+      - other:
+          select_a1
+        how:
+          left
+        columns:
+          mmsta: mmsta
+          sap_cluster_m: sap_cluster
+      - other:
+          select_a2
+        how:
+          left
+        columns:
+          ausme: msehi
+          sap_cluster_m: sap_cluster
+      - other:
+          select_pcm
+        how:
+          inner
+        columns:
+          werks_substr: plant_code_short
+          sap_cluster_m: sap_cluster
+      - other:
+          select_a3
+        how:
+          left
+        columns:
+          werks: werks
+          sap_cluster_m: sap_cluster
+      - other:
+          select_cdpos
+        how:
+          left
+        columns:
+          matnr: objectid_cdpos
+          lpad_key: trim_tabkey
+          sap_cluster_m: sap_cluster_cdpos
+      - other:
+          select_cdhdr
+        how:
+          left
+        columns:
+          changenr_cdpos: changenr_cdhdr
+          sap_cluster_cdpos: sap_cluster_cdhdr
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        matnr: material_code
+        werks: plant_code
+        name1: plant_name
+        country_code: country_code
+        ausdt: discontinuation_date
+        ausme: unit_of_issue_code
+        msehl: unit_of_issue_name
+        beskz: procurement_type
+        dismm: mrp_type
+        kzaus: discontinuation_indicator
+        losgr: lot_size
+        lvorm: deletion_flag
+        ncost: do_not_cost_indicator
+        maabc: abc_indicator
+        minbe: reorder_point
+        mmsta: material_status_code
+        mtstb: material_status_name
+        mmstd: start_date
+        mtvfp: availability_checking_group
+        stawn: commodity_code
+        qmatv: inspection_setup_flag
+        herkl: country_code_of_origin
+        sap_cluster_m: sap_cluster
+        udate_cdhdr: plant_extension_date
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_material_plant
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_plant
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

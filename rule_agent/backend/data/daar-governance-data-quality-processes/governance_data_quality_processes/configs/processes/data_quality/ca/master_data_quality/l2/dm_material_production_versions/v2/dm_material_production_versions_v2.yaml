@@ -1,0 +1,71 @@
+transform:
+  name: dm_material_production_versions
+  operations:
+  - kind: read_dataio
+    name: read_mkal
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mkal
+      schema_version: v1
+
+  - kind: select
+    name: select_mkal
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        verid: verid
+        bdatu: bdatu
+        stlan: stlan
+        stlal: stlal
+        plnty: plnty
+        plnnr: plnnr
+        alnal: alnal
+        prfg_f: prfg_f
+        mksp: mksp
+        prdat: prdat
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_mkal_fin
+    params:
+      columns:
+        matnr: material_code
+        werks: plant_code
+        verid: production_version
+        bdatu: production_version_valid_to_date
+        stlan: bom_usage
+        stlal: bom_alternative
+        plnty: task_list_type_code
+        plnnr: task_list_number
+        alnal: group_counter
+        prfg_f: production_version_check_status
+        mksp: production_version_lock
+        prdat: production_version_last_check_date
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_material_production_versions
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_production_versions
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

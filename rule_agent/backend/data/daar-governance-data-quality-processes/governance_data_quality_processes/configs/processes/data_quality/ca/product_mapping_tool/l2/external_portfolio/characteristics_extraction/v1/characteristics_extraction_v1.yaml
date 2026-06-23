@@ -1,0 +1,251 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: PMT_flow
+  operations:
+
+########################################################################################################################
+# Translate source data (fill-in ext_product_name_translated column)
+########################################################################################################################
+# nested process - translator
+  - kind: nested_process
+    name: ext_product_name_translator
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/product_name_translator_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+########################################################################################################################
+# Cleanse translated data (fill-in ext_product_name_final column)
+########################################################################################################################
+# nested process - cleanser
+  - kind: nested_process
+    name: ext_product_name_cleanser
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/product_name_cleanser_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+########################################################################################################################
+# Product Characteristics Extraction (fill-in _pcm columns): package_size, sales_unit, package_type, brand, sub_brand
+########################################################################################################################
+# nested process - package size PCM
+  - kind: nested_process
+    name: pcm_package_size
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/pcm_package_size_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+          
+# nested process - sales unit PCM
+  - kind: nested_process
+    name: pcm_sales_unit
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/pcm_sales_unit_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+# nested process - package type PCM
+  - kind: nested_process
+    name: pcm_package_type
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/pcm_package_type_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+# nested process - brand PCM
+  - kind: nested_process
+    name: pcm_brand
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/pcm_brand_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+# nested process - sub brand PCM
+  - kind: nested_process
+    name: pcm_sub_brand
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/pcm_sub_brand_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+########################################################################################################################
+# Final Product Characteristics Extraction (fill-in _final columns): package_size, sales_unit, package_type, brand, sub_brand
+########################################################################################################################
+# nested process - package size final
+  - kind: nested_process
+    name: final_package_size
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_package_size_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+          
+# nested process - sales unit final
+  - kind: nested_process
+    name: final_sales_unit
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_sales_unit_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"
+
+# nested process - package type final
+  - kind: nested_process
+    name: final_package_type
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_package_type_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+# nested process - brand final
+  - kind: nested_process
+    name: final_brand
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_brand_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+# nested process - sub brand final
+  - kind: nested_process
+    name: final_sub_brand
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_sub_brand_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+          
+# nested process - item category final
+  - kind: nested_process
+    name: final_item_category
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_item_category_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+          
+########################################################################################################################
+# Flavours Extraction - brand_final and sub_brand_final needed
+########################################################################################################################
+# nested process - flavour PCM
+  - kind: nested_process
+    name: pcm_flavour
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/pcm_flavour_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  
+
+# nested process - flavour final
+  - kind: nested_process
+    name: final_flavour
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/characteristics_extraction/v1/final_flavour_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"  

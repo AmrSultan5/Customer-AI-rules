@@ -1,0 +1,137 @@
+
+transform:
+  name: dm_unit_of_measure
+  operations:
+
+# Read marm
+
+  - kind: read_dataio
+    name: read_marm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: marm
+      schema_version: v1
+
+  - kind: add
+    name: add_conversion_factor
+    context_name: read_marm
+    params:
+      - column: conversion_factor
+        expression: cast(umrez/umren as decimal(10,4))
+
+  - kind: select
+    name: select_marm
+    context_name: add_conversion_factor
+    params:
+      columns:
+        matnr: matnr
+        meinh: meinh
+        umrez: umrez
+        umren: umren
+        conversion_factor: conversion_factor
+        ean11: ean11
+        numtp: numtp
+        laeng: laeng
+        breit: breit
+        hoehe: hoehe
+        volum: volum
+        voleh: voleh
+        brgew: brgew
+        gewei: gewei
+        meabm: meabm
+        sap_cluster: sap_cluster_marm
+      distinct: true
+
+#Read t006a
+
+  - kind: read_dataio
+    name: read_t006a
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t006a
+      schema_version: v1
+
+  - kind: select
+    name: select_t006a
+    context_name: read_t006a
+    params:
+      columns:
+        msehl: msehl
+        msehi: msehi
+        spras: spras
+        sap_cluster: sap_cluster_t006a
+      distinct: true
+ 
+
+# Transformations
+
+  - kind: filter
+    name: filter_t006a
+    context_name: select_t006a
+    params:
+      - condition:
+          spras = 'E'
+
+# Join and select
+
+  - kind: join
+    name: join_marm_t006a
+    context_name: select_marm
+    params:
+      - other:
+          filter_t006a
+        how:
+          inner
+        columns:
+          meinh: msehi
+          sap_cluster_marm: sap_cluster_t006a
+
+  - kind: select
+    name: select_dm_unit_of_measure
+    context_name: join_marm_t006a
+    params:
+      columns:
+        matnr: material_code
+        meinh: alternative_unit_of_measure_code
+        msehl: alternative_unit_of_measure_name
+        umrez: conversion_numerator
+        umren: conversion_denominator
+        conversion_factor: conversion_factor
+        ean11: ean_code
+        numtp: ean_category
+        laeng: length
+        breit: width
+        hoehe: height
+        volum: volume
+        voleh: volume_unit
+        brgew: gross_weight_uom
+        gewei: weight_unit_uom
+        meabm: unit_of_dimension
+        sap_cluster_marm: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_unit_of_measure
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_unit_of_measure
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

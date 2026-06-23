@@ -1,0 +1,307 @@
+transform:
+  name: dm_employee_worker_position_history
+  operations:
+  
+  - kind: read_dataio
+    name: read_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: worker
+      schema_version: v1
+
+  - kind: add
+    name: filter_logic
+    context_name: read_worker
+    params:
+      - column: filter_termination_date
+        expression: if(termination_date >= add_months(current_date(),-1) OR termination_date IS NULL OR termination_date = '', '1', '0')
+      - column: filter_pay_group
+        expression: if(country_id = 'NGA' AND pay_group IN ('PAY_GROUP_AUT_INTERNATIONAL_PAYROLL_LOCAL_SOC_SEC','PAY_GROUP_AUT_INTERNATIONAL_PAYROLL_AT_SOC_SEC'),'0', '1')
+
+  - kind: filter
+    name: filter_worker
+    context_name: filter_logic
+    params:
+      - condition:
+           filter_termination_date = '1' AND filter_pay_group = '1' AND employee_id IS NOT NULL AND position_id IS NOT NULL
+
+  - kind: add
+    name: add_period
+    context_name: filter_worker
+    params:
+      - column: period
+        expression: date_format(to_date(current_date()),'yyyy-MM')
+      - column: compensation_grade_value_1
+        expression: regexp_replace(upper(comp_grade),'COMPENSATION_GRADE_','')
+      - column: compensation_grade_value_2
+        expression: if(compensation_grade_value_1 = '00', '0', compensation_grade_value_1)
+      - column: compensation_grade_value_null
+        expression: if(compensation_grade_value_2 IS NULL OR compensation_grade_value_2 = '', '-1', compensation_grade_value_2)
+
+  - kind: select
+    name: select_worker_0
+    context_name: add_period
+    params:
+      columns:
+        employee_id: employee_id
+        position_id: position_id
+        period: period
+        compensation_grade_value_2: compensation_grade_value
+        compensation_grade_value_null: compensation_grade_value_null
+      distinct: true
+      
+  - kind: group
+    name: group_worker_comp_grade
+    context_name: select_worker_0
+    params:
+      - aggs:
+          compensation_grade_value_null: count
+        by:
+        - employee_id
+        - position_id
+        - period
+
+  - kind: join
+    name: join_worker_comp_grade
+    context_name: select_worker_0
+    params:
+      - other:
+          group_worker_comp_grade
+        how:
+          left
+        columns:
+          employee_id: employee_id
+          position_id: position_id
+          period: period
+
+  - kind: filter
+    name: filter_worker_comp_grade
+    context_name: join_worker_comp_grade
+    params:
+      - condition:
+           count_compensation_grade_value_null == 1 OR (count_compensation_grade_value_null > 1 AND compensation_grade_value IS NOT NULL AND compensation_grade_value != '')
+
+  - kind: select
+    name: select_worker
+    context_name: filter_worker_comp_grade
+    params:
+      columns:
+        employee_id: employee_id
+        position_id: position_id
+        period: period
+        compensation_grade_value: compensation_grade_value
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_worker_position_history
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker_position_history
+      schema_version: v1
+
+  - kind: add
+    name: add_one_year_filter
+    context_name: read_dm_employee_worker_position_history
+    params:
+      - column: period_filter
+        expression: date_format(to_date(add_months(current_date(), -12)), 'yyyy-MM')
+
+  - kind: filter
+    name: filter_worker_hist_last
+    context_name: add_one_year_filter
+    params:
+      - condition:
+           period >= date_format(to_date(current_date()), 'yyyy-MM') OR period >= date_format(to_date(add_months(current_date(), -1)), 'yyyy-MM')
+
+  - kind: filter
+    name: filter_worker_hist_rest
+    context_name: add_one_year_filter
+    params:
+      - condition:
+           period < date_format(to_date(current_date()), 'yyyy-MM') AND period < date_format(to_date(add_months(current_date(), -1)), 'yyyy-MM')
+
+  - kind: select
+    name: select_worker_hist_rest
+    context_name: filter_worker_hist_rest
+    params:
+      columns:
+        employee_id: employee_id
+        position_id: position_id
+        period: period
+        compensation_grade_value: compensation_grade_value
+      distinct: true
+
+  - kind: select
+    name: select_worker_hist
+    context_name: filter_worker_hist_last
+    params:
+      columns:
+        employee_id: employee_id_hist
+        position_id: position_id_hist
+        period: period_hist
+        compensation_grade_value: compensation_grade_value_hist
+      distinct: true
+
+  - kind: join
+    name: join_worker_hist
+    context_name: select_worker
+    params:
+      - other:
+          select_worker_hist
+        how:
+          outer
+        columns:
+          employee_id: employee_id_hist
+          period: period_hist
+
+  - kind: add
+    name: add_status
+    context_name: join_worker_hist
+    params:
+      - column: status
+        expression: if(employee_id_hist IS NULL, 'new', if(employee_id IS NULL, 'hist', 'update'))
+
+  - kind: filter
+    name: filter_worker_hist_new
+    context_name: add_status
+    params:
+      - condition:
+           status = 'new'
+           
+  - kind: select
+    name: select_worker_hist_new
+    context_name: filter_worker_hist_new
+    params:
+      columns:
+        employee_id: employee_id
+        position_id: position_id
+        period: period
+        compensation_grade_value: compensation_grade_value
+      distinct: true
+
+  - kind: filter
+    name: filter_worker_hist_hist
+    context_name: add_status
+    params:
+      - condition:
+           status = 'hist'
+            
+  - kind: select
+    name: select_worker_hist_hist
+    context_name: filter_worker_hist_hist
+    params:
+      columns:
+        employee_id_hist: employee_id
+        position_id_hist: position_id
+        period_hist: period
+        compensation_grade_value_hist: compensation_grade_value
+      distinct: true
+
+  - kind: filter
+    name: filter_worker_hist_update
+    context_name: add_status
+    params:
+      - condition:
+           status = 'update'
+
+  - kind: select
+    name: select_postion_worker_for_count
+    context_name: filter_worker_hist_update
+    params:
+      columns:
+        employee_id: employee_id
+        position_id: position_id
+        period: period
+      distinct: true
+
+  - kind: group
+    name: group_worker_postion
+    context_name: select_postion_worker_for_count
+    params:
+      - aggs:
+          position_id: count
+        by:
+        - employee_id
+        - period
+
+  - kind: join
+    name: join_worker_hist_with_count_position
+    context_name: filter_worker_hist_update
+    params:
+      - other:
+          group_worker_postion
+        how:
+          left
+        columns:
+          employee_id: employee_id
+          period: period
+
+  - kind: filter
+    name: filter_worker_update
+    context_name: join_worker_hist_with_count_position
+    params:
+      - condition:
+           (count_position_id > 1 AND position_id != position_id_hist) OR 
+           (count_position_id = 1 AND position_id = position_id_hist)
+
+  - kind: select
+    name: select_worker_hist_update
+    context_name: filter_worker_update
+    params:
+      columns:
+        employee_id: employee_id
+        position_id: position_id
+        period: period
+        compensation_grade_value: compensation_grade_value
+      distinct: true
+
+  - kind: union
+    name: union_worker_postion_new_hist
+    context_name: select_worker_hist_hist
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_worker_hist_new
+      
+  - kind: union
+    name: union_worker_postion_new_hist_update
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_worker_hist_update
+      
+  - kind: union
+    name: union_final
+    context_name: union_worker_postion_new_hist_update
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_worker_hist_rest
+
+  - kind: write_dataio
+    name: write_dm_employee_worker_position_history
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker_position_history
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,314 @@
+transform:
+  name: f_sell_out_gr
+  operations:
+
+  - kind: read_dataio
+    name: read_universal_schema
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: ca
+      object_name: universal_schema
+      schema_version: v2
+
+  - kind: read_dataio
+    name: read_md_iri
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sellout
+      namespace: iri
+      object_name: md_iri
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_product_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: product_mapping_tool
+      object_name: product_mapping
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_market_cpl_map
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: promo
+      namespace: reference_tables
+      object_name: gr_market_cpl_mapping
+      schema_version: v1
+
+  - kind: select
+    name: select_sellout_first
+    context_name: read_universal_schema
+    params:
+      columns:
+        product_id: product_id
+        vendor_name: vendor_name
+        retailer_region: retailer_region
+        promo_value_sales: promo_value_sales
+        promo_volume_sales: promo_volume_sales
+        regular_value_sales: regular_value_sales
+        regular_volume_sales: regular_volume_sales
+        date: date
+      distinct: true
+
+  - kind: add
+    name: add_upper
+    params:
+      - column: retailer_region_upp
+        expression: upper(retailer_region)
+      - column: vendor_name_low
+        expression: lower(vendor_name)
+
+  - kind: select
+    name: select_sellout
+    params:
+      columns:
+        product_id: product_id
+        vendor_name_low: vendor_name
+        retailer_region_upp: retailer_region
+        promo_value_sales: promo_value_sales
+        promo_volume_sales: promo_volume_sales
+        regular_value_sales: regular_value_sales
+        regular_volume_sales: regular_volume_sales
+        date: date
+      distinct: true
+
+  - kind: select
+    name: select_product
+    context_name: read_md_iri
+    params:
+      columns:
+        ean: ean
+        company: company
+
+  - kind: select
+    name: select_product_map_fisrt
+    context_name: read_product_mapping
+    params:
+      columns:
+        vendor: vendor
+        vendor_item: vendor_item
+        ban: ban
+        country: country
+      distinct: true
+
+  - kind: add
+    name: add_upper
+    params:
+      - column: vendor_low
+        expression: lower(vendor)
+
+  - kind: select
+    name: select_product_map
+    params:
+      columns:
+        vendor_low: vendor
+        vendor_item: vendor_item
+        ban: ban
+        country: country
+      distinct: true
+
+
+  - kind: select
+    name: select_market_cpl_map
+    context_name: read_market_cpl_map
+    params:
+      columns:
+        cpl_name_sellout: cpl_name_sellout
+        cpl_id: cpl_id
+        customer_description: customer_description
+
+
+
+  - kind: filter
+    name: filter_product_map
+    context_name: select_product_map
+    params:
+      - condition:
+          country == 'gr'
+
+
+
+  - kind: group
+    name: group_product_map_ban_vendor
+    context_name: filter_product_map
+    params:
+      - aggs:
+          ban: max
+          vendor: max
+        by:
+        - vendor_item
+
+  - kind: group
+    name: group_product_map_ban_count
+    context_name: filter_product_map
+    params:
+      - aggs:
+          ban: count
+        by:
+        - vendor_item
+
+  - kind: group
+    name: group_product_ean
+    context_name: select_product
+    params:
+      - aggs:
+          company: max
+        by:
+        - ean
+
+
+  - kind: join
+    name: join_vendor
+    context_name: filter_product_map
+    params:
+      - other:
+          group_product_map_ban_vendor
+        how:
+          inner
+        columns:
+          vendor_item: vendor_item
+          vendor: max_vendor
+      - other:
+          group_product_map_ban_count
+        how:
+          inner
+        columns:
+          vendor_item: vendor_item
+
+
+  - kind: join
+    name: join_final
+    context_name: select_sellout
+    params:
+      - other:
+          join_vendor
+        how:
+          left
+        columns:
+          product_id: vendor_item
+          vendor_name: vendor
+      - other:
+          group_product_ean
+        how:
+          left
+        columns:
+          product_id: ean
+      - other:
+          select_market_cpl_map
+        how:
+          inner
+        columns:
+          retailer_region: cpl_name_sellout
+
+  - kind: add
+    name: add_values
+    params:
+      - column: company_code
+        expression: '''450'''
+      - column: country
+        expression: '''gr'''
+      - column: currency_code
+        expression: '''EUR'''
+      - column: date_conv
+        expression: date_format(to_date(date,'yyyyMMdd'), 'yyyy-MM-dd')
+      - column: m_sales_promo_uc
+        expression: promo_volume_sales/5.678
+      - column: m_sales_regular_uc
+        expression: regular_volume_sales/5.678
+
+
+  - kind: group
+    name: group_promo_regular_sum
+    params:
+      - aggs:
+          m_sales_promo_uc: sum
+          promo_value_sales: sum
+          m_sales_regular_uc: sum
+          regular_value_sales: sum
+        by:
+        - date_conv
+        - company_code
+        - country
+        - currency_code
+        - retailer_region
+        - vendor_name
+
+  - kind: add
+    name: add_values
+    params:
+      - column: m_sales_promo_uc
+        expression: coalesce(sum_m_sales_promo_uc,0)
+      - column: m_sales_promo_value
+        expression: coalesce(sum_promo_value_sales,0)
+      - column: m_sales_regular_uc
+        expression: coalesce(sum_m_sales_regular_uc,0)
+      - column: m_sales_regular_value
+        expression: coalesce(sum_regular_value_sales,0)
+      - column: manufacturer_name
+        expression: "CASE WHEN(company IN ('TCCC', 'CCHBC-TCCC', 'CCH')) THEN 'CCH' ELSE p.COMPANY END"
+      - column: market_code
+        expression: "cast(null as string)"
+      - column: shop_code
+        expression: "cast(null as string)"
+      - column: shop_name
+        expression: "cast(null as string)"
+      - column: is_current_dataset
+        expression: "cast(1 as int)"
+      - column: area
+        expression: "cast(null as string)"
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        ban: ban_code
+        country: country_code
+        cpl_id: cpl_code
+        customer_description: cpl_name
+        currency_code: currency_code
+        date_conv: date
+        m_sales_promo_uc: m_sales_promo_uc
+        m_sales_promo_value: m_sales_promo_value
+        m_sales_regular_uc: m_sales_regular_uc
+        m_sales_regular_value: m_sales_regular_value
+        manufacturer_name: manufacturer_name
+        market_code: market_code
+        retailer_region: market_name
+        shop_code: shop_code
+        shop_name: shop_name
+        vendor_name: vendor_name
+        is_current_dataset: is_current_dataset
+        area: area
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_sell_out_gr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: gr
+      module: promo
+      namespace: golden
+      object_name: f_sell_out_gr
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

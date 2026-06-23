@@ -1,0 +1,119 @@
+transform:
+  name: dm_employee_organisation
+  operations:
+
+  - kind: read_dataio
+    name: read_organisation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: organizations
+      schema_version: v1
+
+  - kind: add
+    name: add_location_id
+    context_name: read_organisation
+    params:
+      - column: location_id_substr
+        expression: substr(primary_location_id, 5, 4)
+
+  - kind: read_local
+    name: read_dos
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: dim_organisation_structure
+
+  - kind: select
+    name: select_dos
+    context_name: read_dos
+    params:
+      columns:
+        location_code: location_code_dos
+        company_code: company_code_dos
+      distinct: true
+
+  - kind: read_local
+    name: read_lcm
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: location_country_mapping
+
+  - kind: select
+    name: select_lcm
+    context_name: read_lcm
+    params:
+      columns:
+        location_id: location_id_lcm
+        country_id: country_id_lcm
+      distinct: true
+
+  - kind: join
+    name: join_sources
+    context_name: add_location_id
+    params:
+      - other:
+          select_lcm
+        how:
+          left
+        columns:
+          location_id_substr: location_id_lcm
+      - other:
+          select_dos
+        how:
+          left
+        columns:
+          location_id_substr: location_code_dos
+
+  - kind: add
+    name: add_object_id
+    context_name: join_sources
+    params:
+      - column: object_type
+        expression: '"Organisation"'
+
+  - kind: select
+    name: select_positions
+    context_name: add_object_id
+    params:
+      columns:
+        object_type: object_type
+        sup_org_id: supervisory_organisation_id
+        sup_org_name: supervisory_organisation_name
+        senior_sup_org_id: upper_supervisory_organisation_id
+        senior_sup_name: upper_supervisory_organisation_name
+        manager_pos_id: manager_position_id
+        location_id_substr: location_id
+        country_id_lcm: country_id
+        company_code_dos: company_id
+        cch_sub_function: sub_department_name
+        cch_function: department_name
+        manager_emp_id: manager_employee_id
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_employee_organisation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_organisation
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

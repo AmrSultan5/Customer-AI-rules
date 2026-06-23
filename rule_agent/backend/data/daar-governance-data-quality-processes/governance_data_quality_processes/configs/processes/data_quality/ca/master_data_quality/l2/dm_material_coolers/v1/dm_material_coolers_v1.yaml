@@ -1,0 +1,669 @@
+transform:
+  name: dm_material_coolers
+  operations:
+
+# Read MARA
+
+  - kind: read_dataio
+    name: read_mara
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mara
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mara
+    context_name: read_mara
+    params:
+      - condition:
+          mtart = 'ZCDE'
+
+
+  - kind: select
+    name: select_mara
+    params:
+      columns:
+        matnr: matnr_mara
+        mtart: mtart
+        sap_cluster: sap_cluster
+      distinct: true
+
+ # Read MAKT
+
+  - kind: read_dataio
+    name: read_makt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: makt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_makt
+    context_name: read_makt
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_makt
+    params:
+      columns:
+        matnr: matnr_makt
+        maktx: maktx
+        spras: spras
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+ # Read INOB
+
+  - kind: read_dataio
+    name: read_inob
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: inob
+      schema_version: v1
+
+  - kind: select
+    name: select_inob
+    params:
+      columns:
+        objek: objek_inob
+        cuobj: cuobj
+        sap_cluster: sap_cluster
+      distinct: true
+
+ # Read AUSP-AT24
+
+  - kind: read_dataio
+    name: read_at24
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: ausp
+      schema_version: v1
+
+  - kind: filter
+    name: filter_at24
+    context_name: read_at24
+    params:
+      - condition:
+          atinn = 24 and atwrt = 'COOLER'
+
+  - kind: add
+    name: add_at24
+    context_name: filter_at24
+    params:
+      # - column: at24_objek
+      #   expression: CAST(CAST(objek AS DECIMAL(18, 0)) AS string)
+      - column: at24_objek
+        expression: ltrim('0', objek)
+
+  - kind: select
+    name: select_at24
+    params:
+      columns:
+        atwrt: atwrt_at24
+        atinn: atinn_at24
+        objek: objek_at24
+        at24_objek: at24_objek
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+ # Read AUSP-at30
+
+  - kind: read_dataio
+    name: read_at30
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: ausp
+      schema_version: v1
+
+  - kind: filter
+    name: filter_at30
+    context_name: read_at30
+    params:
+      - condition:
+          atinn = 30
+
+
+  - kind: add
+    name: add_at30
+    context_name: filter_at30
+    params:
+      # - column: at30_objek
+      #   expression: CAST(CAST(objek AS DECIMAL(18, 0)) AS string)
+      - column: at30_objek
+        expression: ltrim('0', objek)
+
+  - kind: select
+    name: select_at30
+    params:
+      columns:
+        atwrt: atwrt_at30
+        atinn: atinn_at30
+        objek: objek_at30
+        at30_objek: at30_objek
+        sap_cluster: sap_cluster
+      distinct: true
+
+ # Read AUSP-at52
+
+  - kind: read_dataio
+    name: read_at52
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: ausp
+      schema_version: v1
+
+  - kind: filter
+    name: filter_at52
+    context_name: read_at52
+    params:
+      - condition:
+          atinn = 52
+
+
+  - kind: add
+    name: add_at52
+    context_name: filter_at52
+    params:
+      # - column: at52_objek
+      #   expression: CAST(CAST(objek AS DECIMAL(18, 0)) AS string)
+      - column: at52_objek
+        expression: ltrim('0', objek)
+
+
+  - kind: cast
+    name: cast_number_of_doors_decimal
+    params:
+      - column: atflv
+        to: decimal(2,1)
+
+
+  - kind: select
+    name: select_at52
+    params:
+      columns:
+        atwrt: atwrt_at52
+        atflv: atflv_at52
+        atinn: atinn_at52
+        objek: objek_at52
+        at52_objek: at52_objek
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+
+ # Read AUSP-at27
+
+  - kind: read_dataio
+    name: read_at27
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: ausp
+      schema_version: v1
+
+  - kind: filter
+    name: filter_at27
+    context_name: read_at27
+    params:
+      - condition:
+          atinn = 27
+
+
+
+  - kind: add
+    name: add_at27
+    context_name: filter_at27
+    params:
+      - column: at27_objek
+        expression: ltrim('0', objek)
+      # - column: at27_objek
+      #   expression: CAST(CAST(objek AS DECIMAL(18, 0)) AS string)
+
+  - kind: select
+    name: select_at27
+    params:
+      columns:
+        atwrt: atwrt_at27
+        atinn: atinn_at27
+        objek: objek_at27
+        at27_objek: at27_objek
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+  # Read V_EQUI
+
+  - kind: read_dataio
+    name: read_veq
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: v_equi
+      schema_version: v1
+
+  - kind: filter
+    name: filter_veq
+    context_name: read_veq
+    params:
+      - condition:
+          datbi = '9999-12-31 00:00:00.0000000' AND spras = 'E'
+
+  - kind: add
+    name: add_Col
+    context_name: filter_veq
+    params:
+      - column: veq_equnr
+        expression: CONCAT('IE', equnr)
+
+  - kind: select
+    name: select_veq
+    params:
+      columns:
+        matnr: matnr_veq
+        datbi: datbi
+        equnr: equnr
+        eqktx: eqktx
+        serge: serge
+        ansdt: ansdt
+        inbdt: inbdt
+        veq_equnr: veq_equnr
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  # Read IHPA
+
+  - kind: read_dataio
+    name: read_ihpa
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ihpa
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ihpa
+    context_name: read_ihpa
+    params:
+      - condition:
+          obtyp ='IEQ' AND parvw IN ('AG', 'RE', 'RG', 'WE') AND kzloesch = ''
+
+  - kind: select
+    name: select_ihpa
+    params:
+      columns:
+        obtyp: obtyp
+        objnr: objnr_ihpa
+        parnr: parnr
+        parvw: parvw
+        kzloesch: kzloesch
+        sap_cluster: sap_cluster
+
+      distinct: true
+
+
+  # Read BUT000
+
+  - kind: read_dataio
+    name: read_but
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_but
+    context_name: read_but
+    params:
+      - condition:
+          (sap_cluster = 'CL1' and bu_group in ('9012', '9013', '9016', '9017', '9018', '9019', '9021', '9024', '9026', '9029', '9030', '9040')) or (sap_cluster = 'CL2' and bu_group in('9014', '9015', '9022', '9023', '9025', '9027', '9028', '9031', '9032', '9033', '9034', '9035', '9038', '9042', '9094', '9095', '9096'))
+
+  - kind: select
+    name: select_but
+    params:
+      columns:
+        bu_group: bu_group
+        partner: partner
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+  # Read jest
+
+  - kind: read_dataio
+    name: read_jest
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: jest
+      schema_version: v1
+
+  - kind: filter
+    name: filter_jest
+    context_name: read_jest
+    params:
+      - condition:
+          stat LIKE 'E%' AND inact = ''
+
+
+  - kind: select
+    name: select_jest
+    params:
+      columns:
+        objnr: objnr_jest
+        stat: stat
+        sap_cluster: sap_cluster
+
+      distinct: true
+
+
+
+  # Read tj30t
+
+  - kind: read_dataio
+    name: read_tj30t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tj30t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tj30t
+    context_name: read_tj30t
+    params:
+      - condition:
+          spras = 'E' AND stsma = 'CSEQ01'
+
+
+  - kind: select
+    name: select_tj30t
+    params:
+      columns:
+        txt04: txt04
+        txt30: txt30
+        estat: estat
+        spras: spras
+        stsma: stsma
+        sap_cluster: sap_cluster
+
+
+      distinct: true
+
+
+  # Read CAWNT_CRM
+
+  - kind: read_dataio
+    name: read_cawnt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: cawnt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cawnt
+    context_name: read_cawnt
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_cawnt
+    params:
+      columns:
+        atinn: atinn_cawnt
+        atzhl: atzhl_cawnt
+        spras: spras
+        atwtb: atwtb_cawnt
+        sap_cluster: sap_cluster
+
+
+      distinct: true
+
+
+
+  # Read CAWN_CRM
+
+  - kind: read_dataio
+    name: read_cawn
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: cawn
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cawn
+    context_name: read_cawn
+    params:
+      - condition:
+          atinn = '1'
+
+  - kind: select
+    name: select_cawn
+    params:
+      columns:
+        atinn: atinn_cawn
+        atwrt: atwrt_cawn
+        atzhl: atzhl_cawn
+        sap_cluster: sap_cluster
+
+      distinct: true
+
+
+
+   #JOINS
+
+  - kind: join
+    name: join_mara
+    context_name: select_mara
+    params:
+      - other:
+          select_makt
+        how:
+          left
+        columns:
+          matnr_mara: matnr_makt
+          sap_cluster: sap_cluster
+      - other:
+          select_inob
+        how:
+          left
+        columns:
+          matnr_mara: objek_inob
+          sap_cluster: sap_cluster
+      - other:
+          select_at24
+        how:
+          left
+        columns:
+          cuobj: at24_objek
+          sap_cluster: sap_cluster
+      - other:
+          select_at30
+        how:
+          left
+        columns:
+          cuobj: at30_objek
+          sap_cluster: sap_cluster
+      - other:
+          select_at52
+        how:
+          left
+        columns:
+          cuobj: at52_objek
+          sap_cluster: sap_cluster
+      - other:
+          select_at27
+        how:
+          left
+        columns:
+          cuobj: at27_objek
+          sap_cluster: sap_cluster
+      - other:
+          select_veq
+        how:
+          left
+        columns:
+          objek_inob: matnr_veq
+          sap_cluster: sap_cluster
+      - other:
+          select_ihpa
+        how:
+          left
+        columns:
+          veq_equnr: objnr_ihpa
+          sap_cluster: sap_cluster
+      - other:
+          select_but
+        how:
+          inner
+        columns:
+          parnr: partner
+          sap_cluster: sap_cluster
+      - other:
+          select_jest
+        how:
+          inner
+        columns:
+          objnr_ihpa: objnr_jest
+          sap_cluster: sap_cluster
+      - other:
+          select_tj30t
+        how:
+          inner
+        columns:
+          stat: estat
+          sap_cluster: sap_cluster
+      - other:
+          select_cawn
+        how:
+          left
+        columns:
+          atwrt_at30: atwrt_cawn
+          sap_cluster: sap_cluster
+      - other:
+          select_cawnt
+        how:
+          left
+        columns:
+          atinn_cawn: atinn_cawnt
+          atzhl_cawn: atzhl_cawnt
+          sap_cluster: sap_cluster
+
+
+  - kind: cast
+    name: cast_number_of_doors
+    params:
+      - column: atflv_at52
+        to: string
+
+  - kind: select
+    name: select_coolers
+    params:
+      columns:
+        matnr_mara: material_code
+        maktx: material_description
+        atwrt_at24: cde_type
+        atwrt_at30: cde_category
+        atwrt_at27: cs_branding
+        atflv_at52: number_of_doors
+        equnr: equipment_number
+        eqktx: equipment_name
+        serge: manufacturer_serial_number
+        ansdt: acquisition_date
+        inbdt: install_date
+        txt04: equipment_status
+        txt30: equipment_status_description
+        parnr: partner_number
+        atwtb_cawnt: cde_category_description
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_material_coolers
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_coolers
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

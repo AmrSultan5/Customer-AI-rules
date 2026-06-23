@@ -1,0 +1,113 @@
+transform:
+  name: dm_employee_check_results_history
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_employee_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results
+      schema_version: v3
+
+  - kind: read_dataio
+    name: read_dm_employee_user_message
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_user_message
+      schema_version: v1
+
+  - kind: select
+    name: select_deus
+    context_name: read_dm_employee_user_message
+    params:
+      columns:
+        rule_code: rule_code_deus
+        object_id: object_id_deus
+        user_message_code: user_message_code_deus
+        user_message_name: user_message_name_deus
+        message_added_when: message_added_when_deus
+      distinct: true
+
+  - kind: add
+    name: add_row_number
+    context_name: select_deus
+    params:
+      - column: row_number  
+        expression: 'ROW_NUMBER() OVER (PARTITION BY rule_code_deus, object_id_deus ORDER BY rule_code_deus, object_id_deus, message_added_when_deus DESC)'
+
+  - kind: filter
+    name: filter_row_number
+    context_name: add_row_number
+    params:
+      - condition:
+          row_number = '1'
+
+  - kind: join
+    name: join_message
+    context_name: read_dm_employee_check_results
+    params:
+      - other:
+          filter_row_number
+        how:
+          left
+        columns:
+          object_id: object_id_deus
+          rule_code: rule_code_deus
+
+  - kind: add
+    name: add_loading_date
+    context_name: join_message
+    params:
+      - column: loading_date
+        expression: TO_DATE(current_date(),'yyyy-MM-dd')
+
+  - kind: select
+    name: select_check_results_final
+    context_name: add_loading_date
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        location_code: location_code
+        detailed_message: detailed_message
+        object_type: object_type
+        user_message_code_deus: user_message_code
+        user_message_name_deus: user_message_name
+        status_added_by: status_added_by
+        status_added_when: status_added_when
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_employee_check_results_history
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results_history
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

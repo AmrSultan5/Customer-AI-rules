@@ -1,0 +1,115 @@
+transform:
+  name: dm_current_open_balance
+  operations:
+
+# Read sources
+
+  - kind: read_dataio
+    name: read_company_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: company_code_mapping
+      schema_version: v1    
+
+  - kind: select
+    name: select_company_code_mapping
+    params:
+      columns:
+        company_code: company_code
+        country_code: country_code
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_ca_fi_01m_fiar_line_item
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: fm
+      domain: cchbc
+      object_name: ca_fi_01m_fiar_line_item
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ca_fi_01m_fiar_line_item
+    params:
+      - condition:
+          bic_chcurtype = '10' AND rc_account = '0170000000' AND ISNULL(clr_doc_no)
+
+  - kind: select
+    name: select_ca_fi_01m_fiar_line_item
+    params:
+      columns:
+        comp_code: comp_code
+        rc_account: rc_account
+        bic_chcurtype: bic_chcurtype
+        doc_date: doc_date
+        debitor: debitor
+        balance: balance
+      distinct: true
+
+  - kind: group
+    name: group_balance
+    params:
+      - aggs:
+          balance: sum
+        by:
+        - comp_code
+        - rc_account
+        - bic_chcurtype
+        - doc_date
+        - debitor
+
+  - kind: join
+    name: join_ca_fi_01m_fiar_line_item_company_code_mapping
+    context_name: group_balance
+    params:
+      - other:
+          select_company_code_mapping
+        how:
+          left
+        columns:
+          comp_code: company_code
+
+
+  - kind: select
+    name: select_ca_fi_01m_fiar_line_item_final
+    params:
+      columns:
+        country_code: country
+        comp_code: comp_code
+        rc_account: rc_account
+        bic_chcurtype: bic_chcurtype
+        doc_date: doc_date
+        debitor: debitor
+        sum_balance: sum_balance
+      distinct: true
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: sum_balance
+        to: decimal(31,14)
+
+  - kind: write_dataio
+    name: write_dm_current_open_balance
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_current_open_balance
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

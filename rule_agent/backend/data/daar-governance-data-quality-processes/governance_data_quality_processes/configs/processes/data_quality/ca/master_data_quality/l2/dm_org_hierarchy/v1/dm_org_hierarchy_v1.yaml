@@ -1,0 +1,59 @@
+transform:
+  name: dm_org_hierarchy
+  operations:
+
+# Read ca_salorg_sales_org
+
+  - kind: read_dataio
+    name: read_ca_salorg_sales_org
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_salorg_sales_org
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ca_salorg_sales_org
+    params:
+      - condition:
+          country not in('RU','BY')
+
+  - kind: add
+    name: add_lower_country
+    params:
+     - column: country
+       expression: lower(country)
+       overwrite: true
+
+  - kind: select
+    name: select_ca_salorg_sales_org
+    params:
+      columns:
+        salesorg: sales_org_code
+        salesorg_d: sales_org_name
+        comp_code: company_code
+        comp_code_d: company_name
+        country: country_code
+        countrytxt: country_name
+        curre: currency
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

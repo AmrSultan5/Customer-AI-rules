@@ -1,0 +1,73 @@
+transform:
+  name: dm_vendor_general
+  operations:
+
+  - kind: read_dataio
+    name: read_lfa1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: vendor
+      object_name: lfa1
+      schema_version: v1
+
+  - kind: filter
+    name: filter_lfa1
+    params:
+      - condition:
+          lower(land1) not in('ru','by')
+
+  - kind: add
+    name: add_is_active
+    params:
+      - column: is_active
+        expression: if((sperm = '' or isnull(sperm)) and (sperr = '' or isnull(sperr)) 
+                    and (loevm = '' or isnull(loevm)) and (nodel = '' or isnull(nodel)), '1', '0')
+      - column: country_code
+        expression: lower(land1)
+      - column: created_on
+        expression: date(erdat)
+
+  - kind: select
+    name: select_dm_vendor_general
+    params:
+      columns:
+        lifnr: vendor_code
+        name1: vendor_name
+        ktokk: account_group_code
+        created_on: created_on
+        kunnr: customer_code
+        country_code: country_code
+        loevm: deletion_flag
+        sperr: posting_block
+        sperm: purchasing_block
+        nodel: deletion_block
+        is_active: is_active
+        j_1kftind: type_of_industry
+        stceg: vat_number
+        stcd1: tax_number_1
+        stcd2: tax_number_2
+        stcd3: tax_number_3
+        stcd4: tax_number_4
+        stcd5: tax_number_5
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_general
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

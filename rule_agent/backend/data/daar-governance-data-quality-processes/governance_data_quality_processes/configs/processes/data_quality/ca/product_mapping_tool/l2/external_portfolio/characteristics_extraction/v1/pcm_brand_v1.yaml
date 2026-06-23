@@ -1,0 +1,1360 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% set uc_catalog_ml_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: PCM_brand
+  operations:
+
+########################################################################################################################
+# Read-in data
+########################################################################################################################
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      schema_version: v1
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+  - kind: drop
+    name: drop_process_run_id
+    params:
+      - column: process_run_id
+
+  - kind: filter
+    name: filter_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is null or ext_product_name_src = ''
+
+  - kind: filter
+    name: filter_not_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is not null and ext_product_name_src != ''
+          
+  - kind: add
+    name: add_ext_product_name_src_0
+    params:
+      - column: ext_product_name_src_0
+        expression: ext_product_name_src
+      - column: ext_product_name_src
+        overwrite: true
+        expression: if(country_code = 'at' and ext_source_name = 'leaflets', regexp_replace(lower(ext_product_code), '-', ' '), ext_product_name_src_0)
+
+  - kind: add
+    name: add_vendor_column_to_join
+    params:
+      - column: column_to_join
+        expression: '''1'''
+      - column: ext_product_name_final
+        overwrite: true
+        expression: trim(regexp_replace(regexp_replace(ext_product_name_final, '(?<!\\d)\\.(?!\\d)', ' '), '\\s+', ' '))
+
+  - kind: select
+    name: select_vendor
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_final: ext_product_name_final
+        column_to_join: column_to_join
+      distinct: true
+      
+  - kind: add
+    name: add_vendor
+    params:
+      - column: material_description_split_with_cc
+        expression: split(regexp_replace(ext_product_name_final, '-', ' '), ' ')
+      - column: material_description_src_split_no_cc
+        expression: split(trim(regexp_replace(regexp_replace(lower(ext_product_name_src), '-', ' '), 'coca cola', '')), ' ')
+      - column: material_description_split_no_cc
+        expression: split(trim(regexp_replace(regexp_replace(ext_product_name_final, '-', ' '), 'coca cola', '')), ' ')
+      - column: material_description_split_no_ccz
+        expression: split(trim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ext_product_name_final, '-', ' '), 'coca', ''), 'cola', ''), 'zero', '')), ' ')
+
+  - kind: checkpoint
+    name: checkpoint_vendor
+    context_name: add_vendor
+
+  # package_type mapping load
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.get_artifact.GetArtifactOperation
+    name: brand_name_mapping
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.get_artifact_config.GetArtifactOperationConfig
+    params:
+      catalog: {{uc_catalog_ml_env}}
+      schema: product_mapping_tool
+      registered_model_name: dmt_brand_name_roberta_model
+      alias: production
+      artifact_path: artifacts/mapping.json
+
+  - kind: read_dataio
+    name: read_dpso
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+      schema_version: v9
+      
+  - kind: read_dataio
+    name: read_dpg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+      schema_version: v5
+
+########################################################################################################################
+# for all available brands look for it's duplicate with -KO or CSD and select most popular one
+########################################################################################################################
+  - kind: join
+    name: join_dpso_dpg
+    context_name: read_dpso
+    params:
+      - other:
+          read_dpg
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+          
+  - kind: filter
+    name: filter_dpso_dpg
+    params:
+      - condition:
+          material_type_code like 'ZFG%'
+          
+  - kind: group
+    name: group_dpso_dpg
+    params:
+      - aggs:
+          material_code: count
+        by:
+        - brand_name
+
+  - kind: add
+    name: add_mapping_column_to_join
+    params:
+      - column: column_to_join
+        expression: '''1'''
+      - column: brand_description_cleansed
+        expression: trim(regexp_replace(lower(brand_name), '[^a-z]+', ' '))
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: regexp_replace(brand_description_cleansed, '\\s+', ' ')
+
+  - kind: select
+    name: select_mapping_column_to_join_0
+    context_name: add_mapping_column_to_join
+    params:
+      columns:
+        brand_name: brand_name_0
+        brand_description_cleansed: brand_description_cleansed_0
+        count_material_code: count_material_code_0
+        column_to_join: column_to_join_0
+      distinct: true
+
+  - kind: join
+    name: self_join_mapping
+    context_name: select_mapping_column_to_join_0
+    params:
+      - other:
+          add_mapping_column_to_join
+        how:
+          full
+        columns:
+          column_to_join_0: column_to_join
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_ered.brand_similarity.BrandSimilarityOperation
+    name: brands_similarity
+    context_name: self_join_mapping
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_ered.brand_similarity_config.BrandSimilarityOperationConfig
+    params:
+      input_brand_1: brand_description_cleansed_0
+      input_brand_2: brand_description_cleansed
+      
+  - kind: add
+    name: add_sym_diff
+    params:
+      - column: brand_sym_diff
+        expression: concat(array_except(brand_1_tokenized, brand_2_tokenized), array_except(brand_2_tokenized, brand_1_tokenized))
+      - column: ko_csd
+        expression: array_contains(brand_sym_diff, 'ko') or array_contains(brand_sym_diff, 'csd')
+
+  - kind: filter
+    name: filter_brand_intersect
+    params:
+      - condition:
+          size(brand_sym_diff) > 0 and size(brand_sym_diff) = 1 and ko_csd
+
+  - kind: add
+    name: add_common_brand
+    params:
+      - column: most_common_brand
+        expression: if(count_material_code_0 > count_material_code, brand_name_0, brand_name)
+
+  - kind: select
+    name: select_most_common_brand
+    params:
+      columns:
+        brand_name: brand_name
+        most_common_brand: most_common_brand
+      distinct: true
+      
+########################################################################################################################
+# for all available brands look for similar brands (used in exact match search)
+########################################################################################################################
+  - kind: join
+    name: join_most_common_brand
+    context_name: brand_name_mapping
+    params:
+      - other:
+          select_most_common_brand
+        how:
+          left
+        columns:
+          brand_description: brand_name
+
+  - kind: add
+    name: add_rn_brand
+    params:
+      - column: rn_brand
+        window:
+          func: row_number
+          partition_by:
+            - brand_key
+          order_by:
+            - brand_key: desc
+
+  - kind: filter
+    name: filter_brands
+    params:
+      - condition:
+          rn_brand = 1
+
+  - kind: add
+    name: add_mapping_column_to_join
+    params:
+      - column: column_to_join
+        expression: '''1'''
+      - column: brand_description
+        overwrite: true
+        expression: if(most_common_brand is null or most_common_brand = '', brand_description, most_common_brand)
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: trim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(lower(brand_description),' - ko',''),' csd',''),'-ko',''), '[^a-z -]+', ' '))
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: regexp_replace(brand_description_cleansed, '\\s+', ' ')
+
+  - kind: select
+    name: select_mapping_column_to_join_0
+    context_name: add_mapping_column_to_join
+    params:
+      columns:
+        brand_description: brand_description_0
+        brand_description_cleansed: brand_description_cleansed_0
+        column_to_join: column_to_join_0
+      distinct: true
+
+  - kind: join
+    name: self_join_mapping
+    context_name: select_mapping_column_to_join_0
+    params:
+      - other:
+          add_mapping_column_to_join
+        how:
+          full
+        columns:
+          column_to_join_0: column_to_join
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: brands_similarity
+    context_name: self_join_mapping
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: brand_description_cleansed_0
+      input_brand_2: brand_description_cleansed
+      output_col_name: brand_similarity_score
+
+  - kind: filter
+    name: filter_brands_similarity
+    params:
+      - condition:
+          brand_similarity_score <> '0.0'
+
+  # looking for brands with few kinds
+  - kind: group
+    name: group_brand_many_kinds
+    params:
+      - aggs:
+          brand_description_cleansed: collect_list
+        by:
+        - brand_description_cleansed_0
+
+  - kind: add
+    name: add_brands_list_len
+    params:
+      - column: brands_list_len
+        expression: size(collect_list_brand_description_cleansed)
+
+  - kind: join
+    name: join_brand_many_kinds
+    context_name: filter_brands_similarity
+    params:
+      - other:
+          add_brands_list_len
+        how:
+          left
+        columns:
+          brand_description_cleansed_0: brand_description_cleansed_0
+
+  - kind: add
+    name: add_brand_whitespace_split
+    params:
+      - column: brand_1_split
+        expression: split(brand_description_cleansed_0, ' ')
+      - column: brand_1_split_len
+        expression: size(brand_1_split)
+      - column: brand_2_split
+        expression: split(brand_description_cleansed, ' ')
+      - column: brand_2_split_len
+        expression: size(brand_2_split)
+
+  - kind: add
+    name: add_brands_similarity_for_exact_match
+    params:
+      - column: brand_for_exact_match_flag
+        expression: if(brands_list_len > 1 and brand_2_split_len > 1 or brands_list_len = 1 or brands_list_len > 1 and brand_1_split_len = 1, 1, 0)
+
+  - kind: filter
+    name: filter_brands_similarity_for_exact_match
+    params:
+      - condition:
+          brand_for_exact_match_flag = 1
+
+  - kind: select
+    name: select_brand_name_exact_match
+    params:
+      columns:
+        brand_description_0: brand_description_0
+        brand_description_cleansed_0: brand_description_cleansed_0
+        brand_description: brand_description
+        brand_description_cleansed: brand_description_cleansed
+        column_to_join: column_to_join
+      distinct: true
+
+  - kind: add
+    name: add_brand_name_exact_match
+    params:
+      - column: brand_description_cleansed_0_split
+        expression: split(regexp_replace(brand_description_cleansed_0, '-', ' '), ' ')
+      - column: brand_description_cleansed_0_split_size
+        expression: size(brand_description_cleansed_0_split) 
+      - column: brand_description_cleansed_split
+        expression: split(regexp_replace(brand_description_cleansed, '-', ' '), ' ')
+      - column: brand_description_cleansed_split_size
+        expression: size(brand_description_cleansed_split) 
+
+  - kind: checkpoint
+    name: checkpoint_brand_name_exact_match
+    context_name: add_brand_name_exact_match
+    
+########################################################################################################################
+# join possible brands with vendor records and create main table to look for exact matches
+########################################################################################################################
+  - kind: join
+    name: join_mapping
+    context_name: checkpoint_vendor
+    params:
+      - other:
+          add_brand_name_exact_match
+        how:
+          full
+        columns:
+          column_to_join: column_to_join
+
+  - kind: add
+    name: add_brand_name_match
+    params:
+      - column: intersect_src_0_no_cc_split_size
+        expression: size(array_intersect(material_description_src_split_no_cc, brand_description_cleansed_0_split))
+      - column: intersect_0_no_cc_split_size
+        expression: size(array_intersect(material_description_split_no_cc, brand_description_cleansed_0_split))
+      - column: intersect_0_no_ccz_split_size
+        expression: size(array_intersect(material_description_split_no_ccz, brand_description_cleansed_0_split))
+      - column: intersect_0_with_cc_split_size
+        expression: size(array_intersect(material_description_split_with_cc, brand_description_cleansed_0_split))
+      - column: intersect_src_no_cc_split_size
+        expression: size(array_intersect(material_description_src_split_no_cc, brand_description_cleansed_split))
+      - column: intersect_no_cc_split_size
+        expression: size(array_intersect(material_description_split_no_cc, brand_description_cleansed_split))
+      - column: intersect_no_ccz_split_size
+        expression: size(array_intersect(material_description_split_no_ccz, brand_description_cleansed_split))
+      - column: intersect_with_cc_split_size
+        expression: size(array_intersect(material_description_split_with_cc, brand_description_cleansed_split))
+      - column: match_ratio_0_with_cc
+        expression: intersect_0_with_cc_split_size / brand_description_cleansed_0_split_size  
+      - column: match_ratio_src_0_no_cc
+        expression: intersect_src_0_no_cc_split_size / brand_description_cleansed_0_split_size 
+      - column: match_ratio_0_no_cc
+        expression: intersect_0_no_cc_split_size / brand_description_cleansed_0_split_size 
+      - column: match_ratio_0_no_ccz
+        expression: intersect_0_no_ccz_split_size / brand_description_cleansed_0_split_size
+      - column: match_ratio_with_cc
+        expression: intersect_with_cc_split_size / brand_description_cleansed_split_size
+      - column: match_ratio_src_no_cc
+        expression: intersect_src_no_cc_split_size / brand_description_cleansed_split_size
+      - column: match_ratio_no_cc
+        expression: intersect_no_cc_split_size / brand_description_cleansed_split_size
+      - column: match_ratio_no_ccz
+        expression: intersect_no_ccz_split_size / brand_description_cleansed_split_size
+        
+########################################################################################################################
+# search without 'coca cola' in SOURCE material descriptions (to avoid translation issues)
+# candidates with full brand_0 match, among them can be candidates with partial brand match and we try to find them in next steps 
+########################################################################################################################
+  - kind: filter
+    name: filter_match_candidates_no_cc
+    params:
+      - condition:
+          match_ratio_src_0_no_cc = 1
+
+  - kind: add
+    name: add_brand_match_type_src
+    params:
+      - column: brand_match_type_src_no_cc
+        overwrite: true
+        expression: if(intersect_src_no_cc_split_size < intersect_src_0_no_cc_split_size and match_ratio_src_no_cc = 1, 'not_a_match', 'brand_0_candidate')
+
+  - kind: group
+    name: group_exact_match_candidates_src_no_cc
+    params:
+      - aggs:
+          brand_description_cleansed: collect_set
+        by:
+        - ext_product_name_src
+        - country_code
+        - ext_source_name
+
+  - kind: join
+    name: join_exact_match_candidates_src_no_cc
+    context_name: add_brand_match_type_src
+    params:
+      - other:
+          group_exact_match_candidates_src_no_cc
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: add
+    name: update_brand_match_type_src
+    params:
+      - column: brand_match_type_src_no_cc
+        overwrite: true
+        expression: if(brand_match_type_src_no_cc = 'brand_0_candidate' and size(collect_set_brand_description_cleansed) = 1, 'exact_match_one_brand', brand_match_type_src_no_cc)
+        
+  - kind: add
+    name: update_brand_match_type_src
+    params:
+      - column: brand_match_type_src_no_cc
+        overwrite: true
+        expression: if(brand_match_type_src_no_cc = 'brand_0_candidate' and intersect_src_no_cc_split_size > intersect_src_0_no_cc_split_size and match_ratio_src_no_cc = 1, 'brand_exact_match', 
+                    if(brand_match_type_src_no_cc = 'brand_0_candidate' and intersect_src_no_cc_split_size < intersect_src_0_no_cc_split_size, 'brand_match_rejected', brand_match_type_src_no_cc))
+
+  - kind: add
+    name: update_brand_match_type_src
+    params:
+      - column: brand_match_type_src_no_cc
+        overwrite: true
+        expression: if(brand_match_type_src_no_cc = 'brand_0_candidate' and intersect_src_no_cc_split_size > intersect_src_0_no_cc_split_size, 'brand_0_candidate_rejected_STOP', brand_match_type_src_no_cc)
+
+  - kind: add
+    name: update_brand_match_type_src
+    params:
+      - column: brand_match_type_src_no_cc
+        overwrite: true
+        expression: if(brand_match_type_src_no_cc = 'brand_0_candidate' and intersect_src_no_cc_split_size = intersect_src_0_no_cc_split_size, 'brand_0_exact_match', brand_match_type_src_no_cc)
+
+  - kind: filter
+    name: filter_match_candidates_no_cc_src
+    params:
+      - condition:
+          brand_match_type_src_no_cc <> 'brand_match_rejected' and brand_match_type_src_no_cc <> 'not_a_match'
+          
+  - kind: group
+    name: group_match_statuses_src_no_cc
+    params:
+      - aggs:
+          brand_match_type_src_no_cc: collect_set
+        by:
+        - ext_product_name_src
+        - country_code
+        - ext_source_name
+
+  - kind: add
+    name: add_whole_match_reject_flag_src
+    params:
+      - column: whole_match_reject_flag_src
+        expression: if(array_contains(collect_set_brand_match_type_src_no_cc, 'brand_0_candidate_rejected_STOP'), 1, 0)
+
+  - kind: join
+    name: join_match_statuses_no_cc_src
+    context_name: filter_match_candidates_no_cc_src
+    params:
+      - other:
+          add_whole_match_reject_flag_src
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: filter
+    name: filter_stop_searching_records_no_cc_src
+    params:
+      - condition:
+          whole_match_reject_flag_src = 1
+
+  - kind: select
+    name: select_stop_searching_records_no_cc_src
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        whole_match_reject_flag_src: whole_match_reject_flag_src
+      distinct: true
+  
+  - kind: filter
+    name: filter_stop_statuses_no_cc_src
+    context_name: join_match_statuses_no_cc_src
+    params:
+      - condition:
+          whole_match_reject_flag_src = 0
+
+  - kind: add
+    name: add_match_reject_flag_src
+    params:
+      - column: match_reject_flag_src
+        expression: if(array_contains(collect_set_brand_match_type_src_no_cc, 'brand_exact_match') and array_contains(collect_set_brand_match_type_src_no_cc, 'brand_0_exact_match'), if(brand_match_type_src_no_cc = 'brand_0_exact_match', 1, 0), 0)
+
+  - kind: filter
+    name: filter_rejected_statuses_no_cc_src
+    params:
+      - condition:
+          match_reject_flag_src = 0
+
+  - kind: add
+    name: add_brand_exact_match_no_cc_src
+    params:
+      - column: brand_exact_match_src_no_cc
+        expression: if(array_contains(collect_set_brand_match_type_src_no_cc, 'exact_match_one_brand'), brand_description_0, 
+                    if(array_contains(collect_set_brand_match_type_src_no_cc, 'brand_exact_match'), brand_description, 
+                    if(array_contains(collect_set_brand_match_type_src_no_cc, 'brand_0_exact_match') and not array_contains(collect_set_brand_match_type_src_no_cc, 'brand_exact_match'), brand_description_0, 'no_exact_match')))  
+      - column: rn_brand_description_cleansed_0_split_size
+        window:
+          func: row_number
+          partition_by:
+            - ext_product_name_src
+            - country_code
+            - ext_source_name
+          order_by:
+            - brand_description_cleansed_0_split_size: desc 
+
+  - kind: filter
+    name: filter_exact_match_candidates_no_cc_src
+    params:
+      - condition:
+          rn_brand_description_cleansed_0_split_size = 1
+
+  - kind: select
+    name: select_exact_match_no_cc_src
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_final: ext_product_name_final
+        brand_exact_match_src_no_cc: brand_exact_match
+      distinct: true
+
+  - kind: group
+    name: group_few_match_candidates_no_cc_src
+    params:
+      - aggs:
+          ext_product_name_src: count
+        by:
+        - ext_product_name_src
+        - country_code
+        - ext_source_name
+
+  - kind: join
+    name: join_exact_match_no_cc_src
+    context_name: select_exact_match_no_cc_src
+    params:
+      - other:
+          group_few_match_candidates_no_cc_src
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: filter
+    name: filter_exact_match_candidates_no_cc_src
+    params:
+      - condition:
+          count_ext_product_name_src = 1
+
+  - kind: select
+    name: select_filtered_exact_match_no_cc_src
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_final: ext_product_name_final
+        brand_exact_match: brand_exact_match
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_exact_match_no_cc_src
+    context_name: select_filtered_exact_match_no_cc_src
+
+########################################################################################################################
+# search for exact brand match for the remaining records (with coca cola in material description)
+########################################################################################################################
+  - kind: join
+    name: join_brands_no_cc
+    context_name: add_brand_name_match
+    params:
+      - other:
+          checkpoint_exact_match_no_cc_src
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+          ext_product_name_final: ext_product_name_final
+          country_code: country_code
+          ext_source_name: ext_source_name
+      - other:
+          select_stop_searching_records_no_cc_src        
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: filter
+    name: filter_no_match_no_cc
+    params:
+      - condition:
+          (brand_exact_match is null or brand_exact_match = '') and match_ratio_0_with_cc = 1 and (whole_match_reject_flag_src is null or whole_match_reject_flag_src = '') #and brand_description_cleansed_0 <> 'coca-cola' and brand_description_cleansed <> 'coca-cola'
+
+  - kind: add
+    name: add_brand_match_type_cc
+    params:
+      - column: brand_match_type_with_cc
+        overwrite: true
+        expression: if(intersect_with_cc_split_size < intersect_0_with_cc_split_size and match_ratio_with_cc = 1, 'not_a_match', 'brand_0_candidate')
+
+  - kind: group
+    name: group_exact_match_candidates_with_cc
+    params:
+      - aggs:
+          brand_description_cleansed: collect_set
+        by:
+        - ext_product_name_final
+        - country_code
+        - ext_source_name
+
+  - kind: join
+    name: join_exact_match_candidates_with_cc
+    context_name: add_brand_match_type_cc
+    params:
+      - other:
+          group_exact_match_candidates_with_cc
+        how:
+          left
+        columns:
+          ext_product_name_final: ext_product_name_final
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: add
+    name: update_brand_match_type_with_cc
+    params:
+      - column: brand_match_type_with_cc
+        overwrite: true
+        expression: if(brand_match_type_with_cc = 'brand_0_candidate' and size(collect_set_brand_description_cleansed) = 1, 'exact_match_one_brand', brand_match_type_with_cc)
+        
+  - kind: add
+    name: update_brand_match_type_with_cc
+    params:
+      - column: brand_match_type_with_cc
+        overwrite: true
+        expression: if(brand_match_type_with_cc = 'brand_0_candidate' and intersect_with_cc_split_size > intersect_0_with_cc_split_size and match_ratio_with_cc = 1, 'brand_exact_match', 
+                    if(brand_match_type_with_cc = 'brand_0_candidate' and intersect_with_cc_split_size < intersect_0_with_cc_split_size, 'brand_match_rejected', brand_match_type_with_cc))
+
+  - kind: add
+    name: update_brand_match_type_with_cc
+    params:
+      - column: brand_match_type_with_cc
+        overwrite: true
+        expression: if(brand_match_type_with_cc = 'brand_0_candidate' and intersect_with_cc_split_size > intersect_0_with_cc_split_size, 'brand_0_candidate_rejected_STOP', brand_match_type_with_cc)
+
+  - kind: add
+    name: update_brand_match_type_with_cc
+    params:
+      - column: brand_match_type_with_cc
+        overwrite: true
+        expression: if(brand_match_type_with_cc = 'brand_0_candidate' and intersect_with_cc_split_size = intersect_0_with_cc_split_size, 'brand_0_exact_match', brand_match_type_with_cc)
+
+  - kind: filter
+    name: filter_match_candidates_with_cc
+    params:
+      - condition:
+          brand_match_type_with_cc <> 'brand_match_rejected' and brand_match_type_with_cc <> 'not_a_match'
+          
+  - kind: group
+    name: group_match_statuses_with_cc
+    params:
+      - aggs:
+          brand_match_type_with_cc: collect_set
+        by:
+        - ext_product_name_final
+        - country_code
+        - ext_source_name
+
+  - kind: add
+    name: add_whole_match_reject_flag_with_cc
+    params:
+      - column: whole_match_reject_flag_with_cc
+        expression: if(array_contains(collect_set_brand_match_type_with_cc, 'brand_0_candidate_rejected_STOP'), 1, 0)
+
+  - kind: join
+    name: join_match_statuses_with_cc
+    context_name: filter_match_candidates_with_cc
+    params:
+      - other:
+          add_whole_match_reject_flag_with_cc
+        how:
+          left
+        columns:
+          ext_product_name_final: ext_product_name_final
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: filter
+    name: filter_stop_searching_records_with_cc
+    params:
+      - condition:
+          whole_match_reject_flag_with_cc = 1
+
+  - kind: select
+    name: select_stop_searching_records_with_cc
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_final: ext_product_name_final
+        whole_match_reject_flag_with_cc: whole_match_reject_flag_with_cc
+      distinct: true
+
+  - kind: filter
+    name: filter_stop_statuses_with_cc
+    context_name: join_match_statuses_with_cc
+    params:
+      - condition:
+          whole_match_reject_flag_with_cc = 0
+
+  - kind: add
+    name: add_match_reject_flag_with_cc
+    params:
+      - column: match_reject_flag
+        expression: if(array_contains(collect_set_brand_match_type_with_cc, 'brand_exact_match') and array_contains(collect_set_brand_match_type_with_cc, 'brand_0_exact_match'), if(brand_match_type_with_cc = 'brand_0_exact_match', 1, 0), 0)
+
+  - kind: filter
+    name: filter_rejected_statuses_with_cc
+    params:
+      - condition:
+          match_reject_flag = 0
+
+  - kind: add
+    name: add_brand_exact_match_with_cc
+    params:
+      - column: brand_exact_match_with_cc
+        expression: if(array_contains(collect_set_brand_match_type_with_cc, 'exact_match_one_brand'), brand_description_0, 
+                    if(array_contains(collect_set_brand_match_type_with_cc, 'brand_exact_match'), brand_description, 
+                    if(array_contains(collect_set_brand_match_type_with_cc, 'brand_0_exact_match') and not array_contains(collect_set_brand_match_type_with_cc, 'brand_exact_match'), brand_description_0, 'no_exact_match'))) 
+      - column: rn_brand_description_cleansed_split_size
+        window:
+          func: row_number
+          partition_by:
+            - ext_product_name_final
+            - country_code
+            - ext_source_name
+          order_by:
+            - brand_description_cleansed_split_size: desc 
+
+  - kind: filter
+    name: filter_exact_match_candidates_with_cc
+    params:
+      - condition:
+          rn_brand_description_cleansed_split_size = 1
+
+  - kind: select
+    name: select_exact_match_with_cc
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_final: ext_product_name_final
+        brand_exact_match_with_cc: brand_exact_match
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_exact_match_with_cc
+    context_name: select_exact_match_with_cc
+
+  - kind: union
+    name: union_no_cc_with_cc
+    context_name: checkpoint_exact_match_no_cc_src
+    params:
+      by_name: true
+      other: checkpoint_exact_match_with_cc
+
+########################################################################################################################
+# search for exact brand match for coca-cola zero (above logic failed for coca-cola zero, since we have brands like coca-cola zero and coca-cola zero light diet and their names overlap also with coca-cola)
+########################################################################################################################
+  - kind: join
+    name: join_brands_with_cc
+    context_name: add_brand_name_match
+    params:
+      - other:
+          union_no_cc_with_cc
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+          ext_product_name_final: ext_product_name_final
+          country_code: country_code
+          ext_source_name: ext_source_name
+      - other:
+          select_stop_searching_records_with_cc        
+        how:
+          left
+        columns:
+          ext_product_name_final: ext_product_name_final
+          country_code: country_code
+          ext_source_name: ext_source_name
+
+  - kind: filter
+    name: filter_no_match_cc_zero
+    params:
+      - condition:
+          (brand_exact_match is null or brand_exact_match = '') and match_ratio_0_with_cc > 0 
+          
+  - kind: group
+    name: group_no_match_cc_zero
+    params:
+      - aggs:
+          match_ratio_0_no_ccz: sum
+        by:
+        - ext_product_name_final
+        - ext_product_name_src
+        - country_code
+        - ext_source_name
+
+  - kind: add
+    name: add_exact_match_ccz
+    params:
+      - column: brand_exact_match
+        expression: if(sum_match_ratio_0_no_ccz = 0, 'Coca-Cola Zero', '')
+        
+  - kind: select
+    name: select_exact_match_cczero
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_final: ext_product_name_final
+        ext_product_name_src: ext_product_name_src
+        brand_exact_match: brand_exact_match
+      distinct: true
+
+  - kind: union
+    name: union_no_cc_with_cc_cczero
+    context_name: union_no_cc_with_cc
+    params:
+      by_name: true
+      other: select_exact_match_cczero
+
+  - kind: filter
+    name: filter_brand_name_found
+    params:
+      - condition:
+          (brand_exact_match is not null and brand_exact_match != '')
+
+  - kind: add
+    name: add_brand_name_found
+    context_name: filter_brand_name_found
+    params:
+      - column: brand_exact_match_probability
+        overwrite: true
+        expression: cast(0.95 as decimal(10,4))
+
+########################################################################################################################
+# predict brand with model
+########################################################################################################################
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.model_predict.ModelPredictOperation
+    name: predict_brand_name_not_found
+    context_name: checkpoint_vendor
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.model_predict_config.ModelPredictOperationConfig
+    params:
+      input_value: ext_product_name_final
+      catalog: {{uc_catalog_ml_env}}
+      schema: product_mapping_tool
+      registered_model_name: dmt_brand_name_roberta_model
+      alias: production
+
+  - kind: join
+    name: join_predict_brand
+    context_name: predict_brand_name_not_found
+    params:
+      - other:
+          filter_brands
+        how:
+          left
+        columns:
+          input_value_category: brand_key_cleansed
+      - other:
+          add_brand_name_found
+        how:
+          left
+        columns:
+          country_code: country_code
+          ext_source_name: ext_source_name
+          ext_product_name_final: ext_product_name_final
+          ext_product_name_src: ext_product_name_src
+          
+  - kind: add
+    name: add_predict_brand
+    context_name: join_predict_brand
+    params:
+      - column: brand_description_cleansed
+        expression: trim(regexp_replace(lower(brand_description), '[^a-z]+', ' '))
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: regexp_replace(brand_description_cleansed, '\\s+', ' ')
+      - column: final_brand_flag
+        expression: if(coalesce(cast(brand_exact_match_probability as double), 0) > coalesce(cast(input_value_probability as double), 0), 'exact_match', 'model_match')
+      - column: ext_brand_pcm_probability_candidate
+        overwrite: true
+        expression: if(final_brand_flag = 'exact_match', brand_exact_match_probability, input_value_probability)
+      - column: ext_brand_pcm_candidate
+        overwrite: true
+        expression: if(final_brand_flag = 'exact_match', brand_exact_match, if(most_common_brand is not null and most_common_brand <> '', most_common_brand, brand_description))
+
+  - kind: filter
+    name: filter_rest_brands
+    context_name: add_predict_brand
+    params:
+      - condition:
+          brand_key_cleansed != 'other' or final_brand_flag = 'exact_match'
+
+  - kind: select
+    name: select_rest_brands
+    context_name: filter_rest_brands
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_final: ext_product_name_final
+        ext_brand_pcm_candidate: ext_brand_pcm_candidate
+        ext_brand_pcm_probability_candidate: ext_brand_pcm_probability_candidate
+      distinct: true
+
+########################################################################################################################
+# for recoreds for which model predicted brand 'other' - find closest brand to product description (fuzzy)
+########################################################################################################################
+  - kind: filter
+    name: filter_other_brands
+    context_name: add_predict_brand
+    params:
+      - condition:
+          brand_key_cleansed = 'other' and final_brand_flag = 'model_match'
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_ered.matching_score_fuzzy.MatchingScoreFuzzyOperation
+    name: sap_brands_similarity
+    context_name: filter_other_brands
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_ered.matching_score_fuzzy_config.MatchingScoreFuzzyOperationConfig
+    params:
+      input_desc_1: brand_description_cleansed
+      input_desc_2: ext_product_name_final
+   
+  - kind: add
+    name: add_rn_fuzzy_score
+    params:
+      - column: rank_fuzzy_score
+        window:
+          func: rank
+          partition_by:
+            - country_code
+            - ext_source_name
+            - ext_product_name_final
+          order_by:
+            - fuzzy_match_score: desc
+
+  - kind: filter
+    name: filter_sap_brands_similarity
+    params:
+      - condition:
+          rank_fuzzy_score = 1
+
+  - kind: add
+    name: add_sap_brands_similarity
+    context_name: filter_sap_brands_similarity
+    params:
+      - column: ext_brand_pcm_candidate
+        overwrite: true
+        expression: brand_description
+      - column: ext_brand_pcm_probability_candidate
+        overwrite: true
+        expression: cast(ext_brand_pcm_probability_candidate * fuzzy_match_score as decimal(10,4))
+
+  - kind: select
+    name: select_other_brands
+    context_name: add_sap_brands_similarity
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_final: ext_product_name_final
+        ext_brand_pcm_candidate: ext_brand_pcm_candidate
+        ext_brand_pcm_probability_candidate: ext_brand_pcm_probability_candidate
+      distinct: true
+
+########################################################################################################################
+# candidates unions and join results back to main dataframe
+########################################################################################################################
+  - kind: union
+    name: union_1
+    context_name: select_other_brands
+    params:
+      by_name: true
+      other: select_rest_brands
+
+  - kind: join
+    name: join_vendor
+    context_name: add_vendor_column_to_join
+    params:
+      - other:
+          union_1
+        how:
+          left
+        columns:
+          country_code: country_code
+          ext_source_name: ext_source_name
+          ext_product_name_final: ext_product_name_final
+          ext_product_name_src: ext_product_name_src
+
+  - kind: select
+    name: select_candidates
+    context_name: join_vendor
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_src_0: ext_product_name_src_0
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm_candidate: ext_brand_pcm
+        ext_brand_pcm_probability_candidate: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+########################################################################################################################
+# for recoreds for which still there are two or more brand candidates - find closest brand to product description (fuzzy)
+########################################################################################################################
+  - kind: add
+    name: add_candidates_duplicates
+    params:
+      - column: column_to_count_duplicates
+        expression: '''1'''
+
+  - kind: group
+    name: group_candidates
+    params:
+      - aggs:
+          column_to_count_duplicates: count
+        by:
+        - ext_product_code
+        - country_code
+        - ext_source_name
+        - ext_product_name_src
+        - ean
+
+  - kind: filter
+    name: filter_candidates_duplicates
+    context_name: group_candidates
+    params:
+      - condition: count_column_to_count_duplicates > 1
+
+  - kind: join
+    name: join_candidates_duplicates
+    context_name: add_candidates_duplicates
+    params:
+      - other:
+          filter_candidates_duplicates
+        how:
+          inner
+        columns:
+          ext_product_code: ext_product_code
+          country_code: country_code
+          ext_source_name: ext_source_name
+          ext_product_name_src: ext_product_name_src
+          ean: ean
+
+  - kind: select
+    name: select_candidates_duplicates
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_translated: ext_product_name_translated
+        ext_brand_pcm: ext_brand_pcm
+      distinct: true
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_ered.matching_score_fuzzy.MatchingScoreFuzzyOperation
+    name: fuzzy_match_candidates_duplicates
+    context_name: select_candidates_duplicates
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_ered.matching_score_fuzzy_config.MatchingScoreFuzzyOperationConfig
+    params:
+      input_desc_1: ext_brand_pcm
+      input_desc_2: ext_product_name_translated
+   
+  - kind: add
+    name: add_fuzzy_match_candidates_duplicates
+    params:
+      - column: brand_length
+        expression: length(ext_brand_pcm)
+
+  - kind: add
+    name: add_fuzzy_match_candidates_duplicates_rn
+    params:
+      - column: rn
+        expression: row_number() over (partition by country_code, ext_source_name, ext_product_name_translated order by fuzzy_match_score DESC, brand_length DESC)
+          
+  - kind: join
+    name: join_candidates_deduplicated
+    context_name: select_candidates
+    params:
+      - other:
+          add_fuzzy_match_candidates_duplicates_rn
+        how:
+          left
+        columns:
+          country_code: country_code
+          ext_source_name: ext_source_name
+          ext_product_name_translated: ext_product_name_translated
+          ext_brand_pcm: ext_brand_pcm
+
+  - kind: filter
+    name: filter_candidates_deduplicated
+    params:
+      - condition:
+          rn = 1 or rn is null
+          
+  - kind: select
+    name: select_final
+    context_name: filter_candidates_deduplicated
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src_0: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: add
+    name: add_cast_pack_type_prob
+    params:
+      - column: ext_brand_pcm_probability
+        overwrite: true
+        expression: cast(ext_brand_pcm_probability as decimal(10,4))
+        
+  - kind: checkpoint
+    name: checkpoint_cast_pack_type_prob
+    context_name: add_cast_pack_type_prob
+
+  - kind: union
+    name: union_final
+    context_name: checkpoint_cast_pack_type_prob
+    params:
+      allow_missing: false
+      by_name: true
+      other: filter_null_product_name
+
+  - kind: write_dataio
+    name: write_ext_portfolio_translated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

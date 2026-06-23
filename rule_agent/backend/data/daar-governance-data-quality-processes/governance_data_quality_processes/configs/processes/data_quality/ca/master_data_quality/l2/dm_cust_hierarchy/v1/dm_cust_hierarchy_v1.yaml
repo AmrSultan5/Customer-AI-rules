@@ -1,0 +1,249 @@
+transform:
+  name: dm_cust_hierarchy
+  operations:
+
+#read knvh
+  - kind: read_dataio
+    name: read_knvh
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvh
+      schema_version: v1
+
+#level 7
+  - kind: filter
+    name: filter_l7_knvh
+    params:
+      - condition:
+          (hzuor = 0 AND datbi = '9999-12-31')
+
+  - kind: select
+    name: select_l7_knvh
+    params:
+      columns:
+        kunnr: l7_customer_code
+        spart: l7_division_code
+        vtweg: l7_distribution_channel_code
+        vkorg: l7_sales_org_code
+        hvkorg: hvkorg_l7
+        hkunnr: hkunnr_l7
+        sap_cluster: sap_cluster_l7
+      distinct: true
+
+#level 6
+  - kind: filter
+    name: filter_l6_knvh
+    context_name: read_knvh
+    params:
+      - condition:
+          (hzuor = 6 AND datbi = '9999-12-31')
+
+  - kind: select
+    name: select_l6_knvh
+    params:
+      columns:
+        kunnr: l6_customer_code
+        spart: l6_division_code
+        vtweg: l6_distribution_channel_code
+        hvkorg: hvkorg_l6
+        hkunnr: hkunnr_l6
+        sap_cluster: sap_cluster_l6
+      distinct: true
+
+#level 5
+  - kind: filter
+    name: filter_l5_knvh
+    context_name: read_knvh
+    params:
+      - condition:
+          (hzuor = 5 AND datbi = '9999-12-31')
+
+  - kind: select
+    name: select_l5_knvh
+    params:
+      columns:
+        kunnr: l5_customer_code
+        spart: l5_division_code
+        vtweg: l5_distribution_channel_code
+        hvkorg: hvkorg_l5
+        hkunnr: hkunnr_l5
+        sap_cluster: sap_cluster_l5
+      distinct: true
+
+#level 4
+  - kind: filter
+    name: filter_l4_knvh
+    context_name: read_knvh
+    params:
+      - condition:
+          (hzuor = 4 AND datbi = '9999-12-31')
+
+  - kind: select
+    name: select_l4_knvh
+    params:
+      columns:
+        kunnr: l4_customer_code
+        spart: l4_division_code
+        vtweg: l4_distribution_channel_code
+        hvkorg: l4_sales_org_code
+        hkunnr: hkunnr_l4
+        sap_cluster: sap_cluster_l4
+      distinct: true
+
+#level 3
+  - kind: filter
+    name: filter_l3_knvh
+    context_name: read_knvh
+    params:
+      - condition:
+          (hzuor = 3 AND datbi = '9999-12-31')
+
+  - kind: select
+    name: select_l3_knvh
+    params:
+      columns:
+        kunnr: l3_customer_code
+        spart: l3_division_code
+        vtweg: l3_distribution_channel_code
+        hvkorg: hvkorg_l3
+        hkunnr: l2_customer_code
+        sap_cluster: sap_cluster_l3
+      distinct: true
+
+# Cluster_Config - CC
+  - kind: read_dataio
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+      schema_version: v2
+
+  - kind: filter
+    name: filter_cluster_config
+    params:
+      - condition:
+          flag = 'DM_sales_org'
+
+  - kind: select
+    name: select_cluster_config
+    params:
+      columns:
+        sales_org: sales_org_cc
+        cluster: cluster_cc
+      distinct: true
+
+#join cluster_config with l7
+  - kind: join
+    name: join_knvh_l7_cluster_conf
+    context_name: select_l7_knvh
+    params:
+      - other:
+          select_cluster_config
+        how:
+          inner
+        columns:
+          l7_sales_org_code: sales_org_cc
+          sap_cluster_l7: cluster_cc
+
+  - kind: select
+    name: select_after_join
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_division_code: l7_division_code
+        l7_distribution_channel_code: l7_distribution_channel_code
+        l7_sales_org_code: l7_sales_org_code
+        hvkorg_l7: hvkorg_l7
+        hkunnr_l7: hkunnr_l7
+        sap_cluster_l7: sap_cluster_l7
+      distinct: true
+
+
+#join l7,l6,l5,l4,l3
+  - kind: join
+    name: join_l7_l6_l5_l4_l3
+    context_name: select_after_join
+    params:
+      - other:
+          select_l6_knvh
+        how:
+          left
+        columns:
+          hkunnr_l7: l6_customer_code
+          hvkorg_l7: hvkorg_l6
+          l7_distribution_channel_code: l6_distribution_channel_code
+          l7_division_code: l6_division_code
+          sap_cluster_l7: sap_cluster_l6
+      - other:
+          select_l5_knvh
+        how:
+          left
+        columns:
+          hkunnr_l6: l5_customer_code
+          hvkorg_l6: hvkorg_l5
+          l6_distribution_channel_code: l5_distribution_channel_code
+          l6_division_code: l5_division_code
+          sap_cluster_l6: sap_cluster_l5
+      - other:
+          select_l4_knvh
+        how:
+          left
+        columns:
+          hkunnr_l5: l4_customer_code
+          hvkorg_l5: l4_sales_org_code
+          l5_distribution_channel_code: l4_distribution_channel_code
+          l5_division_code: l4_division_code
+          sap_cluster_l5: sap_cluster_l4
+      - other:
+          select_l3_knvh
+        how:
+          left
+        columns:
+          hkunnr_l4: l3_customer_code
+          l4_sales_org_code: hvkorg_l3
+          l4_distribution_channel_code: l3_distribution_channel_code
+          l4_division_code: l3_division_code
+          sap_cluster_l4: sap_cluster_l3
+
+  - kind: select
+    name: select_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_division_code: l7_division_code
+        l7_distribution_channel_code: l7_distribution_channel_code
+        l6_customer_code: l6_customer_code
+        l5_customer_code: l5_customer_code
+        l4_customer_code: l4_customer_code
+        l3_customer_code: l3_customer_code
+        l2_customer_code: l2_customer_code
+        l4_sales_org_code: l4_sales_org_code
+        l7_sales_org_code: l7_sales_org_code
+        sap_cluster_l7: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

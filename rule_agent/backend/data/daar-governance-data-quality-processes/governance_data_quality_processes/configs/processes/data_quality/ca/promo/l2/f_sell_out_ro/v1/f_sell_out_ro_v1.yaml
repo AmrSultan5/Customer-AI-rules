@@ -1,0 +1,383 @@
+transform:
+  name: f_sell_out_ro
+  operations:
+
+# universal_schema
+  - kind: read_dataio
+    name: read_universal_schema
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: ca
+      object_name: universal_schema
+      schema_version: v1
+
+  - kind: filter
+    name: filter_universal_schema
+    params:
+      - condition:
+          country='ro'
+
+  - kind: add
+    name: add_lower_vendor
+    params:
+     - column: vendor_name_low
+       expression: lower(vendor_name)
+
+  - kind: select
+    name: select_universal_schema
+    params:
+      columns:
+        vendor_name_low: vendor_name_low
+        stable_key_to_ban_id: stable_key_to_ban_id
+        product_name_long: product_name_long
+        year: year
+        week: week
+        retailer: retailer
+        vendor_name: vendor_name
+        promo_flag: promo_flag
+        total_volume_sales: total_volume_sales
+        total_value_sales: total_value_sales
+      distinct: true
+
+# Read cpl_mapping
+
+  - kind: read_dataio
+    name: read_cpl_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: promo
+      object_name: cpl_mapping
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cpl_mapping
+    params:
+      - condition:
+          country='ro'
+
+  - kind: select
+    name: select_cpl_mapping
+    params:
+      columns:
+        retailer: retailer
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+      distinct: true
+
+# Read date_v2
+
+  - kind: read_dataio
+    name: read_date
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: date
+      schema_version: v2
+
+  - kind: select
+    name: select_date_1
+    params:
+      columns:
+        year: year
+        week: week
+        date_id: date_id
+      distinct: true
+
+  - kind: group
+    name: group_date
+    params:
+      - aggs:
+          date_id: min
+        by:
+        - year
+        - week
+
+  - kind: select
+    name: select_date
+    params:
+      columns:
+        year: year
+        week: week
+        min_date_id: date_id
+      distinct: true
+
+
+# product_mapping
+  - kind: read_dataio
+    name: read_product_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: product_mapping_tool
+      object_name: product_mapping
+      schema_version: v1
+
+  - kind: filter
+    name: filter_product_mapping
+    params:
+      - condition:
+          country = 'ro'
+
+  - kind: select
+    name: select_product_mapping
+    params:
+      columns:
+        vendor_item: vendor_item
+        vendor: vendor
+        ban: ban
+      distinct: true
+
+  - kind: select
+    name: select_product_mapping_for_grouping
+    params:
+      columns:
+        vendor_item: vendor_item
+        ban: ban
+      distinct: true
+
+  - kind: group
+    name: group_product_mapping_ban_vendor
+    params:
+      - aggs:
+          ban: count
+        by:
+        - vendor_item
+        
+  - kind: filter
+    name: filter_product_mapping_wo_duplicates
+    params:
+      - condition:
+          count_ban = 1
+
+  - kind: add
+    name: add_lower_vendor
+    context_name: select_product_mapping
+    params:
+     - column: vendor_low
+       expression: lower(vendor)
+
+  - kind: join
+    name: join_distinct_vendor
+    context_name: add_lower_vendor
+    params:
+      - other:
+          filter_product_mapping_wo_duplicates
+        how:
+          inner
+        columns:
+          vendor_item: vendor_item
+
+#read product mwa
+
+  - kind: read_dataio
+    name: read_ro_product_mwa
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: nielsen
+      namespace: ro
+      object_name: ro_product_mwa
+      schema_version: v1
+
+  - kind: select
+    name: select_ro_product_mwa
+    params:
+      columns:
+        item: item
+        manufacturer: manufacturer
+      distinct: true
+
+#read product jui
+
+  - kind: read_dataio
+    name: read_ro_product_jui
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: nielsen
+      namespace: ro
+      object_name: ro_product_jui
+      schema_version: v1
+
+  - kind: select
+    name: select_ro_product_jui
+    params:
+      columns:
+        item: item
+        manufacturer: manufacturer
+      distinct: true
+
+#read product sdr
+
+  - kind: read_dataio
+    name: read_ro_product_sdr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: nielsen
+      namespace: ro
+      object_name: ro_product_sdr
+      schema_version: v1
+
+  - kind: select
+    name: select_ro_product_sdr
+    params:
+      columns:
+        item: item
+        manufacturer: manufacturer
+      distinct: true
+
+#read product tea
+
+  - kind: read_dataio
+    name: read_ro_product_tea
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: nielsen
+      namespace: ro
+      object_name: ro_product_tea
+      schema_version: v1
+
+  - kind: select
+    name: select_ro_product_tea
+    params:
+      columns:
+        item: item
+        manufacturer: manufacturer
+      distinct: true
+
+  - kind: union
+    name: union_mwa_jui
+    context_name: select_ro_product_mwa
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_ro_product_jui
+
+  - kind: union
+    name: union_mwa_jui_sdr
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_ro_product_sdr
+
+  - kind: union
+    name: union_mwa_jui_sdr_tea
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_ro_product_tea
+
+  - kind: select
+    name: select_mwa_jui_sdr_tea
+    params:
+      columns:
+        item: item
+        manufacturer: manufacturer
+      distinct: true
+
+#joins
+  - kind: join
+    name: join_so_mp_cld_prd
+    context_name: select_universal_schema
+    params:
+      - other:
+          join_distinct_vendor
+        how:
+          left
+        columns:
+          stable_key_to_ban_id: vendor_item
+          vendor_name_low: vendor_low
+      - other:
+          select_mwa_jui_sdr_tea
+        how:
+          left
+        columns:
+          stable_key_to_ban_id: item
+      - other:
+          select_date
+        how:
+          left
+        columns:
+          year: year
+          week: week
+      - other:
+          select_cpl_mapping
+        how:
+          left
+        columns:
+          retailer: retailer
+
+  - kind: add
+    name: add_final_columns
+    params:
+      - column: company_code
+        expression: '''580'''
+      - column: country
+        expression: '''ro'''
+      - column: currency_code
+        expression: '''RON'''
+      - column: date
+        expression: date_format(to_date(left(date_id,10),'yyyy-MM-dd'),'yyyyMMdd')
+      - column: m_sales_promo_uc
+        expression: promo_volume_sales*1000/5.678
+      - column: m_sales_promo_value
+        expression: promo_value_sales*1000
+      - column: m_sales_regular_uc
+        expression: (total_volume_sales-promo_volume_sales)*1000/5.678
+      - column: m_sales_regular_value
+        expression: (total_value_sales-promo_value_sales)*1000
+      - column: manufacturer_name
+        expression: if(manufacturer LIKE 'TCCC%', 'CCH', manufacturer)
+      - column: market_code
+        expression: "cast(null as string)"
+      - column: shop_code
+        expression: "cast(null as string)"
+      - column: shop_name
+        expression: "cast(null as string)"
+      - column: is_current_dataset
+        expression: "cast(1 as int)"
+      - column: area
+        expression: "cast(null as string)"
+
+
+
+  - kind: write_dataio
+    name: write_f_sell_out
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: promo
+      namespace: l2
+      object_name: f_sell_out
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

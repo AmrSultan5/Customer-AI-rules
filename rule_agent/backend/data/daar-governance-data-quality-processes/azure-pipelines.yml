@@ -1,0 +1,197 @@
+trigger: none
+#   - develop
+#   - master
+#   - release/*
+
+# pr:
+#   branches:
+#     include:
+#       - "*"
+
+pool:
+  vmImage: 'ubuntu-22.04'
+
+resources:      
+  repositories: 
+  - repository: daar-datamesh-devops-tools
+    name: CCH SAFe Portfolio/daar-datamesh-devops-tools
+    type: git
+  - repository: CeTemplates
+    type: git
+    name: CCH SAFe Portfolio/dtso-ea-blueprints
+    ref: refs/heads/release/next-v1
+
+# strategy:
+#   matrix:
+#     Python310:
+#       python.version: '3.10'
+#       SPARK_VERSION: 'spark-3.5.0'
+#       HADOOP_VERSION: 'hadoop-3.3.6'
+#   maxParallel: 2
+# workspace:
+#   clean: all
+
+variables:
+  - template: '/blueprints/variables/variables-global.yml@CeTemplates'
+  - name: PIP_CACHE_DIR
+    value: "$(Pipeline.Workspace)/.pip"
+  - name: SPARK_HOME
+    value: ""
+  - name: HADOOP_HOME
+    value: ""
+  - name: python.version
+    value: '3.10'
+  - name: SPARK_VERSION
+    value: 'spark-3.5.0'
+  - name: HADOOP_VERSION
+    value: 'hadoop-3.3.6'
+
+extends:
+  template: blueprints/azure-pipeline-baseline.yml@CeTemplates
+  parameters:
+    runMode: 'Build Only'
+    portfolioName: 'daar' # $(portfolioName)
+    productName: 'governance-data-quality' # $(productName)
+    productIdentifier: '' # ''  # $(productIdentifier) # get the identifier from Ardoq https://cchbc.ardoq.com/
+    verbose: false
+    suppressCD: true 
+
+    sonarProjectKey: '' # $(sonarProjectKey)
+    sonarProjectName: '' # $(sonarProjectName)
+    sonarExtraProperties: 'SKIP_SONAR'
+    #sonarExtraProperties: 'sonar.exclusions=**/wwwroot/**' # 'SKIP_SONAR'
+    sonarScannerMode: 'MSBuild'  # put one of the value here: 'MSBuild', 'Other' or 'CLI'
+
+    buildSteps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: "$(python.version)"
+        displayName: "Use Python $(python.version)"
+
+      - task: Cache@2
+        inputs:
+          key: 'python | "$(Agent.OS)" | requirements.txt'
+          restoreKeys: | 
+            python | "$(Agent.OS)"
+            python
+          path: $(PIP_CACHE_DIR)
+        displayName: Cache pip packages
+
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: "8"
+          jdkArchitectureOption: "x64"
+          jdkSourceOption: "PreInstalled"
+
+      - script: |
+          set -ex
+          cat /etc/os-release
+          python -V
+          java -version
+          df -h /
+        displayName: "Show agent details"
+
+      - script: |
+          set -ex
+          PROJECT_VERSION=$(python ./scripts/get_project_version.py)
+          echo "##vso[task.setvariable variable=PROJECT_VERSION]$PROJECT_VERSION"
+        displayName: "Extract project version information"
+
+      - task: PipAuthenticate@1
+        inputs:
+          artifactFeeds: "$(System.TeamProjectId)/daar-datamesh-common, $(System.TeamProjectId)/daar-datamesh-data-io, $(System.TeamProjectId)/daar-datamesh-datalake-kbi, $(System.TeamProjectId)/daar-datamesh-transformation"
+          onlyAddExtraIndex: true
+        displayName: "Authenticate to project feeds"
+
+      - script: |
+          set -ex
+          sudo apt-get install unixodbc-dev
+          sudo apt-get install msodbcsql17
+          python -m pip install --upgrade pip
+          grep -o -m 1 'wheel==[0-9\.]*' development_requirements.txt | xargs python -m pip install --upgrade # "wheel" is required during installation of some dependencies
+          python -m pip install --upgrade -r development_requirements.txt
+          python -m pip list
+        displayName: "Install python dependencies"
+
+      - script: |
+          set -ex
+          pipdeptree --warn fail
+          pipconflictchecker
+        displayName: "Validate python dependencies"
+
+      # - script: |
+      #     python -m flake8 --max-line-length 120 --max-complexity 10 --exclude \entrypoints .
+      #   condition: succeededOrFailed()
+      #   displayName: "Run code quality checks (flake8)"
+
+      # - script: |
+      #     python -m black --line-length 120 --target-version py38 --check --diff --exclude \entrypoints .
+      #   condition: succeededOrFailed()
+      #   displayName: "Run code quality checks (black)"
+
+      # - script: |
+      #     python -m pylint --disable=R,C,fixme --enable=inconsistent-return-statements --max-line-length=120 $(find . -type f -name "*.py" -not -path "./entrypoints/*") --msg-template="{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}" |& tee ./pylint_report.txt ; ( exit ${PIPESTATUS} )
+      #   condition: succeededOrFailed()
+      #   displayName: "Run code quality checks (pylint)"
+
+      # - script: |
+      #     python -m mypy --ignore-missing-imports --junit-xml ./tests/reports/mypy_errors_junit.xml --exclude \entrypoints .
+      #   condition: succeededOrFailed()
+      #   displayName: "Run code quality checks (mypy)"
+
+      - task: Cache@2
+        inputs:
+          key: '"$(SPARK_HOME)"'
+          path: "$(SPARK_HOME)"
+          cacheHitVar: SPARK_CACHE_RESTORED
+        condition: succeededOrFailed()
+        displayName: "Cache Spark"
+
+      - task: Cache@2
+        inputs:
+          key: '"$(HADOOP_HOME)"'
+          path: "$(HADOOP_HOME)"
+          cacheHitVar: HADOOP_CACHE_RESTORED
+        condition: succeededOrFailed()
+        displayName: "Cache Hadoop"
+
+      #       - script: |
+      #           set -ex
+      #           cd $(Pipeline.Workspace)
+      #           wget https://archive.apache.org/dist/spark/$(SPARK_VERSION)/$(SPARK_VERSION)-bin-without-hadoop.tgz
+      #           tar -xf $(SPARK_VERSION)-bin-without-hadoop.tgz
+      #         condition: ne(variables.SPARK_CACHE_RESTORED, 'true')
+      #         displayName: "Get Spark"
+
+      #       - script: |
+      #           set -ex
+      #           cd $(Pipeline.Workspace)
+      #           wget https://archive.apache.org/dist/hadoop/common/$(HADOOP_VERSION)/$(HADOOP_VERSION).tar.gz
+      #           tar -xf $(HADOOP_VERSION).tar.gz
+      #         condition: ne(variables.HADOOP_CACHE_RESTORED, 'true')
+      #         displayName: "Get Hadoop"
+
+      # - script: |
+      #     sh ./scripts/run_all_unit_tests.sh selective
+      #   env:
+      #     DATAMESHCICD_SECRET: $(DATAMESHCICDSECRET)
+      #   condition: succeededOrFailed()
+      #   displayName: "Run selective unit tests"
+
+      - script: |
+          set -ex
+          EXECUTION_TIMES_FILE_PATH='execution_times.csv'
+          python ./scripts/format_execution_times.py $EXECUTION_TIMES_FILE_PATH
+        condition: succeededOrFailed()
+        displayName: "Show execution times statistics"
+
+      - template: "ado-templates/sonarcloud-python.yaml@daar-datamesh-devops-tools"
+        parameters:
+          art: daar
+          clisources: ./governance_data_quality_processes/
+
+      - task: PublishTestResults@2
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFiles: $(Build.SourcesDirectory)/tests/reports/*_junit.xml
+        displayName: "Publish test execution summary"

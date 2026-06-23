@@ -1,0 +1,63 @@
+transform:
+  name: d_calendar
+  operations:
+  - kind: read_dataio
+    name: read_ppaa_user_input_local_date_v2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: date
+      schema_version: v2
+
+  - kind: add
+    name: transformations_1
+    params:
+      - column: date
+        expression: cast(date_id as timestamp)
+      - column: month
+        expression: lpad(month_445, 2, '0')
+        overwrite: true
+      - column: week
+        expression: lpad(week_445, 2, '0')
+        overwrite: true
+      - column: year
+        expression: year_445
+        overwrite: true
+      - column: year_month
+        expression: concat(year_445, lpad(month_445, 2, '0'))
+        overwrite: true
+      - column: year_week
+        expression: concat(year_445, lpad(week_445, 2, '0'))
+        overwrite: true
+
+  - kind: select
+    name: select_output
+    params:
+      columns:
+        date: date
+        month: month
+        week: week
+        year: year
+        year_month: year_month
+        year_week: year_week
+        country: country
+
+  - kind: write_dataio
+    name: write_d_calendar
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: promo
+      namespace: l2
+      object_name: d_calendar
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

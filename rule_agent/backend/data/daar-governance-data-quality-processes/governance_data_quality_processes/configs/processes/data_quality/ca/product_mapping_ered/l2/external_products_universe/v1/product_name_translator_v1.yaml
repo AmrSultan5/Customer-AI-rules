@@ -1,0 +1,197 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: external_products_universe_product_name_translator
+  operations:
+
+# Read data marts
+# external_product_univers - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+#conf data join
+#epu add const value for join
+  - kind: add
+    name: add_const_1_epu
+    context_name: read_epu
+    params:
+      - column: const_1_epu
+        expression: '''1'''
+
+# turn country_codes into language_codes
+# location name to be replaced by env-specific variable
+  - kind: read_local
+    name: read_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: translate_country_codes
+
+  - kind: add
+    name: add_const_1_conf_epu_country_codes
+    context_name: read_conf_data
+    params:
+      - column: const_1_conf_epu_country_codes
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_epu_country_codes
+    context_name: add_const_1_conf_epu_country_codes
+    params:
+      - aggs:
+          country_code: array_agg
+          language_code: array_agg
+        by:
+        - const_1_conf_epu_country_codes
+
+  - kind: add
+    name: add_map_conf_epu_country_codes
+    context_name: group_arrays_conf_epu_country_codes
+    params:
+      - column: map_conf_epu_country_codes
+        expression: map_from_arrays(array_agg_country_code, array_agg_language_code)
+
+  - kind: join
+    name: join_conf_epu_country_codes
+    context_name: add_const_1_epu
+    params:
+      - other:
+          add_map_conf_epu_country_codes
+        how:
+          inner
+        columns:
+          const_1_epu: const_1_conf_epu_country_codes
+
+  - kind: add
+    name: add_epu_conf_lookup_country_codes
+    context_name: join_conf_epu_country_codes
+    params:
+      - column: language_code
+        expression: reduce(array_agg_country_code, lower(country_code), (acc, x) -> regexp_replace(acc, (x), map_conf_epu_country_codes[x]))
+
+# translate
+  - kind: governance_data_quality_processes.custom_operations.text.google_translate_en.GoogleTranslateEnOperation
+    name: translate_epu
+    context_name: add_epu_conf_lookup_country_codes
+    config_kind: governance_data_quality_processes.custom_operation_configs.text.google_translate_en_config.GoogleTranslateEnOperationConfig
+    params:
+      input_value: product_name_raw
+      input_country_code: language_code
+
+# cleanse after translation
+# location name to be replaced by env-specific variable
+  - kind: read_local
+    name: read_conf_data_cleanser
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: translate_product_name_cleanser
+
+  - kind: add
+    name: add_const_1_conf_epu_cleanser
+    context_name: read_conf_data_cleanser
+    params:
+      - column: const_1_conf_epu_cleanser
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_epu_cleanser
+    context_name: add_const_1_conf_epu_cleanser
+    params:
+      - aggs:
+          source_value: array_agg
+          target_value: array_agg
+        by:
+        - const_1_conf_epu_cleanser
+
+  - kind: add
+    name: add_map_conf_epu_cleanser
+    context_name: group_arrays_conf_epu_cleanser
+    params:
+      - column: map_conf_epu_cleanser
+        expression: map_from_arrays(array_agg_source_value, array_agg_target_value)
+
+  - kind: join
+    name: join_conf_epu_cleanser
+    context_name: translate_epu
+    params:
+      - other:
+          add_map_conf_epu_cleanser
+        how:
+          inner
+        columns:
+          const_1_epu: const_1_conf_epu_cleanser
+
+  - kind: add
+    name: add_epu_conf_lookup_cleanser
+    context_name: join_conf_epu_cleanser
+    params:
+      - column: product_name_translated
+        expression: reduce(array_agg_source_value, lower(input_value_translated), (acc, x) -> regexp_replace(acc, (x), map_conf_epu_cleanser[x]))
+        overwrite: true
+
+  - kind: select
+    name: select_translated
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_products_universe_translated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

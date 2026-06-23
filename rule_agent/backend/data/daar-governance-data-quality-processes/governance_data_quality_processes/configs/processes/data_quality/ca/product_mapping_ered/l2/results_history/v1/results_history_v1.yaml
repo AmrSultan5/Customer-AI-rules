@@ -1,0 +1,582 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: products_matching_results_history_basic
+  operations:
+
+# Read data marts
+# sap_products_universe - spu
+  - kind: read_dataio
+    name: read_spu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_spu
+    context_name: read_spu
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_cleansed: product_name_cleansed
+        country_code: country_code
+        brand_name: brand_name
+        flavour_name: flavour_name
+        pack_size_name: pack_size_name
+        pack_size_uom_unified: pack_size_uom_unified
+        pack_size_volume_unified: pack_size_volume_unified
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        sales_unit_name: sales_unit_name
+        sales_unit_bottles: sales_unit_bottles
+        sales_unit_cases: sales_unit_cases
+        sales_unit_pallets: sales_unit_pallets
+        product_hierarchy_name: product_hierarchy_name
+        sparkling_level: sparkling_level
+        country_code_in_product_name: country_code_in_product_name
+        is_abp: is_abp
+        is_actively_used: is_actively_used
+        is_in_use: is_in_use
+        is_promotion: is_promotion
+        ean_code: ean_code
+        ban_code: ban_code
+        product_group_code: product_group_code
+        product_group_name: product_group_name
+        product_type_code: product_type_code
+        creation_date: creation_date
+        sell_in_volume_uc_12m: sell_in_volume_uc_12m
+        sell_in_volume_uc_24m: sell_in_volume_uc_24m
+        sap_cluster: sap_cluster
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: add
+    name: add_spu_fixed_ps_sub_brand
+    context_name: select_spu
+    params:
+      - column: pack_size_fixed
+        expression: replace(to_char(int(case when lower(pack_size_uom_unified) in ('l', 'kg') then pack_size_volume_unified*1000 when lower(pack_size_uom_unified) = 'cl' then pack_size_volume_unified*100 else pack_size_volume_unified end), '9999999') || case when lower(pack_size_uom_unified) = 'l' then 'ml' when lower(pack_size_uom_unified) = 'kg' then 'g' when lower(pack_size_uom_unified) = 'cl' then 'ml' else lower(pack_size_uom_unified) end, ' ', '')
+      - column: sub_brand_name_fixed
+        expression: case when sub_brand_name is null or trim(sub_brand_name) = '' then 'other' else sub_brand_name end
+
+  - kind: read_local
+    name: read_pack_type_mapping_file
+    skip_next: true
+    params:
+      format: json
+      location: "/Volumes/{{uc_catalog_env}}/product_mapping_ered/ml_models/pack_type_model/mapping.json"
+      options:
+        mode: FAILFAST
+
+  - kind: select
+    name: select_pt_mf
+    context_name: read_pack_type_mapping_file
+    params:
+      columns:
+        pack_type_code: pack_type_code
+        pack_type_code_cleansed: pack_type_code_cleansed
+        pack_type_category: pack_type_category
+      distinct: true
+
+  - kind: read_local
+    name: read_brand_mapping_file
+    skip_next: true
+    params:
+      format: json
+      location: "/Volumes/{{uc_catalog_env}}/product_mapping_ered/ml_models/brand_name_model/mapping.json"
+      options:
+        mode: FAILFAST
+
+  - kind: select
+    name: select_brand_mf
+    context_name: read_brand_mapping_file
+    params:
+      columns:
+        brand_name: brand_name
+        brand_name_cleansed: brand_name_cleansed
+        brand_name_category: brand_name_category
+      distinct: true
+
+  - kind: join
+    name: join_spu_mapping_files
+    context_name: add_spu_fixed_ps_sub_brand
+    params:
+      - other:
+          select_brand_mf
+        how:
+          left
+        columns:
+          brand_name: brand_name
+      - other:
+          select_pt_mf
+        how:
+          left
+        columns:
+          pack_type_code: pack_type_code
+
+  - kind: add
+    name: add_spu_fixed_brand_pt_flavour
+    context_name: join_spu_mapping_files
+    params:
+      - column: brand_name_fixed
+        expression: if(brand_name_cleansed is null, 'other', brand_name_cleansed)
+      - column: pack_type_code_fixed
+        expression: if(pack_type_code_cleansed is null, 'other', pack_type_code_cleansed)
+      - column: flavour_fixed
+        expression: trim(regexp_replace(regexp_replace(regexp_replace(lower(flavour_name), '\\s+', '-'), '[()]', ''), '[^a-z0-9,.-]+', ' '))
+
+  - kind: select
+    name: select_spu_alias
+    context_name: add_spu_fixed_brand_pt_flavour
+    params:
+      columns:
+        product_code: product_code_sap
+        product_name_raw: product_name_raw_sap
+        product_name_cleansed: product_name_cleansed_sap
+        country_code: country_code_sap
+        brand_name: brand_name_sap
+        flavour_name: flavour_name_sap
+        pack_size_name: pack_size_name_sap
+        pack_size_uom_unified: pack_size_uom_unified_sap
+        pack_size_volume_unified: pack_size_volume_unified_sap
+        pack_type_code: pack_type_code_sap
+        pack_type_name: pack_type_name_sap
+        sales_unit_name: sales_unit_name_sap
+        sales_unit_bottles: sales_unit_bottles_sap
+        sales_unit_cases: sales_unit_cases_sap
+        sales_unit_pallets: sales_unit_pallets_sap
+        product_hierarchy_name: product_hierarchy_name_sap
+        sparkling_level: sparkling_level_sap
+        country_code_in_product_name: country_code_in_product_name_sap
+        is_abp: is_abp_sap
+        is_in_use: is_in_use_sap
+        is_promotion: is_promotion_sap
+        ean_code: ean_code_sap
+        ban_code: ban_code_sap
+        product_group_code: product_group_code_sap
+        product_group_name: product_group_name_sap
+        product_type_code: product_type_code_sap
+        creation_date: creation_date_sap
+        sell_in_volume_uc_12m: sell_in_volume_uc_12m
+        sell_in_volume_uc_24m: sell_in_volume_uc_24m
+        sap_cluster: sap_cluster
+        sub_brand_name: sub_brand_name_sap
+        pack_size_fixed: pack_size_fixed_sap
+        sub_brand_name_fixed: sub_brand_name_fixed_sap
+        brand_name_cleansed: brand_name_cleansed
+        brand_name_category: brand_name_category
+        pack_type_code_cleansed: pack_type_code_cleansed
+        pack_type_category: pack_type_category
+        brand_name_fixed: brand_name_fixed_sap
+        pack_type_code_fixed: pack_type_code_fixed_sap
+        flavour_fixed: flavour_fixed_sap
+      distinct: true
+
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+  - kind: add
+    name: add_epu_fixed_ps_sub_brand
+    context_name: read_epu
+    params:
+      - column: pack_size_volume
+        expression: regexp_extract(pack_size_name, '([0-9]+(?:\\.[0-9]+)?)', 1)
+      - column: pack_size_unit
+        expression: regexp_extract(pack_size_name, '([a-zA-Z]+)', 1)
+      - column: pack_size_name_fix
+        expression: replace(to_char(int(case when lower(pack_size_unit) in ('l', 'kg') then pack_size_volume*1000 when lower(pack_size_unit) = 'cl' then pack_size_volume*100 else pack_size_volume end), '9999999') || case when lower(pack_size_unit) = 'l' then 'ml' when lower(pack_size_unit) = 'kg' then 'g' when lower(pack_size_unit) = 'cl' then 'ml' else lower(pack_size_unit) end, ' ', '')
+      - column: sub_brand_name_fixed
+        expression: case when sub_brand_name is null then 'other' else sub_brand_name end
+
+  - kind: select
+    name: select_epu
+    context_name: add_epu_fixed_ps_sub_brand
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        sub_brand_name_fixed: sub_brand_name_fixed
+        pack_size_name_fix: pack_size_name_fix
+      distinct: true
+
+# step 0 - left join - base
+  - kind: join
+    name: join_epu_spu_base
+    context_name: select_epu
+    params:
+      - other:
+          select_spu_alias
+        how:
+          left
+        columns:
+          country_code: country_code_sap
+          flavour_name: flavour_fixed_sap
+          pack_type_name: pack_type_code_fixed_sap
+          pack_size_name_fix: pack_size_fixed_sap
+          sub_brand_name_fixed: sub_brand_name_fixed_sap
+
+# brand similarity join
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_ered.brand_similarity.BrandSimilarityOperation
+    name: brand_similarity
+    context_name: join_epu_spu_base
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_ered.brand_similarity_config.BrandSimilarityOperationConfig
+    params:
+      input_brand_1: brand_name
+      input_brand_2: brand_name_fixed_sap
+
+# producs with mappings with brand similarity or without mappings after step 0
+  - kind: filter
+    name: filter_brand_similarity_w
+    context_name: brand_similarity
+    params:
+      - condition:
+          cast(brand_similarity_score as decimal(10,4)) > 0 or product_code_sap is null
+
+# products with mappings without brand similarity, but with mappings after step 0
+  - kind: filter
+    name: filter_brand_similarity_wo
+    context_name: brand_similarity
+    params:
+      - condition:
+          cast(brand_similarity_score as decimal(10,4)) = 0
+
+  - kind: join
+    name: join_brand_similarity_wo
+    context_name: filter_brand_similarity_wo
+    params:
+      - other:
+          filter_brand_similarity_w
+        how:
+          leftanti
+        columns:
+          country_code: country_code
+          product_name_raw: product_name_raw
+
+  - kind: select
+    name: select_after_brand_similarity_wo
+    context_name: join_brand_similarity_wo
+    params:
+      columns:
+        country_code: country_code
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        # product_name_cleansed_sap: product_name_cleansed_sap
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        sub_brand_name_fixed: sub_brand_name_fixed
+        pack_size_name_fix: pack_size_name_fix
+        brand_similarity_score: brand_similarity_score
+      distinct: true
+
+  - kind: union
+    name: union_brand_similarity
+    context_name: filter_brand_similarity_w
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_after_brand_similarity_wo
+
+# sparkling level join
+  - kind: add
+    name: add_sparkling_level
+    context_name: union_brand_similarity
+    params:
+      - column: sparkling_level_ind
+        expression: case when sparkling_level in ('no', 'low', 'medium', 'high') and sparkling_level_sap in ('no', 'low', 'medium', 'high') and sparkling_level = sparkling_level_sap then 1 else 0 end
+
+  - kind: group
+    name: group_sparkling_level
+    context_name: add_sparkling_level
+    params:
+      - aggs:
+          sparkling_level_ind: sum
+        by:
+        - product_name_raw
+        - country_code
+
+  - kind: filter
+    name: filter_sparkling_level_no_sl
+    context_name: group_sparkling_level
+    params:
+      - condition:
+          sum_sparkling_level_ind = 0
+
+  - kind: join
+    name: join_sparkling_level_no_sl
+    context_name: add_sparkling_level
+    params:
+      - other:
+          filter_sparkling_level_no_sl
+        how:
+          left_semi
+        columns:
+          product_name_raw: product_name_raw
+          country_code: country_code
+
+  - kind: select
+    name: select_after_no_sl
+    context_name: join_sparkling_level_no_sl
+    params:
+      columns:
+        country_code: country_code
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_cleansed_sap: product_name_cleansed_sap
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        sub_brand_name_fixed: sub_brand_name_fixed
+        pack_size_name_fix: pack_size_name_fix
+        brand_similarity_score: brand_similarity_score
+        product_code_sap: product_code_sap
+      distinct: true
+
+  - kind: filter
+    name: filter_sparkling_level_sl
+    context_name: add_sparkling_level
+    params:
+      - condition:
+          sparkling_level_ind = 1
+
+  - kind: select
+    name: select_after_sl
+    context_name: filter_sparkling_level_sl
+    params:
+      columns:
+        country_code: country_code
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_cleansed_sap: product_name_cleansed_sap
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        sub_brand_name_fixed: sub_brand_name_fixed
+        pack_size_name_fix: pack_size_name_fix
+        brand_similarity_score: brand_similarity_score
+        product_code_sap: product_code_sap
+      distinct: true
+
+  - kind: union
+    name: union_sl
+    context_name: select_after_no_sl
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_after_sl
+
+# match score fuzzy
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_ered.matching_score_fuzzy.MatchingScoreFuzzyOperation
+    name: match_score_fuzzy
+    context_name: union_sl
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_ered.matching_score_fuzzy_config.MatchingScoreFuzzyOperationConfig
+    params:
+      input_desc_1: product_name_cleansed
+      input_desc_2: product_name_cleansed_sap
+
+  - kind: add
+    name: add_score1
+    context_name: match_score_fuzzy
+    params:
+      - column: score1
+        expression: fuzzy_match_score * cast(brand_similarity_score as decimal(10,4))
+
+  - kind: group
+    name: group_match_score_avg
+    context_name: add_score1
+    params:
+      - aggs:
+          fuzzy_match_score: avg
+        by:
+        - product_name_raw
+        - country_code
+
+  - kind: join
+    name: join_match_score_avg
+    context_name: add_score1
+    params:
+      - other:
+          group_match_score_avg
+        how:
+          left
+        columns:
+          product_name_raw: product_name_raw
+          country_code: country_code
+
+  - kind: add
+    name: add_score2
+    context_name: join_match_score_avg
+    params:
+      - column: score2
+        expression: -1 + fuzzy_match_score/avg_fuzzy_match_score
+      - column: rank_brand_matching_score
+        window:
+          func: dense_rank
+          partition_by:
+            - country_code
+            - product_name_raw
+          order_by:
+            - brand_similarity_score: desc
+
+  - kind: add
+    name: add_score_sigmoid
+    context_name: add_score2
+    params:
+      - column: rank_brand_matching_score1
+        expression: if(rank_brand_matching_score = 1, 1, 2)
+      - column: score3
+        expression: (brand_probability * sqrt(flavour_probability) * pack_type_probability) / sqrt(rank_brand_matching_score1)
+      - column: score_sigmoid
+        expression: 1 / (1 + exp(-2 * (score2 + score3)))
+
+  - kind: add
+    name: add_final
+    context_name: add_score_sigmoid
+    params:
+      - column: scenario_id
+        expression: '1'
+      - column: is_in_scope
+        expression: ''''''
+      - column: is_in_manual_mapping
+        expression: ''''''
+      - column: processing_date
+        # expression: cast(current_timestamp() as string)
+        expression: substring("{{process_run_id}}", 0, 15)
+      - column: status_code
+        expression: case when product_code_sap is null or product_code_sap = '' then '0' else '1' end
+      - column: detailed_message
+        expression: case when product_code_sap is null or product_code_sap = '' then 'SAP products not found' else 'SAP product found' end
+      - column: score_sigmoid
+        overwrite: true
+        expression: cast(score_sigmoid as Decimal(10,4))
+      - column: score3
+        overwrite: true
+        expression: cast(score3 as Decimal(10,4))
+      - column: score2
+        overwrite: true
+        expression: cast(score2 as Decimal(10,4))
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        country_code: ext_country_code
+        product_code: ext_product_code
+        product_name_raw: ext_product_name
+        product_code_sap: sap_product_code
+        score_sigmoid: matching_score
+        scenario_id: scenario_id
+        processing_date: processing_date
+        detailed_message: detailed_message
+        status_code: status_code
+        source_system: source_system
+        is_in_scope: is_in_scope
+        is_in_manual_mapping: is_in_manual_mapping
+        score3: characteristics_probability_score
+        score2: description_score_deviation
+
+  - kind: write_dataio
+    name: write_results_history_basic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: results_history
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

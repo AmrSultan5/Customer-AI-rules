@@ -1,0 +1,415 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: sap_cleanser
+  operations:
+
+###############
+# Read data marts
+# sap_portfolio
+  - kind: read_dataio
+    name: read_sap
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: sap_portfolio
+      schema_version: v1
+###############
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+  - kind: add
+    name: add_brand_flavour_final
+    params:
+      - column: brand_final
+        overwrite: true
+        expression: brand_name
+      - column: flavour_final
+        overwrite: true
+        expression: flavour_name
+
+  - kind: add
+    name: add_sales_unit_final
+    params:
+      - column: sales_unit_final
+        overwrite: true
+        expression: regexp_replace(sales_unit_name, '^X(\\d+)$|(\\d+)X(\\d+)', '$1$2x$3')
+      - column: package_size_hlp
+        expression: lower(package_size_name)
+        
+  - kind: add
+    name: add_package_type_final
+    params:
+      - column: package_type_hlp
+        expression: lower(package_type_key)
+      - column: package_type_final
+        overwrite: true
+        expression: regexp_replace(package_type_hlp, 'nrg|nrb', 'nrgb')
+        
+  # volume extraction
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.volume_parse.VolumeParseOperation
+    name: sap_unify_volume
+    context_name: add_package_type_final
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.volume_parse_config.VolumeParseOperationConfig
+    params:
+      input_value: package_size_hlp
+      output_col_name: package_size_stage
+
+  - kind: add
+    name: add_package_size_final
+    params:
+      - column: package_size_final
+        overwrite: true
+        expression: package_size_stage_volume
+
+# calculate country_code_in_product_name
+  - kind: read_local
+    name: read_conf_data_sp_country_codes
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_country_code
+
+  - kind: add
+    name: add_const_1_oh
+    context_name: read_conf_data_sp_country_codes
+    params:
+      - column: const_1_oh
+        expression: '''1'''
+
+  - kind: group
+    name: group_oh
+    context_name: add_const_1_oh
+    params:
+      - aggs:
+          country_code: array_agg
+        by:
+        - const_1_oh
+
+  - kind: add
+    name: add_col_for_seperated_prod_name
+    context_name: add_package_size_final
+    params:
+      - column: country_code_in_product_name_separated
+        expression: regexp_extract(lower(sap_product_name), '.*[ ](.*)', 1)
+
+  - kind: add
+    name: add_country_code_in_product_name_separated_array_single
+    context_name: add_col_for_seperated_prod_name
+    params:
+      - column: country_code_in_product_name_separated_array_single
+        expression: split(country_code_in_product_name_separated, '', -1)
+
+  - kind: add
+    name: add_country_code_in_product_name_separated_array_double
+    context_name: add_country_code_in_product_name_separated_array_single
+    params:
+      - column: country_code_in_product_name_separated_array_double
+        expression: transform(country_code_in_product_name_separated_array_single, (x, i) -> concat(x, country_code_in_product_name_separated_array_single[i+1]))
+
+  - kind: add
+    name: add_country_code_in_product_name_separated_array_final
+    context_name: add_country_code_in_product_name_separated_array_double
+    params:
+      - column: country_code_in_product_name_separated_array_final
+        expression: FILTER(TRANSFORM(country_code_in_product_name_separated_array_double, (x, i) -> x), (x, i) -> i % 2 = 0)
+      - column: const_1_join_clean_1
+        expression: '''1'''
+
+  - kind: join
+    name: join_country_code_in_product_name
+    context_name: add_country_code_in_product_name_separated_array_final
+    params:
+      - other:
+          group_oh
+        how:
+          inner
+        columns:
+          const_1_join_clean_1: const_1_oh
+
+  - kind: add
+    name: add_country_code_in_product_name
+    params:
+      - column: country_code_in_product_name
+        overwrite: true
+        expression: if(size(array_except(country_code_in_product_name_separated_array_final, array_agg_country_code)) = 0, country_code_in_product_name_separated, '')
+
+#remove leading word if it's a number
+  - kind: add
+    name: add_sp_remove_leading_word_if_number
+    context_name: add_country_code_in_product_name
+    params:
+      - column: sap_product_name_final
+        expression: if(regexp_like(lower(sap_product_name), '^\\s*\\d+(\\.\\d+)?[a-zA-Z]*\\b'), regexp_replace(lower(sap_product_name), '^\\s*\\d+(\\.\\d+)?[a-zA-Z]*\\s*', ''), lower(sap_product_name))
+        overwrite: true
+
+#remove pack_type from the beginning
+  - kind: add
+    name: add_sp_remove_pack_type
+    context_name: add_sp_remove_leading_word_if_number
+    params:
+      - column: sap_product_name_final
+        expression: if(startswith(sap_product_name_final, 'nrgb') or startswith(sap_product_name_final, package_type_hlp), regexp_replace(sap_product_name_final, '^(nrgb|' || package_type_hlp || ')\\s*', ''), sap_product_name_final)
+        overwrite: true
+
+#remove unit_size
+  - kind: add
+    name: add_sp_remove_unit_size
+    context_name: add_sp_remove_pack_type
+    params:
+      - column: sap_product_name_final
+        expression: regexp_replace(sap_product_name_final, '\\b(x\\s*\\d+|\\d+\\s*x\\s*\\d+|\\d+\\s*x|\\d+x\\b|\\d+x)', '')
+        overwrite: true
+
+#remove country code from the end
+  - kind: add
+    name: add_sp_remove_country_code
+    context_name: add_sp_remove_unit_size
+    params:
+      - column: sap_product_name_final
+        expression: if(endswith(sap_product_name_final, country_code_in_product_name), regexp_replace(sap_product_name_final, concat(country_code_in_product_name, '$'), ''), sap_product_name_final)
+        overwrite: true
+
+#concat with package_size and sales_unit
+  - kind: add
+    name: add_concat_package_size_sales_unit
+    context_name: add_sp_remove_country_code
+    params:
+      - column: sap_product_name_final
+        expression: concat(sap_product_name_final, ' ', package_size_final, ' ', if(sales_unit_final != 'other', sales_unit_final, ''))
+        overwrite: true
+
+#remove multiple spaces
+  - kind: add
+    name: add_final_cleansing
+    context_name: add_concat_package_size_sales_unit
+    params:
+      - column: sap_product_name_final
+        expression: regexp_replace(trim(sap_product_name_final), '\\s+', ' ')
+        overwrite: true
+
+### sub brand ###
+#conf data join
+#spu add const value for join
+  - kind: add
+    name: add_const_1_subbrand
+    params:
+      - column: const_1_subbrand
+        expression: '''1'''
+
+#read conf data
+  - kind: read_local
+    name: read_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_sub_brand
+
+  - kind: add
+    name: add_const_1_conf
+    context_name: read_conf_data
+    params:
+      - column: const_1_conf
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf
+    context_name: add_const_1_conf
+    params:
+      - aggs:
+          input_value: array_agg
+          output_value: array_agg
+          priority: array_agg
+        by:
+        - const_1_conf
+
+  - kind: join
+    name: join_conf
+    context_name: add_const_1_subbrand
+    params:
+      - other:
+          group_arrays_conf
+        how:
+          inner
+        columns:
+          const_1_subbrand: const_1_conf
+
+  - kind: add
+    name: add_conf_structs
+    params:
+      - column: input_output_priority_structs
+        expression: transform(sequence(0, size(array_agg_input_value) - 1), i -> struct(array_agg_input_value[i] as input_val, array_agg_output_value[i] as output_val, CAST(array_agg_priority[i] AS INT) as prio))
+
+  - kind: add
+    name: filter_matching_structs
+    context_name: add_conf_structs
+    params:
+      - column: matching_structs
+        expression: filter(input_output_priority_structs, x -> instr(sap_product_name_final, x.input_val) > 0)
+
+  - kind: add
+    name: sort_matching_structs
+    context_name: filter_matching_structs
+    params:
+      - column: matching_structs
+        expression: array_sort(matching_structs, (left, right) -> case when left.prio < right.prio then -1 when left.prio > right.prio then 1 else 0 end)
+        overwrite: true
+
+  - kind: add
+    name: extract_lowest_priority_output
+    context_name: sort_matching_structs
+    params:
+      - column: subbrand_tmp
+        expression: element_at(transform(slice(matching_structs, 1, 1), x -> x.output_val), 1)
+        overwrite: true
+
+  - kind: add
+    name: add_subbrand_final
+    context_name: extract_lowest_priority_output
+    params:
+      - column: sub_brand_final
+        expression: if(subbrand_tmp is not null and (brand_name = 'Monster-KO' or brand_name = 'ULTRA-KO'), subbrand_tmp, '')
+        overwrite: true
+
+# item category
+  - kind: add
+    name: add_const_portfolio
+    context_name: add_subbrand_final
+    params:
+      - column: portfolio
+        expression: '''sap'''
+      - column: lower_item_category
+        expression: lower(item_category_name)
+
+  - kind: read_local
+    name: read_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: item_category_std
+
+  - kind: add
+    name: add_conf_data
+    params:
+      - column: lower_item_category
+        expression: lower(item_category)
+
+  - kind: join
+    name: join_conf_data
+    context_name: add_const_portfolio
+    params:
+      - other:
+          add_conf_data
+        how:
+          left
+        columns:
+          country_code: country_code
+          ext_source_name: ext_source_name
+          portfolio: portfolio
+          lower_item_category: lower_item_category
+
+  - kind: add
+    name: add_item_category_final
+    params:
+      - column: item_category_final
+        expression: if(item_category_std is not null or item_category_std <> '', item_category_std, item_category_name)
+        overwrite: true
+     
+  - kind: select
+    name: select_final
+    context_name: add_item_category_final
+    params:
+      columns:
+        sap_product_code: sap_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        sap_product_name: sap_product_name
+        sap_product_name_final: sap_product_name_final
+        ban: ban
+        ban_name: ban_name
+        ban_name_final: ban_name_final
+        ean_piece: ean_piece
+        ean_pack: ean_pack
+        ean_case: ean_case
+        brand_key: brand_key
+        brand_name: brand_name
+        brand_final: brand_final
+        flavour_key: flavour_key
+        flavour_name: flavour_name
+        flavour_final: flavour_final
+        package_type_key: package_type_key
+        package_type_name: package_type_name
+        package_type_final: package_type_final
+        package_size_key: package_size_key
+        package_size_name: package_size_name
+        package_size_final: package_size_final
+        item_category_key: item_category_key
+        item_category_name: item_category_name
+        item_category_final: item_category_final
+        sales_unit_key: sales_unit_key
+        sales_unit_name: sales_unit_name
+        sales_unit_final: sales_unit_final
+        single_multi_serve_key: single_multi_serve_key
+        single_multi_serve_name: single_multi_serve_name
+        single_multi_serve_final: single_multi_serve_final
+        sub_brand_key: sub_brand_key
+        sub_brand_name: sub_brand_name
+        sub_brand_final: sub_brand_final
+        load_date: load_date
+        number_of_ext_matches: number_of_ext_matches
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        in_scope_ban_flg: in_scope_ban_flg
+        country_code_in_product_name: country_code_in_product_name
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+      distinct: true
+
+  - kind: write_dataio
+    name: write_sap
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: sap_portfolio
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

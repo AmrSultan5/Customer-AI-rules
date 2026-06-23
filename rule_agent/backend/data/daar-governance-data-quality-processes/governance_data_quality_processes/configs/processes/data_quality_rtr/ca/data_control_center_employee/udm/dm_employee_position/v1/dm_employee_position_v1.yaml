@@ -1,0 +1,156 @@
+transform:
+  name: dm_employee_position
+  operations:
+
+  - kind: read_dataio
+    name: read_position
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: positions
+      schema_version: v1
+
+  - kind: filter
+    name: filter_position
+    params:
+      - condition:
+          employee_group != 'CUSTOM_ORG_EGS_HIERARCHY_3_INACTIVE'
+
+  - kind: add
+    name: add_location_id
+    context_name: filter_position
+    params:
+      - column: object_type
+        expression: '"Position"'
+      - column: location_id_substr
+        expression: substr(location, 5, 4)
+      - column: company_id_substr
+        expression: regexp_replace(upper(company_id), 'COMPANY_', '')
+      - column: time_type
+        expression: regexp_replace(lower(time_type), ' ', '_')
+        overwrite: true
+      - column: cost_center_id
+        expression: regexp_replace(upper(cost_center_id), 'COST_CENTER_', '')
+        overwrite: true
+      - column: compensation_grade_profile_value
+        expression: substr(comp_grade_pro, 0, 2)
+      - column: compensation_grade_value
+        expression: REPLACE(UPPER(comp_grade), 'COMPENSATION_GRADE_', '')
+      - column: earl_hire_date
+        expression: if(earl_hire_date = '1900-01-01', NULL, earl_hire_date)
+        overwrite: true
+      - column: avail_date
+        expression: if(avail_date = '1900-01-01', NULL, avail_date)
+        overwrite: true
+      - column: position_fte
+        expression: position_fte/100
+        overwrite: true
+
+  - kind: read_local
+    name: read_lcm
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: location_country_mapping
+
+  - kind: select
+    name: select_lcm
+    context_name: read_lcm
+    params:
+      columns:
+        location_id: location_id_lcm
+        country_id: country_id_lcm
+      distinct: true
+
+  - kind: join
+    name: join_position
+    context_name: add_location_id
+    params:
+      - other:
+          select_lcm
+        how:
+          left
+        columns:
+          location_id_substr: location_id_lcm
+
+  - kind: select
+    name: select_position
+    context_name: join_position
+    params:
+      columns:
+        object_type: object_type
+        position_id: position_id
+        position_title: position_name
+        sup_org_id: supervisory_organisation_id
+        function: department_name
+        sub_function: sub_department_name
+        location_id_substr: location_id
+        business_unit: business_unit_id
+        company_id_substr: company_id
+        country_id_lcm: country_id
+        worker_type: worker_type_id
+        worker_sub_type: employee_sub_type_id
+        employee_group: employee_group_id
+        employee_sub_grp: employee_sub_group_id
+        job_family: job_family_name
+        job_family_grp: job_family_group_name
+        job_class: job_classification_id
+        job_post_title: job_posting_position_title
+        avail_date: availability_date
+        earl_hire_date: hire_date
+        job_profile: job_profile_id
+        time_type: position_time_type_id
+        sch_weekly_hours: scheduled_weekly_hours
+        default_hours: default_hours
+        position_fte: position_fte
+        cost_center_id: cost_center_id
+        comp_grade: compensation_grade_id
+        comp_grade_pro: compensation_grade_profile_id
+        compensation_grade_profile_value: compensation_grade_profile_value
+        compensation_grade_value: compensation_grade_value
+        manager_pos_id: line_manager_position_id
+        curr_manager_pos: supervisory_organisation_manager_id
+        management_level: management_level
+        dolphin_id: dolphin_id
+        is_matern_leave: is_on_maternity_leave
+        overlap_worker: is_overlap_worker
+        is_on_leave: is_on_leave
+      distinct: true
+
+  - kind: cast
+    name: cast_to_string
+    context_name: select_position
+    params:
+      - column: compensation_grade_profile_value
+        to: integer
+      - column: compensation_grade_value
+        to: integer
+      - column: is_on_maternity_leave
+        to: string
+      - column: is_overlap_worker
+        to: string
+      - column: is_on_leave
+        to: string
+
+  - kind: write_dataio
+    name: write_dm_employee_position
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_position
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

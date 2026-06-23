@@ -1,0 +1,1071 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% set uc_catalog_ml_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: PCM_flavour
+  operations:
+
+########################################
+# Read input data
+########################################
+# Load External Portfolio (EP) product data
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      schema_version: v1
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+########################################
+# EP preprocessing
+########################################
+# - Drop technical columns
+# - Split records with / without product name
+  - kind: drop
+    name: drop_process_run_id
+    params:
+      - column: process_run_id
+
+  - kind: filter
+    name: filter_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is null or ext_product_name_src = ''
+
+  - kind: filter
+    name: filter_not_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is not null and ext_product_name_src != ''
+          
+########################################
+# EP feature engineering
+########################################
+# - Normalize brand names
+# - Default missing sub-brands
+# - Generate row-level unique IDs
+  - kind: add
+    name: add_ven_1
+    params:
+      - column: brand_description_cleansed
+        expression: trim(regexp_replace(regexp_replace(lower(ext_brand_final),'-ko| csd',''), '[^a-z -]+', ' '))
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: regexp_replace(brand_description_cleansed, '\\s+', ' ')
+      - column: sub_brand_name
+        expression: if(ext_sub_brand_final = '' or ext_sub_brand_final is null, 'other', ext_sub_brand_final)
+      - column: partition
+        expression: '''1'''
+      - column: id
+        expression: row_number() over (partition by partition order by ext_product_name_final, country_code, ext_source_name)
+
+########################################
+# Read SAP reference data
+########################################
+# Load authoritative SAP product universe
+  - kind: read_dataio
+    name: read_sap_ered
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_sap_ered
+    context_name: read_sap_ered
+    params:
+      columns:
+        country_code: country_code
+        product_code: sap_product_code
+        product_name_cleansed: ext_product_name_final
+        brand_name: brand_final
+        flavour_name: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: read_dataio
+    name: read_sap_dmt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: sap_portfolio
+      schema_version: v1
+  
+  - kind: select
+    name: select_sap_dmt
+    context_name: read_sap_dmt
+    params:
+      columns:
+        country_code: country_code
+        sap_product_name_final: ext_product_name_final
+        sap_product_code: sap_product_code
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: union
+    name: union_sap
+    context_name: select_sap_ered
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_sap_dmt
+
+  - kind: select
+    name: select_sap
+    context_name: union_sap
+    params:
+      columns:
+        country_code: country_code
+        sap_product_code: sap_product_code
+        ext_product_name_final: ext_product_name_final
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+      
+  - kind: select
+    name: select_sap_2
+    context_name: select_sap
+    params:
+      columns:
+        country_code: country_code
+        sap_product_code: sap_product_code
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+####################################################################
+# Product Mapping data
+  - kind: read_dataio
+    name: read_pm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: golden
+      object_name: product_mapping
+      schema_version: v1
+
+  - kind: select
+    name: select_pm
+    context_name: read_pm
+    params:
+      columns:
+        country_code: country_code
+        sap_product_code: sap_product_code
+        ext_product_code: ext_product_code
+      distinct: true
+
+  - kind: select
+    name: select_ep
+    context_name: read_ep
+    params:
+      columns:
+        country_code: country_code
+        ext_product_code: ext_product_code
+        ext_product_name_final: ext_product_name_final
+      distinct: true
+
+  - kind: join
+    name: join_pm_sap_ep
+    context_name: select_pm
+    params:
+      - other:
+          select_sap_2
+        how:
+          inner
+        columns:
+          country_code: country_code
+          sap_product_code: sap_product_code
+      - other:
+          select_ep
+        how:
+          inner
+        columns:
+          country_code: country_code
+          ext_product_code: ext_product_code
+
+  - kind: filter
+    name: filter_pm_sap_ep
+    context_name: join_pm_sap_ep
+    params:
+      - condition:
+          ext_product_name_final is not null and ext_product_name_final != ''
+
+  - kind: select
+    name: select_pm_sap_ep
+    context_name: filter_pm_sap_ep
+    params:
+      columns:
+        country_code: country_code
+        sap_product_code: sap_product_code
+        ext_product_name_final: ext_product_name_final
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: union
+    name: union_sap_pm
+    context_name: select_sap
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pm_sap_ep
+####################################################################
+
+########################################
+# SAP preprocessing
+########################################
+# - Normalize brand names
+# - Apply blacklist cleansing
+# - Prepare data for fuzzy matching
+  - kind: add
+    name: add_sap
+    context_name: union_sap_pm
+    params:
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: trim(regexp_replace(regexp_replace(lower(brand_final),'-ko| csd',''), '[^a-z -]+', ' '))
+      - column: brand_description_cleansed
+        overwrite: true
+        expression: regexp_replace(brand_description_cleansed, '\\s+', ' ')        
+      - column: brand_description_blklist
+        overwrite: true
+        expression: trim(regexp_replace(brand_description_cleansed,'zero|diet|light|free|water|gin|tea|rum|pulpy|sugar|year|vodka|coke',''))   
+      - column: brand_description_blklist
+        overwrite: true
+        expression: if(instr(brand_description_blklist, "bacardi") > 0 and instr(brand_description_blklist, "coca-cola") > 0, regexp_replace(brand_description_blklist, "coca-cola", ""), brand_description_blklist)
+      - column: brand_description_blklist
+        overwrite: true
+        expression: regexp_replace(brand_description_blklist, '\\s+', ' ')
+      - column: sub_brand_name
+        overwrite: true
+        expression: if(sub_brand_name = '' or sub_brand_name is null, 'other', sub_brand_name)
+      - column: column_for_join
+        expression: '''1'''
+
+########################################
+# SAP brand fuzzy matching
+########################################
+# - Cartesian join of SAP brands
+# - Compute unordered brand similarity
+# - Keep non-zero similarity pairs
+  - kind: select
+    name: select_sap_brands_0
+    context_name: add_sap
+    params:
+      columns:
+        brand_description_cleansed: brand_description_cleansed_0
+        brand_description_blklist: brand_description_blklist_0
+        column_for_join: column_for_join
+      distinct: true
+
+  - kind: select
+    name: select_sap_brands
+    context_name: add_sap
+    params:
+      columns:
+        brand_description_cleansed: brand_description_cleansed
+        brand_description_blklist: brand_description_blklist
+        column_for_join: column_for_join
+      distinct: true
+      
+  - kind: join
+    name: join_sap_brands
+    context_name: select_sap_brands_0
+    params:
+      - other:
+          select_sap_brands
+        how:
+          outer
+        columns:
+          column_for_join: column_for_join
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: sap_brands_similarity
+    context_name: join_sap_brands    
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: brand_description_cleansed_0
+      input_brand_2: brand_description_cleansed
+      output_col_name: brand_similarity_score
+
+  - kind: filter
+    name: filter_sap_brands
+    params:
+      - condition:
+          brand_similarity_score != '0.0'
+
+  - kind: rename
+    name: rename_sap_brands
+    params:
+        - column: brand_1_tokenized
+          to: brand_cleansed_1_tokenized
+        - column: brand_2_tokenized
+          to: brand_cleansed_2_tokenized
+        - column: brand_similarity_score
+          to: brand_cleansed_similarity_score
+          
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: sap_brands_similarity_blklist
+    context_name: rename_sap_brands  
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: brand_description_blklist_0
+      input_brand_2: brand_description_blklist
+      output_col_name: brand_similarity_score
+
+  - kind: filter
+    name: filter_sap_brands_blklist
+    params:
+      - condition:
+          brand_similarity_score != '0.0'
+
+  - kind: select
+    name: select_brand_name_matches
+    params:
+      columns:
+        brand_description_cleansed_0: brand_description_cleansed_0
+        brand_description_cleansed: brand_description_cleansed
+      distinct: true
+
+  - kind: rename
+    name: rename_sap
+    context_name: add_sap
+    params:
+      - column: brand_description_cleansed
+        to: brand_description_cleansed_0
+
+  - kind: join
+    name: join_sap_fuzzy_brands
+    context_name: rename_sap
+    params:
+      - other:
+          select_brand_name_matches
+        how:
+          left
+        columns:
+          brand_description_cleansed_0: brand_description_cleansed_0
+          
+  - kind: select
+    name: select_sap_fuzzy_brands
+    context_name: join_sap_fuzzy_brands
+    params:
+      columns:
+        brand_final: brand_final
+        brand_description_cleansed: brand_description_cleansed
+        brand_description_cleansed_0: brand_description_cleansed_0
+        sub_brand_name: sub_brand_name
+        country_code: country_code
+        flavour_final: flavour_final 
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_select_sap_fuzzy_brands
+    context_name: select_sap_fuzzy_brands
+
+  - kind: select
+    name: select_sap_products_fuzzy_brands
+    context_name: join_sap_fuzzy_brands
+    params:
+      columns:
+        ext_product_name_final: ext_product_name_final
+        brand_final: brand_final
+        brand_description_cleansed: brand_description_cleansed
+        brand_description_cleansed_0: brand_description_cleansed_0
+        sub_brand_name: sub_brand_name
+        country_code: country_code
+        flavour_final: flavour_final 
+      distinct: true
+      
+  - kind: add
+    name: add_sap_cleanse
+    params:
+      - column: ext_product_name_final
+        overwrite: true
+        expression: if(brand_description_cleansed = 'roemerquelle', regexp_replace(ext_product_name_final, 'rq em', 'roemerquelle emotion'), ext_product_name_final)
+
+########################################
+# Tokenization
+########################################
+# - Generate n-gram tokens for SAP flavours
+# - Generate n-gram tokens for EP product names
+# generate flavour tokens 
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.ngram_tokenization.NgramTokenizationOperation
+    name: sap_flavours_ref
+    context_name: checkpoint_select_sap_fuzzy_brands
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.ngram_tokenization_config.NgramTokenizationOperationConfig
+    params:
+      column_to_tokenize: flavour_final
+      column_map: {'id': 'id',
+              'product_name': 'ext_product_name_final',
+              'brand_name': 'brand_description_cleansed',
+              'sub_brand_name': 'sub_brand_name',
+              'country_code': 'country_code',
+              'flavour_name': 'flavour_final'} 
+      ngram_sizes: [999, 5, 4, 3] 
+
+  - kind: select
+    name: select_sap_flavour_tokens
+    context_name: sap_flavours_ref
+    params:
+      columns:
+        country_code: country_code
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+        brand_description_cleansed: brand_description_cleansed
+        brand_description_cleansed_0: brand_description_cleansed_0
+        token: token
+        n: n
+        tokens_num: flavour_size
+      distinct: true
+
+# generate ep tokens 
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.ngram_tokenization.NgramTokenizationOperation
+    name: ep_tokens
+    context_name: add_ven_1
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.ngram_tokenization_config.NgramTokenizationOperationConfig
+    params:
+      column_to_tokenize: ext_product_name_final
+      column_map: {'id': 'id',
+              'product_name': 'ext_product_name_final',
+              'brand_name': 'brand_description_cleansed',
+              'sub_brand_name': 'sub_brand_name',
+              'country_code': 'country_code',
+              'flavour_name': 'flavour_final'} 
+      ngram_sizes: [999, 5, 4, 3] 
+
+  - kind: checkpoint
+    name: checkpoint_ep_tokens
+    context_name: ep_tokens
+
+########################################
+# Exact flavour matching
+########################################
+# - Match EP and SAP tokens
+# - Compute frequency-based scores
+# - Select best exact match per product
+  - kind: join
+    name: join_ep_sap_flavour_tokens
+    context_name: checkpoint_ep_tokens
+    params:
+      - other:
+          select_sap_flavour_tokens
+        how:
+          inner
+        columns:
+          brand_description_cleansed: brand_description_cleansed
+          sub_brand_name: sub_brand_name
+          country_code: country_code
+          token: token
+          n : n
+
+  - kind: add
+    name: add_1
+    params:
+      - column: column_1
+        expression: '''1'''
+
+  - kind: group
+    name: group_ep_sap_flavour_tokens
+    params:
+      - aggs:
+          column_1: count
+          token: collect_list
+          flavour_size: max
+        by:
+        - id
+        - brand_description_cleansed
+        - sub_brand_name
+        - flavour_final
+        - n
+
+  - kind: add
+    name: add_count_freq
+    params:
+      - column: count_freq
+        expression: count_column_1/max_flavour_size
+      - column: tokens_list_len
+        expression: size(array_distinct(collect_list_token))
+      - column: rank_count_freq
+        window:
+          func: row_number
+          partition_by:
+            - id
+            - n
+          order_by:
+            - count_freq: desc
+      - column: score
+        expression: tokens_list_len * count_freq
+
+  - kind: filter
+    name: filter_flavour_top_2
+    params:
+      - condition:
+          rank_count_freq <= 2
+
+# generate ep tokens 
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.common_tokens_identify.CommonTokensIdentifyOperation
+    name: common_tokens
+    context_name: filter_flavour_top_2
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.common_tokens_identify_config.CommonTokensIdentifyOperationConfig
+    params:
+      tokens_list_col: collect_list_token
+      group_cols: ['id', 'n']
+
+  - kind: join
+    name: join_common_tokens
+    context_name: filter_flavour_top_2
+    params:
+      - other:
+          common_tokens
+        how:
+          left
+        columns:
+          id: id
+          n: n
+
+  - kind: add
+    name: add_count_freq
+    params:
+      - column: tokens_list_filtered
+        expression: array_except(collect_list_token, common_tokens)
+      - column: tokens_list_diff
+        expression: size(tokens_list_filtered)
+
+  - kind: group
+    name: group_exact_match_sum
+    params:
+      - aggs:
+          tokens_list_diff: sum
+        by:
+        - id
+        - n
+
+  - kind: join
+    name: join_exact_match_sum
+    context_name: add_count_freq
+    params:
+      - other:
+          group_exact_match_sum
+        how:
+          left
+        columns:
+          id: id
+          n: n
+
+  - kind: add
+    name: add_exact_match
+    params:
+      - column: exact_match_flag
+        expression: (size(tokens_list_filtered) > 0 or sum_tokens_list_diff = 0) and (max_flavour_size = tokens_list_len)
+      - column: row_number_score
+        window:
+          func: row_number
+          partition_by:
+            - n
+            - id
+          order_by:
+            - score: desc
+
+  - kind: filter
+    name: filter_row_number_score
+    params:
+      - condition:
+          row_number_score = 1
+          
+  - kind: group
+    name: group_exact_match_score
+    params:
+      - aggs:
+          flavour_final: collect_list
+          count_column_1: collect_list
+          count_freq: collect_list
+        by:
+        - id
+        - brand_description_cleansed
+        - sub_brand_name
+        - exact_match_flag
+        - n
+          
+  - kind: join
+    name: join_ep_exact_match
+    context_name: add_ven_1
+    params:
+      - other:
+          group_exact_match_score
+        how:
+          left
+        columns:
+          id: id
+          brand_description_cleansed: brand_description_cleansed
+          sub_brand_name: sub_brand_name
+
+  - kind: filter
+    name: filter_exact_match_found
+    context_name: join_ep_exact_match
+    params:
+      - condition:
+          exact_match_flag
+          
+  - kind: group
+    name: group_em_n_max
+    context_name: filter_exact_match_found
+    params:
+      - aggs:
+          n: max
+        by:
+        - id
+
+  - kind: join
+    name: join_em_flavour_final
+    context_name: filter_exact_match_found
+    params:
+      - other:
+          group_em_n_max
+        how:
+          left
+        columns:
+          id: id
+
+  - kind: filter
+    name: filter_em_n_max
+    context_name: join_em_flavour_final
+    params:
+      - condition:
+          n = max_n
+
+  - kind: add
+    name: add_exact_match_flavour_final
+    params:
+      - column: flavour_found
+        expression: collect_list_flavour_final[0]
+      - column: normalized_score
+        expression: '''1'''
+
+  - kind: select
+    name: select_exact_match_flavour_found
+    params:
+      columns:
+        id: id
+        flavour_found: flavour_found
+        normalized_score: normalized_score
+      distinct: true
+ 
+########################################
+# Fallback matching (no exact match)
+########################################
+# - Hierarchical token join (brand → sub-brand → country)
+# - Rank SAP candidates using weighted scoring
+  - kind: join
+    name: join_ep_tokens_no_match
+    context_name: add_ven_1
+    params:
+      - other:
+          select_exact_match_flavour_found
+        how:
+          left
+        columns:
+          id: id
+
+  - kind: filter
+    name: filter_exact_match_not_found
+    context_name: join_ep_tokens_no_match
+    params:
+      - condition:
+          flavour_found = '' or flavour_found is null
+
+  - kind: select
+    name: select_exact_match_not_found
+    context_name: filter_exact_match_not_found
+    params:
+      columns:
+        id: id
+      distinct: true
+
+  - kind: join
+    name: join_ep_tokens_no_match
+    context_name: checkpoint_ep_tokens
+    params:
+      - other:
+          select_exact_match_not_found
+        how:
+          inner
+        columns:
+          id: id
+
+########################################
+# Tokenization
+########################################
+# - Generate n-gram tokens for SAP product names
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.ngram_tokenization.NgramTokenizationOperation
+    name: sap_tokens
+    context_name: add_sap_cleanse
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.ngram_tokenization_config.NgramTokenizationOperationConfig
+    params:
+      column_to_tokenize: ext_product_name_final
+      column_map: {'id': 'id',
+              'product_name': 'ext_product_name_final',
+              'brand_name': 'brand_description_cleansed',
+              'sub_brand_name': 'sub_brand_name',
+              'country_code': 'country_code',
+              'flavour_name': 'flavour_final'} 
+      ngram_sizes: [999, 5, 4, 3] 
+
+  - kind: rename
+    name: rename_sap_tokens
+    context_name: sap_tokens
+    params:
+      - column: ext_product_name_final
+        to: ext_product_name_final_sap
+
+# # hierarchical join of ep_tokens and sap_tokens
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.hierarchical_join.HierarchicalJoinOperation
+    name: hierarchical_join_ep_sap
+    context_name: join_ep_tokens_no_match
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.hierarchical_join_config.HierarchicalJoinOperationConfig
+    params:
+      other: rename_sap_tokens
+      join_cols: ['token', 'n']
+      other_join_cols: ['token', 'n']
+      join_hierarchy_list: [['brand_description_cleansed', 'sub_brand_name', 'country_code'], ['brand_description_cleansed', 'sub_brand_name'], []] 
+      id_col: id
+      how: inner
+
+  - kind: select
+    name: select_tokens_hierarchically_joined
+    context_name: hierarchical_join_ep_sap
+    params:
+      columns:
+        id: id
+        partition: partition
+        ext_product_name_final_sap: ext_product_name_final_sap
+        flavour_final: flavour_final
+        token: token
+        n: n
+      distinct: true
+
+  - kind: group
+    name: group_exact_match_score
+    context_name: select_tokens_hierarchically_joined
+    params:
+      - aggs:
+          partition: sum
+        by:
+        - ext_product_name_final_sap
+        - flavour_final
+        - id
+        - n
+
+  - kind: add
+    name: add_rank_count
+    params:
+      - column: rank_count
+        window:
+          func: rank
+          partition_by:
+            - n
+            - id
+          order_by:
+            - sum_partition: desc
+
+  - kind: group
+    name: group_rank
+    context_name: add_rank_count
+    params:
+      - aggs:
+          rank_count: collect_list
+        by:
+        - id
+        - n
+
+  - kind: add
+    name: add_rank_limit
+    params:
+      - column: rank_limit
+        expression: collect_list_rank_count[least(4, size(collect_list_rank_count) - 1)]
+
+  - kind: join
+    name: join_rank_limit
+    context_name: add_rank_count
+    params:
+      - other:
+          add_rank_limit
+        how:
+          left
+        columns:
+          id: id
+          n: n
+           
+  - kind: add
+    name: add_score
+    params:
+      - column: score
+        expression: 1/(rank_count*rank_count)
+      - column: weighted_score
+        expression: sum_partition * score
+
+  - kind: filter
+    name: filter_rank_limit
+    context_name: add_score
+    params:
+      - condition:
+          rank_count <= rank_limit
+          
+  - kind: group
+    name: group_weighted_score
+    context_name: filter_rank_limit
+    params:
+      - aggs:
+          weighted_score: sum
+        by:
+        - id
+        - flavour_final
+        - n
+          
+  - kind: group
+    name: group_total_weighted_score
+    context_name: group_weighted_score
+    params:
+      - aggs:
+          sum_weighted_score: sum
+        by:
+        - id
+        - n
+          
+  - kind: join
+    name: join_total_weighted_score
+    context_name: group_weighted_score
+    params:
+      - other:
+          group_total_weighted_score
+        how:
+          left
+        columns:
+          id: id
+          n: n
+ 
+  - kind: add
+    name: add_normalized_score
+    params:
+      - column: normalized_score
+        expression: sum_weighted_score/sum_sum_weighted_score
+
+########################################
+# Final flavour selection
+########################################
+# - Select top-ranked flavour per product
+  - kind: add
+    name: add_max_score
+    params:
+      - column: rank_score
+        window:
+          func: row_number
+          partition_by:
+            - id
+          order_by:
+            - normalized_score: desc
+
+  - kind: filter
+    name: filter_max_score
+    context_name: add_max_score
+    params:
+      - condition:
+          rank_score = 1
+
+  - kind: add
+    name: add_flavour_final_length
+    params:
+      - column: flavour_final_length
+        expression: len(flavour_final)
+      - column: rn_n
+        window:
+          func: row_number
+          partition_by:
+            - id
+          order_by:
+            - n: desc
+        
+  - kind: filter
+    name: filter_n_max
+    context_name: add_flavour_final_length
+    params:
+      - condition:
+          rn_n = 1
+
+  - kind: select
+    name: select_flavour_final
+    params:
+      columns:
+        id: id
+        flavour_final: flavour_found
+        normalized_score: normalized_score
+      distinct: true
+
+########################################
+# Output assembly
+########################################
+  - kind: union
+    name: union_flavours
+    context_name: select_exact_match_flavour_found
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_flavour_final
+
+  - kind: join
+    name: join_final_flavours
+    context_name: add_ven_1
+    params:
+      - other:
+          union_flavours
+        how:
+          left
+        columns:
+          id: id
+
+  - kind: select
+    name: select_final
+    context_name: join_final_flavours
+    params:
+      columns:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        flavour_found: ext_flavour_pcm
+        normalized_score: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: add
+    name: add_final
+    params:
+      - column: ext_flavour_pcm_probability
+        overwrite: true
+        expression: CAST(ext_flavour_pcm_probability AS decimal(10, 4))
+
+  - kind: checkpoint
+    name: checkpoint_before_write
+    context_name: add_final
+
+  - kind: union
+    name: union_final
+    context_name: checkpoint_before_write
+    params:
+      allow_missing: false
+      by_name: true
+      other: filter_null_product_name
+
+  - kind: write_dataio
+    name: write_ext_portfolio
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

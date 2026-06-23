@@ -1,0 +1,3166 @@
+transform:
+  name: employee_worker_completeness
+  operations:
+
+# Read data marts
+
+  - kind: read_dataio
+    name: read_dm_employee_education
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_education
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_employee_education_employee_id
+    context_name: read_dm_employee_education
+    params:
+      columns:
+        employee_id: employee_id_dee
+      distinct: true
+
+  - kind: select
+    name: select_dm_employee_education_school_reference_id
+    context_name: read_dm_employee_education
+    params:
+      columns:
+        employee_id: employee_id_dee
+        school_reference_id: school_reference_id
+      distinct: true
+
+  - kind: select
+    name: select_dm_employee_education_field_of_study_ref_id
+    context_name: read_dm_employee_education
+    params:
+      columns:
+        employee_id: employee_id_dee
+        field_of_study_ref_id: field_of_study_ref_id
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_talent
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_talent
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_employee_talent
+    context_name: read_dm_employee_talent
+    params:
+      columns:
+        global_id: global_id
+        performance_rating: performance_rating
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_career_history
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_career_history
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_employee_career_history
+    context_name: read_dm_employee_career_history
+    params:
+      columns:
+        employee_id: employee_id_dech
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker
+      schema_version: v2
+
+  - kind: add
+    name: add_dm_employee_worker
+    context_name: read_dm_employee_worker
+    params:
+      - column: upper_currency_id
+        expression: upper(currency_id)
+
+  - kind: read_dataio
+    name: read_dm_employee_organisation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_organisation
+      schema_version: v1
+
+  - kind: select
+    name: select_organisation
+    context_name: read_dm_employee_organisation
+    params:
+      columns:
+        supervisory_organisation_id: supervisory_organisation_id_org
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_worker_compensation_plans
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker_compensation_plans
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dewcp_retirement
+    context_name: read_dm_employee_worker_compensation_plans
+    params:
+      - condition:
+          plan_name = 'retirement_plan_id'
+          
+  - kind: select
+    name: select_dewcp_retirement
+    params:
+      columns:
+        employee_id: employee_id_dewcp_retirement
+        plan_name: plan_name_dewcp_retirement
+        plan_value: plan_value_dewcp_retirement
+      distinct: true
+
+  - kind: filter
+    name: filter_dewcp_insurance
+    context_name: read_dm_employee_worker_compensation_plans
+    params:
+      - condition:
+          plan_name = 'insurance_plan_id'
+
+  - kind: select
+    name: select_dewcp_insurance
+    params:
+      columns:
+        employee_id: employee_id_dewcp_insurance
+        plan_name: plan_name_dewcp_insurance
+        plan_value: plan_value_dewcp_insurance
+      distinct: true
+
+  - kind: filter
+    name: filter_dewcp_healthcare
+    context_name: read_dm_employee_worker_compensation_plans
+    params:
+      - condition:
+          plan_name = 'healthcare_plan_id'
+
+  - kind: select
+    name: select_dewcp_healthcare
+    params:
+      columns:
+        employee_id: employee_id_dewcp_healthcare
+        plan_name: plan_name_dewcp_healthcare
+        plan_value: plan_value_dewcp_healthcare
+      distinct: true
+
+  - kind: filter
+    name: filter_dewcp_additional_benefit
+    context_name: read_dm_employee_worker_compensation_plans
+    params:
+      - condition:
+          plan_name = 'additional_benefit_plan_id'
+
+  - kind: select
+    name: select_dewcp_additional_benefit
+    params:
+      columns:
+        employee_id: employee_id_dewcp_additional_benefit
+        plan_name: plan_name_dewcp_additional_benefit
+        plan_value: plan_value_dewcp_additional_benefit
+      distinct: true
+
+  - kind: read_local
+    name: read_dict_currency
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: dict_currency
+
+  - kind: select
+    name: select_dict_currency
+    context_name: read_dict_currency
+    params:
+      columns:
+        workday_value: workday_value_dc
+      distinct: true
+
+  - kind: add
+    name: add_dict_currency
+    context_name: select_dict_currency
+    params:
+      - column: upper_workday_value_dc
+        expression: upper(workday_value_dc)
+
+  - kind: read_local
+    name: read_dict_address_component
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: dict_address_component
+
+# Join data marts
+  - kind: join
+    name: join_dew_dac
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          read_dict_address_component
+        how:
+          left
+        columns:
+          country_id: country_code
+
+  # - kind: add
+  #   name: add_organisation
+  #   context_name: select_organisation
+  #   params:
+  #     - column: supervisory_organisation_id_org
+        # expression: regexp_extract(supervisory_organisation_id_o, '\\d+', 0)
+
+# Join data marts
+  - kind: join
+    name: join_dew_deo
+    context_name: add_dm_employee_worker
+    params:
+      - other:
+          select_organisation
+        how:
+          left
+        columns:
+          supervisory_organisation_id: supervisory_organisation_id_org
+          
+# Join data marts
+  - kind: join
+    name: join_dew_dewcp
+    context_name: add_dm_employee_worker
+    params:
+      - other:
+          select_dewcp_retirement
+        how:
+          left
+        columns:
+          employee_id: employee_id_dewcp_retirement
+      - other:
+          select_dewcp_insurance
+        how:
+          left
+        columns:
+          employee_id: employee_id_dewcp_insurance
+      - other:
+          select_dewcp_healthcare
+        how:
+          left
+        columns:
+          employee_id: employee_id_dewcp_healthcare
+      - other:
+          select_dewcp_additional_benefit
+        how:
+          left
+        columns:
+          employee_id: employee_id_dewcp_additional_benefit
+          
+# Join data marts
+  - kind: join
+    name: join_dew_dd
+    context_name: add_dm_employee_worker
+    params:
+      - other:
+          add_dict_currency
+        how:
+          left
+        columns:
+          upper_currency_id: upper_workday_value_dc
+
+#RECOMP_1.1
+  - kind: add
+    name: add_recomp_1_1
+    context_name: join_dew_deo
+    params:
+      - column: rule_code
+        expression: "'RECOMP_1.1'"
+      - column: check_status
+        expression: if(supervisory_organisation_id IS NULL OR supervisory_organisation_id = '' OR supervisory_organisation_id_org IS NULL OR supervisory_organisation_id_org = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_1_1_final
+    context_name: add_recomp_1_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        supervisory_organisation_id_org: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_2.1
+  - kind: add
+    name: add_recomp_2_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_2.1'"
+      - column: check_status
+        expression: if(department_name IS NULL OR department_name = '', '0', '1')
+      - column: value_checked
+        expression: department_name
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_2_1_final
+    context_name: add_recomp_2_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_4.1
+  - kind: add
+    name: add_recomp_4_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_4.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '',
+                    if(gender_id IS NULL OR gender_id = '', '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_4_1_final
+    context_name: add_recomp_4_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        gender_id: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_5.1
+  - kind: add
+    name: add_recomp_5_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_5.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR (termination_date IS NOT NULL AND termination_date != ''), '',
+                    if(contract_type_id IS NULL OR contract_type_id = '', '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_5_1_final
+    context_name: add_recomp_5_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        contract_type_id: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_6.1
+  - kind: add
+    name: add_recomp_6_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_6.1'"
+      - column: check_status
+        expression: if(position_fte IS NULL OR position_fte = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_6_1_final
+    context_name: add_recomp_6_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        position_fte: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_7.1
+  - kind: add
+    name: add_recomp_7_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_7.1'"
+      - column: check_status
+        expression: if(effective_hire_date IS NULL OR effective_hire_date = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_7_1_final
+    context_name: add_recomp_7_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        effective_hire_date: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_8.1
+  - kind: add
+    name: add_recomp_8_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_8.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '',
+                    if(original_hire_date IS NULL OR original_hire_date = '', '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_8_1_final
+    context_name: add_recomp_8_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        original_hire_date: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_9.1
+  - kind: add
+    name: add_recomp_9_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_9.1'"
+      - column: check_status
+        expression: IF(worker_type_id != 'Employee' OR contract_type_id IN ('EMPLOYEE_CONTRACT_TYPE_GBL_INDEFINITE',
+                                                                            'EMPLOYEE_CONTRACT_TYPE_BGR_PERM_CONTRACT_WITH_PROBATION',
+                                                                            'EMPLOYEE_CONTRACT_TYPE_AUT_WORK_CONTRACT',
+                                                                            'EMPLOYEE_CONTRACT_TYPE_POL_REPLACEMENT_CONTRACT')
+                    OR contract_type_id IS NULL OR is_international_assignee = '1', '',
+                    IF(contract_end_date IS NULL, '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_9_1_final
+    context_name: add_recomp_9_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        contract_end_date: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_10.1
+  - kind: add
+    name: add_recomp_10_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_10.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '',
+                    if(date_of_birth IS NULL OR date_of_birth = '', '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_10_1_final
+    context_name: add_recomp_10_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        date_of_birth: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_11.1
+  - kind: add
+    name: add_recomp_11_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_11.1'"
+      - column: check_status
+        expression: if(employee_id IS NULL OR employee_id = '', '0', '1')
+      - column: object_id
+        expression: employee_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_11_1_final
+    context_name: add_recomp_11_1
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        employee_id: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_12.1
+  - kind: add
+    name: add_recomp_12_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_12.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '',
+                    if(pay_rate_type_id IS NULL OR pay_rate_type_id = '', '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_12_1_final
+    context_name: add_recomp_12_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        pay_rate_type_id: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_13.2
+  - kind: add
+    name: add_recomp_13_2
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_13.2'"
+      - column: check_status
+        expression: if(position_name IS NULL OR position_name = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_13_2_final
+    context_name: add_recomp_13_2
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        position_name: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_14.1
+  - kind: add
+    name: add_recomp_14_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_14.1'"
+      - column: check_status
+        expression: if(position_id IS NULL OR position_id = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_14_1_final
+    context_name: add_recomp_14_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        position_id: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_16.1
+  - kind: add
+    name: add_recomp_16_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_16.1'"
+      - column: check_status
+        expression: if(sub_department_name IS NULL OR sub_department_name = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_16_1_final
+    context_name: add_recomp_16_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        sub_department_name: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_17.1
+  - kind: add
+    name: add_recomp_17_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_17.1'"
+      - column: check_status
+        expression: if(country_id NOT IN ('GR', 'CZ', 'SK', 'EG', 'AM', 'UA', 'MK'), '',
+                    if(position_title_local IS NULL OR position_title_local = '', '0', '1'))
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_17_1_final
+    context_name: add_recomp_17_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        position_title_local: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_18.1
+  - kind: add
+    name: add_recomp_18_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_18.1'"
+      - column: check_status
+        expression: if(job_profile_id IS NULL OR job_profile_id = '', '0', '1')
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_18_1_final
+    context_name: add_recomp_18_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        job_profile_id: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_19.1
+  - kind: add
+    name: add_recomp_19_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_19.1'"
+      - column: check_status
+        expression: if(location_id IS NULL OR location_id = '', '0', '1')
+      - column: value_checked
+        expression: location_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_19_1_final
+    context_name: add_recomp_19_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_20.1
+  - kind: add
+    name: add_recomp_20_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_20.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(position_time_type_id IS NULL OR position_time_type_id = '', '0', '1'))
+      - column: value_checked
+        expression: position_time_type_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_20_1_final
+    context_name: add_recomp_20_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_21.1
+  - kind: add
+    name: add_recomp_21_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_21.1'"
+      - column: check_status
+        expression: if(scheduled_weekly_hours IS NULL OR scheduled_weekly_hours = '', '0', '1')
+      - column: value_checked
+        expression: scheduled_weekly_hours
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_21_1_final
+    context_name: add_recomp_21_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_23.1
+  - kind: add
+    name: add_recomp_23_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_23.1'"
+      - column: check_status
+        expression: if(cost_center_id IS NULL OR cost_center_id = '', '0', '1')
+      - column: value_checked
+        expression: cost_center_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_23_1_final
+    context_name: add_recomp_23_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_24.1
+  - kind: add
+    name: add_recomp_24_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_24.1'"
+      - column: check_status
+        expression: if(business_unit_id IS NULL OR business_unit_id = '', '0', '1')
+      - column: value_checked
+        expression: business_unit_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_24_1_final
+    context_name: add_recomp_24_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_25.1
+  - kind: add
+    name: add_recomp_25_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_25.1'"
+      - column: check_status
+        expression: if(company_id IS NULL OR company_id = '', '0', '1')
+      - column: value_checked
+        expression: company_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_25_1_final
+    context_name: add_recomp_25_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_26.1
+  - kind: add
+    name: add_recomp_26_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_26.1'"
+      - column: check_status
+        expression: if(employee_sub_type_id IS NULL OR employee_sub_type_id = '', '0', '1')
+      - column: value_checked
+        expression: employee_sub_type_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_26_1_final
+    context_name: add_recomp_26_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_27.1
+  - kind: add
+    name: add_recomp_27_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_27.1'"
+      - column: check_status
+        expression: if(employee_group_id IS NULL OR employee_group_id = '' or employee_sub_group_id IS NULL OR employee_sub_group_id = '', '0', '1')
+      - column: value_checked
+        expression: concat(employee_group_id, '_', employee_sub_group_id)
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_27_1_final
+    context_name: add_recomp_27_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_33.1
+  - kind: add
+    name: add_recomp_33_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_33.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(age IS NULL OR age = '', '0', '1'))
+      - column: value_checked
+        expression: age
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_33_1_final
+    context_name: add_recomp_33_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_34.1
+  - kind: add
+    name: add_recomp_34_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_34.1'"
+      - column: check_status
+        expression: IF((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR country_id NOT IN ('BA','HR','CZ','NG','IE','MK','PL','RO','SK','SI','UA','GB','FI'), '',
+                      IF(disability_id IS NULL OR disability_id = '', '0', '1'))
+      - column: value_checked
+        expression: disability_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_34_1_final
+    context_name: add_recomp_34_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_35.1
+  - kind: add
+    name: add_recomp_35_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_35.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') 
+                      OR country_id NOT IN ('EG', 'IE', 'NG', 'MK', 'CH', 'GB'), '', 
+                    if(religion_id IS NULL OR religion_id = '', '0', '1'))
+      - column: value_checked
+        expression: religion_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_35_1_final
+    context_name: add_recomp_35_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_36.1
+  - kind: add
+    name: add_recomp_36_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_36.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') 
+                      OR country_id NOT IN ('AT', 'CY', 'EG', 'GR', 'FI', 'MD', 'NL', 'RO', 'CH'), '', 
+                    if(marital_status_id IS NULL OR marital_status_id = '', '0', '1'))
+      - column: value_checked
+        expression: marital_status_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_36_1_final
+    context_name: add_recomp_36_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_37.1
+  - kind: add
+    name: add_recomp_37_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_37.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(citizenship_status_id IS NULL OR citizenship_status_id = '', '0', '1'))
+      - column: value_checked
+        expression: citizenship_status_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_37_1_final
+    context_name: add_recomp_37_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_38.1
+  - kind: add
+    name: add_recomp_38_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_38.1'"
+      - column: check_status
+        expression: if(first_name IS NULL OR first_name = '', '0', '1')
+      - column: value_checked
+        expression: first_name
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_38_1_final
+    context_name: add_recomp_38_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_39.1
+  - kind: add
+    name: add_recomp_39_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_39.1'"
+      - column: check_status
+        expression: if(last_name IS NULL OR last_name = '', '0', '1')
+      - column: value_checked
+        expression: last_name
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_39_1_final
+    context_name: add_recomp_39_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_41.1
+  - kind: add
+    name: add_recomp_41_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_41.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') 
+                      OR country_id NOT IN ('AM', 'BA', 'BG', 'HR', 'CY', 'CZ', 'EG', 'EE', 'GR', 'HU', 'IT', 'XK', 'LV', 'LT', 'ME', 'NL', 'NG', 'MK', 'PL', 'RS', 'SK', 'SI', 'UA', 'GB'), '',
+                    if(first_name_local IS NULL OR first_name_local = '', '0', '1'))
+      - column: value_checked
+        expression: first_name_local
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_41_1_final
+    context_name: add_recomp_41_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_42.1
+  - kind: add
+    name: add_recomp_42_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_42.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '')
+                      OR country_id NOT IN ('AM', 'BA', 'BG', 'HR', 'CY', 'CZ', 'EG', 'EE', 'GR', 'HU', 'IT', 'XK', 'LV', 'LT', 'ME', 'NL', 'NG', 'MK', 'PL', 'RS', 'SK', 'SI', 'UA', 'GB'), '',
+                    if(last_name_local IS NULL OR last_name_local = '', '0', '1'))
+      - column: value_checked
+        expression: last_name_local
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_42_1_final
+    context_name: add_recomp_42_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_44.1
+  - kind: add
+    name: add_recomp_44_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_44.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(national_id_type_id IS NULL OR national_id_type_id = '', '0', '1'))
+      - column: value_checked
+        expression: national_id_type_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_44_1_final
+    context_name: add_recomp_44_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_45.1
+  - kind: add
+    name: add_recomp_45_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_45.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') 
+                      OR country_id NOT IN ('AM', 'BA', 'HR', 'CY', 'GR', 'ME', 'NL', 'IE', 'RS', 'CH', 'GB'), '', 
+                    if(government_type_id IS NULL OR government_type_id = '', '0', '1'))
+      - column: value_checked
+        expression: government_type_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_45_1_final
+    context_name: add_recomp_45_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_46.1
+  - kind: add
+    name: add_recomp_46_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_46.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR country_id NOT IN ('AM', 'BA', 'AT', 'HR', 'GR', 'SI', 'NL', 'NG', 'IE', 'CY', 'CH', 'GB','EE','IT','LV','LT','PL', 'RO', 'FI'), '', if(visa_type_id IS NULL OR visa_type_id = '', '0', '1'))
+      - column: value_checked
+        expression: visa_type_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_46_1_final
+    context_name: add_recomp_46_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_48.1
+  - kind: add
+    name: add_recomp_48_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_48.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(omada_id IS NULL OR omada_id = '', '0', '1'))
+      - column: value_checked
+        expression: omada_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_48_1_final
+    context_name: add_recomp_48_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_93.1
+  - kind: add
+    name: add_recomp_93_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_93.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(payroll_id IS NULL OR payroll_id = '', '0', '1'))
+      - column: value_checked
+        expression: payroll_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_93_1_final
+    context_name: add_recomp_93_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_49.1
+  - kind: add
+    name: add_recomp_49_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_49.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR (department_name IS NULL OR department_name = ''), '', 
+                       if((business_unit_id = 'CUSTOM_ORG_BU_CSC' OR department_name = 'DTPS') AND (internal_order_number IS NULL OR internal_order_number = ''), '0', 
+                       if((business_unit_id = 'CUSTOM_ORG_BU_CSC' OR department_name = 'DTPS') AND (internal_order_number IS NOT NULL AND internal_order_number != ''), '1', '')))
+      - column: value_checked
+        expression: internal_order_number
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_49_1_final
+    context_name: add_recomp_49_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_50.1
+  - kind: add
+    name: add_recomp_50_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_50.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', if(preferred_communication_language IS NULL OR preferred_communication_language = '', '0', '1'))
+      - column: value_checked
+        expression: preferred_communication_language
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_50_1_final
+    context_name: add_recomp_50_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_51.1
+  - kind: add
+    name: add_recomp_51_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_51.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR country_id = 'PL', '', 
+                    if(home_address IS NULL OR home_address = '', '0', '1'))
+      - column: value_checked
+        expression: home_address
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_51_1_final
+    context_name: add_recomp_51_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_52.1
+  - kind: add
+    name: add_recomp_52_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_52.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', 
+                    if(home_country_id IS NULL OR home_country_id = '', '0', '1'))
+      - column: value_checked
+        expression: home_country_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_52_1_final
+    context_name: add_recomp_52_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_53.1
+  - kind: add
+    name: add_recomp_53_1
+    context_name: join_dew_dac
+    params:
+      - column: rule_code
+        expression: "'RECOMP_53.1'"
+      - column: check_status
+        expression: IF(worker_type_id IS NULL OR worker_type_id = '' OR worker_type_id != 'Employee' OR region_required = 'No', '',
+                    IF(home_region_id IS NULL OR home_region_id = '', '0', '1'))
+      - column: value_checked
+        expression: home_region_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_53_1_final
+    context_name: add_recomp_53_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_54.1
+  - kind: add
+    name: add_recomp_54_1
+    context_name: join_dew_dac
+    params:
+      - column: rule_code
+        expression: "'RECOMP_54.1'"
+      - column: check_status
+        expression: IF(worker_type_id IS NULL OR worker_type_id = '' OR worker_type_id != 'Employee' OR postal_code_required = 'No', '',
+                    IF(home_postal_code IS NULL OR home_postal_code = '', '0', '1'))
+      - column: value_checked
+        expression: home_postal_code
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_54_1_final
+    context_name: add_recomp_54_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_55.1
+  - kind: add
+    name: add_recomp_55_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_55.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR (job_profile_id NOT LIKE '%Business_Developer%' AND compensation_grade_value < '10'), '',
+                    if(work_phone_number IS NULL OR work_phone_number = '', '0', '1'))
+      - column: value_checked
+        expression: work_phone_number
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_55_1_final
+    context_name: add_recomp_55_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_56.1
+  - kind: add
+    name: add_recomp_56_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_56.1'"
+      - column: check_status
+        expression: if(work_email_address IS NULL OR work_email_address = '', '0', '1')
+      - column: value_checked
+        expression: work_email_address
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_56_1_final
+    context_name: add_recomp_56_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_57.1
+  - kind: add
+    name: add_recomp_57_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_57.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', 
+                    if(emergency_contact IS NULL OR emergency_contact = '', '0', '1'))
+      - column: value_checked
+        expression: emergency_contact
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_57_1_final
+    context_name: add_recomp_57_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_58.1
+  - kind: add
+    name: add_recomp_58_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_58.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR country_id IN ('UA', 'BG'), '', 
+                    if(payment_election_id IS NULL OR payment_election_id = '', '0', '1'))
+      - column: value_checked
+        expression: payment_election_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_58_1_final
+    context_name: add_recomp_58_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_59.1
+  - kind: add
+    name: add_recomp_59_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_59.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', 
+                    if(pay_group_id IS NULL OR pay_group_id = '', '0', '1'))
+      - column: value_checked
+        expression: pay_group_id
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_59_1_final
+    context_name: add_recomp_59_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_60.1
+  - kind: add
+    name: add_recomp_60_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_60.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', 
+                    if(time_in_company IS NULL OR time_in_company = '', '0', '1'))
+      - column: value_checked
+        expression: time_in_company
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_60_1_final
+    context_name: add_recomp_60_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_61.1
+  - kind: add
+    name: add_recomp_61_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_61.1'"
+      - column: check_status
+        expression: IF((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', IF(time_in_job_profile IS NULL OR time_in_job_profile = '', '0', '1'))
+      - column: value_checked
+        expression: time_in_job_profile
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_61_1_final
+    context_name: add_recomp_61_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_63.1
+  - kind: add
+    name: add_recomp_63_1
+    context_name: join_dew_dd
+    params:
+      - column: rule_code
+        expression: "'RECOMP_63.1'"
+      - column: check_status
+        expression: IF((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = ''), '', IF(contract_status_id IS NULL OR contract_status_id = '', '0', '1'))
+      - column: value_checked
+        expression: contract_status_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_63_1_final
+    context_name: add_recomp_63_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_65.1
+  - kind: add
+    name: add_recomp_65_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_65.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR country_id NOT IN ('AT', 'BG', 'HR', 'EG', 'FI', 'NG', 'RO', 'RS', 'SI'), '', if(union_id IS NULL OR union_id = '', '0', '1'))
+      - column: value_checked
+        expression: union_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_65_1_final
+    context_name: add_recomp_65_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_66.1
+  - kind: add
+    name: add_recomp_66_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_66.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR country_id NOT IN ('AT','BG','HR','CY','FI','GR','IE','IT','KV','ME','NG','RS','SI'), '', if(collective_agreement_id IS NULL OR collective_agreement_id = '', '0', '1'))
+      - column: value_checked
+        expression: collective_agreement_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_66_1_final
+    context_name: add_recomp_66_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_67.1
+  - kind: add
+    name: add_recomp_67_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_67.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR contract_status_id != 'CONTRACT_STATUS_GBL_CLOSED' OR contract_status_id IS NULL OR contract_status_id = '', '', 
+                    if(termination_reason_id IS NULL OR termination_reason_id = '', '0', '1'))
+      - column: value_checked
+        expression: termination_reason_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_67_1_final
+    context_name: add_recomp_67_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_70.1
+  - kind: add
+    name: add_recomp_70_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_70.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '', '',
+                    if(UPPER(job_profile_id) IN ('JOB_PROFILE_CL_DIGITAL_TECHNOLOGY_PLATFORM_DIRECTOR', 'JOB_PROFILE_BU_DIGITAL_TECHNOLOGY_PLATFORM_DIRECTOR', 'JOB_PROFILE_BU_SUPPLY_CHAIN_DIRECTOR') AND (matrix_organisation_reference_id IS NULL OR matrix_organisation_reference_id = ''), '0', 
+                    if(UPPER(job_profile_id) IN ('JOB_PROFILE_CL_DIGITAL_TECHNOLOGY_PLATFORM_DIRECTOR', 'JOB_PROFILE_BU_DIGITAL_TECHNOLOGY_PLATFORM_DIRECTOR', 'JOB_PROFILE_BU_SUPPLY_CHAIN_DIRECTOR') AND matrix_organisation_reference_id IS NOT NULL AND matrix_organisation_reference_id != '', '1', '')))
+      - column: value_checked
+        expression: matrix_organisation_reference_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_70_1_final
+    context_name: add_recomp_70_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_71.1
+  - kind: add
+    name: add_recomp_71_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_71.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR business_unit_id NOT IN ('CUSTOM_ORG_BU_CSC', 'CUSTOM_ORG_BU_BSO'), '', 
+                    if(cost_center_allocation_id IS NULL OR cost_center_allocation_id = '', '0', '1'))
+      - column: value_checked
+        expression: cost_center_allocation_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_71_1_final
+    context_name: add_recomp_71_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_72.1
+  - kind: add
+    name: add_recomp_72_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_72.1'"
+      - column: check_status
+        expression: if(position_id = 'P - 60020021' OR employee_id = '1000023363', '',
+                    if(line_manager_position_id  IS NULL OR line_manager_position_id  = '', '0', '1'))
+      - column: value_checked
+        expression: line_manager_position_id 
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_72_1_final
+    context_name: add_recomp_72_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_73.1
+  - kind: add
+    name: add_recomp_73_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_73.1'"
+      - column: check_status
+        expression: if(position_id = 'P - 60020021' OR employee_id = '1000023363', '',
+                    if(line_manager_emloyee_id  IS NULL OR line_manager_emloyee_id  = '', '0', '1'))
+      - column: value_checked
+        expression: line_manager_emloyee_id 
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_73_1_final
+    context_name: add_recomp_73_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_76.1
+  - kind: add
+    name: add_recomp_76_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_76.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR (termination_date IS NOT NULL AND termination_date != ''), '', 
+                    if(salary_plan_id IS NULL OR salary_plan_id = '', '0', '1'))
+      - column: value_checked
+        expression: salary_plan_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_76_1_final
+    context_name: add_recomp_76_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_81.1
+  - kind: add
+    name: add_recomp_81_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_81.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR (termination_date IS NOT NULL AND termination_date != '') OR employee_sub_type_id = 'EMPLOYEE_TYPE_GBL_FLEX_WORKER', '', 
+                    if(compensation_grade_profile_id  IS NULL OR compensation_grade_profile_id  = '', '0', '1'))
+      - column: value_checked
+        expression: compensation_grade_profile_id 
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_81_1_final
+    context_name: add_recomp_81_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+      
+#RECOMP_82.1
+  - kind: add
+    name: add_recomp_82_1
+    context_name: join_dew_dd
+    params:
+      - column: rule_code
+        expression: "'RECOMP_82.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR salary_plan_id IS NULL OR salary_plan_id = '') OR (termination_date IS NOT NULL AND termination_date != ''), '', 
+                    if(currency_id IS NULL OR currency_id = '', '0', '1'))
+      - column: value_checked
+        expression: currency_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_82_1_final
+    context_name: add_recomp_82_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_85.1
+  - kind: add
+    name: add_recomp_85_1
+    context_name: join_dew_dewcp
+    params:
+      - column: rule_code
+        expression: "'RECOMP_85.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR country_id NOT IN ('IT','GR','GB','NG','IE','FI', 'NL', 'PL', 'CH')) OR (termination_date IS NOT NULL AND termination_date != ''), '', 
+                    if(plan_value_dewcp_retirement IS NULL OR plan_value_dewcp_retirement = '', '0', '1'))
+      - column: value_checked
+        expression: plan_value_dewcp_retirement
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_85_1_final
+    context_name: add_recomp_85_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_86.1
+  - kind: add
+    name: add_recomp_86_1
+    context_name: join_dew_dewcp
+    params:
+      - column: rule_code
+        expression: "'RECOMP_86.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR country_id NOT IN ('EG','GR','GB','NG','IE','FI')) OR (termination_date IS NOT NULL AND termination_date != ''), '', 
+                    if(plan_value_dewcp_insurance IS NULL OR plan_value_dewcp_insurance = '', '0', '1'))
+      - column: value_checked
+        expression: plan_value_dewcp_insurance
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_86_1_final
+    context_name: add_recomp_86_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_87.1
+  - kind: add
+    name: add_recomp_87_1
+    context_name: join_dew_dewcp
+    params:
+      - column: rule_code
+        expression: "'RECOMP_87.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR country_id NOT IN ('AM','BA','BG','HR','CY','EG','GR','HU','IT','EG','IE','GB','KV','LV','MD','ME','NG','RO','RS','SI','CH','UA')) OR (termination_date IS NOT NULL AND termination_date != ''), '', 
+                    if(plan_value_dewcp_healthcare IS NULL OR plan_value_dewcp_healthcare = '', '0', '1'))
+      - column: value_checked
+        expression: plan_value_dewcp_healthcare
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_87_1_final
+    context_name: add_recomp_87_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_88.1
+  - kind: add
+    name: add_recomp_88_1
+    context_name: join_dew_dewcp
+    params:
+      - column: rule_code
+        expression: "'RECOMP_88.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') 
+                    OR (country_id NOT IN ('AM', 'BA', 'BG', 'HR', 'CY', 'EG', 'GR', 'HU', 'IT', 'EG', 'IE', 'GB', 'KV', 'LV', 'MD', 'ME', 'NG', 'RO', 'RS', 'SI', 'CH', 'UA', 'AT', 'CZ', 'EE', 'FI', 'LT', 'NL', 'MK', 'PL', 'SK') AND is_international_assignee  = '0') 
+                    OR (termination_date IS NOT NULL AND termination_date != '')
+                    OR (is_on_leave = '1'), '', 
+                    if(plan_value_dewcp_additional_benefit IS NULL OR plan_value_dewcp_additional_benefit = '', '0', '1'))
+      - column: value_checked
+        expression: plan_value_dewcp_additional_benefit
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_88_1_final
+    context_name: add_recomp_88_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_91.1
+  - kind: add
+    name: add_recomp_91_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_91.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') OR (country_id IN ('AT', 'CZ', 'EG', 'HU', 'PL', 'SK') AND is_international_assignee  = '0'), '', 
+                       if(absence_balance IS NULL OR absence_balance = '', '0', '1'))
+      - column: value_checked
+        expression: absence_balance
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_91_1_final
+    context_name: add_recomp_91_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true        
+
+#RECOMP_92.1
+  - kind: add
+    name: add_recomp_92_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_92.1'"
+      - column: check_status
+        expression: if((worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '') AND country_id NOT IN ('MK', 'UA', 'EG'), '', if(scheduled_work_calendar_id IS NULL OR scheduled_work_calendar_id = '', '0', '1'))
+      - column: value_checked
+        expression: scheduled_work_calendar_id
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_92_1_final
+    context_name: add_recomp_92_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_94.1
+  - kind: add
+    name: add_recomp_94_1
+    context_name: read_dm_employee_worker
+    params:
+      - column: rule_code
+        expression: "'RECOMP_94.1'"
+      - column: check_status
+        expression: if(worker_type_id != 'Employee' OR worker_type_id IS NULL OR worker_type_id = '' OR (termination_date IS NOT NULL AND termination_date != '') OR employee_sub_type_id = 'EMPLOYEE_TYPE_GBL_FLEX_WORKER', '', 
+                    if(compensation_grade_id  IS NULL OR compensation_grade_id  = '', '0', '1'))
+      - column: value_checked
+        expression: compensation_grade_id 
+      - column: detailed_message
+        expression: "''"
+        
+  - kind: select
+    name: select_recomp_94_1_final
+    context_name: add_recomp_94_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_96.1
+  - kind: join
+    name: join_dew_det
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_employee_talent
+        how:
+          left
+        columns:
+          employee_id: global_id
+
+  - kind: add
+    name: add_recomp_96_1
+    context_name: join_dew_det
+    params:
+      - column: rule_code
+        expression: "'RECOMP_96.1'"
+      - column: check_status
+        expression: CASE WHEN management_level <> 'Supporters' AND worker_type_id = 'Employee' AND effective_hire_date <= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 Year' THEN CASE WHEN performance_rating IS NOT NULL THEN 1 ELSE 0 END ELSE ''END
+      - column: value_checked
+        expression: performance_rating
+      - column: detailed_message
+        expression: "''"
+      
+  - kind: select
+    name: select_recomp_96_1_final
+    context_name: add_recomp_96_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_97.1
+
+  - kind: select
+    name: select_dm_employee_career_history_start_date
+    context_name: read_dm_employee_career_history
+    params:
+      columns:
+        employee_id: employee_id_dech
+        start_date: start_date
+      distinct: true
+
+  - kind: join
+    name: join_dew_dech
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_employee_career_history_start_date
+        how:
+          left
+        columns:
+          employee_id: employee_id_dech
+
+  - kind: filter
+    name: filter_recomp_97_1
+    context_name: join_dew_dech
+    params:
+      - condition: effective_hire_date >= start_date
+
+  - kind: add
+    name: add_recomp_97_1
+    context_name: filter_recomp_97_1
+    params:
+      - column: rule_code
+        expression: "'RECOMP_97.1'"
+      - column: check_status
+        expression: CASE WHEN worker_type_id != 'Employee' 
+                      OR worker_type_id IS NULL 
+                      OR employee_id IS NULL 
+                      OR management_level IS NULL 
+                      OR management_level = 'Supporters' THEN '' 
+                    WHEN employee_id_dech IS NOT NULL THEN 1 ELSE 0 END
+      - column: value_checked
+        expression: employee_id_dech
+      - column: detailed_message
+        expression: "''"
+ 
+  - kind: select
+    name: select_recomp_97_1_final
+    context_name: add_recomp_97_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true 
+
+#RECOMP_98.1
+  - kind: add
+    name: add_dm_career_history_recomp98
+    context_name: read_dm_employee_career_history
+    params:
+      - column: row_num
+        expression: ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY start_date)
+      - column: prev_end_date
+        expression: LAG(end_date) OVER (PARTITION BY employee_id ORDER BY start_date)
+      - column: next_end_date
+        expression: LEAD(end_date) OVER (PARTITION BY employee_id ORDER BY start_date)
+
+  - kind: select
+    name: select_dm_career_history_recomp98
+    context_name: add_dm_career_history_recomp98
+    params:
+      columns:
+        employee_id: employee_id
+        start_date: start_date
+        end_date: end_date
+        job_title: job_title
+        row_num: row_num
+        prev_end_date: prev_end_date
+        next_end_date: next_end_date
+      distinct: false
+
+  - kind: join
+    name: join_dew_overlap_check
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_career_history_recomp98
+        how:
+          left
+        columns:
+          employee_id: employee_id
+
+  - kind: add
+    name: add_recomp_98_1
+    context_name: join_dew_overlap_check
+    params:
+      - column: rule_code
+        expression: "'RECOMP_98.1'"
+      - column: overlap_flag
+        expression: if(row_num = 1, 0, if(end_date IS NULL AND next_end_date IS NOT NULL, 1, if(prev_end_date IS NOT NULL AND start_date <= prev_end_date, 1, 0)))
+      - column: total_overlaps
+        expression: SUM(overlap_flag) OVER (PARTITION BY employee_id)
+      - column: check_status
+        expression: if(worker_type_id <> 'Employee' OR worker_type_id IS NULL OR employee_id IS NULL, '', if(total_overlaps > 0, 0, 1))
+      - column: value_checked
+        expression: job_title
+      - column: detailed_message
+        expression: ''''''
+
+  - kind: select
+    name: select_recomp_98_1_final
+    context_name: add_recomp_98_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true
+
+#RECOMP_99.1  
+  - kind: join
+    name: join_dew_dee
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_employee_education_employee_id
+        how:
+          left
+        columns:
+          employee_id: employee_id_dee
+
+  - kind: add
+    name: add_recomp_99_1
+    context_name: join_dew_dee
+    params:
+      - column: rule_code
+        expression: "'RECOMP_99.1'"
+      - column: check_status
+        expression: CASE WHEN worker_type_id != 'Employee' 
+                      OR worker_type_id IS NULL 
+                      OR management_level IS NULL 
+                      OR management_level = 'Supporters' THEN '' 
+                    WHEN employee_id_dee IS NOT NULL THEN 1 ELSE 0 END
+      - column: value_checked
+        expression: employee_id
+      - column: detailed_message
+        expression: "''"
+ 
+  - kind: select
+    name: select_recomp_99_1_final
+    context_name: add_recomp_99_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true  
+
+#RECOMP_102.1 
+  - kind: join
+    name: join_dew_dee_school_ref_id
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_employee_education_school_reference_id
+        how:
+          left
+        columns:
+          employee_id: employee_id_dee
+
+  - kind: add
+    name: add_recomp_102_1
+    context_name: join_dew_dee_school_ref_id
+    params:
+      - column: rule_code
+        expression: "'RECOMP_102.1'"
+      - column: check_status
+        expression: CASE WHEN (worker_type_id != 'Employee' OR worker_type_id IS NULL OR management_level = 'Supporters' OR employee_id_dee IS NULL) THEN '' WHEN school_reference_id IS NOT NULL THEN '1' ELSE '0' END
+      - column: value_checked
+        expression: school_reference_id
+      - column: detailed_message
+        expression: "''"
+ 
+  - kind: select
+    name: select_recomp_102_1_final
+    context_name: add_recomp_102_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true  
+
+#RECOMP_103.1 
+  - kind: join
+    name: join_dew_dee_field_of_study_ref_id
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_employee_education_field_of_study_ref_id
+        how:
+          left
+        columns:
+          employee_id: employee_id_dee
+
+  - kind: add
+    name: add_recomp_103_1
+    context_name: join_dew_dee_field_of_study_ref_id
+    params:
+      - column: rule_code
+        expression: "'RECOMP_103.1'"
+      - column: check_status
+        expression: CASE WHEN (worker_type_id != 'Employee' OR worker_type_id IS NULL OR management_level = 'Supporters' OR employee_id_dee IS NULL) THEN '' WHEN field_of_study_ref_id IS NOT NULL THEN '1' ELSE '0' END
+      - column: value_checked
+        expression: field_of_study_ref_id
+      - column: detailed_message
+        expression: "''"
+
+  - kind: select
+    name: select_recomp_103_1_final
+    context_name: add_recomp_103_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true  
+
+#RECOMP_104.1
+  - kind: select
+    name: select_dm_employee_career_history_location
+    context_name: read_dm_employee_career_history
+    params:
+      columns:
+        employee_id: employee_id_dech
+        location: location_dech
+      distinct: true 
+
+  - kind: join
+    name: join_dew_dech_location
+    context_name: read_dm_employee_worker
+    params:
+      - other:
+          select_dm_employee_career_history_location
+        how:
+          left
+        columns:
+          employee_id: employee_id_dech
+
+  - kind: add
+    name: add_recomp_104_1
+    context_name: join_dew_dech_location
+    params:
+      - column: rule_code
+        expression: "'RECOMP_104.1'"
+      - column: check_status
+        expression: CASE WHEN (worker_type_id != 'Employee' OR worker_type_id IS NULL OR management_level = 'Supporters' OR employee_id_dech IS NULL) THEN '' WHEN location_dech IS NOT NULL THEN '1' ELSE '0' END
+      - column: value_checked
+        expression: location_dech
+      - column: detailed_message
+        expression: "''"
+ 
+  - kind: select
+    name: select_recomp_104_1_final
+    context_name: add_recomp_104_1
+    params:
+      columns:
+        rule_code: rule_code
+        employee_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        country_id: country_code
+        location_id: location_code
+        detailed_message: detailed_message
+      distinct: true 
+
+  - kind: union
+    name: union_worker_completeness
+    context_name: select_recomp_1_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_2_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_4_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_5_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_6_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_7_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_8_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_9_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_10_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_11_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_12_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_13_2_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_14_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_16_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_17_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_18_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_19_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_20_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_21_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_23_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_24_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_25_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_26_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_27_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_33_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_34_1_final
+      
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_35_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_36_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_37_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_38_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_39_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_41_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_42_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_44_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_45_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_46_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_48_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_93_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_49_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_50_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_51_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_52_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_53_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_54_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_55_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_56_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_57_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_58_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_59_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_60_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_61_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_63_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_65_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_66_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_70_1_final
+      
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_71_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_72_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_73_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_76_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_81_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_82_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_85_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_86_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_87_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_88_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_91_1_final
+      
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_92_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_94_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_96_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_97_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_98_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_99_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_102_1_final
+
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_103_1_final
+      
+  - kind: union
+    name: union_worker_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_recomp_104_1_final
+
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        location_code: location_code
+        detailed_message: detailed_message
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_employee_worker_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_worker_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

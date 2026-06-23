@@ -1,0 +1,61 @@
+transform:
+  name: dm_customer_territory
+  operations:
+
+# Read zbut0000p3vvi9
+
+  - kind: read_dataio
+    name: read_zbut0000p3vvi9
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: customer
+      object_name: zbut0000p3vvi9
+      schema_version: v1
+
+  - kind: filter
+    name: filter_zbut0000p3vvi9
+    context_name: read_zbut0000p3vvi9
+    params:
+      - condition:
+          substring(date_to, 1,8) = "99991231"
+
+  - kind: add
+    name: add_substr
+    context_name: filter_zbut0000p3vvi9
+    params:
+      - column: territory_validity_from
+        expression: to_date(substring(date_from, 1,8),"yyyyMMdd")
+      - column: territory_validity_to
+        expression: to_date(substring(date_to, 1,8),"yyyyMMdd")
+
+  - kind: select
+    name: select_ihpa
+    context_name: add_substr
+    params:
+      columns:
+        partner: customer_code
+        type: territory_type
+        terrid: territory_code
+        territory_validity_from: territory_validity_from
+        territory_validity_to: territory_validity_to
+        sap_cluster: sap_cluster
+
+  - kind: write_dataio
+    name: write_dm_customer_territory
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_territory
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

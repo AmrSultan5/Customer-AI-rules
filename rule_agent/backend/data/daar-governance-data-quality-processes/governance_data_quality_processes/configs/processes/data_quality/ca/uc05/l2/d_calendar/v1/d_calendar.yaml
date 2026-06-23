@@ -1,0 +1,51 @@
+transform:
+  name: d_calendar
+  operations:
+
+
+  - kind: read_dataio
+    name: src_calendar
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: curated
+        storage_id: "{{dataio.storage_id}}"
+      namespace: local
+      object_name: date
+      schema_version: v2
+      source: ppaa_user_input
+
+  # - kind: add
+  #   name: add_openhub
+  #   params:
+  #     - column: openhub
+  #       expression: "lower(country)"
+
+  - name: read_and_transform_calendar
+    kind: governance_data_quality_processes.custom_operations.uc05.d_calendar.DCalendarOperation
+    params:
+
+  # - kind: cast
+  #   name: cast_d_calendar
+  #   params:
+  #     - column: week
+  #       to: string
+
+
+
+  - kind: write_dataio
+    name: write_calendar
+    context_name: src_calendar_target
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: uc05
+      namespace: l2
+      object_name: d_calendar
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: overwrite

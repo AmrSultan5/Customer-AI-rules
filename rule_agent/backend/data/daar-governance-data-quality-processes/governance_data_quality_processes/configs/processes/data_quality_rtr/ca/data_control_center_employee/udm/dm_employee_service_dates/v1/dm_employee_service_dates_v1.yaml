@@ -1,0 +1,71 @@
+transform:
+  name: dm_employee_service_dates
+  operations:
+  - kind: read_dataio
+    name: read_service_dates
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: service_dates
+      schema_version: v1
+
+  - kind: add
+    name: add_cols
+    context_name: read_service_dates
+    params:
+      - column: object_type
+        expression: '"Employee"'
+
+  - kind: cast
+    name: cast_cols
+    context_name: add_cols
+    params:
+      - column: object_type
+        to: string
+      - column: continuous_service_date
+        to: date
+      - column: hire_date
+        to: date
+      - column: original_hire_date
+        to: date
+      - column: time_off_service_date
+        to: date
+      - column: worker_id
+        to: string
+      - column: worker_type
+        to: string
+
+  - kind: select
+    name: select_service_dates_columns
+    context_name: cast_cols
+    params:
+      columns:
+        object_type: object_type
+        continuous_service_date: continuous_service_date
+        hire_date: hire_date
+        original_hire_date: original_hire_date
+        time_off_service_date: time_off_service_date
+        worker_id: worker_id
+        worker_type: worker_type
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_employee_service_dates
+    context_name: select_service_dates_columns
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_service_dates
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: partition

@@ -1,0 +1,88 @@
+transform:
+  name: external_products_universe_pack_size
+  operations:
+
+# Read epu after basic load
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+# extract volume and weight from product_name_cleansed
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.volume_extract.VolumeExtractOperation
+    name: extract_pack_size_epu
+    context_name: read_epu
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.volume_extract_config.VolumeExtractOperationConfig
+    params:
+      input_value: product_name_cleansed
+      output_col_name: product_name_from_cleansed
+
+  - kind: add
+    name: add_pack_size_probability
+    context_name: extract_pack_size_epu
+    params:
+      - column: pack_size_name
+        overwrite: true
+        expression: product_name_from_cleansed_volume
+      - column: pack_size_probability
+        overwrite: true
+        expression: IF (pack_size_name = '', 0, 1)
+
+  - kind: select
+    name: select_epu_with_pack_size
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+      distinct: true
+      
+  - kind: cast
+    name: cast_to_decimal
+    params:
+      - column: pack_size_probability
+        to: decimal(10,4)
+
+  - kind: write_dataio
+    name: write_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

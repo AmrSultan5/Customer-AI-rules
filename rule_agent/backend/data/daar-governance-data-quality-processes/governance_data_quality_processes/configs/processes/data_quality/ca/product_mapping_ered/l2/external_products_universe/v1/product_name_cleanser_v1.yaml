@@ -1,0 +1,349 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: external_products_universe_product_name_cleanser
+  operations:
+
+# Read spu after basic load
+# sap_products_universe - spu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+#cleansing rules
+#convert all characters to lowercase
+  - kind: add
+    name: add_convert_to_lowercase
+    context_name: read_epu
+    params:
+      - column: product_name_stage
+        expression: lower(product_name_translated)
+        overwrite: true
+
+#conf data join
+#spu add const value for join
+  - kind: add
+    name: add_const_1_epu
+    context_name: add_convert_to_lowercase
+    params:
+      - column: const_1_epu
+        expression: '''1'''
+
+#read conf data
+  - kind: read_local
+    name: read_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: epu_product_name_cleanser
+
+  - kind: add
+    name: add_const_1_conf_epu_cleanser
+    context_name: read_conf_data
+    params:
+      - column: const_1_conf_epu_cleanser
+        expression: '''1'''
+
+  - kind: add
+    name: add_stuct_conf_epu_cleanser
+    context_name: add_const_1_conf_epu_cleanser
+    params:
+      - column: stuct_conf_epu_cleanser
+        expression: struct(cast(priority as int) as key, source_value as source_val, target_value as target_val)
+
+  - kind: group
+    name: group_stuct_conf_epu_cleanser
+    context_name: add_stuct_conf_epu_cleanser
+    params:
+      - aggs:
+          stuct_conf_epu_cleanser: collect_list 
+        by:
+        - const_1_conf_epu_cleanser
+
+  - kind: add
+    name: add_sort_stuct_conf_epu_cleanser
+    context_name: group_stuct_conf_epu_cleanser
+    params:
+      - column: collect_list_struct_conf_epu_cleanser_sorted
+        expression: array_sort(collect_list_stuct_conf_epu_cleanser)
+
+  - kind: join
+    name: join_conf_epu_cleanser
+    context_name: add_const_1_epu
+    params:
+      - other:
+          add_sort_stuct_conf_epu_cleanser
+        how:
+          inner
+        columns:
+          const_1_epu: const_1_conf_epu_cleanser
+
+  - kind: add
+    name: add_epu_conf_lookup_cleanser
+    context_name: join_conf_epu_cleanser
+    params:
+      - column: product_name_stage
+        expression: reduce(collect_list_struct_conf_epu_cleanser_sorted, lower(product_name_translated), (acc, x) -> regexp_replace(acc, x.source_val, x.target_val))
+        overwrite: true
+
+# transform volume
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.volume_transform.VolumeTransformOperation
+    name: transform_volume_epu
+    context_name: add_epu_conf_lookup_cleanser
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.volume_transform_config.VolumeTransformOperationConfig
+    params:
+      input_value: product_name_stage
+        
+  - kind: add
+    name: add_replace_multi_spaces
+    params:
+      - column: product_name_stage
+        overwrite: true
+        expression: regexp_replace(input_value_transformed, '\\s+', ' ')
+
+  - kind: add
+    name: add_regex_1
+    params:
+      - column: product_name_stage
+        overwrite: true
+        expression: regexp_replace(product_name_stage, '(?<=\\d)\\s+l\\s*', 'l ')
+      - column: product_name_stage
+        overwrite: true
+        expression: regexp_replace(product_name_stage, '(?<=\\d)\\s+ml\\s*', 'ml ')
+      - column: product_name_stage
+        overwrite: true
+        expression: regexp_replace(product_name_stage, '(?<=\\d)\\s+cl\\s*', 'cl ')
+      - column: product_name_stage
+        overwrite: true
+        expression: regexp_replace(product_name_stage, '(?<=\\d)\\s+kg\\s*', 'kg ')
+      - column: product_name_stage
+        overwrite: true
+        expression: regexp_replace(product_name_stage, '(?<=\\d)\\s+g\\s*', 'g ')
+
+  - kind: add
+    name: add_remove_duplicated_words
+    params:
+      - column: product_name_stage
+        overwrite: true
+        expression: ltrim(concat_ws(' ', array_distinct(split(product_name_stage, ' '))))
+
+  - kind: add
+    name: add_regex_2
+    params:
+      - column: product_name_stage
+        overwrite: true
+        expression: "CASE WHEN product_name_stage like '%fanta%' AND 
+                              (product_name_stage like '%free%' OR product_name_stage like '%without%') AND
+                               product_name_stage like '%sugar%' AND
+                               product_name_stage not like '%zero%'
+                          THEN regexp_replace(product_name_stage, 'fanta', 'fanta zero light diet') 
+                          WHEN product_name_stage like '%kinley%' AND 
+                               product_name_stage like '%without%' AND
+                               product_name_stage like '%sugar%' 
+                          THEN regexp_replace(product_name_stage, 'kinley', 'kinley zero light diet') 
+                      ELSE product_name_stage END"
+
+# extract volume and weight from product_name_stage
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.volume_extract.VolumeExtractOperation
+    name: extract_volume_epu_1
+    context_name: add_regex_2
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.volume_extract_config.VolumeExtractOperationConfig
+    params:
+      input_value: product_name_stage
+      output_col_name: product_name_from_stage
+
+  - kind: add
+    name: add_product_name_raw_volume
+    params:
+      - column: product_name_raw_tmp
+        overwrite: true
+        expression: lower(regexp_replace(product_name_raw, ',', '.'))
+
+# extract volume and weight from product_name_raw
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.volume_extract.VolumeExtractOperation
+    name: extract_volume_epu_2
+    context_name: add_product_name_raw_volume
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.volume_extract_config.VolumeExtractOperationConfig
+    params:
+      input_value: product_name_raw_tmp
+      output_col_name: product_name_from_raw
+
+  - kind: add
+    name: add_extract_volume_epu_2
+    params:
+      - column: product_name_from_raw_volume
+        overwrite: true
+        expression: regexp_replace(product_name_from_raw_volume, '(?<=\\d)\\s+(?=\\D)', '')
+        
+  - kind: add
+    name: add_extract_volume_epu_3
+    params:
+      - column: volume
+        overwrite: true
+        expression: "CASE WHEN product_name_from_stage_volume = '' THEN product_name_from_raw_volume ELSE product_name_from_stage_volume END"    
+
+  - kind: add
+    name: add_pack_size_volume_and_unit
+    params:
+      - column: pack_size_volume
+        overwrite: true
+        expression: regexp_extract(volume, '([^a-zA-Z]+)', 0)
+      - column: pack_size_unit
+        overwrite: true
+        expression: regexp_extract(volume, '([a-zA-Z]+)', 0)
+        
+  - kind: add
+    name: add_pack_size_name_fix
+    params:
+      - column: pack_size_name_fix
+        overwrite: true
+        expression: IF (pack_size_unit == 'l', concat(regexp_replace(pack_size_volume * 1000, '\\.0', ''), 'ml'),
+                    IF (pack_size_unit == 'kg', concat(regexp_replace(pack_size_volume * 1000, '\\.0', ''), 'g'),
+                    IF (pack_size_unit == 'cl', concat(regexp_replace(pack_size_volume * 100, '\\.0', ''), 'ml'),
+                    IF (pack_size_unit == '', '', concat(regexp_replace(pack_size_volume, '\\.0', ''), pack_size_unit)))))
+      - column: product_name_stage
+        overwrite: true
+        expression: product_name_from_stage
+
+  - kind: select
+    name: select_epu_with_pack_size_1
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+        pack_size_name_fix: pack_size_name_fix
+      distinct: true
+
+# extract not nedeed volumes and weights from product_name_stage
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.volume_extract.VolumeExtractOperation
+    name: extract_spare_volume_epu
+    context_name: select_epu_with_pack_size_1
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.volume_extract_config.VolumeExtractOperationConfig
+    params:
+      input_value: product_name_stage
+      output_col_name: product_name_from_stage
+
+  - kind: select
+    name: select_epu_with_pack_size_2
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_from_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+        pack_size_name_fix: pack_size_name_fix
+      distinct: true
+
+# extract unit_size product_name_stage
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.sales_unit_extract.SalesUnitExtractOperation
+    name: extract_unit_size_epu
+    context_name: select_epu_with_pack_size_2
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.sales_unit_extract_config.SalesUnitExtractOperationConfig
+    params:
+      input_value: product_name_stage
+      output_col_name: product_name_from_stage
+
+  - kind: add
+    name: add_final_product_name_cleansed
+    params:
+      - column: product_name_cleansed
+        overwrite: true
+        expression: trim(concat(regexp_replace(product_name_from_stage, '\\s+', ' '), ' ', pack_size_name_fix, ' ', product_name_from_stage_sales_unit))
+
+  - kind: select
+    name: select_epu_cleansed_final
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_from_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

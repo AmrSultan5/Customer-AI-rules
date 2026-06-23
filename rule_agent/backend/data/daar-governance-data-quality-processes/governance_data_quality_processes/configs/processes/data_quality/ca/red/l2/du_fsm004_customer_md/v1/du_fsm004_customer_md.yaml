@@ -1,0 +1,866 @@
+
+transform:
+  name: du_fsm004_customer_md
+  operations:
+
+  ## du_fsm004_customer_md
+  - kind: read_local
+    name: read_country_mapping
+    params:
+      location: /mnt/datalake_idq/raw/data_quality/red/country_mapping
+      options:
+        escape: '"'
+        header: true
+        mode: DROPMALFORMED
+        pathGlobFilter: country_mapping.csv
+
+  - kind: select
+    name: select_country_mapping
+    context_name: read_country_mapping
+    params:
+      columns:
+        Country_Code: country_code_cm
+        sales_organization: sales_organization
+        technical_code: technical_code_cm
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_ca_0_cus03_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_cus03_customer
+      schema_version: v1
+
+  - kind: select
+    name: select_ca_0_cus03_customer
+    context_name: read_ca_0_cus03_customer
+    params:
+      columns:
+        bic_credoutlt: red_outlet
+        customer: customer_code
+        sales_off: sales_office
+        sales_grp: sales_group
+        customer_desc: customer_description
+        salesorg: sales_org_code
+        salesorg_desc: sales_org_description
+        bic_csup_cust: order_block_code
+        csup_cust_desc: order_block_description
+        bic_ccustpllv: cpl_code
+        ccustpllv_desc: cpl_description
+        bic_ctrade_ch: trade_channel_code
+        ctrade_ch_desc: trade_channel_description
+        bic_csub_trad: sub_trade_channel_code
+        csub_trad_desc: sub_trade_channel_description
+        bic_c_ccaf: ccaf_code
+        c_ccaf_desc: ccaf_description
+        cbdaasgm1: bdaa_segment_code
+        cbdaasgm1_desc: bdaa_segment_description
+        bic_ccdetgtdr: cde_target_doors_code
+        ccdetgtdr_desc: cde_target_doors_description
+        bic_cterrid: bp_territory_id
+        ccustinc: customer_incentive
+        bic_cfiscper: fiscal_period
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_cacus03pi_customer_pi
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: cacus03pi_customer_pi
+      schema_version: v1
+
+  - kind: select
+    name: select_cacus03pi_customer_pi
+    context_name: read_cacus03pi_customer_pi
+    params:
+      columns:
+        bic_cbdvempl: bd_employee
+        customer: customer
+
+  - kind: read_local
+    name: read_zred_mapping
+    params:
+      location: /mnt/datalake_idq/raw/data_quality/red/zred_mapping
+      options:
+        escape: '"'
+        header: true
+        mode: DROPMALFORMED
+        pathGlobFilter: zred_mapping.csv
+
+  - kind: add
+    name: add_lpad_bdaa_segment
+    params:
+      - column: bdaa_segment_lpad
+        expression: lpad(bdaa_segment, 10, "0")
+
+  - kind: select
+    name: select_zred_mapping
+    params:
+      columns:
+        sales_org: sales_org_zm
+        red_pos: red_pos_zm
+        channel: channel_zm
+        sub_channel: sub_channel_zm
+        ccaf_value: ccaf_value_zm
+        bdaa_segment_lpad: bdaa_segment_zm
+        cpl: cpl_zm
+      distinct: true
+#df6
+  - kind: join
+    name: join_ca_ref_df6
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "cpl_code": "cpl_zm","bdaa_segment_code": "bdaa_segment_zm", "sub_trade_channel_code": "sub_channel_zm"}
+
+  - kind: select
+    name: select_zred_mapping_df6
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+#df5_cpl_bdaa
+  - kind: join
+    name: join_ca_ref_df5_cpl_bdaa
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "cpl_code": "cpl_zm","bdaa_segment_code": "bdaa_segment_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df5_cpl_bdaa
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df6_and_df5_cpl_bdaa
+    context_name: select_zred_mapping_df5_cpl_bdaa
+    params:
+      - other: select_zred_mapping_df6
+        how: left_anti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value", "cpl_code_ca": "cpl","bdaa_segment_code_ca": "bdaa_segment"}
+
+  - kind: union
+    name: union_df6_and_df5_cpl_bdaa
+    context_name: select_zred_mapping_df6
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df6_and_df5_cpl_bdaa
+
+#df5_cpl_sub
+  - kind: join
+    name: join_ca_ref_df5_cpl_sub
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "cpl_code": "cpl_zm","sub_trade_channel_code": "sub_channel_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df5_cpl_sub
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df5_cpl_sub
+    context_name: select_zred_mapping_df5_cpl_sub
+    params:
+      - other: union_df6_and_df5_cpl_bdaa
+        how: leftanti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value", "cpl_code_ca": "cpl","sub_trade_channel_code_ca": "sub_channel"}
+
+
+  - kind: union
+    name: union_df6_and_df5_cpl_sub
+    context_name: union_df6_and_df5_cpl_bdaa
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df5_cpl_sub
+
+#df5_bdaa_sub
+  - kind: join
+    name: join_ca_ref_df5_bdaa_sub
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "bdaa_segment_code": "bdaa_segment_zm","sub_trade_channel_code": "sub_channel_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df5_bdaa_sub
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df5_bdaa_sub
+    context_name: select_zred_mapping_df5_bdaa_sub
+    params:
+      - other: union_df6_and_df5_cpl_sub
+        how: leftanti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value", "bdaa_segment_code_ca": "bdaa_segment","sub_trade_channel_code_ca": "sub_channel"}
+
+
+  - kind: union
+    name: union_df6_and_df5_bdaa_sub
+    context_name: union_df6_and_df5_cpl_sub
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df5_bdaa_sub
+
+#df4_bdaa
+  - kind: join
+    name: join_ca_ref_df4_bdaa
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "bdaa_segment_code": "bdaa_segment_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df4_bdaa
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df4_bdaa
+    context_name: select_zred_mapping_df4_bdaa
+    params:
+      - other: union_df6_and_df5_bdaa_sub
+        how: leftanti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value", "bdaa_segment_code_ca": "bdaa_segment"}
+
+
+  - kind: union
+    name: union_df6_and_df4_bdaa
+    context_name: union_df6_and_df5_bdaa_sub
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df4_bdaa
+
+#df4_sub
+  - kind: join
+    name: join_ca_ref_df4_sub
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "sub_trade_channel_code": "sub_channel_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df4_sub
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df4_sub
+    context_name: select_zred_mapping_df4_sub
+    params:
+      - other: union_df6_and_df4_bdaa
+        how: leftanti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value","sub_trade_channel_code_ca": "sub_channel"}
+
+
+  - kind: union
+    name: union_df6_and_df4_sub
+    context_name: union_df6_and_df4_bdaa
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df4_sub
+
+#df4_cpl
+  - kind: join
+    name: join_ca_ref_df4_cpl
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm", "cpl_code": "cpl_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df4_cpl
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df4_cpl
+    context_name: select_zred_mapping_df4_cpl
+    params:
+      - other: union_df6_and_df4_sub
+        how: leftanti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value","cpl_code_ca": "cpl"}
+
+
+  - kind: union
+    name: union_df6_and_df4_cpl
+    context_name: union_df6_and_df4_sub
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df4_cpl
+#df3
+  - kind: join
+    name: join_ca_ref_df3
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: select_zred_mapping
+        how: inner
+        columns: {"technical_code_cm": "sales_org_zm", "trade_channel_code": "channel_zm",  "ccaf_code": "ccaf_value_zm"}
+
+
+  - kind: select
+    name: select_zred_mapping_df3
+    params:
+      columns:
+        country_code_cm: country_code
+        sales_organization: sales_organization_cm
+        sales_org_zm: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code_ca
+        red_pos_zm: red_pos
+        channel_zm: channel
+        sub_channel_zm: sub_channel
+        ccaf_value_zm: ccaf_value
+        bdaa_segment_zm: bdaa_segment
+        cpl_zm: cpl
+        red_outlet: red_outlet_ca
+        sales_office: sales_office_ca
+        sales_group: sales_group_ca
+        customer_description: customer_description_ca
+        sales_org_code: sales_org_code_ca
+        sales_org_description: sales_org_description_ca
+        order_block_code: order_block_code_ca
+        order_block_description: order_block_description_ca
+        cpl_code: cpl_code_ca
+        cpl_description: cpl_description_ca
+        trade_channel_code: trade_channel_code_ca
+        trade_channel_description: trade_channel_description_ca
+        sub_trade_channel_code: sub_trade_channel_code_ca
+        sub_trade_channel_description: sub_trade_channel_description_ca
+        ccaf_code: ccaf_code_ca
+        ccaf_description: ccaf_description_ca
+        bdaa_segment_code: bdaa_segment_code_ca
+        bdaa_segment_description: bdaa_segment_description_ca
+        cde_target_doors_code: cde_target_doors_code_ca
+        cde_target_doors_description: cde_target_doors_description_ca
+        bp_territory_id: bp_territory_id_ca
+        customer_incentive: customer_incentive_ca
+        fiscal_period: fiscal_period_ca
+      distinct: true
+
+  - kind: join
+    name: join_ca_df3
+    context_name: select_zred_mapping_df3
+    params:
+      - other: union_df6_and_df4_cpl
+        how: leftanti
+        columns: {"technical_code": "sales_org", "trade_channel_code_ca": "channel",  "ccaf_code_ca": "ccaf_value"}
+
+
+  - kind: union
+    name: union_df6_and_df3
+    context_name: union_df6_and_df4_cpl
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_ca_df3
+
+  - kind: join
+    name: join_ca_ref_scope
+    context_name: select_ca_0_cus03_customer
+    params:
+      - other: select_country_mapping
+        how: inner
+        columns: {"sales_org_code": "sales_organization"}
+      - other: union_df6_and_df3
+        how: left
+        columns: {"technical_code_cm": "sales_org", "trade_channel_code": "channel",  "ccaf_code": "ccaf_value", "cpl_code": "cpl","bdaa_segment_code": "bdaa_segment", "sub_trade_channel_code": "sub_channel"}
+
+  - kind: select
+    name: select_scope
+    params:
+      columns:
+        country_code: country_code
+        sales_organization: sales_organization
+        sales_org: sales_org
+        technical_code_cm: technical_code
+        customer_code: customer_code
+        red_pos: red_pos
+        channel: channel
+        sub_channel: sub_channel
+        ccaf_value: ccaf_value
+        bdaa_segment: bdaa_segment
+        cpl: cpl
+        red_outlet_ca: red_outlet
+        sales_office: sales_office
+        sales_group: sales_group
+        customer_description: customer_description
+        sales_org_code: sales_org_code
+        sales_org_description: sales_org_description
+        order_block_code: order_block_code
+        order_block_description: order_block_description
+        cpl_code: cpl_code
+        cpl_description: cpl_description
+        trade_channel_code: trade_channel_code
+        trade_channel_description: trade_channel_description
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_description: sub_trade_channel_description
+        ccaf_code: ccaf_code
+        ccaf_description: ccaf_description
+        bdaa_segment_code: bdaa_segment_code
+        bdaa_segment_description: bdaa_segment_description
+        cde_target_doors_code: cde_target_doors_code
+        cde_target_doors_description: cde_target_doors_description
+        bp_territory_id: bp_territory_id
+        customer_incentive: customer_incentive
+        fiscal_period: fiscal_period
+      distinct: true
+
+
+#join with cacus03pi_customer_pi
+
+  - kind: join
+    name: join_ca_cust_pi
+    context_name: select_scope
+    params:
+      - other: select_cacus03pi_customer_pi
+        how: left
+        columns: {"customer_code": "customer"}
+
+  - kind: cast
+    name: cast_du_fsm004_customer_md
+    params:
+      - column: cde_target_doors_code
+        to: string
+
+  - kind: add
+    name: add_cde_target_doors_code
+    params:
+      - column: cde_target_doors_code_re
+        expression: regexp_replace(cde_target_doors_code, ",", ".")
+
+  - kind: add
+    name: add_cde_target_doors_code_reg
+    params:
+      - column: cde_target_doors_code_regex
+        expression: regexp_extract(cde_target_doors_code, '^[00]+[1-9]*', 0)
+
+  - kind: add
+    name: add_cde_target_doors_code_leading
+    params:
+      - column: cde_target_doors_code_leading
+        expression: "CASE WHEN (cde_target_doors_code_regex != '0' OR cde_target_doors_code_regex != '' ) THEN CAST(cde_target_doors_code_regex AS INT) ELSE cde_target_doors_code_re END"
+
+  - kind: add
+    name: add_cde_target_doors_code_final
+    params:
+      - column: cde_target_doors_code_final
+        expression: "CASE WHEN (cde_target_doors_code_leading == '0' OR cde_target_doors_code_leading == '' OR cde_target_doors_code_leading IS NULL) THEN cde_target_doors_code_re ELSE cde_target_doors_code_leading END"
+
+  - kind: cast
+    name: cast_cde_target_doors_code_final_decimal
+    params:
+      - column: cde_target_doors_code_final
+        to: decimal(38,2)
+
+  - kind: add
+    name: add_du_fsm004_customer_md
+    params:
+      - column: report_code
+        expression: '"fsm004"'
+      - column: report_name
+        expression: '"Customer General Master"'
+      - column: country_code_add
+        expression: lower(country_code)
+      - column: customer_description_add
+        expression: upper(customer_description)
+      - column: sales_org_description_add
+        expression: upper(sales_org_description)
+      - column: order_block_description_add
+        expression: upper(order_block_description)
+      - column: cpl_description_add
+        expression: upper(cpl_description)
+      - column: trade_channel_description_add
+        expression: upper(trade_channel_description)
+      - column: sub_trade_channel_description_add
+        expression: upper(sub_trade_channel_description)
+      - column: ccaf_description_add
+        expression: upper(ccaf_description)
+      - column: bdaa_segment_description_add
+        expression: upper(bdaa_segment_description)
+      - column: cde_target_doors_description_add
+        expression: upper(cde_target_doors_description)
+      - column: red_outlet_suppressed_check
+        expression: "CASE WHEN order_block_code IN ('C', 'DR', 'E', 'F', 'G', 'R', 'S', 'S1', 'S3', 'S4', 'SP', 'SY', 'TS','U') AND (red_outlet = 'X' OR red_outlet = 'W') THEN '0' ELSE '1' END"
+      - column: red_outlet_with_microsegment_check
+        expression: "CASE WHEN (red_outlet = 'X' AND ccaf_value IS NOT NULL AND channel IS NOT NULL AND sales_org IS NOT NULL) THEN '1' WHEN (red_outlet = 'X' AND ccaf_value IS NULL AND channel IS NULL AND sales_org IS NULL) THEN '0' ELSE '' END"
+      - column: microsegment_with_red_outlet_check
+        expression: "CASE WHEN (red_outlet = 'X' AND ccaf_value IS NOT NULL AND channel IS NOT NULL AND sales_org IS NOT NULL) THEN '1' WHEN ((red_outlet != 'X' OR red_outlet IS NULL) AND ccaf_value IS NOT NULL AND channel IS NOT NULL AND sales_org IS NOT NULL) THEN '0' ELSE '' END"
+      - column: red_outlet_cde_doors_check
+        expression: "CASE WHEN (red_outlet = 'X' AND cde_target_doors_code_final >= 0.1) THEN '1' WHEN (red_outlet = 'X' AND (cde_target_doors_code_final < 0.1 OR cde_target_doors_code_final IS NULL)) THEN '0' ELSE '' END"
+
+
+  - kind: add
+    name: add_du_fsm004_customer_md_flags_null
+    params:
+      - column: red_outlet_suppressed_check_null
+        expression: "CASE WHEN red_outlet_suppressed_check IS NOT NULL THEN red_outlet_suppressed_check ELSE '0' END"
+      - column: red_outlet_with_microsegment_check_null
+        expression: "CASE WHEN red_outlet_with_microsegment_check IS NOT NULL THEN red_outlet_with_microsegment_check ELSE '0' END"
+      - column: microsegment_with_red_outlet_check_null
+        expression: "CASE WHEN microsegment_with_red_outlet_check IS NOT NULL THEN microsegment_with_red_outlet_check ELSE '0' END"
+      - column: red_outlet_cde_doors_check_null
+        expression: "CASE WHEN red_outlet_cde_doors_check IS NOT NULL THEN red_outlet_cde_doors_check ELSE '0' END"
+
+  - kind: cast
+    name: cast_cde_target_doors_code_final_string
+    params:
+      - column: cde_target_doors_code_final
+        to: string
+
+  - kind: select
+    name: select_ca_du_fsm004_customer
+    params:
+      columns:
+        report_code: report_code
+        report_name: report_name
+        red_outlet: red_outlet
+        country_code_add: country_code
+        customer_code: customer_code
+        sales_office: sales_office
+        sales_group: sales_group
+        customer_description_add: customer_description
+        sales_org_code: sales_org_code
+        sales_org_description_add: sales_org_description
+        order_block_code: order_block_code
+        order_block_description_add: order_block_description
+        cpl_code: cpl_code
+        cpl_description_add: cpl_description
+        trade_channel_code: trade_channel_code
+        trade_channel_description_add: trade_channel_description
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_description_add: sub_trade_channel_description
+        ccaf_code: ccaf_code
+        ccaf_description_add: ccaf_description
+        bdaa_segment_code: bdaa_segment_code
+        bdaa_segment_description_add: bdaa_segment_description
+        cde_target_doors_code: cde_target_doors_code
+        cde_target_doors_description_add: cde_target_doors_description
+        bp_territory_id: bp_territory_id
+        customer_incentive: customer_incentive
+        bd_employee: bd_employee
+        red_pos: red_pos
+        fiscal_period: fiscal_period
+        red_outlet_suppressed_check_null: red_outlet_suppressed_check
+        red_outlet_with_microsegment_check_null: red_outlet_with_microsegment_check
+        microsegment_with_red_outlet_check_null: microsegment_with_red_outlet_check
+        red_outlet_cde_doors_check_null: red_outlet_cde_doors_check
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_du_fsm004_customer_md
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: red
+      namespace: l2
+      object_name: du_fsm004_customer_md
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1

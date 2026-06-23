@@ -1,0 +1,154 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: external_portfolio_basic_load_pm_stats
+  operations:
+
+# final output of this process is md with added flags
+
+# adding products out of portfolio scope, but with mappings
+# calculation of number of mappings per product
+# product mappings source - pm
+  - kind: read_dataio
+    name: read_product_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: golden
+      object_name: product_mapping
+      schema_version: v1
+      
+  - kind: filter
+    name: filter_pm_competitor
+    context_name: read_product_mapping
+    params:
+      - condition:
+          sap_product_code is not null and trim(sap_product_code) != ''
+
+  - kind: filter
+    name: filter_pm_country_vendor_name
+    context_name: filter_pm_competitor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = IF(ext_source_name like '%leaflets%', '''{{vendor_data.country}}''' || '_', '') || '''{{vendor_data.vendor}}'''
+
+  - kind: select
+    name: select_distinct_sap_mappings
+    context_name: filter_pm_country_vendor_name
+    params:
+      columns:
+        ext_product_code: ext_product_code_pm
+        sap_product_code: sap_material
+      distinct: true
+
+  - kind: group
+    name: group_count_number_of_sap_matches
+    context_name: select_distinct_sap_mappings
+    params:
+      - aggs:
+          sap_material: count
+        by:
+        - ext_product_code_pm
+
+  # - kind: add
+  #   name: add_in_pm_flg
+  #   context_name: group_count_number_of_sap_matches
+  #   params:
+  #     - column: in_pm_flg
+  #       expression: '''1'''
+
+  - kind: select
+    name: select_sap_mappings
+    context_name: group_count_number_of_sap_matches
+    params:
+      columns:
+        ext_product_code_pm: ext_product_code_pm
+        # in_pm_flg: in_pm_flg
+        count_sap_material: number_of_sap_matches
+      distinct: true
+
+  - kind: select
+    name: select_distinct_sap_ban_mappings
+    context_name: filter_pm_country_vendor_name
+    params:
+      columns:
+        ext_product_code: ext_product_code_pm
+        ban: sap_ban
+      distinct: true
+
+  - kind: group
+    name: group_count_number_of_sap_ban_matches
+    context_name: select_distinct_sap_ban_mappings
+    params:
+      - aggs:
+          sap_ban: count
+        by:
+        - ext_product_code_pm
+
+  - kind: select
+    name: select_sap_ban_mappings
+    context_name: group_count_number_of_sap_ban_matches
+    params:
+      columns:
+        ext_product_code_pm: ext_product_code_pm
+        count_sap_ban: number_of_sap_ban_matches
+      distinct: true
+
+  - kind: join
+    name: join_ext_portfolio_kpis
+    context_name: select_sap_mappings
+    params:
+      - other:
+          select_sap_ban_mappings
+        how:
+          inner
+        columns:
+          ext_product_code_pm: ext_product_code_pm
+
+  - kind: join
+    name: join_np_base
+    context_name: add_np_pm_stats_req
+    params:
+      - other:
+          join_ext_portfolio_kpis
+        how:
+          fullouter
+        columns:
+          ext_product_code_md_in: ext_product_code_pm
+
+  - kind: add
+    name: add_flags
+    context_name: join_np_base
+    params:
+      - column: ext_product_code_md
+        expression: coalesce(ext_product_code_md_in, ext_product_code_pm)
+      - column: in_pm_flg
+        expression: IF(ext_product_code_pm IS NULL, 0, 1)
+      - column: in_md_flg
+        expression: IF(ext_product_code_md_in IS NULL, 0, 1)
+      - column: in_portfolio_scope_flg
+        expression: CASE WHEN in_md_flg = 0 THEN 0 WHEN in_scope_flg = 0 THEN 0 ELSE 1 END 
+      - column: number_of_sap_matches
+        expression: coalesce(number_of_sap_matches, 0)
+        overwrite: true
+      - column: number_of_sap_ban_matches
+        expression: coalesce(number_of_sap_ban_matches, 0)
+        overwrite: true
+
+  - kind: filter
+    name: filter_np_pm_stats_final
+    context_name: add_flags
+    params:
+      - condition:
+          in_scope_flg = 1 OR in_pm_flg = 1

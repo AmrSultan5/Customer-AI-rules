@@ -1,0 +1,101 @@
+parameters:
+  - name: environment
+    type: string
+
+  - name: project
+    type: string
+
+  - name: feed
+    type: string
+
+  - name: artifact
+    type: string
+
+  - name: application_id
+    type: string
+
+  - name: application_secret
+    type: string
+
+  - name: tenant_id
+    type: string
+
+  - name: databricks_workspace_url
+    type: string
+
+  - name: cluster_ids
+    type: object
+    default: []
+
+  - name: python_version
+    type: string
+    default: "3.10"
+
+  - name: init_scripts_location
+    type: string
+    default: "/Shared/init_scripts"
+
+jobs:
+  - deployment: ${{replace(parameters.environment,'-','_')}}
+    displayName: "${{parameters.environment}} deployment"
+    environment: "${{parameters.environment}}"
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: self
+            - task: UsePythonVersion@0
+              inputs:
+                versionSpec: "${{parameters.python_version}}"
+              displayName: "Use Python ${{parameters.python_version}}"
+            - script: |
+                set -ex
+                python -m pip install --upgrade pip
+                python -m pip install --upgrade twine==5.0.0
+                python -m pip install argparse jinja2 urllib3
+                python -m pip install databricks-cli
+                python -m pip list
+              displayName: "Install library dependencies"
+
+            - script: |
+                token_response=$(curl -X POST -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=${{parameters.application_id}}&resource=2ff814a6-3304-4ab8-85cb-cd0e6f879c1d&client_secret=${{parameters.application_secret}}' https://login.microsoftonline.com/${{parameters.tenant_id}}/oauth2/token)
+                export DATABRICKS_AAD_TOKEN=$(echo ${token_response} | jq .access_token -r )
+                databricks configure --host ${{parameters.databricks_workspace_url}} --aad-token
+              displayName: "Configure databricks cli for ${{parameters.databricks_workspace_url}}"
+
+            - script: |
+                python3 ./scripts/release/generate_init_script.py ${{parameters.project}} ${{parameters.feed}} ${{parameters.artifact}} ./scripts/release/init_governance_data_quality_processes_template.sh ./scripts/release/init_governance_data_quality_processes.sh
+                cat ./scripts/release/init_governance_data_quality_processes_template.sh
+              displayName: "Generate Init Script"
+
+            - script: |
+                set -ex
+                echo "Cleanup workspace dir, if exist."
+                databricks workspace delete /governance_data_quality_processes -r > /dev/null
+                echo "Importing entrypoints: "
+                if [[ "${{parameters.environment}}" == "adb-dg-dataquality-qlty-001" ]]; then
+                  databricks workspace import_dir -o ./entrypoints_qlty/ /governance_data_quality_processes
+                else
+                  databricks workspace import_dir -o ./entrypoints/ /governance_data_quality_processes
+                fi
+              displayName: "Import notebooks from entrypoints to ${{parameters.databricks_workspace_url}} workspace"
+
+            - script: |
+                set -ex
+                python -m pip uninstall -y databricks-cli
+                curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+                databricks -v
+              displayName: 'Update Databricks-cli'
+
+            - script: |
+                databricks workspace import-dir --overwrite ./scripts/release/ ${{parameters.init_scripts_location}}
+              displayName: "Deploy Init Script to Workspace of ${{parameters.databricks_workspace_url}}"
+
+            - ${{ each cluster_id in parameters.cluster_ids }}:
+                - script: |
+                    set -ex
+                    chmod 755 ./scripts/release/deploy_init_script.sh
+                    bash ./scripts/release/deploy_init_script.sh ${{cluster_id}} ${{parameters.init_scripts_location}}/init_governance_data_quality_processes.sh
+                  displayName: "Install Init Script on cluster ${{cluster_id}}"
+
+

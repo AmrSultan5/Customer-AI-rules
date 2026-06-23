@@ -1,0 +1,108 @@
+transform:
+  name: external_products_universe_basic_load
+  operations:
+
+# Read data marts
+# ered_products - ep
+  - kind: read_dataio
+    name: read_ered_products
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: ered_products
+      schema_version: v1
+
+  - kind: add
+    name: add_const_values
+    context_name: read_ered_products
+    params:
+      - column: product_code
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: product_name_cleansed
+        expression: "cast (null as string)"
+      - column: brand_name_extracted
+        expression: "cast (null as string)"
+      - column: brand_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: flavour_name
+        expression: "cast (null as string)"
+      - column: flavour_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: pack_size_name
+        expression: "cast (null as string)"
+      - column: pack_size_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: pack_type_name
+        expression: "cast (null as string)"
+      - column: pack_type_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: sales_unit_name
+        expression: "cast (null as string)"
+      - column: sales_unit_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: sparkling_level
+        expression: ''''''
+      - column: blacklisting_mode
+        expression: ''''''
+      - column: product_name_translated
+        expression: "cast (null as string)"
+      - column: product_name_stage
+        expression: "cast (null as string)"
+      - column: sub_brand_name
+        expression: "cast (null as string)"
+      - column: base_unit_of_measure
+        expression: "cast (null as string)"
+      - column: base_unit_of_measure_probability
+        expression: "cast (null as decimal(10,4))"
+
+  - kind: select
+    name: select_final
+    context_name: add_const_values
+    params:
+      columns:
+        product_code: product_code
+        product_name: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name_extracted: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        base_unit_of_measure: base_unit_of_measure
+        base_unit_of_measure_probability: base_unit_of_measure_probability
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_products_universe_basic_load
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

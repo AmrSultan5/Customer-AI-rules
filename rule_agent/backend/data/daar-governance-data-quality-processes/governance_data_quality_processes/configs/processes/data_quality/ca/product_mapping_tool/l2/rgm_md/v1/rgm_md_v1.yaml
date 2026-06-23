@@ -1,0 +1,135 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: rgm_md
+  operations:
+
+#TCCC multi cat data
+  - kind: read_dataio
+    name: read_tccc_sellout_product
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: tccc_sellout
+      namespace: multi_cat
+      object_name: tccc_sellout_product
+      schema_version: v2
+
+  - kind: add
+    name: add_gb_nir_mapping
+    context_name: read_tccc_sellout_product
+    params:
+      - column: country_code
+        expression: IF(country_code = 'nir', 'gb', country_code)
+        overwrite: true
+
+  {% if country.name != "ca" %}
+
+  - kind: filter
+    name: filter_country
+    params:
+      - condition:
+          lower(country_code) = '''{{country.name}}'''
+
+  {% endif %}
+
+  - kind: filter
+    name: filter_tccc
+    params:
+      - condition:
+          hier_level_name in ('ITEM CODE') and category in ('CORE SPARKLING', 'ENERGY DRINKS', 'JUICE & JUICE DRINKS', 'WATER', 'RTD TEA', 'ADVANCED HYDRATION', 'PLANT BASED BEVERAGES')
+
+# configuration data - ep_rgm_ean_availability
+  - kind: read_local
+    name: read_rgm_reference_data_country_attributes
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_rgm_ean_availability
+
+  - kind: add
+    name: transformations_rgm_country_flag
+    context_name: read_rgm_reference_data_country_attributes
+    params:
+      - column: country_code
+        expression: lower(country_code)
+        overwrite: true
+
+  - kind: select
+    name: select_rgm_country_flag
+    context_name: transformations_rgm_country_flag
+    params:
+      columns:
+        country_code: country_code
+        ean_flag: ean_flag
+      distinct: true
+
+  - kind: join
+    name: join_gtc_rgm_reference_data_country_attributes
+    context_name: filter_tccc
+    params:
+      - other:
+          select_rgm_country_flag
+        how:
+          inner
+        columns:
+          country_code: country_code
+
+  - kind: add
+    name: transformations_tccc
+    context_name: join_gtc_rgm_reference_data_country_attributes
+    params:
+      - column: vendor_package_type
+        expression: concat(container_material, '+', container_type, '+', refillable)
+      - column: vendor
+        expression: cast('Nielsen' as string)
+      - column: application
+        expression: cast('RGM' as string)
+      - column: vendor_item
+        expression: CASE WHEN ean_flag = 'YES' AND upc IS NOT NULL AND upc != '' AND UPPER(upc) != 'SENSITIVE' THEN upc ELSE item_code END
+
+  - kind: select
+    name: select_tccc_columns
+    context_name: transformations_tccc
+    params:
+      columns:
+        product_id: product_tag
+        vendor_item: vendor_item
+        item: vendor_long_description
+        brand_owner: brand_owner
+        brand: vendor_brand
+        vendor_package_type: vendor_package_type
+        pack_size: vendor_package_size
+        units_per_package: vendor_units_per_package
+        global_flavour: vendor_flavour
+        application: application
+        vendor: vendor
+        country_code: country
+      distinct: true
+
+  - kind: write_dataio
+    name: write_rgm_md
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: rgm_md
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

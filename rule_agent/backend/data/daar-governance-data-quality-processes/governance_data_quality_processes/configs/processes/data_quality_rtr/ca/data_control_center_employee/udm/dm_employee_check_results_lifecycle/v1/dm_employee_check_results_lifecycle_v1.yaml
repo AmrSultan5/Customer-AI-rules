@@ -1,0 +1,186 @@
+transform:
+  name: dm_employee_check_results_lifecycle
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_employee_check_results_lifecycle
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results_lifecycle
+      schema_version: v1
+
+  - kind: filter
+    name: filter_lifecycle_not_null_end_date
+    context_name: read_dm_employee_check_results_lifecycle
+    params:
+      - condition:
+          check_status_end_date IS NOT NULL
+
+  - kind: select
+    name: select_lifecycle_not_null_end_date
+    context_name: filter_lifecycle_not_null_end_date
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        object_type: object_type
+        check_status_start_date: check_status_start_date
+        check_status_end_date: check_status_end_date
+        checks_count: checks_count
+      distinct: true
+
+  - kind: filter
+    name: filter_lifecycle_null_end_date
+    context_name: read_dm_employee_check_results_lifecycle
+    params:
+      - condition:
+          check_status_end_date IS NULL OR check_status_end_date = ''
+
+  - kind: read_dataio
+    name: read_dm_employee_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results
+      schema_version: v3
+
+  - kind: select
+    name: select_decr
+    context_name: read_dm_employee_check_results
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        check_date: check_date
+        object_type: object_type
+        user_message_name: user_message_name
+      distinct: true
+
+  - kind: select
+    name: select_lifecycle_data
+    context_name: filter_lifecycle_null_end_date
+    params:
+      columns:
+        rule_code: rule_code_lif
+        object_id: object_id_lif
+        check_status: check_status_lif
+        object_type: object_type_lif
+        check_status_start_date: check_status_start_date_lif
+        check_status_end_date: check_status_end_date_lif
+        checks_count: checks_count_lif
+      distinct: true
+
+  - kind: select
+    name: select_lifecycle_data_exist_check
+    context_name: filter_lifecycle_null_end_date
+    params:
+      columns:
+        rule_code: rule_code_lif_exist
+        object_id: object_id_lif_exist
+        check_status: check_status_lif_exist
+        check_status_start_date: check_status_start_date_lif_exist
+        check_status_end_date: check_status_end_date_lif_exist
+        checks_count: checks_count_lif_exist
+      distinct: true
+
+  - kind: join
+    name: join_lifecycle
+    context_name: select_decr
+    params:
+      - other:
+          select_lifecycle_data
+        how:
+          outer
+        columns:
+          rule_code: rule_code_lif
+          object_id: object_id_lif
+          check_status: check_status_lif
+      - other:
+          select_lifecycle_data_exist_check
+        how:
+          outer
+        columns:
+          rule_code: rule_code_lif_exist
+          object_id: object_id_lif_exist
+
+  - kind: add
+    name: add_lifecycle_data
+    context_name: join_lifecycle
+    params:
+      - column: check_status_start_date_lif
+        expression: if(check_status = check_status_lif, check_status_start_date_lif, 
+                    if(check_status IS NULL AND check_status_start_date_lif IS NOT NULL AND check_status_start_date_lif_exist IS NULL, check_status_start_date_lif, check_date))
+        overwrite: true
+      - column: check_status_end_date_lif  
+        expression: if(check_status = check_status_lif, CAST(NULL AS DATE),
+                    if(check_status IS NULL AND check_status_lif IS NOT NULL AND checks_count_lif_exist IS NULL, TO_DATE(current_date(),'yyyy-MM-dd'),  CAST(NULL AS DATE)))
+        overwrite: true
+      - column: checks_count_lif
+        expression: if(check_status = check_status_lif, CAST(checks_count_lif + 1 AS INTEGER),
+                    if(check_status IS NOT NULL AND check_status_lif IS NULL AND checks_count_lif_exist IS NOT NULL, checks_count_lif_exist, '1'))
+        overwrite: true
+      - column: rule_code
+        expression: if(rule_code IS NULL, rule_code_lif, rule_code)
+        overwrite: true
+      - column: object_id
+        expression: if(object_id IS NULL, object_id_lif, object_id)
+        overwrite: true
+      - column: check_status
+        expression: if(check_status IS NULL, check_status_lif, check_status)
+        overwrite: true
+      - column: object_type
+        expression: if(object_type IS NULL, object_type_lif, object_type)
+        overwrite: true
+
+  - kind: select
+    name: select_final
+    context_name: add_lifecycle_data
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        object_type: object_type
+        check_status_start_date_lif: check_status_start_date
+        check_status_end_date_lif: check_status_end_date
+        checks_count_lif: checks_count
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_final
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_lifecycle_not_null_end_date
+
+  - kind: write_dataio
+    name: write_dm_employee_check_results_lifecycle
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results_lifecycle
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

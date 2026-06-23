@@ -1,0 +1,519 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: sap_products_universe_basic_load
+  operations:
+
+# Read data marts
+# dm_product_general - pg
+  - kind: read_dataio
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+      schema_version: v5
+
+  - kind: filter
+    name: filter_dm_product_general
+    context_name: read_dm_product_general
+    params:
+      - condition:
+          material_type_code like 'ZFG%' AND material_group_code != '1110000'
+
+  - kind: select
+    name: select_dm_product_general
+    context_name: filter_dm_product_general
+    params:
+      columns:
+        material_code: material_code_pg
+        material_description: material_description
+        ean_code: ean_code
+        ban_code: ban_code
+        material_group_code: material_group_code
+        material_group_name: material_group_name
+        material_type_code: material_type_code
+        uom_pc_ean_code: ean_piece
+        uom_pack_ean_code: ean_pack
+        uom_cs_ean_code: ean_case
+        base_unit_of_measure_code: base_unit_of_measure
+        creation_date: creation_date
+        sap_cluster: sap_cluster_pg
+      distinct: true
+
+# dm_product_sales_organization - pso
+  - kind: read_dataio
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+      schema_version: v9
+
+  - kind: filter
+    name: filter_dm_product_sales_organization
+    context_name: read_dm_product_sales_organization
+    params:
+      - condition:
+          country_code != 'BSO' AND distribution_channel_code = '01' AND brand_name IS NOT NULL AND pack_size_name IS NOT NULL
+
+  - kind: select
+    name: select_dm_product_sales_organization
+    context_name: filter_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code_pso
+        country_code: country_code_pso
+        sales_org_code: sales_org_code_pso
+        brand_name: brand_name
+        flavour_name: flavour_name
+        pack_size_name: pack_size_name
+        pack_size_uom_unified: pack_size_uom_unified
+        pack_size_volume_unified: pack_size_volume_unified
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        sales_unit_name: sales_unit_name
+        product_hierarchy_name: product_hierarchy_name
+        sap_cluster: sap_cluster_pso
+      distinct: true
+
+# dm_product_universe - pu
+  - kind: read_dataio
+    name: read_dm_product_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_universe
+      schema_version: v2
+
+  - kind: select
+    name: select_dm_product_universe
+    context_name: read_dm_product_universe
+    params:
+      columns:
+        material_code: material_code_pu
+        country_code: country_code_pu
+        sap_cluster: sap_cluster_pu
+      distinct: true
+
+# f_product_details_l3_activity_fg - pac
+  - kind: read_dataio
+    name: read_f_product_details_l3_activity_fg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_product_details_l3_activity_fg
+      schema_version: v4
+
+  - kind: select
+    name: select_f_product_details_l3_activity_fg
+    context_name: read_f_product_details_l3_activity_fg
+    params:
+      columns:
+        material_code: material_code_pac
+        country_code: country_code_pac
+        check_status: check_status
+        sap_cluster: sap_cluster_pac
+      distinct: true
+
+# ca_co004n_profitability_pl - sls
+  - kind: read_dataio
+    name: read_ca_co004n_profitability_pl
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: fm
+      object_name: ca_co004n_profitability_pl
+      schema_version: v1
+
+  - kind: select
+    name: select_ca_co004n_profitability_pl_sell_in
+    context_name: read_ca_co004n_profitability_pl
+    params:
+      columns:
+        sku: material_code_sls
+        salesorg: sales_org_code_sls
+        volume_uc: volume_uc
+        bic_cccweek: bic_cccweek
+      distinct: true
+
+  - kind: read_dataio
+    name: read_ca_faccal_calendar_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_faccal_calendar
+      schema_version: v1
+
+  - kind: group
+    name: group_cch_week_max_date
+    context_name: read_ca_faccal_calendar_v1
+    params:
+      - aggs:
+          calday: max
+        by:
+        - cccweek
+
+  - kind: join
+    name: join_profitability_fascal
+    context_name: select_ca_co004n_profitability_pl_sell_in
+    params:
+      - other:
+          group_cch_week_max_date
+        how:
+          inner
+        columns:
+          bic_cccweek: cccweek
+
+  - kind: filter
+    name: filter_profitability_fascal_52
+    context_name: join_profitability_fascal
+    params:
+      - condition:
+          datediff(curdate(), max_calday) / 7 <= 52
+
+  - kind: group
+    name: group_ca_co004n_profitability_pl_52
+    context_name: filter_profitability_fascal_52
+    params:
+      - aggs:
+          volume_uc: sum
+        by:
+        - material_code_sls
+        - sales_org_code_sls
+
+  - kind: select
+    name: select_ca_co004n_profitability_pl_52
+    context_name: group_ca_co004n_profitability_pl_52
+    params:
+      columns:
+        material_code_sls: material_code_sls_52
+        sales_org_code_sls: sales_org_code_sls_52
+        sum_volume_uc: sell_in_volume_uc_12m
+
+  - kind: filter
+    name: filter_profitability_fascal_104
+    context_name: join_profitability_fascal
+    params:
+      - condition:
+          datediff(curdate(), max_calday) / 7 <= 104
+
+  - kind: group
+    name: group_ca_co004n_profitability_pl_104
+    context_name: filter_profitability_fascal_104
+    params:
+      - aggs:
+          volume_uc: sum
+        by:
+        - material_code_sls
+        - sales_org_code_sls
+
+  - kind: select
+    name: select_ca_co004n_profitability_pl_104
+    context_name: group_ca_co004n_profitability_pl_104
+    params:
+      columns:
+        material_code_sls: material_code_sls_104
+        sales_org_code_sls: sales_org_code_sls_104
+        sum_volume_uc: sell_in_volume_uc_24m
+
+# join data marts
+  - kind: join
+    name: join_sap_products_universe
+    context_name: select_dm_product_general
+    params:
+      - other:
+          select_dm_product_sales_organization
+        how:
+          inner
+        columns:
+          material_code_pg : material_code_pso
+          sap_cluster_pg: sap_cluster_pso
+      - other:
+          select_dm_product_universe
+        how:
+          left
+        columns:
+          material_code_pso : material_code_pu
+          country_code_pso: country_code_pu
+          sap_cluster_pso: sap_cluster_pu
+      - other:
+          select_f_product_details_l3_activity_fg
+        how:
+          left
+        columns:
+          material_code_pso : material_code_pac
+          country_code_pso: country_code_pac
+          sap_cluster_pso: sap_cluster_pac
+      - other:
+          select_ca_co004n_profitability_pl_52
+        how:
+          left
+        columns:
+          material_code_pso : material_code_sls_52
+          sales_org_code_pso: sales_org_code_sls_52
+      - other:
+          select_ca_co004n_profitability_pl_104
+        how:
+          left
+        columns:
+          material_code_pso : material_code_sls_104
+          sales_org_code_pso: sales_org_code_sls_104
+
+  - kind: add
+    name: add_const_values_transformations
+    context_name: join_sap_products_universe
+    params:
+      - column: product_name_cleansed
+        expression: "cast (null as string)"
+      - column: country_code_pso
+        overwrite: true
+        expression: "lower(country_code_pso)"
+      - column: sales_unit_bottles
+        overwrite: true
+        expression: case when regexp(lower(sales_unit_name), '.*\\d.*') and regexp(lower(sales_unit_name), '.*x.*') then regexp_extract(lower(sales_unit_name), '.*x(.*)', 1) else '' end
+      - column: sales_unit_name
+        overwrite: true
+        expression: "lower(sales_unit_name)"
+      - column: pack_type_code
+        overwrite: true
+        expression: "lower(pack_type_code)"
+      - column: sales_unit_cases
+        overwrite: true
+        expression: case when regexp(lower(sales_unit_name), '.*\\d.*') and length(lower(sales_unit_name)) - length(replace(lower(sales_unit_name), 'x', '')) > 1 then regexp_extract(lower(sales_unit_name), '.*x([^x]*)x[^x]*$', 1) when regexp(lower(sales_unit_name), '.*\\d.*') and length(lower(sales_unit_name)) - length(replace(lower(sales_unit_name), 'x', '')) = 1 then case when regexp_extract(lower(sales_unit_name), '(.*)x.*', 1) = '' then 0 else regexp_extract(lower(sales_unit_name), '(.*)x.*', 1) end else '' end
+      - column: sales_unit_pallets
+        expression: case when regexp(lower(sales_unit_name), '.*\\d.*') and length(lower(sales_unit_name)) - length(replace(lower(sales_unit_name), 'x', '')) > 1 then regexp_extract(lower(sales_unit_name), '^(.*)x[^x]*x[^x]*$', 1) else '' end
+      - column: sparkling_level
+        expression: case when product_hierarchy_name like '%Med Carb%' or product_hierarchy_name like '%Medium Carb%' then 'medium' when product_hierarchy_name like '%Water%Still%' or product_hierarchy_name like '%Regular%' then 'no' when product_hierarchy_name like '%Fully Carb%' then 'high' when product_hierarchy_name like '%Low Carb%' then 'low' else '' end
+      - column: is_abp
+        expression: if(lower(material_description) like '%abp%', '1', '0')
+      - column: is_in_use
+        expression: if(material_code_pu is null, '0', '1')
+      - column: is_promotion
+        expression: if(lower(material_description) like '%(c)%', '1', '0')
+      - column: sub_brand_name
+        expression: "cast (null as string)"
+      - column: sell_in_volume_uc_12m
+        overwrite: true
+        expression: "cast (sell_in_volume_uc_12m as decimal(18,6))"
+      - column: sell_in_volume_uc_24m
+        overwrite: true
+        expression: "cast (sell_in_volume_uc_24m as decimal(18,6))"
+      - column: creation_date
+        overwrite: true
+        expression: "cast (creation_date as date)"
+
+  - kind: select
+    name: select_clean_1
+    context_name: add_const_values_transformations
+    params:
+      columns:
+        material_code_pg: product_code
+        material_description: product_name_raw
+        product_name_cleansed: product_name_cleansed
+        country_code_pso: country_code
+        brand_name: brand_name
+        flavour_name: flavour_name
+        pack_size_name: pack_size_name
+        pack_size_uom_unified: pack_size_uom_unified
+        pack_size_volume_unified: pack_size_volume_unified
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        sales_unit_name: sales_unit_name
+        sales_unit_bottles: sales_unit_bottles
+        sales_unit_cases: sales_unit_cases
+        sales_unit_pallets: sales_unit_pallets
+        product_hierarchy_name: product_hierarchy_name
+        sparkling_level: sparkling_level
+        # country_code_in_product_name: country_code_in_product_name
+        is_abp: is_abp
+        check_status: is_actively_used
+        is_in_use: is_in_use
+        is_promotion: is_promotion
+        ean_code: ean_code
+        ban_code: ban_code
+        material_group_code: product_group_code
+        material_group_name: product_group_name
+        material_type_code: product_type_code
+        ean_piece: ean_piece
+        ean_pack: ean_pack
+        ean_case: ean_case
+        base_unit_of_measure: base_unit_of_measure
+        creation_date: creation_date
+        sell_in_volume_uc_12m: sell_in_volume_uc_12m
+        sell_in_volume_uc_24m: sell_in_volume_uc_24m
+        sap_cluster_pg: sap_cluster
+        sales_unit_bottles: sales_unit_bottles
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+# calculate country_code_in_product_name
+# application_data_quality_ca_master_data_quality_l2.dm_org_hierarchy_v1 - oh
+  - kind: read_local
+    name: read_conf_data_spu_country_codes
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: spu_country_codes
+
+  - kind: add
+    name: add_const_1_oh
+    context_name: read_conf_data_spu_country_codes
+    params:
+      - column: const_1_oh
+        expression: '''1'''
+
+  - kind: group
+    name: group_oh
+    context_name: add_const_1_oh
+    params:
+      - aggs:
+          country_code: array_agg
+        by:
+        - const_1_oh
+
+  - kind: add
+    name: add_col_for_seperated_prod_name
+    context_name: select_clean_1
+    params:
+      - column: country_code_in_product_name_separated
+        expression: regexp_extract(lower(product_name_raw), '.*[ ](.*)', 1)
+
+  - kind: add
+    name: add_country_code_in_product_name_separated_array_single
+    context_name: add_col_for_seperated_prod_name
+    params:
+      - column: country_code_in_product_name_separated_array_single
+        expression: split(country_code_in_product_name_separated, '', -1)
+
+  - kind: add
+    name: add_country_code_in_product_name_separated_array_double
+    context_name: add_country_code_in_product_name_separated_array_single
+    params:
+      - column: country_code_in_product_name_separated_array_double
+        expression: transform(country_code_in_product_name_separated_array_single, (x, i) -> concat(x, country_code_in_product_name_separated_array_single[i+1]))
+
+  - kind: add
+    name: add_country_code_in_product_name_separated_array_final
+    context_name: add_country_code_in_product_name_separated_array_double
+    params:
+      - column: country_code_in_product_name_separated_array_final
+        expression: FILTER(TRANSFORM(country_code_in_product_name_separated_array_double, (x, i) -> x), (x, i) -> i % 2 = 0)
+      - column: const_1_join_clean_1
+        expression: '''1'''
+
+  - kind: join
+    name: join_country_code_in_product_name
+    context_name: add_country_code_in_product_name_separated_array_final
+    params:
+      - other:
+          group_oh
+        how:
+          inner
+        columns:
+          const_1_join_clean_1: const_1_oh
+
+  - kind: add
+    name: add_country_code_in_product_name
+    params:
+      - column: country_code_in_product_name
+        expression: if(size(array_except(country_code_in_product_name_separated_array_final, array_agg_country_code)) = 0, country_code_in_product_name_separated, '')
+
+  - kind: select
+    name: select_final
+    context_name: add_country_code_in_product_name
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_cleansed: product_name_cleansed
+        country_code: country_code
+        brand_name: brand_name
+        flavour_name: flavour_name
+        pack_size_name: pack_size_name
+        pack_size_uom_unified: pack_size_uom_unified
+        pack_size_volume_unified: pack_size_volume_unified
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        sales_unit_name: sales_unit_name
+        sales_unit_bottles: sales_unit_bottles
+        sales_unit_cases: sales_unit_cases
+        sales_unit_pallets: sales_unit_pallets
+        product_hierarchy_name: product_hierarchy_name
+        sparkling_level: sparkling_level
+        country_code_in_product_name: country_code_in_product_name
+        is_abp: is_abp
+        is_actively_used: is_actively_used
+        is_in_use: is_in_use
+        is_promotion: is_promotion
+        ean_code: ean_code
+        ban_code: ban_code
+        product_group_code: product_group_code
+        product_group_name: product_group_name
+        product_type_code: product_type_code
+        creation_date: creation_date
+        sell_in_volume_uc_12m: sell_in_volume_uc_12m
+        sell_in_volume_uc_24m: sell_in_volume_uc_24m
+        sap_cluster: sap_cluster
+        sub_brand_name: sub_brand_name
+        ean_piece: ean_piece
+        ean_pack: ean_pack
+        ean_case: ean_case
+        base_unit_of_measure: base_unit_of_measure
+      distinct: true
+
+  - kind: write_dataio
+    name: write_sap_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,336 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% set uc_catalog_ml_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: PCM_package_type
+  operations:
+
+########################################################################################################################
+# Read-in data
+########################################################################################################################
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      schema_version: v1
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+  - kind: drop
+    name: drop_process_run_id
+    params:
+      - column: process_run_id
+
+  - kind: filter
+    name: filter_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is null or ext_product_name_src = ''
+
+  - kind: filter
+    name: filter_not_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is not null and ext_product_name_src != ''
+
+  - kind: add
+    name: add_ext_product_name_src_0
+    params:
+      - column: ext_product_name_src_0
+        expression: ext_product_name_src
+      - column: ext_product_name_src
+        overwrite: true
+        expression: if(country_code = 'at' and ext_source_name = 'leaflets', regexp_replace(lower(ext_product_code), '-', ' '), ext_product_name_src_0)
+
+  - kind: add
+    name: add_vendor_column_to_join
+    params:
+      - column: column_to_join
+        expression: '''1'''
+
+  # package_type mapping load
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.get_artifact.GetArtifactOperation
+    name: pack_type_mapping
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.get_artifact_config.GetArtifactOperationConfig
+    params:
+      catalog: {{uc_catalog_ml_env}}
+      schema: product_mapping_tool
+      registered_model_name: dmt_pack_type_distilbert_model
+      alias: production
+      artifact_path: artifacts/mapping.json
+
+  - kind: add
+    name: add_mapping_column_to_join
+    params:
+      - column: column_to_join
+        expression: '''1'''
+
+  - kind: join
+    name: join_mapping
+    context_name: add_vendor_column_to_join
+    params:
+      - other:
+          add_mapping_column_to_join
+        how:
+          full
+        columns:
+          column_to_join: column_to_join
+
+  - kind: add
+    name: add_pack_type_match
+    params:
+      - column: pack_type_match
+        expression: array_contains(split(ext_product_name_final, ' '), lower(package_type_key))
+      - column: pack_type_match_src
+        expression: array_contains(split(lower(ext_product_name_src), ' '), lower(package_type_key))
+      
+# look for exact match in src column
+  - kind: filter
+    name: filter_pack_type_match_src
+    params:
+      - condition:
+          pack_type_match_src
+
+  - kind: group
+    name: group_pack_type_matches_src
+    params:
+      - aggs:
+          package_type_key: collect_set
+        by:
+        - ext_product_name_src
+        
+  - kind: rename
+    name: rename_pack_type_matches_src
+    params:
+      - column: collect_set_package_type_key
+        to: collect_set_package_type_key_src
+
+  - kind: add
+    name: add_pack_type_matches_count_src
+    params:
+      - column: pack_type_matches_count_src
+        expression: size(collect_set_package_type_key_src)
+
+  - kind: filter
+    name: filter_pack_type_matches_count_src
+    params:
+      - condition:
+          pack_type_matches_count_src = 1
+
+# look for exact match in std column (after translation)
+  - kind: filter
+    name: filter_pack_type_match
+    context_name: add_pack_type_match
+    params:
+      - condition:
+          pack_type_match
+
+  - kind: group
+    name: group_pack_type_matches
+    params:
+      - aggs:
+          package_type_key: collect_set
+        by:
+        - ext_product_name_final
+
+  - kind: add
+    name: add_pack_type_matches_count
+    params:
+      - column: pack_type_matches_count
+        expression: size(collect_set_package_type_key)
+
+  - kind: filter
+    name: filter_pack_type_matches_count
+    params:
+      - condition:
+          pack_type_matches_count = 1
+
+# join back
+  - kind: join
+    name: join_pack_type_matches
+    context_name: add_vendor_column_to_join
+    params:
+      - other:
+          filter_pack_type_matches_count_src
+        how:
+          left
+        columns:
+          ext_product_name_src: ext_product_name_src
+      - other:
+          filter_pack_type_matches_count
+        how:
+          left
+        columns:
+          ext_product_name_final: ext_product_name_final
+        
+  - kind: add
+    name: add_pack_type_exact_match
+    params:
+      - column: ext_package_type_pcm
+        overwrite: true
+        expression: if(pack_type_matches_count_src = 1, lower(collect_set_package_type_key_src[0]), if(pack_type_matches_count = 1, lower(collect_set_package_type_key[0]), ''))
+      - column: ext_package_type_pcm_probability
+        overwrite: true
+        expression: if(ext_package_type_pcm <> '', cast(1 as decimal(10,4)), '')
+
+  - kind: filter
+    name: filter_pack_type_found
+    context_name: add_pack_type_exact_match
+    params:
+      - condition:
+          ext_package_type_pcm is not null and ext_package_type_pcm <> ''
+          
+  - kind: filter
+    name: filter_pack_type_not_found
+    context_name: add_pack_type_exact_match
+    params:
+      - condition:
+          ext_package_type_pcm is null or ext_package_type_pcm = ''
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.model_predict.ModelPredictOperation
+    name: predict_pack_type_not_found
+    context_name: filter_pack_type_not_found
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.model_predict_config.ModelPredictOperationConfig
+    params:
+      input_value: ext_product_name_final
+      catalog: {{uc_catalog_ml_env}}
+      schema: product_mapping_tool
+      registered_model_name: dmt_pack_type_distilbert_model
+      alias: production
+
+  - kind: add
+    name: add_pack_type_prob
+    params:
+      - column: ext_package_type_pcm
+        overwrite: true
+        expression: input_value_category
+      - column: ext_package_type_pcm_probability
+        overwrite: true
+        expression: cast(input_value_probability as decimal(10,4))
+
+  - kind: union
+    name: union_all
+    context_name: add_pack_type_prob
+    params:
+      allow_missing: true
+      by_name: true
+      other: filter_pack_type_found     
+        
+  - kind: add
+    name: add_cast_pack_type_prob
+    params:
+      - column: ext_package_type_pcm_probability
+        overwrite: true
+        expression: cast(ext_package_type_pcm_probability as decimal(10,4))
+
+  - kind: select
+    name: select_final
+    context_name: add_cast_pack_type_prob
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src_0: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+      
+  - kind: union
+    name: union_final
+    context_name: select_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: filter_null_product_name
+
+  - kind: write_dataio
+    name: write_ext_portfolio
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full
+      

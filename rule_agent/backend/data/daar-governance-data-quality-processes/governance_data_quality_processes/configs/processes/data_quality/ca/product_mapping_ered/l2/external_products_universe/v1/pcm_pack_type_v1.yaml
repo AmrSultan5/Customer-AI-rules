@@ -1,0 +1,163 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% set uc_catalog_ml_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: external_products_universe_pack_type
+  operations:
+
+# Read epu after basic load
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+# predict pack types
+  - kind: governance_data_quality_processes.custom_operations.machine_learning.model_pyfunc_predict.ModelPyfuncPredictOperation
+    name: add_epu_pack_type_prediction
+    context_name: read_epu
+    config_kind: governance_data_quality_processes.custom_operation_configs.machine_learning.model_pyfunc_predict_config.ModelPyfuncPredictOperationConfig
+    params:
+      input_value: product_name_cleansed
+      catalog: {{uc_catalog_ml_env}}
+      schema: product_mapping_ered
+      registered_model_name: pack_type_distilbert_model
+      alias: production
+      
+#conf data join
+#epu add const value for join
+  - kind: add
+    name: add_const_1_pack_type
+    params:
+      - column: const_1_pack_type
+        expression: '''1'''
+
+#read conf data
+  - kind: read_local
+    name: read_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: epu_pack_type_cleanser
+
+  - kind: add
+    name: add_const_1_conf_pack_type_cleanser
+    context_name: read_conf_data
+    params:
+      - column: const_1_conf_pack_type_cleanser
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_pack_type_cleanser
+    context_name: add_const_1_conf_pack_type_cleanser
+    params:
+      - aggs:
+          source_value: array_agg
+          target_value: array_agg
+        by:
+        - const_1_conf_pack_type_cleanser
+
+  - kind: add
+    name: add_map_conf_pack_type_cleanser
+    context_name: group_arrays_conf_pack_type_cleanser
+    params:
+      - column: map_conf_pack_type_cleanser
+        expression: map_from_arrays(array_agg_source_value, array_agg_target_value)
+
+  - kind: join
+    name: join_conf_pack_type_cleanser
+    context_name: add_const_1_pack_type
+    params:
+      - other:
+          add_map_conf_pack_type_cleanser
+        how:
+          inner
+        columns:
+          const_1_pack_type: const_1_conf_pack_type_cleanser
+
+  - kind: add
+    name: add_pack_type_conf_lookup_cleanser
+    context_name: join_conf_pack_type_cleanser
+    params:
+      - column: pack_type_glass
+        expression: reduce(array_agg_source_value, product_name_cleansed, (acc, x) -> if(contains(acc, (x)), map_conf_pack_type_cleanser[x], ''))
+        overwrite: true
+
+  - kind: add
+    name: add_pack_type_prediction
+    params:
+      - column: pack_type_name
+        overwrite: true
+        expression: if(pack_type_glass != '', pack_type_glass, input_value_category)
+      - column: pack_type_probability
+        overwrite: true
+        expression: if(pack_type_glass != '', 1, input_value_probability)
+ 
+  - kind: select
+    name: select_epu_with_pack_type
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+      distinct: true
+      
+  - kind: cast
+    name: cast_to_decimal
+    params:
+      - column: pack_type_probability
+        to: decimal(10,4)
+
+  - kind: write_dataio
+    name: write_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

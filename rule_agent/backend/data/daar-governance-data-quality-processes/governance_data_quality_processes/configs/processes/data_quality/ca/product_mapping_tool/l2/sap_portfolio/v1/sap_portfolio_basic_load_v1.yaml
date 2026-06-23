@@ -1,0 +1,703 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+{% if product_level == "material" %}
+{% set product_level_1 = "material" %}
+{% else %}
+{% set product_level_1 = "ban" %}
+{% endif %}
+{% set np_sellin_mode = "" %}
+{% set np_sellin_mode_1 = "in_scope" %}
+{% set np_sellin_mode_2 = "in_pm" %}
+
+transform:
+  name: sap_portfolio_basic_load
+  operations:
+
+# Read data marts
+# to be discussed with prod owner - source of master data
+# for now - bw, discuss using 'dcc' tables
+# curated_cch_bw_md.ca_0_mat03_material_v1 - mat03
+  - kind: read_dataio
+    name: read_ca_0_mat03_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_mat03_material
+      schema_version: v1
+
+# static filters on mat03/sap portfolio
+# could be done with conf data and filter map/eligiblity flags
+  - kind: filter
+    name: filter_mat03_static
+    context_name: read_ca_0_mat03_material
+    params:
+      - condition:
+          ISNULL(material) = 0 AND material != material_desc
+  
+  - kind: add
+    name: add_const_1_mat03
+    context_name: filter_mat03_static
+    params:
+      - column: const_1_mat03
+        expression: '''1'''
+
+# configuration data - sp_filters 
+# for determining which filter is eligible for respective ext source
+  - kind: read_local
+    name: read_conf_data_sp_fliters
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_filters
+
+  - kind: filter
+    name: filter_conf_data_sp_fliters
+    context_name: read_conf_data_sp_fliters
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+# configuration data - sp_excluded_brands
+  - kind: filter
+    name: filter_conf_data_sp_fliters_brand_exclusion
+    context_name: filter_conf_data_sp_fliters
+    params:
+      - condition:
+          filter_name = 'brand_exclusion'
+
+  - kind: add
+    name: add_const_1_conf_data_sp_fliters_brand_exclusion
+    context_name: filter_conf_data_sp_fliters_brand_exclusion
+    params:
+      - column: const_1_conf_data_sp_fliters_brand_exclusion
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_sp_excluded_brands
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_excluded_brands
+
+  - kind: filter
+    name: filter_conf_data_sp_excluded_brands
+    context_name: read_conf_data_sp_excluded_brands
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_sp_excluded_brands
+    context_name: filter_conf_data_sp_excluded_brands
+    params:
+      - column: const_1_conf_data_sp_excluded_brands
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_sp_excluded_brands
+    context_name: add_const_1_conf_data_sp_excluded_brands
+    params:
+      - aggs:
+          excluded_brand: array_agg
+        by:
+        - const_1_conf_data_sp_excluded_brands
+
+  - kind: join
+    name: join_conf_data_sp_excluded_brands
+    context_name: add_const_1_conf_data_sp_fliters_brand_exclusion
+    params:
+      - other:
+          group_arrays_conf_data_sp_excluded_brands
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_sp_fliters_brand_exclusion: const_1_conf_data_sp_excluded_brands
+
+  - kind: select
+    name: select_conf_data_sp_excluded_brands
+    context_name: join_conf_data_sp_excluded_brands
+    params:
+      columns:
+        const_1_conf_data_sp_fliters_brand_exclusion: const_1_conf_data_sp_fliters_brand_exclusion
+        filter_flag: filter_flag_brand_exclusion
+        array_agg_excluded_brand: array_agg_excluded_brand
+      distinct: true
+
+# configuration data - sp_excluded_pack_types
+  - kind: filter
+    name: filter_conf_data_sp_fliters_pack_type_exclusion
+    context_name: filter_conf_data_sp_fliters
+    params:
+      - condition:
+          filter_name = 'pack_type_exclusion'
+
+  - kind: add
+    name: add_const_1_conf_data_sp_fliters_pack_type_exclusion
+    context_name: filter_conf_data_sp_fliters_pack_type_exclusion
+    params:
+      - column: const_1_conf_data_sp_fliters_pack_type_exclusion
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_sp_excluded_pack_types
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_excluded_pack_types
+
+  - kind: filter
+    name: filter_conf_data_sp_excluded_pack_types
+    context_name: read_conf_data_sp_excluded_pack_types
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_sp_excluded_pack_types
+    context_name: filter_conf_data_sp_excluded_pack_types
+    params:
+      - column: const_1_conf_data_sp_excluded_pack_types
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_sp_excluded_pack_types
+    context_name: add_const_1_conf_data_sp_excluded_pack_types
+    params:
+      - aggs:
+          excluded_pack_type: array_agg
+        by:
+        - const_1_conf_data_sp_excluded_pack_types
+
+  - kind: join
+    name: join_conf_data_sp_excluded_pack_types
+    context_name: add_const_1_conf_data_sp_fliters_pack_type_exclusion
+    params:
+      - other:
+          group_arrays_conf_data_sp_excluded_pack_types
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_sp_fliters_pack_type_exclusion: const_1_conf_data_sp_excluded_pack_types
+
+  - kind: select
+    name: select_conf_data_sp_excluded_pack_types
+    context_name: join_conf_data_sp_excluded_pack_types
+    params:
+      columns:
+        const_1_conf_data_sp_fliters_pack_type_exclusion: const_1_conf_data_sp_fliters_pack_type_exclusion
+        filter_flag: filter_flag_pack_type_exclusion
+        array_agg_excluded_pack_type: array_agg_excluded_pack_type
+      distinct: true
+
+# configuration data - sp_included_item_categories
+  - kind: filter
+    name: filter_conf_data_sp_fliters_item_category_inclusion
+    context_name: filter_conf_data_sp_fliters
+    params:
+      - condition:
+          filter_name = 'item_category_inclusion'
+
+  - kind: add
+    name: add_const_1_conf_data_sp_fliters_item_category_inclusion
+    context_name: filter_conf_data_sp_fliters_item_category_inclusion
+    params:
+      - column: const_1_conf_data_sp_fliters_item_category_inclusion
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_sp_included_item_categories
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_included_item_categories
+
+  - kind: filter
+    name: filter_conf_data_sp_included_item_categories
+    context_name: read_conf_data_sp_included_item_categories
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_sp_included_item_categories
+    context_name: filter_conf_data_sp_included_item_categories
+    params:
+      - column: const_1_conf_data_sp_included_item_categories
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_sp_included_item_categories
+    context_name: add_const_1_conf_data_sp_included_item_categories
+    params:
+      - aggs:
+          included_item_category: array_agg
+        by:
+        - const_1_conf_data_sp_included_item_categories
+
+  - kind: join
+    name: join_conf_data_sp_included_item_categories
+    context_name: add_const_1_conf_data_sp_fliters_item_category_inclusion
+    params:
+      - other:
+          group_arrays_conf_data_sp_included_item_categories
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_sp_fliters_item_category_inclusion: const_1_conf_data_sp_included_item_categories
+
+  - kind: select
+    name: select_conf_data_sp_included_item_categories
+    context_name: join_conf_data_sp_included_item_categories
+    params:
+      columns:
+        const_1_conf_data_sp_fliters_item_category_inclusion: const_1_conf_data_sp_fliters_item_category_inclusion
+        filter_flag: filter_flag_item_category_inclusion
+        array_agg_included_item_category: array_agg_included_item_category
+      distinct: true
+
+# join conf data - product
+  - kind: join
+    name: join_mat03_conf_data
+    context_name: add_const_1_mat03
+    params:
+      - other:
+          select_conf_data_sp_excluded_brands
+        how:
+          inner
+        columns:
+          const_1_mat03: const_1_conf_data_sp_fliters_brand_exclusion
+      - other:
+          select_conf_data_sp_excluded_pack_types
+        how:
+          inner
+        columns:
+          const_1_mat03: const_1_conf_data_sp_fliters_pack_type_exclusion
+      - other:
+          select_conf_data_sp_included_item_categories
+        how:
+          inner
+        columns:
+          const_1_mat03: const_1_conf_data_sp_fliters_item_category_inclusion
+
+  - kind: add
+    name: add_pm_stats_req
+    context_name: join_mat03_conf_data
+    params:
+      - column: sap_product_code_md_in
+        overwrite: true
+        expression: material
+      - column: sap_ban_md
+        overwrite: true
+        expression: bic_cpbartno
+      - column: in_scope_flg
+        overwrite: true
+        expression: IF(IF(filter_flag_brand_exclusion = 1 AND NOT array_contains(array_agg_excluded_brand, cbrand_desc), 1, 0) + IF(filter_flag_pack_type_exclusion = 1 AND NOT array_contains(array_agg_excluded_pack_type, cpacktype_desc), 1, 0) + IF(filter_flag_item_category_inclusion = 1 AND array_contains(array_agg_included_item_category, bic_ccategory), 1, 0) + IF(filter_flag_brand_exclusion = 0 AND filter_flag_pack_type_exclusion = 0 AND filter_flag_item_category_inclusion = 0, 1, 0) > 0, 1, 0)
+
+# pm_stats - calculation of KPIs comming from product mapping table and establishing flags
+# product mappings source - pm
+  - kind: read_dataio
+    name: read_product_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: golden
+      object_name: product_mapping
+      schema_version: v1
+
+#adjust for new country/ext_source_name naming convention
+  - kind: filter
+    name: filter_pm_country_vendor_name
+    context_name: read_product_mapping
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = IF(ext_source_name like '%leaflets%', '''{{vendor_data.country}}''' || '_', '') || '''{{vendor_data.vendor}}'''
+
+  - kind: select
+    name: select_distinct_ext_mappings
+    context_name: filter_pm_country_vendor_name
+    params:
+      columns:
+        ext_product_code: ext_product_code_pm
+        sap_product_code: sap_material_pm
+      distinct: true
+
+  - kind: group
+    name: group_count_number_of_ext_matches
+    context_name: select_distinct_ext_mappings
+    params:
+      - aggs:
+          ext_product_code_pm: count
+        by:
+        - sap_material_pm
+
+  - kind: select
+    name: select_ext_mappings
+    context_name: group_count_number_of_ext_matches
+    params:
+      columns:
+        sap_material_pm: sap_material_pm
+        count_ext_product_code_pm: number_of_ext_matches
+      distinct: true
+
+  - kind: join
+    name: join_pm_stats_base
+    context_name: add_pm_stats_req
+    params:
+      - other:
+          select_ext_mappings
+        how:
+          fullouter
+        columns:
+          sap_product_code_md_in: sap_material_pm
+
+  - kind: add
+    name: add_flags_pm_stats
+    context_name: join_pm_stats_base
+    params:
+      - column: sap_product_code_md
+        expression: coalesce(sap_product_code_md_in, sap_material_pm)
+      - column: in_pm_flg
+        expression: IF(sap_material_pm IS NULL, 0, 1)
+      - column: in_md_flg
+        expression: IF(sap_product_code_md_in IS NULL, 0, 1)
+      - column: in_portfolio_scope_flg
+        expression: CASE WHEN in_md_flg = 0 THEN 0 WHEN in_scope_flg = 0 THEN 0 ELSE 1 END 
+      - column: number_of_ext_matches
+        expression: coalesce(number_of_ext_matches, 0)
+        overwrite: true
+
+  - kind: filter
+    name: filter_pm_stats_final
+    context_name: add_flags_pm_stats
+    params:
+      - condition:
+          in_scope_flg = 1 OR in_pm_flg = 1
+
+# select identyfying only needed columns
+  - kind: select
+    name: select_md_columns
+    context_name: filter_pm_stats_final
+    params:
+      columns:
+        material: material
+        # country_code: country_code
+        material_desc: material_desc
+        bic_cpbartno: bic_cpbartno
+        cpbartno_desc: cpbartno_desc
+        bic_ceanpc: bic_ceanpc
+        bic_ceanpac: bic_ceanpac
+        eanupc: eanupc
+        bic_cbrand: bic_cbrand
+        cbrand_desc: cbrand_desc
+        bic_cflavor: bic_cflavor
+        cflavor_desc: cflavor_desc
+        bic_cpacktype: bic_cpacktype
+        cpacktype_desc: cpacktype_desc
+        bic_cpacksize: bic_cpacksize
+        cpacksize_desc: cpacksize_desc
+        bic_ccategory: bic_ccategory
+        ccategory_desc: ccategory_desc
+        bic_csls_unit: bic_csls_unit
+        csls_unit_desc: csls_unit_desc
+        bic_cssms: bic_cssms
+        cssms_desc: cssms_desc
+        sap_product_code_md: sap_product_code_md
+        sap_ban_md: sap_ban_md
+        in_scope_flg: in_scope_flg
+        in_pm_flg: in_pm_flg
+        in_md_flg: in_md_flg
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        number_of_ext_matches: number_of_ext_matches
+      distinct: true
+
+# subset of data for following nested process - sell in, mode - inscope -> calculating for products incscope, but not in pm
+  - kind: filter
+    name: filter_np_sellin_mode_in_scope
+    context_name: select_md_columns
+    params:
+      - condition:
+          in_pm_flg = 0
+
+# nested process - sell in calculation - inscope
+  - kind: nested_process
+    name: sap_portfolio_basic_load_sell_in
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/sap_portfolio/v1/sap_portfolio_basic_load_sell_in_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        product_level: "{{product_level_1}}"
+        np_sellin_mode: "{{np_sellin_mode_1}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# # end of nested process
+
+# capture results of np into dataframe, for union later
+# np_sellout_mode_in_scope
+  - kind: add
+    name: add_np_sellin_mode_in_scope
+    context_name: join_product_sell_in
+    params:
+      - column: const_1_union
+        expression: '''1'''
+# ready for union - np_sellout_mode_in_scope
+
+# subset of data for following nested process - sell in, mode - in_pm -> calculating for products in_pm, regardless of scope
+  - kind: filter
+    name: filter_np_sellin_mode_in_pm
+    context_name: select_md_columns
+    params:
+      - condition:
+          in_pm_flg = 1
+
+# nested process - sell in calculation - in_pm
+  - kind: nested_process
+    name: sap_portfolio_basic_load_sell_in
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/sap_portfolio/v1/sap_portfolio_basic_load_sell_in_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        product_level: "{{product_level_1}}"
+        np_sellin_mode: "{{np_sellin_mode_2}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# # end of nested process
+
+# capture results of np into dataframe, for union later
+# np_sellout_mode_in_pm
+  - kind: add
+    name: add_np_sellin_mode_in_pm
+    context_name: add_fy_after_left_join
+    params:
+      - column: const_1_union
+        expression: '''1'''
+# ready for union - np_sellout_mode_in_pm
+
+  - kind: union
+    name: union_np_sellin
+    context_name: add_np_sellin_mode_in_pm
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_np_sellin_mode_in_scope
+
+# final transformations step
+  - kind: add
+    name: add_const_values
+    context_name: union_np_sellin
+    params:
+      - column: country_code
+        overwrite: true
+        expression: '''{{vendor_data.country}}''' 
+      - column: ext_source_name 
+        expression: '''{{vendor_data.vendor}}'''
+      - column: sap_product_name_final
+        expression: "cast (null as string)"
+      - column: ban_name_final
+        expression: "cast (null as string)"
+      - column: brand_final
+        expression: "cast (null as string)"
+      - column: flavour_final
+        expression: "cast (null as string)"
+      - column: package_type_final
+        expression: "cast (null as string)"
+      - column: package_size_final
+        expression: "cast (null as string)"
+      - column: item_category_final
+        expression: "cast (null as string)"
+      - column: sales_unit_final
+        expression: "cast (null as string)"
+      - column: single_multi_serve_final
+        expression: "cast (null as string)"
+      - column: sub_brand_key
+        expression: "cast (null as string)"
+      - column: sub_brand_name
+        expression: "cast (null as string)"
+      - column: sub_brand_final
+        expression: "cast (null as string)"
+      - column: load_date
+        expression: current_timestamp()
+      # - column: in_portfolio_scope_flg
+      #   expression: "1"
+      - column: product_load_status
+        expression: "1"
+      # - column: in_scope_ban_flg
+      #   expression: "1"
+      - column: number_of_ext_matches
+        expression: "cast (number_of_ext_matches as integer)"
+        overwrite: true
+      # - column: cfy
+      #   expression: "cast (null as integer)"
+      # - column: pfy
+      #   expression: "cast (null as integer)"
+      # - column: ppfy
+      #   expression: "cast (null as integer)"
+      - column: sum_cfy
+        expression: "cast (sum_cfy as decimal(10,4))"
+        overwrite: true
+      - column: sum_pfy
+        expression: "cast (sum_pfy as decimal(10,4))"
+        overwrite: true
+      - column: sum_ppfy
+        expression: "cast (sum_ppfy as decimal(10,4))"
+        overwrite: true
+      - column: sum_pppfy
+        expression: "cast (sum_pppfy as decimal(10,4))"
+        overwrite: true
+
+# add in_scope_ban_flg
+  - kind: read_dataio
+    name: read_inscope_bans
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: ca
+      object_name: inscope_bans
+      schema_version: v3
+
+  - kind: add
+    name: add_read_inscope_bans_transformations
+    context_name: read_inscope_bans
+    params:
+      - column: country_inscope
+        overwrite: true
+        expression: IF(IF(len(trim(company_code)) = 3, '0' || trim(company_code), trim(company_code)) = '0480', 'gb', Country)
+
+  - kind: select
+    name: select_inscope_bans_distinct
+    context_name: add_read_inscope_bans_transformations
+    params:
+      columns:
+        country_inscope: country_inscope
+        ban: ban_inscope
+      distinct: true
+
+  - kind: join
+    name: join_inscope_bans_base
+    context_name: add_const_values
+    params:
+      - other:
+          select_inscope_bans_distinct
+        how:
+          left
+        columns:
+          country_code: country_inscope
+          sap_ban_md: ban_inscope
+
+  - kind: add
+    name: add_in_scope_ban_flg
+    context_name: join_inscope_bans_base
+    params:
+      - column: in_scope_ban_flg
+        overwrite: true
+        expression: IF(ban_inscope is null or trim(ban_inscope) = '', 0, 1)
+
+  - kind: select
+    name: select_final
+    context_name: add_in_scope_ban_flg
+    params:
+      columns:
+        material: sap_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        material_desc: sap_product_name
+        sap_product_name_final: sap_product_name_final
+        bic_cpbartno: ban
+        cpbartno_desc: ban_name
+        ban_name_final: ban_name_final
+        bic_ceanpc: ean_piece
+        bic_ceanpac: ean_pack
+        eanupc: ean_case
+        bic_cbrand: brand_key
+        cbrand_desc: brand_name
+        brand_final: brand_final
+        bic_cflavor: flavour_key
+        cflavor_desc: flavour_name
+        flavour_final: flavour_final
+        bic_cpacktype: package_type_key
+        cpacktype_desc: package_type_name
+        package_type_final: package_type_final
+        bic_cpacksize: package_size_key
+        cpacksize_desc: package_size_name
+        package_size_final: package_size_final
+        bic_ccategory: item_category_key
+        ccategory_desc: item_category_name
+        item_category_final: item_category_final
+        bic_csls_unit: sales_unit_key
+        csls_unit_desc: sales_unit_name
+        sales_unit_final: sales_unit_final
+        bic_cssms: single_multi_serve_key
+        cssms_desc: single_multi_serve_name
+        single_multi_serve_final: single_multi_serve_final
+        sub_brand_key: sub_brand_key
+        sub_brand_name: sub_brand_name
+        sub_brand_final: sub_brand_final
+        load_date: load_date
+        number_of_ext_matches: number_of_ext_matches
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        in_scope_ban_flg: in_scope_ban_flg
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: write_dataio
+    name: write_sap_portfolio
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: sap_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

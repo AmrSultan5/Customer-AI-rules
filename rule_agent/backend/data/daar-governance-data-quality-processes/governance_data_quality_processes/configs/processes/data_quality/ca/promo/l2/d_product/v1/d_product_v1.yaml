@@ -1,0 +1,387 @@
+transform:
+  name: d_product
+  operations:
+
+ #ca_0_mat03_material - sku dataset from requirements
+  - kind: read_dataio
+    name: read_ca_0_mat03_material_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_mat03_material
+      schema_version: v1
+
+  - kind: filter
+    name: filter_sku
+    context_name: read_ca_0_mat03_material_v1
+    params:
+      - condition:
+          material != material_desc
+
+  - kind: add
+    name: transformations_sku
+    context_name: filter_sku
+    params:
+      - column: bic_cpbartno
+        expression: regexp_replace(bic_cpbartno, '^[0]*', '')
+        overwrite: true
+      - column: material
+        expression: regexp_replace(material, '^[0]*', '')
+        overwrite: true
+      - column: pack_size
+        expression: CAST(CASE WHEN lower(cpacksize_desc) like '%kilo%' THEN regexp_extract(replace(cpacksize_desc, ',','.'),'(\\d+[.]?\\d*)', 1)*1000 ELSE regexp_extract(replace(cpacksize_desc, ',','.'),'(\\d+[.]?\\d*)', 1) END AS DECIMAL(18,6))
+      - column: unit_of_measure
+        expression: CASE WHEN lower(cpacksize_desc) like '%litre%' THEN 'litre' WHEN lower(cpacksize_desc) like '%gr%' THEN 'gram' ELSE NULL END
+      - column: mp
+        expression: CAST(CASE WHEN cpckgrp_desc = 'Multi Pack' THEN substring_index(LOWER(csls_unit_desc), 'x', -1) ELSE '1' END AS INT)
+      - column: uc_ratio
+        expression: cast(NULL as string)
+      - column: is_dummy_product
+        expression: cast(0 as int)
+
+  - kind: select
+    name: select_sku
+    context_name: transformations_sku
+    params:
+      columns:
+        material: material
+        bic_cpbartno: bic_cpbartno
+        cpbartno_desc: cpbartno_desc
+        material_desc: material_desc
+        cbrand_desc: cbrand_desc
+        cpacksize_desc: cpacksize_desc
+        cpckgrp_desc: cpckgrp_desc
+        csls_unit_desc: csls_unit_desc
+        ccategory_desc: ccategory_desc
+        bic_ceanpc: bic_ceanpc
+        bic_cbrand: bic_cbrand
+        bic_ccategory: bic_ccategory
+        eanupc: eanupc
+        bic_ceanpac: bic_ceanpac
+        pack_size: pack_size
+        unit_of_measure: unit_of_measure
+        mp: mp
+        uc_ratio: uc_ratio
+        is_dummy_product: is_dummy_product
+      distinct: true
+
+#ca_co004n_profitability_pl - sap dataset from requirements
+  - kind: read_dataio
+    name: read_ca_co004n_profitability_pl_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: fm
+      object_name: ca_co004n_profitability_pl
+      schema_version: v1
+
+  - kind: add
+    name: transformations_sap
+    context_name: read_ca_co004n_profitability_pl_v1
+    params:
+      - column: sku
+        expression: regexp_replace(sku, '^[0]*', '')
+        overwrite: true
+        
+  - kind: select
+    name: select_sap
+    context_name: transformations_sap
+    params:
+      columns:
+        sku: sku
+      distinct: true
+
+#sku_group - sg dataset from requirements
+  - kind: read_dataio
+    name: read_sku_group_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: promo
+      object_name: sku_group
+      schema_version: v1
+
+  - kind: select
+    name: select_sg
+    context_name: read_sku_group_v1
+    params:
+      columns:
+        ban_id: ban_id
+        sku_group: sku_group
+      distinct: true
+
+#join sku, sap, sg
+  - kind: join
+    name: join_sku_sap_sg
+    context_name: select_sku
+    params:
+      - other:
+          select_sap
+        how:
+          inner
+        columns:
+          material: sku
+      - other:
+          select_sg
+        how:
+          left
+        columns:
+          bic_cpbartno: ban_id
+
+  - kind: select
+    name: select_sku_sap_sg
+    context_name: join_sku_sap_sg
+    params:
+      columns:
+        bic_cpbartno: ban_code
+        cpbartno_desc: ban_description
+        material: sku_code
+        sku_group: sku_group
+        material_desc: sku_name
+        uc_ratio: uc_ratio
+        cbrand_desc: brand
+        pack_size: pack_size
+        unit_of_measure: unit_of_measure
+        mp: mp
+        ccategory_desc: item_category
+        is_dummy_product: is_dummy_product
+        bic_ceanpc: ean_code
+        bic_cbrand: brand_code
+        bic_ccategory: item_category_code
+        eanupc: ean_upc_code
+        bic_ceanpac: ean_pac_code
+      distinct: true
+
+#universal_schema - so dataset from requirements
+  - kind: read_dataio
+    name: read_universal_schema_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: ca
+      object_name: universal_schema
+      schema_version: v1
+
+  - kind: filter
+    name: filter_so
+    context_name: read_universal_schema_v1
+    params:
+      - condition:
+          country = 'hu'
+
+  - kind: select
+    name: select_so
+    context_name: filter_so
+    params:
+      columns:
+        product_name: product_name
+        brand: brand
+        pack_type: pack_type
+      distinct: true
+
+#cat_mapping - mp1, mp2, mp3 datasets from requirements
+  - kind: read_dataio
+    name: read_cat_mapping_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: cat_mapping
+      schema_version: v1
+
+#mp1
+  - kind: select
+    name: select_mp1
+    context_name: read_cat_mapping_v1
+    params:
+      columns:
+        item_category_sellin: item_category_sellin
+        item_category_sellout: item_category_sellout
+      distinct: true
+
+  - kind: filter
+    name: filter_mp1
+    context_name: select_mp1
+    params:
+      - condition:
+          item_category_sellin IS NOT NULL
+
+#mp2
+  - kind: select
+    name: select_mp2
+    context_name: read_cat_mapping_v1
+    params:
+      columns:
+        brand_sellin: brand_sellin
+        brand_sellout: brand_sellout
+      distinct: true
+
+#mp3
+  - kind: select
+    name: select_mp3
+    context_name: read_cat_mapping_v1
+    params:
+      columns:
+        pack_size_sellin: pack_size_sellin
+        pack_size_sellout: pack_size_sellout
+        pcs_per_phc: pcs_per_phc
+      distinct: true
+
+  - kind: filter
+    name: filter_mp3
+    context_name: select_mp3
+    params:
+      - condition:
+          pack_size_sellin IS NOT NULL
+
+#join so and mp1,2,3
+  - kind: join
+    name: join_so_mp
+    context_name: select_so
+    params:
+      - other:
+          filter_mp1
+        how:
+          inner
+        columns:
+          product_name: item_category_sellout
+      - other:
+          select_mp2
+        how:
+          inner
+        columns:
+          brand: brand_sellout
+      - other:
+          filter_mp3
+        how:
+          inner
+        columns:
+          pack_type: pack_size_sellout
+
+  - kind: add
+    name: transformations_so_mp
+    context_name: join_so_mp
+    params:
+      - column: ban_description
+        expression: concat(product_name, ' | ', brand, ' | ', pack_type)
+      - column: pack_size
+        expression: CAST(CASE WHEN lower(pack_size_sellin) like '%kilo%' THEN regexp_extract(replace(pack_size_sellin, ',','.'),'(\\d+[.]?\\d*)', 1)*1000 ELSE regexp_extract(replace(pack_size_sellin, ',','.'),'(\\d+[.]?\\d*)', 1) END AS DECIMAL(18,6))
+      - column: unit_of_measure
+        expression: CASE WHEN lower(pack_size_sellin) like '%litre%' THEN 'litre' WHEN lower(pack_size_sellin) like '%gr%' THEN 'gram' ELSE NULL END
+      - column: mp
+        expression: CAST(CASE WHEN pcs_per_phc = '' THEN substring_index(LOWER(pcs_per_phc), 'x', -1) ELSE '1' END AS INT)
+      - column: uc_ratio
+        expression: cast(NULL as string)
+      - column: is_dummy_product
+        expression: cast(1 as int)
+      - column: sku_code
+        expression: cast(NULL as string)
+      - column: sku_group
+        expression: cast(NULL as string)
+      - column: sku_name
+        expression: cast(NULL as string)
+      - column: ean_code
+        expression: cast(NULL as string)
+      - column: brand_code
+        expression: cast(NULL as string)
+      - column: item_category_code
+        expression: cast(NULL as string)
+      - column: ean_upc_code
+        expression: cast(NULL as string)
+      - column: ean_pac_code
+        expression: cast(NULL as string)
+
+  - kind: select
+    name: select_so_mp
+    context_name: transformations_so_mp
+    params:
+      columns:
+        ban_description: ban_description
+        sku_code: sku_code
+        sku_group: sku_group
+        sku_name: sku_name
+        uc_ratio: uc_ratio
+        brand_sellin: brand
+        pack_size: pack_size
+        unit_of_measure: unit_of_measure
+        mp: mp
+        item_category_sellin: item_category
+        is_dummy_product: is_dummy_product
+        ean_code: ean_code
+        brand_code: brand_code
+        item_category_code: item_category_code
+        ean_upc_code: ean_upc_code
+        ean_pac_code: ean_pac_code
+      distinct: true
+
+  - kind: add
+    name: add_ban_code
+    context_name: select_so_mp
+    params:
+      - column: ban_code
+        expression: "concat('DUMMY BAN HU: ', row_number() over (order by ban_description))"
+
+  - kind: select
+    name: select_so_mp_ban_code
+    context_name: add_ban_code
+    params:
+      columns:
+        ban_code: ban_code
+        ban_description: ban_description
+        sku_code: sku_code
+        sku_group: sku_group
+        sku_name: sku_name
+        uc_ratio: uc_ratio
+        brand: brand
+        pack_size: pack_size
+        unit_of_measure: unit_of_measure
+        mp: mp
+        item_category: item_category
+        is_dummy_product: is_dummy_product
+        ean_code: ean_code
+        brand_code: brand_code
+        item_category_code: item_category_code
+        ean_upc_code: ean_upc_code
+        ean_pac_code: ean_pac_code
+      distinct: true
+
+#union standard and hu
+  - kind: union
+    name: union_std_hu
+    context_name: select_sku_sap_sg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_so_mp_ban_code
+
+  - kind: write_dataio
+    name: write_d_product
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: promo
+      namespace: l2
+      object_name: d_product
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,280 @@
+transform:
+  name: dm_purchase_orders
+  operations:
+
+  - kind: read_dataio
+    name: read_afko
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: afko
+      schema_version: v1
+
+  - kind: filter
+    name: filter_afko
+    params:
+      - condition:
+          gltrp > add_months(current_timestamp(), -12)
+
+  - kind: select
+    name: select_afko
+    params:
+      columns:
+        aufnr: aufnr
+        gltrp: gltrp
+        gamng: gamng
+        dispo: dispo
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_afpo
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: afpo
+      schema_version: v1
+
+  - kind: filter
+    name: filter_afpo
+    params:
+      - condition:
+          dgltp > add_months(current_timestamp(), -12)
+
+  - kind: select
+    name: select_afpo
+    params:
+      columns:
+        aufnr: aufnr
+        posnr: posnr
+        wemng: wemng
+        meins: meins
+        matnr: matnr
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_aufk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: aufk
+      schema_version: v1
+
+  - kind: filter
+    name: filter_aufk
+    params:
+      - condition:
+          erdat > add_months(current_timestamp(), -12)
+
+  - kind: select
+    name: select_aufk
+    params:
+      columns:
+        aufnr: aufnr
+        objnr: objnr
+        bukrs: bukrs
+        werks: werks
+        autyp: autyp
+        auart: auart
+        ernam: ernam
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tj02t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tj02t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tj02t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tj02t
+    params:
+      columns:
+        istat: istat
+        txt04: txt04
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_jest
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: jest
+      schema_version: v1
+
+  - kind: filter
+    name: filter_jest
+    params:
+      - condition:
+          inact <> 'X' and stat in('I0045','I0046','I0076')
+
+  - kind: select
+    name: select_jest
+    params:
+      columns:
+        objnr: objnr
+        stat: stat
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: read_dataio
+    name: read_zfm_cc_grouping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zfm_cc_grouping
+      schema_version: v1
+
+  - kind: select
+    name: select_zfm_cc_grouping
+    params:
+      columns:
+        bukrs: bukrs
+        bu_key: bu_key
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_zfm_busunit_txt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zfm_busunit_txt
+      schema_version: v1
+
+  - kind: select
+    name: select_zfm_busunit_txt
+    params:
+      columns:
+        bu_key: bu_key
+        long_desc: long_desc
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_production_orders
+    context_name: select_afko
+    params:
+      - other:
+          select_afpo
+        how:
+          inner
+        columns:
+          aufnr: aufnr
+          sap_cluster: sap_cluster
+      - other:
+          select_aufk
+        how:
+          inner
+        columns:
+          aufnr: aufnr
+          sap_cluster: sap_cluster
+      - other:
+          select_jest
+        how:
+          left
+        columns:
+          objnr: objnr
+          sap_cluster: sap_cluster
+      - other:
+          select_tj02t
+        how:
+          left
+        columns:
+          stat: istat
+          sap_cluster: sap_cluster
+      - other:
+          select_zfm_cc_grouping
+        how:
+          left
+        columns:
+          bukrs: bukrs
+          sap_cluster: sap_cluster
+      - other:
+          select_zfm_busunit_txt
+        how:
+          left
+        columns:
+          bu_key: bu_key
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_dm_production_orders
+    params:
+      columns:
+        bukrs: company_code
+        werks: plant_code
+        bu_key: business_unit_code
+        long_desc: business_unit_description
+        autyp: order_category
+        auart: order_type
+        aufnr: order_number
+        posnr: item_number
+        txt04: delivery_completion_code
+        txt30: delivery_completion_name
+        gltrp: delivery_date
+        gamng: quantity_ordered
+        wemng: quantity_delivered
+        meins: unit_of_measure_code
+        matnr: material_code
+        ernam: created_by
+        sap_cluster: sap_cluster
+        dispo: mrp_controller
+      distinct: true
+     
+
+  - kind: write_dataio
+    name: write_dm_production_orders
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_production_orders
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,295 @@
+transform:
+  name: f_sell_out_it
+  operations:
+
+# universal_schema
+  - kind: read_dataio
+    name: read_universal_schema
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: ca
+      object_name: universal_schema
+      schema_version: v1
+
+
+  - kind: filter
+    name: filter_universal_schema
+    params:
+      - condition:
+          country='it' and area='Nano Aree'
+
+  - kind: add
+    name: add_lower_vendor
+    params:
+     - column: vendor_name_low
+       expression: lower(vendor_name)
+
+  - kind: select
+    name: select_universal_schema
+    params:
+      columns:
+        vendor_name_low: vendor_name_low
+        stable_key_to_ban_id: stable_key_to_ban_id
+        product_id: product_id
+        date: date
+        promo_volume_sales: promo_volume_sales
+        promo_value_sales: promo_value_sales
+        total_volume_sales: total_volume_sales
+        promo_volume_sales: promo_volume_sales
+        total_value_sales: total_value_sales
+        promo_value_sales: promo_value_sales
+        area: area
+        vendor_name: vendor_name
+      distinct: true
+
+# nano_areas_products
+  - kind: read_dataio
+    name: read_nano_areas_products
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: nielsen
+      namespace: it
+      object_name: nano_areas_products
+      schema_version: v1
+
+  - kind: select
+    name: select_nano_areas_products
+    params:
+      columns:
+        tag: tag
+        manufacturer: manufacturer
+        brand: brand
+      distinct: true
+
+# product_mapping
+  - kind: read_dataio
+    name: read_product_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: product_mapping_tool
+      object_name: product_mapping
+      schema_version: v1
+
+  - kind: filter
+    name: filter_product_mapping
+    params:
+      - condition:
+          country = 'it'
+
+  - kind: select
+    name: select_product_mapping
+    params:
+      columns:
+        vendor_item: vendor_item
+        vendor: vendor
+        ban: ban
+      distinct: true
+
+  - kind: select
+    name: select_product_mapping_for_grouping
+    params:
+      columns:
+        vendor_item: vendor_item
+        ban: ban
+      distinct: true
+
+  - kind: group
+    name: group_product_mapping_ban_vendor
+    params:
+      - aggs:
+          ban: count
+        by:
+        - vendor_item
+        
+  - kind: filter
+    name: filter_product_mapping_wo_duplicates
+    params:
+      - condition:
+          count_ban = 1
+
+  - kind: add
+    name: add_lower_vendor
+    context_name: select_product_mapping
+    params:
+     - column: vendor_low
+       expression: lower(vendor)
+
+  - kind: join
+    name: join_distinct_vendor
+    context_name: add_lower_vendor
+    params:
+      - other:
+          filter_product_mapping_wo_duplicates
+        how:
+          inner
+        columns:
+          vendor_item: vendor_item
+
+#joining sources
+  - kind: join
+    name: join_so_mp_prd
+    context_name: select_universal_schema
+    params:
+      - other:
+          join_distinct_vendor
+        how:
+          left
+        columns:
+          stable_key_to_ban_id: vendor_item
+          vendor_name_low: vendor_low
+      - other:
+          select_nano_areas_products
+        how:
+          left
+        columns:
+          product_id: tag
+
+  - kind: add
+    name: add_final_columns
+    params:
+     - column: company_code
+       expression: '''594'''
+     - column: country
+       expression: '''it'''
+     - column: cpl_code
+       expression: "cast(null as string)"
+     - column: cpl_name
+       expression: "cast(null as string)"
+     - column: currency_code
+       expression: '''EUR'''
+     - column: date
+       expression: date_format(to_date(left(date,10),'yyyyMMdd'),'yyyyMMdd')
+       overwrite: true
+     - column: m_sales_promo_uc
+       expression: promo_volume_sales/5.678
+     - column: m_sales_regular_uc
+       expression: (total_volume_sales-promo_volume_sales)/5.678
+     - column: m_sales_regular_value
+       expression: total_value_sales-promo_value_sales
+     - column: manufacturer_name
+       expression: if(manufacturer like 'COCA%' or (manufacturer='ZZALTRI' and brand='STILLE'), 'CCH', manufacturer)
+     - column: market_code
+       expression: regexp_extract(area, '^[0-9]*',0)
+     - column: market_name
+       expression: regexp_replace(area,'^[0-9]*','')
+     - column: shop_code
+       expression: "cast(null as string)"
+     - column: shop_name
+       expression: "cast(null as string)"
+     - column: is_current_dataset
+       expression: '1'
+
+  - kind: select
+    name: select_befor_grouping
+    params:
+      columns:
+        ban: ban_code
+        company_code: company_code
+        country: country
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+        currency_code: currency_code
+        date: date
+        m_sales_promo_uc: m_sales_promo_uc
+        promo_value_sales: promo_value_sales
+        m_sales_regular_uc: m_sales_regular_uc
+        m_sales_regular_value: m_sales_regular_value
+        manufacturer_name: manufacturer_name
+        market_code: market_code
+        market_name: market_name
+        shop_code: shop_code
+        shop_name: shop_name
+        vendor_name: vendor_name
+        is_current_dataset: is_current_dataset
+        area: area
+      distinct: true
+
+
+  - kind: group
+    name: group_sum_sales_promo_regular
+    params:
+      - aggs:
+          m_sales_promo_uc: sum
+          promo_value_sales: sum
+          m_sales_regular_uc: sum
+          m_sales_regular_value: sum
+        by:
+        - ban_code
+        - company_code
+        - country
+        - cpl_code
+        - cpl_name
+        - currency_code
+        - date
+        - manufacturer_name
+        - market_code
+        - market_name
+        - shop_code
+        - shop_name
+        - vendor_name
+        - is_current_dataset
+        - area
+
+  - kind: add
+    name: add_final_columns
+    params:
+     - column: m_sales_promo_uc
+       expression: cast(nvl(sum_m_sales_promo_uc,0) as decimal(24,8))
+     - column: m_sales_promo_value
+       expression: cast(nvl(sum_promo_value_sales,0) as decimal(24,8))
+     - column: m_sales_regular_uc
+       expression: cast(nvl(sum_m_sales_regular_uc,0) as decimal(24,8))
+     - column: m_sales_regular_value
+       expression: cast(nvl(sum_m_sales_regular_value,0) as decimal(24,8))
+
+  - kind: select
+    name: select_f_sell_out
+    params:
+      columns:
+        ban_code: ban_code
+        company_code: company_code
+        country: country
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+        currency_code: currency_code
+        date: date
+        m_sales_promo_uc: m_sales_promo_uc
+        m_sales_promo_value: m_sales_promo_value
+        m_sales_regular_uc: m_sales_regular_uc
+        m_sales_regular_value: m_sales_regular_value
+        manufacturer_name: manufacturer_name
+        market_code: market_code
+        market_name: market_name
+        shop_code: shop_code
+        shop_name: shop_name
+        vendor_name: vendor_name
+        is_current_dataset: is_current_dataset
+        area: area
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_sell_out
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: promo
+      namespace: l2
+      object_name: f_sell_out
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

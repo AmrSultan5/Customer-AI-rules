@@ -1,0 +1,90 @@
+transform:
+  name: dm_product_class
+  operations:
+  - kind: read_dataio
+    name: read_kssk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: kssk
+      schema_version: v1
+
+  - kind: select
+    name: select_kssk
+    params:
+      columns:
+        objek: material_code
+        clint: class_code
+        klart: class_type_code
+        sap_cluster: sap_cluster_kp
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_klah
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: klah
+      schema_version: v1
+
+  - kind: select
+    name: select_klah
+    params:
+      columns:
+        clint: clint
+        class: class_name
+        sap_cluster: sap_cluster_kl
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_kp_kl
+    context_name: select_kssk
+    params:
+      - other:
+          select_klah
+        how:
+          left
+        columns:
+          class_code: clint
+          sap_cluster_kp: sap_cluster_kl
+
+
+  - kind: select
+    name: select_dm_product_class
+    params:
+      columns:
+        material_code: material_code
+        class_code: product_class_code
+        class_name: product_class_name
+        class_type_code: class_type
+        sap_cluster_kp: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: write_dataio
+    name: write_dm_product_class
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_product_class
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

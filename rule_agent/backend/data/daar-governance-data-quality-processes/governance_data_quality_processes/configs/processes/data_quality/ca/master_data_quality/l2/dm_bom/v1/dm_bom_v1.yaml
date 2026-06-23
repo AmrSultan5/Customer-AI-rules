@@ -1,0 +1,468 @@
+transform:
+  name: dm_bom
+  operations:
+
+#read dm_bill_of_material
+# Read STPO
+
+  - kind: read_dataio
+    name: read_stpo
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: stpo
+      schema_version: v2
+ 
+  - kind: select
+    name: select_stpo
+    params:
+      columns:
+        stlty: stpo_stlty
+        stlnr: stpo_stlnr
+        stlkn: stpo_stlkn
+        idnrk: stpo_idnrk
+        lkenz: stpo_lkenz
+        sanka: stpo_sanka
+        aedat: stpo_aedat
+        menge: stpo_menge
+        verti: stpo_verti
+        datuv: stpo_datuv
+        sap_cluster: stpo_sap_cluster
+
+
+# Read STKO
+
+  - kind: read_dataio
+    name: read_stko
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: stko
+      schema_version: v1
+
+  - kind: select
+    name: select_stko
+    params:
+      columns:
+        stlty: stko_stlty
+        stlnr: stko_stlnr
+        stlst: stko_stlst
+        stkoz: stko_stkoz
+        loekz: stko_loekz
+        sap_cluster: stko_sap_cluster
+
+  - kind: group
+    name: grouped_stko
+    context_name: read_stko
+    params:
+      - aggs:
+          stkoz: max
+        by:
+        - stlnr
+        - stlty
+        - sap_cluster
+
+
+  - kind: join
+    name: join_grp_read
+    context_name: select_stko
+    params:
+      - other:
+          grouped_stko
+        how:
+          inner
+        columns:
+          stko_stlnr: stlnr
+          stko_stlty: stlty
+          stko_sap_cluster: sap_cluster
+          stko_stkoz: max_stkoz
+
+
+  - kind: select
+    name: select_stko_fin
+    params:
+      columns:
+        stko_stlty: sk_stlty
+        stko_stlnr: sk_stlnr
+        stko_stlst: sk_stlst
+        stko_loekz: stko_loekz
+        max_stkoz: sk_stkoz
+        stko_sap_cluster: sk_sap_cluster
+      distinct: true
+
+# Read MAST
+
+  - kind: read_dataio
+    name: read_mast
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mast
+      schema_version: v1
+
+  - kind: add
+    name: add_mast_werks_substr
+    params:
+      - column: mast_werks_substr
+        expression: substring(werks,0,2)      
+
+  - kind: select
+    name: select_mast
+    params:
+      columns:
+        mast_werks_substr: mast_werks_substr
+        stlnr: mast_stlnr
+        stlal: mast_stlal
+        matnr: mast_matnr
+        werks: mast_werks
+        stlan: mast_stlan
+        andat: mast_andat
+        sap_cluster: mast_sap_cluster
+
+  - kind: filter
+    name: filter_plant
+    context_name: read_mast
+    params:
+      - condition:
+          werks = '0000'
+ 
+  - kind: select
+    name: select_mast_werks
+    params:
+      columns:
+        stlnr: mast_stlnr_zero
+        stlal: mast_stlal_zero
+        matnr: mast_matnr_zero
+        werks: mast_werks_zero
+        stlan: mast_stlan_zero
+        andat: mast_andat_zero
+        sap_cluster: mast_sap_cluster_zero
+
+
+# Read STAS
+
+  - kind: read_dataio
+    name: read_stas
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: stas
+      schema_version: v1
+
+  - kind: group
+    name: grouped_stas
+    params:
+      - aggs:
+          stasz: max
+        by:
+        - stlnr
+        - stlty
+        - stlkn
+        - stlal
+        - sap_cluster
+
+  - kind: select
+    name: select_grouped_stas
+    params:
+      columns:
+        stlnr: agg_stas_stlnr
+        stlty: agg_stas_stlty
+        stlkn: agg_stas_stlkn
+        stlal: agg_stas_stlal
+        sap_cluster: agg_stas_sap_cluster
+        max_stasz: agg_stas_max_stasz           
+
+  - kind: read_dataio
+    name: read_stas
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: stas
+      schema_version: v1
+
+  - kind: select
+    name: select_stas
+    params:
+      columns:
+        stlnr: stas_stlnr
+        stlal: stas_stlal
+        stlkn: stas_stlkn
+        stlty: stas_stlty
+        datuv: stas_datuv
+        stasz: stas_stasz
+        andat: stas_andat
+        lkenz: stas_lkenz
+        sap_cluster: stas_sap_cluster
+
+
+# Read plant_code_mapping
+
+  - kind: read_dataio
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+      schema_version: v2
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: pcm_plant_code_short
+        country_code: pcm_country_code
+        sap_cluster: pcm_sap_cluster
+
+  - kind: join
+    name: join_ms_sp_st_pcm
+    context_name: select_stpo
+    params:
+      - other:
+          select_mast
+        how:
+          inner
+        columns:
+          stpo_stlnr: mast_stlnr
+          stpo_sap_cluster: mast_sap_cluster
+      - other:
+          select_stas
+        how:
+          inner
+        columns:
+          stpo_stlnr: stas_stlnr
+          mast_stlal: stas_stlal 
+          stpo_stlkn: stas_stlkn  
+          stpo_stlty: stas_stlty                             
+          stpo_sap_cluster: stas_sap_cluster
+      - other:
+          select_grouped_stas
+        how:
+          inner
+        columns:
+          stas_stlnr: agg_stas_stlnr
+          stas_stlal: agg_stas_stlal 
+          stas_stlkn: agg_stas_stlkn  
+          stas_stlty: agg_stas_stlty                             
+          stas_sap_cluster: agg_stas_sap_cluster
+          stas_stasz: agg_stas_max_stasz  
+      - other:
+          select_stko_fin
+        how:
+          inner
+        columns:
+          stpo_stlnr: sk_stlnr
+          stpo_stlty: sk_stlty
+          stpo_sap_cluster: sk_sap_cluster      
+      - other:
+          select_pcm
+        how:
+          inner
+        columns:
+          mast_werks_substr: pcm_plant_code_short
+          mast_sap_cluster: pcm_sap_cluster
+
+  - kind: select
+    name: select_joins_general
+    params:
+      columns:
+        mast_matnr: material_code
+        mast_werks: plant_code
+        pcm_country_code: country_code        
+        mast_stlan: bom_usage
+        mast_stlal: bom_alternative
+        mast_andat: bom_link_created_when
+        mast_stlnr: bom_number
+        stko_loekz: bom_deletion_flag
+        stpo_idnrk: bom_component_material_code
+        stpo_stlkn: bom_item_number
+        stpo_lkenz: bom_item_deletion_flag
+        stpo_sanka: costing_relevant_flag
+        stpo_aedat: bom_item_last_change_date
+        stpo_menge: component_quantity
+        stpo_verti: distribution_key_code
+        stpo_stlty: component_category
+        stpo_datuv: bom_item_valid_from
+        stas_datuv: bom_item_link_valid_from
+        agg_stas_max_stasz: bom_item_link_counter
+        stas_andat: bom_item_link_created_when
+        stas_lkenz: bom_item_link_deletion_flag
+        sk_stlst: bom_material_status
+        sk_stkoz: bom_counter
+        mast_sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_with_0000_werks
+    context_name: select_stpo
+    params:
+      - other:
+          select_mast
+        how:
+          inner
+        columns:
+          stpo_stlnr: mast_stlnr
+          stpo_sap_cluster: mast_sap_cluster
+      - other:
+          select_stas
+        how:
+          inner
+        columns:
+          stpo_stlnr: stas_stlnr
+          mast_stlal: stas_stlal 
+          stpo_stlkn: stas_stlkn  
+          stpo_stlty: stas_stlty                             
+          stpo_sap_cluster: stas_sap_cluster
+      - other:
+          select_grouped_stas
+        how:
+          inner
+        columns:
+          stas_stlnr: agg_stas_stlnr
+          stas_stlal: agg_stas_stlal 
+          stas_stlkn: agg_stas_stlkn  
+          stas_stlty: agg_stas_stlty                             
+          stas_sap_cluster: agg_stas_sap_cluster
+          stas_stasz: agg_stas_max_stasz  
+      - other:
+          select_stko_fin
+        how:
+          inner
+        columns:
+          stpo_stlnr: sk_stlnr
+          stpo_stlty: sk_stlty
+          stpo_sap_cluster: sk_sap_cluster    
+      - other:
+          select_mast_werks
+        how:
+          inner
+        columns:
+          mast_matnr: mast_matnr_zero
+          mast_stlnr: mast_stlnr_zero
+          mast_stlal: mast_stlal_zero
+          mast_sap_cluster: mast_sap_cluster_zero
+
+  - kind: add
+    name: add_aggregated_completeness_accuracy
+    params:
+     - column: country_code
+       expression: '" "'
+
+  - kind: select
+    name: select_joins_werks_0000
+    params:
+      columns:
+        mast_matnr: material_code
+        mast_werks: plant_code
+        country_code: country_code        
+        mast_stlan: bom_usage
+        mast_stlal: bom_alternative
+        mast_andat: bom_link_created_when
+        mast_stlnr: bom_number
+        stko_loekz: bom_deletion_flag
+        stpo_idnrk: bom_component_material_code
+        stpo_stlkn: bom_item_number
+        stpo_lkenz: bom_item_deletion_flag
+        stpo_sanka: costing_relevant_flag
+        stpo_aedat: bom_item_last_change_date
+        stpo_menge: component_quantity
+        stpo_verti: distribution_key_code
+        stpo_stlty: component_category
+        stpo_datuv: bom_item_valid_from
+        stas_datuv: bom_item_link_valid_from
+        agg_stas_max_stasz: bom_item_link_counter
+        stas_andat: bom_item_link_created_when
+        stas_lkenz: bom_item_link_deletion_flag
+        sk_stlst: bom_material_status
+        sk_stkoz: bom_counter
+        mast_sap_cluster: sap_cluster
+
+  - kind: union
+    name: union_joins
+    context_name: select_joins_general
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_joins_werks_0000
+
+  - kind: add
+    name: add_null_timestamps_fix
+    params:
+      - column: bom_link_created_when_fix
+        expression: if(bom_link_created_when < '1970-01-01', NULL, bom_link_created_when) 
+      - column: bom_item_last_change_date_fix
+        expression: if(bom_item_last_change_date < '1970-01-01', NULL, bom_item_last_change_date)      
+      - column: bom_item_valid_from_fix
+        expression: if(bom_item_valid_from < '1970-01-01', NULL, bom_item_valid_from)         
+      - column: bom_item_link_valid_from_fix
+        expression: if(bom_item_link_valid_from < '1970-01-01', NULL, bom_item_link_valid_from)    
+      - column: bom_item_link_created_when_fix
+        expression: if(bom_item_link_created_when < '1970-01-01', NULL, bom_item_link_created_when)      
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        material_code: material_code
+        plant_code: plant_code
+        country_code: country_code        
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_link_created_when_fix: bom_link_created_when
+        bom_number: bom_number
+        bom_deletion_flag: bom_deletion_flag
+        bom_component_material_code: bom_component_material_code
+        bom_item_number: bom_item_number
+        bom_item_deletion_flag: bom_item_deletion_flag
+        costing_relevant_flag: costing_relevant_flag
+        bom_item_last_change_date_fix: bom_item_last_change_date
+        component_quantity: component_quantity
+        distribution_key_code: distribution_key_code
+        component_category: component_category
+        bom_item_valid_from_fix: bom_item_valid_from
+        bom_item_link_valid_from_fix: bom_item_link_valid_from
+        bom_item_link_counter: bom_item_link_counter
+        bom_item_link_created_when_fix: bom_item_link_created_when
+        bom_item_link_deletion_flag: bom_item_link_deletion_flag
+        bom_material_status: bom_material_status
+        bom_counter: bom_counter
+        sap_cluster: sap_cluster
+
+
+  - kind: write_dataio
+    name: write_dm_bom
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_bom
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

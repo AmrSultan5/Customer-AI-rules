@@ -1,0 +1,31 @@
+transform:
+  name: dm_sell_in
+  operations:
+  - name: read_and_transform_sell_in
+    kind: governance_data_quality_processes.custom_operations.uc05.dm_sell_in.DmSellinOperation
+    config_kind: governance_data_quality_processes.custom_operation_configs.uc05.dm_sell_in_config.DmSellinOperationConfig
+    params:
+      src_sellout_curated:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: curated
+          storage_id: "{{dataio.storage_id}}"
+        namespace: cz
+        object_name: cz_sellout
+        schema_version: v1
+        source: nielsen
+  - kind: write_dataio
+    name: write_sell_out_cz
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: uc05
+      namespace: l2
+      object_name: f_sell_out
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,176 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: rgm_td
+  operations:
+
+#tccc data
+#READ curated_tccc_sellout_multi_cat.tccc_sellout_fact
+  - kind: read_dataio
+    name: read_tccc_sellout_fact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: tccc_sellout
+      namespace: multi_cat
+      object_name: tccc_sellout_fact
+      schema_version: v2
+
+  - kind: add
+    name: add_gb_nir_mapping
+    context_name: read_tccc_sellout_fact
+    params:
+      - column: country_code
+        expression: IF(country_code = 'nir', 'gb', country_code)
+        overwrite: true
+
+  {% if country.name != "ca" %}
+
+  - kind: filter
+    name: filter_country
+    params:
+      - condition:
+          lower(country_code) = '''{{country.name}}'''
+
+  {% endif %}
+
+  - kind: filter
+    name: filter_tccc_fact_data
+    params:
+      - condition:
+          category in ('CORE SPARKLING', 'ENERGY DRINKS', 'JUICE & JUICE DRINKS', 'WATER', 'RTD TEA', 'ADVANCED HYDRATION', 'PLANT BASED BEVERAGES')
+
+# configuration data - ep_rgm_ean_availability
+  - kind: read_local
+    name: read_rgm_reference_data_country_attributes
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_rgm_ean_availability
+
+  - kind: add
+    name: transformations_rgm_country_flag
+    context_name: read_rgm_reference_data_country_attributes
+    params:
+      - column: country_code
+        expression: lower(country_code)
+        overwrite: true
+
+  - kind: select
+    name: select_rgm_country_flag
+    context_name: transformations_rgm_country_flag
+    params:
+      columns:
+        country_code: country_code
+        ean_flag: ean_flag
+      distinct: true
+
+#READ curated_tccc_sellout_multi_cat.tccc_sellout_period
+  - kind: read_dataio
+    name: read_tccc_sellout_period
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: tccc_sellout
+      namespace: multi_cat
+      object_name: tccc_sellout_period
+      schema_version: v2
+
+  - kind: filter
+    name: filter_tccc_period
+    context_name: read_tccc_sellout_period
+    params:
+      - condition:
+          year >= extract(year from current_date()) - 3
+
+  - kind: select
+    name: select_tccc_period
+    context_name: filter_tccc_period
+    params:
+      columns:
+        period_id: period_id
+        year: year
+        # year_month: year_month
+        periodicity: periodicity
+      distinct: true
+
+#JOIN fact_data, periods, country_flag - tccc
+  - kind: join
+    name: join_gtc_fact_data_period_country_flag
+    context_name: filter_tccc_fact_data
+    params:
+      - other:
+          select_tccc_period
+        how:
+          inner
+        columns:
+          per_id: period_id
+      - other:
+          select_rgm_country_flag
+        how:
+          inner
+        columns:
+          country_code: country_code
+
+#Transformations and KPIs - tccc
+  - kind: add
+    name: transformations_tccc
+    context_name: join_gtc_fact_data_period_country_flag
+    params:
+      - column: period
+        expression: cast(year_month as string)
+      - column: volume_in_uc
+        expression: cast(sales_volume_uc as decimal(18,6))
+      - column: year
+        expression: cast(year as string)
+        overwrite: true
+      - column: vendor
+        expression: cast('Nielsen' as string)
+      - column: application
+        expression: cast('RGM' as string)
+
+#Final select - tccc
+  - kind: select
+    name: select_tccc_columns
+    context_name: transformations_tccc
+    params:
+      columns:
+        period_id: period_tag
+        prod_id: product_tag
+        year: year
+        period: period
+        periodicity: periodicity
+        mkt_id: market_tag
+        volume_in_uc: volume_in_uc
+        application: application
+        vendor: vendor
+        country_code: country
+
+  - kind: write_dataio
+    name: write_rgm_td
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: rgm_td
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

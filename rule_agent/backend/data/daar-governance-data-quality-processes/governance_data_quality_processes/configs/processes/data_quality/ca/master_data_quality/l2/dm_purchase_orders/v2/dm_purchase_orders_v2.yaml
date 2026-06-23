@@ -1,0 +1,320 @@
+transform:
+  name: dm_purchase_orders
+  operations:
+
+  - kind: read_dataio
+    name: read_eket
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: eket
+      schema_version: v1
+
+  - kind: filter
+    name: filter_eket
+    params:
+      - condition:
+          eindt > add_months(current_timestamp(), -24)
+
+  - kind: select
+    name: select_eket
+    params:
+      columns:
+        ebeln: ebeln
+        ebelp: ebelp
+        eindt: eindt
+        wemng: wemng
+        etenr: etenr
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_ekko
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ekko
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ekko
+    params:
+      - condition:
+          (isnull(loekz) or loekz = '') and aedat > add_months(current_timestamp(), -24)
+
+  - kind: select
+    name: select_ekko
+    params:
+      columns:
+        ebeln: ebeln
+        bstyp: bstyp
+        bedat: bedat
+        ekgrp: ekgrp
+        ekorg: ekorg
+        bsart: bsart
+        lifnr: lifnr
+        ernam: ernam
+        aedat: aedat_ekko
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_ekpo
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ekpo
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ekpo
+    params:
+      - condition:
+          isnotnull(matnr) and (isnull(loekz) or loekz = '') and aedat > add_months(current_timestamp(), -24)
+
+  - kind: select
+    name: select_ekpo
+    params:
+      columns:
+        ebeln: ebeln
+        ebelp: ebelp
+        bukrs: bukrs
+        werks: werks
+        elikz: elikz
+        erekz: erekz
+        menge: menge
+        brtwr: brtwr
+        meins: meins
+        matnr: matnr
+        txz01: txz01
+        uniqueid: uniqueid
+        aedat: aedat_ekpo
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_zfm_cc_grouping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zfm_cc_grouping
+      schema_version: v1
+
+  - kind: select
+    name: select_zfm_cc_grouping
+    params:
+      columns:
+        bukrs: bukrs
+        bu_key: bu_key
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_zfm_busunit_txt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zfm_busunit_txt
+      schema_version: v1
+
+  - kind: select
+    name: select_zfm_busunit_txt
+    params:
+      columns:
+        bu_key: bu_key
+        long_desc: long_desc
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_ekbe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ekbe
+      schema_version: v1
+
+  - kind: select
+    name: select_ekbe
+    params:
+      columns:
+        ebeln: ebeln
+        ebelp: ebelp
+        menge: menge_ekbe
+        wrbtr: wrbtr
+        vgabe: vgabe
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_purchase_orders
+    context_name: select_ekpo
+    params:
+      - other:
+          select_eket
+        how:
+          left
+        columns:
+          ebeln: ebeln
+          ebelp: ebelp
+          sap_cluster: sap_cluster
+      - other:
+          select_ekko
+        how:
+          left
+        columns:
+          ebeln: ebeln
+          sap_cluster: sap_cluster
+      - other:
+          select_zfm_cc_grouping
+        how:
+          left
+        columns:
+          bukrs: bukrs
+          sap_cluster: sap_cluster
+      - other:
+          select_zfm_busunit_txt
+        how:
+          left
+        columns:
+          bu_key: bu_key
+          sap_cluster: sap_cluster
+      - other:
+          select_ekbe
+        how:
+          left
+        columns:
+          ebeln: ebeln
+          ebelp: ebelp
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dm_purchase_orders
+    params:
+        - column: purchasing_document_type_name
+          expression: if(bsart = 'NB', 'Purchase Order', 
+                      if(bsart = 'UB', 'Stock Transport Order', 
+                      if(bsart = 'ZI' or bsart = 'ZC', 'Intercompany PO', 
+                      if(bsart = 'ZCC', 'Call off order Conc.', 
+                      if(bsart = 'ZCO', 'Call off order', 
+                      if(bsart = 'ZEO', 'PO from SRM', 
+                      if(bsart = 'ZN', 'Country PO for CPC', null)))))))
+        - column: var_menge
+          expression: if(vgabe = '1', menge_ekbe, 0) 
+        - column: var_wrbtr
+          expression: if(vgabe = '2', wrbtr, 0) 
+
+  - kind: group
+    name: group_dm_purchase_orders
+    params:
+      - aggs:
+          var_menge: sum
+          var_wrbtr: sum
+        by:
+        - bukrs
+        - bu_key
+        - long_desc
+        - werks
+        - bstyp
+        - bedat
+        - ekgrp
+        - ekorg
+        - bsart
+        - ebeln
+        - ebelp
+        - elikz
+        - erekz
+        - eindt
+        - eindt
+        - menge
+        - wemng
+        - meins
+        - matnr
+        - lifnr
+        - ernam
+        - aedat_ekko
+        - sap_cluster
+        - txz01
+        - uniqueid
+        - aedat_ekpo
+        - etenr
+        - purchasing_document_type_name
+        - brtwr
+
+
+  - kind: select
+    name: select_dm_purchase_orders
+    params:
+      columns:
+        bukrs: company_code
+        bu_key: business_unit_code
+        long_desc: business_unit_description
+        werks: plant_code
+        bstyp: purchasing_document_category
+        bedat: purchase_document_date
+        ekgrp: purchasing_group_code
+        ekorg: purchasing_organization
+        bsart: purchasing_document_type
+        ebeln: purchasing_document_number
+        ebelp: item_number
+        elikz: delivery_completion_flag
+        erekz: invoice_completion_flag
+        eindt: delivery_date
+        menge: quantity_ordered
+        wemng: quantity_delivered
+        meins: unit_of_measure_code
+        matnr: material_code
+        lifnr: vendor_code
+        ernam: created_by
+        aedat_ekko: order_created_when
+        sap_cluster: sap_cluster
+        txz01: order_item_description
+        uniqueid: item_id
+        aedat_ekpo: item_created_when
+        etenr: delivery_item_counter
+        purchasing_document_type_name: purchasing_document_type_name
+        brtwr: amount_ordered
+        sum_var_menge: quantity_history
+        sum_var_wrbtr: amount_history
+      distinct: true
+     
+
+  - kind: write_dataio
+    name: write_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_purchase_orders
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

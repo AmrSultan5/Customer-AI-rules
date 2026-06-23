@@ -1,0 +1,244 @@
+
+transform:
+  name: external_products_universe_flavour  
+  operations:
+
+# Read epu after basic load
+# epu_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+      
+  - kind: add
+    name: add_epu_1
+    params:
+      - column: brand_name_cleansed
+        overwrite: true
+        expression: regexp_replace(lower(brand_name), '[^a-z0-9,.-]+', ' ')
+      - column: sub_brand_name
+        overwrite: true
+        expression: if(sub_brand_name = '' or sub_brand_name is null, 'other', sub_brand_name)
+      - column: partition
+        expression: '''1'''
+      - column: id
+        expression: row_number() over (partition by partition order by product_name_cleansed, country_code)
+
+  - kind: add
+    name: add_epu_2
+    params:
+      - column: brand_name_cleansed
+        overwrite: true
+        expression: trim(regexp_replace(brand_name_cleansed, 'schweppes-cs', 'schweppes-club'))        
+      - column: product_name_cleansed
+        overwrite: true
+        expression: if(contains(product_name_cleansed, 'energy') and contains(product_name_cleansed, 'zero'), regexp_replace(product_name_cleansed, 'energy ', ''), product_name_cleansed) 
+
+# Read spu after basic load
+# sap_products_universe - spu
+  - kind: read_dataio
+    name: read_spu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: add
+    name: add_spu_1
+    params:
+      - column: brand_name_cleansed
+        overwrite: true
+        expression: regexp_replace(lower(brand_name), '[^a-z0-9,.-]+', ' ')
+      - column: flavour_name_cleansed
+        overwrite: true
+        expression: regexp_replace(lower(if(flavour_name is null or trim(flavour_name) = '', 'ZZZZZZZZZZZZZZZZ', flavour_name)), '[^a-z0-9,.-]+', ' ')
+
+  - kind: add
+    name: add_spu_2
+    params:
+      - column: brand_name_cleansed
+        overwrite: true
+        expression: regexp_replace(brand_name_cleansed, 'schweppes-cs', 'schweppes-club')
+        
+  - kind: add
+    name: add_spu_3
+    params:
+      - column: brand_name_cleansed
+        overwrite: true
+        expression: trim(brand_name_cleansed)
+      - column: flavour_name_cleansed
+        overwrite: true
+        expression: trim(flavour_name_cleansed)
+
+  - kind: add
+    name: add_spu_4
+    params:
+      - column: flavour_name_cleansed
+        overwrite: true
+        expression: regexp_replace(flavour_name_cleansed, '\\s+', '-')
+      - column: product_name_cleansed
+        overwrite: true
+        expression: regexp_replace(regexp_replace(product_name_cleansed, '\\s+\\S+$', ''), '\\s+\\S+$', '')
+      - column: sub_brand_name
+        overwrite: true
+        expression: if(sub_brand_name = '' or sub_brand_name is null, 'other', sub_brand_name)
+      - column: pack_size_fix
+        overwrite: true
+        expression: IF (lower(pack_size_uom_unified) == 'l', concat(regexp_replace(pack_size_volume_unified * 1000, '\\.0', ''), 'ml'),
+                    IF (lower(pack_size_uom_unified) == 'kg', concat(regexp_replace(pack_size_volume_unified * 1000, '\\.0', ''), 'g'),
+                    IF (lower(pack_size_uom_unified) == 'cl', concat(regexp_replace(pack_size_volume_unified * 100, '\\.0', ''), 'ml'),
+                    IF (lower(pack_size_uom_unified) == '-1', '', concat(regexp_replace(pack_size_volume_unified, '\\.0', ''), lower(pack_size_uom_unified))))))
+
+  - kind: select
+    name: select_sap_brands_0
+    context_name: add_spu_4
+    params:
+      columns:
+        brand_name_cleansed: brand_name_cleansed_0
+      distinct: true
+      
+  - kind: add
+    name: add_sap_brands_0
+    params:
+      - column: column_for_join
+        expression: '''1'''
+
+  - kind: select
+    name: select_sap_brands
+    context_name: add_spu_4
+    params:
+      columns:
+        brand_name_cleansed: brand_name_cleansed
+      distinct: true
+      
+  - kind: add
+    name: add_sap_brands
+    params:
+      - column: column_for_join
+        expression: '''1'''
+
+  - kind: join
+    name: join_sap_brands
+    context_name: add_sap_brands_0
+    params:
+      - other:
+          add_sap_brands
+        how:
+          outer
+        columns:
+          column_for_join: column_for_join
+
+# brand similarity join
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_ered.brand_similarity.BrandSimilarityOperation
+    name: sap_brands_similarity
+    context_name: join_sap_brands
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_ered.brand_similarity_config.BrandSimilarityOperationConfig
+    params:
+      input_brand_1: brand_name_cleansed_0
+      input_brand_2: brand_name_cleansed
+
+  - kind: filter
+    name: filter_sap_brands
+    params:
+      - condition:
+          brand_similarity_score != '0.0'
+
+  - kind: rename
+    name: rename_spu_4
+    context_name: add_spu_4
+    params:
+      - column: brand_name_cleansed
+        to: brand_name_cleansed_0
+
+  - kind: join
+    name: join_spu_fuzzy_brands
+    context_name: rename_spu_4
+    params:
+      - other:
+          filter_sap_brands
+        how:
+          left
+        columns:
+          brand_name_cleansed_0: brand_name_cleansed_0
+
+# generate flavours
+  - kind: governance_data_quality_processes.custom_operations.product_characteristics.generate_flavours.GenerateFlavoursOperation
+    name: add_epu_flavours
+    context_name: add_epu_2
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_characteristics.generate_flavours_config.GenerateFlavoursOperationConfig
+    params:
+      max_rank_to_vote: 5
+      other: join_spu_fuzzy_brands
+      column_map: {'id': 'id',
+              'product_name': 'product_name_cleansed',
+              'brand_name': 'brand_name_cleansed',
+              'sub_brand_name': 'sub_brand_name',
+              'country_code': 'country_code',
+              'flavour_name': 'flavour_name_cleansed'} 
+      ngram_sizes: [0,5,4,3] 
+      join_hierarchy_list: [['brand_name_cleansed', 'sub_brand_name', 'country_code'], ['brand_name_cleansed', 'sub_brand_name'], []]
+ 
+  - kind: select
+    name: select_epu_with_flavours
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+      distinct: true
+
+  - kind: cast
+    name: cast_to_decimal
+    params:
+      - column: flavour_probability
+        to: decimal(10,4)
+
+  - kind: write_dataio
+    name: write_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

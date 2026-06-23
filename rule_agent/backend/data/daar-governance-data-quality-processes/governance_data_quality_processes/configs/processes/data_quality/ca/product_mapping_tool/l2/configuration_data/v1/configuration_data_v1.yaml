@@ -1,0 +1,63 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+                        
+transform:
+  name: configuration_data_ingest
+  operations:
+
+  - kind: read_sharepoint
+    name: update_conf_data_from_sharepoint
+    params:
+      domain: "cchellenic"
+      site: "spaces-BSS-DropZone"
+      client_id: SHAREPOINTDROPZONECLIENTID
+      client_secret: SHAREPOINTDROPZONECLIENTSECRET
+      remote_path: "Manual Submissions/ca/product_mapping_tool/"
+      local_path: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/"
+      file_regex: ".+.xlsx$"
+      recursive: true
+
+  - kind: read_local
+    name: read_pipeline_dyn_params_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: pipelines_dyn_params
+
+  - kind: write_local
+    name: write_dyn_params_to_raw
+    params:
+      format: parquet
+      location: /mnt/datalake_idq/raw/data_quality/product_mapping_tool/configuration_data/0/pipelines_dyn_params
+      refresh_mode: overwrite
+      options:
+        header: true
+        delimiter: ";"
+
+  - kind: read_local
+    name: read_pipeline_dyn_params_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ext_sources_processing_list
+
+  - kind: write_local
+    name: write_ext_sources_processing_list_to_raw
+    params:
+      format: parquet
+      location: /mnt/datalake_idq/raw/data_quality/product_mapping_tool/configuration_data/0/ext_sources_processing_list
+      refresh_mode: overwrite
+      options:
+        header: true
+        delimiter: ";"

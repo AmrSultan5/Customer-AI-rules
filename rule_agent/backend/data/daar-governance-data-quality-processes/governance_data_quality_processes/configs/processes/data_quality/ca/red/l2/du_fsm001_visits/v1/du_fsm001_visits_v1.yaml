@@ -1,0 +1,452 @@
+transform:
+  name: du_fsm001_visits
+  operations:
+
+  - kind: read_dataio
+    name: read_ca_0_cus03_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_cus03_customer
+      schema_version: v1
+
+  - kind: select
+    name: select_ca_0_cus03_customer
+    params:
+      columns:
+        customer: customer
+        bic_cterrid: bp_territory_id
+        country: country
+        bic_ctrade_ch: bic_ctrade_ch
+        ctrade_ch_desc: ctrade_ch_desc
+        bic_csub_trad: bic_csub_trad
+        csub_trad_desc: csub_trad_desc
+        bic_c_ccaf: ccaf_code
+        c_ccaf_desc: c_ccaf_desc
+        cbdaasgm1: bdaa_segment_code
+        cbdaasgm1_desc: cbdaasgm1_desc
+        bic_ccustpllv: cpl_code
+        ccustpllv_desc: ccustpllv_desc
+        sales_off: sales_office
+        sales_grp: sales_group
+
+  - kind: read_local
+    name: read_red_threshold_matrix
+    params:
+      location: "{{mnt_path}}/data_quality/red/threshold_matrix"
+      options:
+        escape: '"'
+        header: true
+        mode: DROPMALFORMED
+        pathGlobFilter: threshold_matrix.csv
+
+  - kind: select
+    name: select_threshold_matrix
+    params:
+      columns:
+        thc_code: thc_code
+        min_time: min_time
+        max_time: max_time
+
+  - kind: read_dataio
+    name: read_ca_crm01_m_visits
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: mtc
+      object_name: ca_crm01_m_visits
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ca_crm01_m_visits
+    params:
+      - condition:
+          (crm_prctyp = 'ZRDE' OR crm_prctyp = 'RED POS Execution')
+      - condition:
+          crm_usstat != 'E0008'
+      - condition:
+          staonesys0 = 40
+      - condition:
+          crm_no_act > 0
+      - condition:
+          date_format(to_date(concat(left(fiscper, 4), right(fiscper, 2)), "yyyyMM"), "yyyyMM") >= date_format(add_months(current_date(), -3), "yyyyMM")
+
+  - kind: select
+    name: select_ca_crm01_m_visits
+    params:
+      columns:
+        customer: customer_code
+        crm_no_act: no_of_activities
+        crm_dur: duration_actual_raw
+        bic_kst_dur: duration_plan
+        crm_prctyp: process_type
+        crm_rg: code_group
+        crm_rca: catalog_reason
+        calday: activity_date
+        crm_usstat: user_status
+        staonesys0: staonesys0
+        bic_cbusdeva: bd_employee
+        fiscper: fiscal_period
+        salesorg: sales_org_code
+        crm_obj_id: transaction_id
+        bic_ctim_acfr: actual_activity_from
+        bic_ctim_acto: actual_activity_to
+
+  - kind: join
+    name: join_ca_0_cus03_customer
+    params:
+      - other:
+          select_ca_0_cus03_customer
+        how:
+          left
+        columns:
+          customer_code: customer
+      - other:
+          select_threshold_matrix
+        how:
+          inner
+        columns:
+          bic_ctrade_ch: thc_code
+
+  - kind: select
+    name: select_du_fsm001_visits
+    params:
+      columns:
+        customer_code: customer_code
+        no_of_activities: no_of_activities
+        duration_actual_raw: duration_actual_raw
+        duration_plan: duration_plan
+        process_type : process_type
+        code_group: code_group
+        catalog_reason: catalog_reason
+        activity_date: activity_date
+        user_status: user_status
+        staonesys0: staonesys0
+        bd_employee: bd_employee
+        fiscal_period: fiscal_period
+        bp_territory_id: bp_territory_id
+        country: country
+        sales_org_code: sales_org_code
+        bic_ctrade_ch: trade_channel_code
+        ctrade_ch_desc: ctrade_ch_desc
+        bic_csub_trad: sub_trade_channel_code
+        csub_trad_desc: csub_trad_desc
+        ccaf_code: ccaf_code
+        c_ccaf_desc: c_ccaf_desc
+        bdaa_segment_code: bdaa_segment_code
+        cbdaasgm1_desc: cbdaasgm1_desc
+        cpl_code: cpl_code
+        ccustpllv_desc: ccustpllv_desc
+        transaction_id: transaction_id
+        sales_office: sales_office
+        sales_group: sales_group
+        actual_activity_from: actual_activity_from
+        actual_activity_to: actual_activity_to
+        min_time: min_time
+        max_time: max_time
+
+  - kind: add
+    name: add_du_fsm001_visits
+    params:
+      - column: report_code
+        expression: '"fsm001"'
+      - column: report_name
+        expression: '"RED Duration"'
+      - column: country_code
+        expression: lower(country)
+      - column: trade_channel_description
+        expression: upper(ctrade_ch_desc)
+      - column: sub_trade_channel_description
+        expression: upper(csub_trad_desc)
+      - column: ccaf_description
+        expression: upper(c_ccaf_desc)
+      - column: bdaa_segment_description
+        expression: upper(cbdaasgm1_desc)
+      - column: cpl_description
+        expression: upper(ccustpllv_desc)
+      - column: duration_actual_calc
+        expression: IF(bigint(to_timestamp(actual_activity_to)) < bigint(to_timestamp(actual_activity_from)), duration_actual_raw, round((bigint(to_timestamp(actual_activity_to)) - bigint(to_timestamp(actual_activity_from)))/60,2))
+      - column: above_time_threshold_flag
+        expression: "CASE WHEN duration_actual_calc > max_time THEN '1' ELSE '0' END"
+      - column: below_time_threshold_flag
+        expression: "CASE WHEN duration_actual_calc < min_time THEN '1' ELSE '0' END"
+      - column: activity_status
+        expression: "CASE WHEN staonesys0 = '40' THEN 'Completed' WHEN staonesys0 = '10' THEN 'Open' WHEN staonesys0 = '20' THEN 'Procesing' WHEN staonesys0 = '00' THEN 'Rejected' END"
+
+  - kind: drop
+    name: drop_du_fsm001_visits
+    params:
+      - column: min_time
+      - column: max_time
+      - column: country
+      - column: ctrade_ch_desc
+      - column: csub_trad_desc
+      - column: c_ccaf_desc
+      - column: cbdaasgm1_desc
+      - column: ccustpllv_desc
+      - column: staonesys0
+
+  - kind: cast
+    name: cast_du_fsm001_visits
+    params:
+      - column: activity_date
+        to: string
+      - column: actual_activity_from
+        to: string
+      - column: actual_activity_to
+        to: string
+      - column: duration_actual_raw
+        to: string
+      - column: duration_plan
+        to: string
+      - column: no_of_activities
+        to: string
+      - column: duration_actual_calc
+        to: string
+
+  - kind: write_dataio
+    name: write_du_fsm001_visits
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: red
+      namespace: l2
+      object_name: du_fsm001_visits
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+
+  - kind: select
+    name: select_fsm001_visits_detailed
+    params:
+      columns:
+        report_name: report_name
+        customer_code: customer_code
+        no_of_activities: number_of_activities
+        duration_actual_calc: duration_actual
+        process_type: process_type
+        catalog_reason: catalog_reason
+        code_group: code_group
+        activity_date: activity_date
+        user_status: user_status
+        activity_status: activity_status
+        transaction_id: transaction_id
+        bd_employee: business_developer_employee
+        fiscal_period: fiscal_period
+        bp_territory_id: business_partner_territory_id
+        country_code: country_code
+        ccaf_code: ccaf_code
+        ccaf_description: ccaf_description
+        bdaa_segment_code: bdaa_segment_code
+        bdaa_segment_description: bdaa_segment_description
+        cpl_code: cpl_code
+        cpl_description: cpl_description
+        sales_org_code: sales_org_code
+        trade_channel_code: trade_channel_code
+        trade_channel_description: trade_channel_description
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_description: sub_trade_channel_description
+        sales_office: sales_office
+        sales_group: sales_group
+        above_time_threshold_flag: above_time_threshold_flag
+        below_time_threshold_flag: below_time_threshold_flag
+
+  - kind: add
+    name: add_fsm001_visits_detailed
+    params:
+      - column: duration_check
+        expression: "CASE WHEN above_time_threshold_flag = '1' THEN 'RED duration above threshold' WHEN below_time_threshold_flag = '1' THEN 'RED duration below threshold' ELSE 'OK' END"
+
+  - kind: drop
+    name: drop_fsm001_visits_detailed
+    params:
+      - column: above_time_threshold_flag
+      - column: below_time_threshold_flag
+
+  - kind: cast
+    name: cast_fsm001_visits_detailed
+    params:
+      - column: activity_date
+        to: date
+      - column: duration_actual
+        to: double
+      - column: number_of_activities
+        to: integer
+
+  - kind: write_dataio
+    name: write_fsm001_visits_detailed
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: red
+      namespace: golden
+      object_name: fsm001_visits_detailed
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+
+  - kind: select
+    name: select_above_time_threshold
+    context_name: add_du_fsm001_visits
+    params:
+      columns:
+        country_code: country_code
+        report_code: report
+        report_name: name
+        above_time_threshold_flag: above_time_threshold_flag
+        fiscal_period: period
+
+  - kind: add
+    name: add_above_time_threshold
+    params:
+      - column: check_name
+        expression: '"RED duration above threshold - Daily"'
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: failed_checks
+        expression: IF(above_time_threshold_flag = '1', 1, NULL)
+      - column: total_checks
+        expression: int(1)
+      - column: report_name
+        expression: concat(concat(report, '-'), name)
+
+  - kind: drop
+    name: drop_above_time_threshold
+    params:
+      - column: above_time_threshold_flag
+      - column: report
+      - column: name
+
+  - kind: group
+    name: group_above_time_threshold
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code
+        - report_name
+        - check_name
+        - quality_category
+        - period
+
+  - kind: select
+    name: select_above_time_threshold_aggregated
+    params:
+      columns:
+        country_code: country_code
+        report_name: report_name
+        check_name: check_name
+        quality_category: quality_category
+        count_total_checks: count_total_checks
+        count_failed_checks: count_failed_checks
+        period: period
+
+  - kind: select
+    name: select_below_time_threshold
+    context_name: add_du_fsm001_visits
+    params:
+      columns:
+        country_code: country_code
+        report_code: report
+        report_name: name
+        below_time_threshold_flag: below_time_threshold_flag
+        fiscal_period: period
+
+  - kind: add
+    name: add_below_time_threshold
+    params:
+      - column: check_name
+        expression: '"RED duration below threshold - Daily"'
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: failed_checks
+        expression: int(IF(below_time_threshold_flag = '1', 1, NULL))
+      - column: total_checks
+        expression: int(1)
+      - column: report_name
+        expression: concat(concat(report, '-'), name)
+
+  - kind: drop
+    name: drop_below_time_threshold
+    params:
+      - column: below_time_threshold_flag
+      - column: report
+      - column: name
+
+  - kind: group
+    name: group_below_time_threshold
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code
+        - report_name
+        - check_name
+        - quality_category
+        - period
+
+  - kind: select
+    name: select_below_time_threshold_aggregated
+    params:
+      columns:
+        country_code: country_code
+        report_name: report_name
+        check_name: check_name
+        quality_category: quality_category
+        count_total_checks: count_total_checks
+        count_failed_checks: count_failed_checks
+        period: period
+
+  - kind: union
+    name: union_below_above_time_threshold_aggregated
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_above_time_threshold_aggregated
+
+  - kind: add
+    name: add_red_aggregated
+    params:
+      - column: total_checks
+        expression: int(count_total_checks)
+      - column: failed_checks
+        expression: int(count_failed_checks)
+      - column: openhub
+        expression: '''fsm001_visits'''    
+
+  - kind: drop
+    name: drop_red_aggregated
+    params:
+      - column: count_total_checks
+      - column: count_failed_checks
+
+  - kind: write_dataio
+    name: write_red_aggregated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: red
+      namespace: golden
+      object_name: red_aggregated
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: append

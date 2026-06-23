@@ -1,0 +1,213 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+
+transform:
+  name: external_products_universe_blacklisting
+  operations:
+
+# Read data marts
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+  - kind: add
+    name: add_product_name_separated
+    context_name: read_external_products_universe
+    params:
+      - column: product_name_tokenized_array
+        expression: split(product_name_stage, ' ', -1)
+      - column: const_1_join_clean_1
+        expression: '''1'''
+
+# read conf data - blacklisting 
+  - kind: read_local
+    name: read_conf_data_epu_blacklisting
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: epu_blacklisting
+
+# blacklisting - words - bw
+  - kind: add
+    name: add_const_1_bw
+    context_name: read_conf_data_epu_blacklisting
+    params:
+      - column: const_1_bw
+        expression: '''1'''
+
+  - kind: filter
+    name: filter_bw
+    context_name: add_const_1_bw
+    params:
+      - condition:
+          blacklisting_mode = 'word'
+
+  - kind: group
+    name: group_bw
+    context_name: filter_bw
+    params:
+      - aggs:
+          forbidden_value: array_agg
+        by:
+        - const_1_bw
+
+  - kind: add
+    name: add_pattern_bw
+    context_name: group_bw
+    params:
+      - column: pattern_bw
+        expression: concat_ws('|', array_agg_forbidden_value)
+
+  - kind: select
+    name: select_pattern_bw
+    context_name: add_pattern_bw
+    params:
+      columns:
+        const_1_bw: const_1_bw
+        pattern_bw: pattern_bw
+
+# blacklisting - rows - br
+  - kind: add
+    name: add_const_1_br
+    context_name: read_conf_data_epu_blacklisting
+    params:
+      - column: const_1_br
+        expression: '''1'''
+
+  - kind: filter
+    name: filter_br
+    context_name: add_const_1_br
+    params:
+      - condition:
+          blacklisting_mode = 'row'
+
+  - kind: group
+    name: group_br
+    context_name: filter_br
+    params:
+      - aggs:
+          forbidden_value: array_agg
+        by:
+        - const_1_br
+
+  - kind: add
+    name: add_pattern_br
+    context_name: group_br
+    params:
+      - column: pattern_br
+        expression: concat_ws('|', array_agg_forbidden_value)
+
+  - kind: select
+    name: select_pattern_br
+    context_name: add_pattern_br
+    params:
+      columns:
+        const_1_br: const_1_br
+        pattern_br: pattern_br
+
+  - kind: join
+    name: join_bw_br
+    context_name: add_product_name_separated
+    params:
+      - other:
+          select_pattern_bw
+        how:
+          inner
+        columns:
+          const_1_join_clean_1: const_1_bw
+      - other:
+          select_pattern_br
+        how:
+          inner
+        columns:
+          const_1_join_clean_1: const_1_br
+
+  - kind: add
+    name: add_re_bw_br
+    context_name: join_bw_br
+    params:
+      - column: pattern_re_bw
+        expression: regexp_replace(product_name_cleansed, pattern_bw, '')
+      - column: pattern_re_br
+        expression: regexp_like(product_name_cleansed, pattern_br)
+
+  - kind: add
+    name: add_blacklisting_mode
+    context_name: add_re_bw_br
+    params:
+      - column: blacklisting_mode
+        overwrite: true
+        expression: case when pattern_re_br = true and pattern_re_bw != product_name_cleansed then 'row/word' when pattern_re_br = true then 'row' when pattern_re_bw != product_name_cleansed then 'word' else '' end
+
+  - kind: add
+    name: add_remove_whitespaces
+    context_name: add_blacklisting_mode
+    params:
+      - column: pattern_re_bw
+        overwrite: true
+        expression: trim(regexp_replace(pattern_re_bw, '\\s+', ' '))
+
+  - kind: select
+    name: select_final
+    context_name: add_remove_whitespaces
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        pattern_re_bw: product_name_cleansed
+        product_name_translated: product_name_translated
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        #pack_size_name_fix: pack_size_name_fix
+        #process_run_id: process_run_id
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full
+

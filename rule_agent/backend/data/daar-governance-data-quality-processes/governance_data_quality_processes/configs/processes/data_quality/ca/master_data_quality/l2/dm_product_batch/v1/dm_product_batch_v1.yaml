@@ -1,0 +1,102 @@
+transform:
+  name: dm_product_batch
+  operations:
+  - kind: read_dataio
+    name: read_mchb
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mchb
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mchb
+    params:
+      - condition:
+          lfgja >=  (date_format(add_months(current_date(), -24),"yyyy"))
+
+
+  - kind: select
+    name: select_mchb
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        charg: charg
+        lfgja: lfgja
+        lfmon: lfmon
+        ersda: ersda
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_mch1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mch1
+      schema_version: v1
+
+  - kind: select
+    name: select_mch1
+    params:
+      columns:
+        matnr: matnr_b
+        charg: charg_b
+        cuobj_bm: cuobj_bm_b
+        sap_cluster: sap_cluster_b
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: joina_b
+    context_name: select_mchb
+    params:
+      - other:
+          select_mch1
+        how:
+          inner
+        columns:
+          matnr: matnr_b
+          charg: charg_b
+          sap_cluster: sap_cluster_b
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        matnr: material_code
+        werks: plant_code
+        charg: batch_number
+        lfgja: fiscal_year
+        lfmon: period
+        cuobj_bm_b: batch_classification
+        ersda: created_on_date
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_product_batch
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_product_batch
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

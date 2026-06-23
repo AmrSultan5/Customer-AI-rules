@@ -1,0 +1,377 @@
+transform:
+  name: f_promotion
+  operations:
+
+#f_promotion XTEL
+
+# Read promo_mechanics
+
+  - kind: read_dataio
+    name: read_promo_mechanics
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: promo_mechanics
+      schema_version: v2
+
+  - kind: add
+    name: add_final_columns_xtel
+    params:
+     - column: country
+       expression: if(ltrim('0', company_code)='480', 'ni', country)
+     - column: company_code
+       expression: ltrim('0', company_code)
+     - column: sell_out_start_date
+       expression: date_format(to_date(left(start_sell_out_date,10),'yyyy-MM-dd'),'yyyyMMdd')
+     - column: sell_out_end_date
+       expression: date_format(to_date(left(end_sell_out_date,10),'yyyy-MM-dd'),'yyyyMMdd')
+     - column: source
+       expression: '''xtel'''
+
+  - kind: select
+    name: select_xtel
+    params:
+      columns:
+        country: country
+        cust_planning_level_cmd: cpl_code
+        cpl_name: cpl_name
+        company_code: company_code
+        shopper_discount: m_promo_discount
+        retail_promo_selling_price: m_promo_price
+        shopper_mechanic: mechanic_name
+        promotion_descrpition: promotion_name
+        promotion_id: promotion_code
+        sell_out_start_date: sell_out_start_date
+        sell_out_end_date: sell_out_end_date
+        sku_id: sku_id
+        ban_id: ban_id
+        source: source
+      distinct: true
+
+
+#f_promotion LEAFLET_RO
+
+# Read leaflets
+
+  - kind: read_dataio
+    name: read_leaflets
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: leaflets
+      schema_version: v2
+
+  - kind: add
+    name: add_final_columns_leaflet
+    params:
+     - column: company_code
+       expression: '''580'''
+     - column: m_promo_price
+       expression: replace(regexp_replace(map_with_vat, '[A-Za-z]+$', ''), ',', '.')
+     - column: promotion_name
+       expression: 'null'
+     - column: promotion_code
+       expression: 'null'
+     - column: sell_out_start_date
+       expression: date_format(to_date(left(period_start,10),'yyyy-MM-dd'),'yyyyMMdd')
+     - column: sell_out_end_date
+       expression: date_format(to_date(left(period_end,10),'yyyy-MM-dd'),'yyyyMMdd')
+     - column: sku_code
+       expression: 'null'
+     - column: source
+       expression: '''leaflet'''
+
+
+  - kind: select
+    name: select_leaflets
+    params:
+      columns:
+        item_full_description: item_full_description
+        country: country
+        retailer: retailer
+        company_code: company_code
+        discount: m_promo_discount
+        m_promo_price: m_promo_price
+        promotion_mechanism_w_o_value: mechanic_name
+        promotion_name: promotion_name
+        promotion_code: promotion_code
+        sell_out_start_date: sell_out_start_date
+        sell_out_end_date: sell_out_end_date
+        sku_code: sku_code
+        source: source
+      distinct: true
+
+# Read nielsen_leaflet
+
+  - kind: read_dataio
+    name: read_nielsen_leaflet
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: nielsen_leaflet
+      schema_version: v2
+
+  - kind: select
+    name: select_nielsen_leaflet
+    params:
+      columns:
+        leaflets_key: leaflets_key
+        ban: ban
+      distinct: true
+
+
+# # Read cpl_mapping
+
+#   - kind: read_dataio
+#     name: read_cpl_mapping
+#     params:
+#       dataio:
+#         ad_id: '{{dataio.ad_id}}'
+#         layer: curated
+#         storage_id: '{{dataio.storage_id}}'
+#       source: data_quality
+#       namespace: promo
+#       object_name: cpl_mapping
+#       schema_version: v1
+
+  # - kind: select
+  #   name: select_cpl_mapping
+  #   params:
+  #     columns:
+  #       retailer: retailer
+  #       country: country
+  #       cpl_code: cpl_code
+  #       cpl_name: cpl_name
+  #     distinct: true
+
+#   - kind: filter
+#     name: filter_cpl_mapping
+#     params:
+#       - condition:
+#           country='ru'
+
+# JOINS
+
+  - kind: join
+    name: join_pro_prd_cpl
+    context_name: select_leaflets
+    params:
+      - other:
+          select_nielsen_leaflet
+        how:
+          left
+        columns:
+          item_full_description: leaflets_key
+      # - other:
+      #     select_cpl_mapping
+      #   how:
+      #     left
+      #   columns:
+      #     retailer: retailer
+      #     country: country
+
+
+  - kind: select
+    name: select_leaflet_ro
+    params:
+      columns:
+        country: country
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+        company_code: company_code
+        m_promo_discount: m_promo_discount
+        m_promo_price: m_promo_price
+        mechanic_name: mechanic_name
+        promotion_name: promotion_name
+        promotion_code: promotion_code
+        sell_out_start_date: sell_out_start_date
+        sell_out_end_date: sell_out_end_date
+        sku_code: sku_code
+        ban: ban_code
+        source: source
+      distinct: true
+
+#f_promotion LEAFLET_RU
+
+# Read hipercom_transactional - WAITING FOR CLARIFICATION REGARDING SOURCE!!!!!!
+
+  # - kind: read_dataio
+  #   name: read_hipercom_transactional
+  #   params:
+  #     dataio:
+  #       ad_id: '{{dataio.ad_id}}'
+  #       layer: curated
+  #       storage_id: '{{dataio.storage_id}}'
+  #     source: ppaa_user_input
+  #     namespace: local
+  #     object_name: hipercom_transactional
+  #     schema_version: v1
+
+  # - kind: add
+  #   name: add_final_columns_leaflet_ru
+  #   params:
+  #    - column: country
+  #      expression: '''ru'''
+  #    - column: company_code
+  #      expression: '''403'''
+  #    - column: promotion_code
+  #      expression: 'null'
+  #    - column: sell_out_start_date
+  #      expression: date_format(to_date(left(period_start_promotion,10),'yyyy-MM-dd'),'yyyyMMdd')
+  #    - column: sell_out_end_date
+  #      expression: date_format(to_date(left(period_end_promotion,10),'yyyy-MM-dd'),'yyyyMMdd')
+  #    - column: source
+  #      expression: '''leaflet'''
+
+  # - kind: select
+  #   name: select_hipercom_transactional
+  #   params:
+  #     columns:
+  #       country: country
+  #       cpl: cpl
+  #       company_code: company_code
+  #       discount: m_promo_discount
+  #       mapwithvat: m_promo_price
+  #       promomechanic: mechanic_name
+  #       description: promotion_name
+  #       promotion_code: promotion_code
+  #       sell_out_start_date: sell_out_start_date
+  #       sell_out_end_date: sell_out_end_date
+  #       skucode: sku_code
+  #       bancch: ban_code
+  #       source: source
+  #     distinct: true
+
+  # - kind: join
+  #   name: join_pro_prd_cpl
+  #   context_name: select_hipercom_transactional
+  #   params:
+  #     - other:
+  #         filter_cpl_mapping
+  #       how:
+  #         left
+  #       columns:
+  #         cpl_name: cpl_name
+
+
+  # - kind: select
+  #   name: select_leaflet_ru
+  #   params:
+  #     columns:
+  #       country: country
+  #       cpl_code: cpl_code
+  #       cpl_name: cpl_name
+  #       company_code: company_code
+  #       m_promo_discount: m_promo_discount
+  #       m_promo_price: m_promo_price
+  #       mechanic_name: mechanic_name
+  #       promotion_name: promotion_name
+  #       promotion_code: promotion_code
+  #       sell_out_start_date: sell_out_start_date
+  #       sell_out_end_date: sell_out_end_date
+  #       sku_code: sku_code
+  #       ban: ban_code
+  #       source: source
+  #     distinct: true
+
+
+
+#f_promotion LEAFLET_IT
+
+# Read leaflets_informatica_manual
+
+  - kind: read_dataio
+    name: read_leaflets_informatica_manual
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: leaflets_informatica_manual
+      schema_version: v1
+
+  - kind: add
+    name: add_final_columns_leaflet_it
+    params:
+     - column: company_code
+       expression: ltrim('0', company_code)
+     - column: m_promo_discount
+       expression: replace(shopper_discount,'%','')/100
+     - column: sell_out_start_date
+       expression: date_format(to_date(left(start_sell_out,10),'yyyy-MM-dd'),'yyyyMMdd')
+     - column: sell_out_end_date
+       expression: date_format(to_date(left(end_sell_out,10),'yyyy-MM-dd'),'yyyyMMdd')
+     - column: source
+       expression: '''leaflet'''
+
+  - kind: select
+    name: select_leaflet_it
+    params:
+      columns:
+        country: country
+        cust_planning_level_cmd: cpl_code
+        cpl_name: cpl_name
+        company_code: company_code
+        m_promo_discount: m_promo_discount
+        retail_promo_selling_price: m_promo_price
+        shopper_mechanic: mechanic_name
+        promotion_descrpition: promotion_name
+        promotion_id: promotion_code
+        sell_out_start_date: sell_out_start_date
+        sell_out_end_date: sell_out_end_date
+        sku_id: sku_id
+        ban_id: ban_id
+        source: source
+      distinct: true
+
+  - kind: union
+    name: union_xtel_leaflet_ro
+    context_name: select_xtel
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_leaflet_ro
+
+  - kind: union
+    name: union_leaflet_ru
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_leaflet_ru
+
+  - kind: union
+    name: union_leaflet_it
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_leaflet_it
+
+  - kind: write_dataio
+    name: write_f_promotion
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: promo
+      namespace: l2
+      object_name: f_promotion
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

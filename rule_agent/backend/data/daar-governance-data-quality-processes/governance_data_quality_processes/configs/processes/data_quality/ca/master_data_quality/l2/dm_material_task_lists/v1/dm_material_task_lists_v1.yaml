@@ -1,0 +1,59 @@
+transform:
+  name: dm_material_task_lists
+  operations:
+  - kind: read_dataio
+    name: read_mapl
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mapl
+      schema_version: v1
+
+  - kind: select
+    name: select_mapl
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        loekz: loekz
+        plnty: plnty
+        plnnr: plnnr
+        plnal: plnal
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_mapl_fin
+    params:
+      columns:
+        matnr: material_code
+        werks: plant_code
+        loekz: deletion_flag
+        plnty: task_list_type_code
+        plnnr: task_list_number
+        plnal: group_counter
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_material_task_lists
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_task_lists
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,100 @@
+transform:
+  name: dm_vendor_bank
+  operations:
+
+  - kind: read_dataio
+    name: read_lfbk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: vendor
+      object_name: lfbk
+      schema_version: v1
+
+  - kind: select
+    name: select_lf
+    context_name: read_lfbk
+    params:
+      columns:
+        lifnr: lifnr
+        banks: banks
+        bankl: bankl
+        bankn: bankn
+        bkont: bkont
+        bvtyp: bvtyp
+        sap_cluster: sap_cluster
+      distinct: true  
+
+  - kind: read_dataio
+    name: read_tiban
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: bank_data
+      object_name: tiban
+      schema_version: v1
+
+  - kind: select
+    name: select_t
+    context_name: read_tiban
+    params:
+      columns:
+        banks: banks_t
+        bankl: bankl_t
+        bankn: bankn_t
+        bkont: bkont_t
+        iban: iban_t
+        sap_cluster: sap_cluster_t
+      distinct: true  
+
+  - kind: join
+    name: join_lf_t
+    context_name: select_lf
+    params:
+      - other:
+          select_t
+        how:
+          left
+        columns:
+          banks: banks_t
+          bankl: bankl_t
+          bankn: bankn_t
+          bkont: bkont_t
+          sap_cluster: sap_cluster_t
+ 
+  - kind: select
+    name: select_bank_final
+    context_name: join_lf_t
+    params:
+      columns:
+        lifnr: vendor_code
+        banks: bank_country_code
+        bankl: bank_key
+        bankn: bank_account_number
+        bkont: bank_control_key
+        bvtyp: partner_bank_type
+        iban_t: iban
+        sap_cluster: sap_cluster
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_dm_vendor_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_bank
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

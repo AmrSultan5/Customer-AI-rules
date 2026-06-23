@@ -1,0 +1,135 @@
+transform:
+  name: dm_brand_information
+  operations:
+
+# Read sources
+
+  - kind: read_dataio
+    name: read_tvm1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm1
+      schema_version: v1
+
+  - kind: select
+    name: select_tvm1
+    context_name: read_tvm1
+    params:
+      columns:
+        mvgr1: mvgr1_tvm1
+        sap_cluster: sap_cluster_tvm1
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvm1t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm1t
+      schema_version: v1
+
+  - kind: select
+    name: select_tvm1t
+    context_name: read_tvm1t
+    params:
+      columns:
+        mvgr1: mvgr1_tvm1t
+        sap_cluster: sap_cluster_tvm1t
+        bezei: bezei_tvm1t
+        spras: spras_tvm1t
+      distinct: true
+  
+  - kind: read_dataio
+    name: read_zmd_brand_attr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zmd_brand_attr
+      schema_version: v1
+
+  - kind: select
+    name: select_zmd_brand_attr
+    context_name: read_zmd_brand_attr
+    params:
+      columns:
+        mvgr1: mvgr1_zmd_brand_attr
+        sap_cluster: sap_cluster_zmd_brand_attr
+        bezei: bezei_zmd_brand_attr
+        trademark: trademark_zmd_brand_attr
+        brandowner: brandowner_zmd_brand_attr
+        tcccindic: tcccindic_zmd_brand_attr
+      distinct: true
+
+# Transformations
+
+  - kind: filter
+    name: filter_tvm1t
+    context_name: select_tvm1t
+    params:
+      - condition:
+          spras_tvm1t = 'E'
+
+# Join and select
+
+  - kind: join
+    name: join_tvm1_tvm1t_zmd_brand
+    context_name: select_tvm1
+    params:
+      - other:
+          filter_tvm1t
+        how:
+          inner
+        columns:
+          mvgr1_tvm1: mvgr1_tvm1t
+          sap_cluster_tvm1: sap_cluster_tvm1t
+      - other:
+          select_zmd_brand_attr
+        how:
+          outer
+        columns:
+          mvgr1_tvm1: mvgr1_zmd_brand_attr
+          sap_cluster_tvm1: sap_cluster_zmd_brand_attr
+
+  - kind: select
+    name: select_dm_brand_info
+    context_name: join_tvm1_tvm1t_zmd_brand
+    params:
+      columns:
+        mvgr1_tvm1: brand_code
+        bezei_tvm1t: brand_description
+        mvgr1_zmd_brand_attr: brand_code_zmd_brand
+        bezei_zmd_brand_attr: brand_description_zmd_brand
+        trademark_zmd_brand_attr: trademark
+        brandowner_zmd_brand_attr: brand_owner
+        tcccindic_zmd_brand_attr: tccc_indicator
+        sap_cluster_tvm1: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_brand_info
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_brand_information
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

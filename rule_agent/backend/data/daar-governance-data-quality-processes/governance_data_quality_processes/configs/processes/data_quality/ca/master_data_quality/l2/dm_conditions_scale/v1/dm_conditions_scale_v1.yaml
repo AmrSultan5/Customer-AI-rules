@@ -1,0 +1,57 @@
+transform:
+  name: dm_conditions_scale
+  operations:
+  - kind: read_dataio
+    name: read_konm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: konm
+      schema_version: v1
+
+  - kind: select
+    name: select_konm
+    params:
+      columns:
+        knumh: knumh
+        kopos: kopos
+        klfn1: klfn1
+        kstbm: kstbm
+        kbetr: kbetr
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_konm_fin
+    params:
+      columns:
+        knumh: condition_record_number
+        kopos: sequence_number
+        klfn1: scale_number
+        kstbm: scale_quantity
+        kbetr: scale_rate
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_conditions_scale
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_conditions_scale
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,287 @@
+transform:
+  name: dm_employee_worker
+  operations:
+
+  - kind: read_dataio
+    name: read_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: worker
+      schema_version: v1
+
+  - kind: add
+    name: filter_logic
+    context_name: read_worker
+    params:
+      - column: filter_termination_date
+        expression: if(termination_date >= add_months(current_date(),-1) OR termination_date IS NULL OR termination_date = '', '1', '0')
+      - column: filter_pay_group
+        expression: if(country_id = 'NGA' AND pay_group IN ('PAY_GROUP_AUT_INTERNATIONAL_PAYROLL_LOCAL_SOC_SEC','PAY_GROUP_AUT_INTERNATIONAL_PAYROLL_AT_SOC_SEC'),'0', '1')
+
+  - kind: filter
+    name: filter_employee
+    context_name: filter_logic
+    params:
+      - condition:
+           filter_termination_date = '1' AND filter_pay_group = '1'
+
+  - kind: add
+    name: add_location_id
+    context_name: filter_employee
+    params:
+      - column: location_id_substr
+        expression: substr(location_id, 5, 4)
+      - column: company_id_substr
+        expression: regexp_replace(UPPER(company_id), 'COMPANY_', '')
+      - column: object_type
+        expression: '"Employee"'
+      - column: time_type
+        expression: regexp_replace(lower(time_type_id), ' ', '_')
+      - column: compensation_grade_value
+        expression: regexp_replace(upper(comp_grade),'COMPENSATION_GRADE_','')
+      - column: compensation_grade_profile_value
+        expression: substr(comp_grad_profile, 0, 2)
+      - column: cost_center_id_edit
+        expression: REPLACE(UPPER(cost_center_id), 'COST_CENTER_','')
+      - column: is_international_assignee
+        expression: if(pay_group IN ('PAY_GROUP_AUT_INTERNATIONAL_PAYROLL_LOCAL_SOC_SEC','PAY_GROUP_AUT_INTERNATIONAL_PAYROLL_AT_SOC_SEC'), '1', '0')
+
+  - kind: read_local
+    name: read_lcm
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: location_country_mapping
+
+  - kind: select
+    name: select_lcm
+    context_name: read_lcm
+    params:
+      columns:
+        location_id: location_id_lcm
+        country_id: country_id_lcm
+        country_iso3_id: country_iso3_id_lcm
+      distinct: true
+      
+  - kind: read_local
+    name: read_cim
+    params:
+      format: excel
+      location: {{storage_account}}/locations/rtr_documents/data_control_center/dcc_employee_reference_tables.xlsx
+      options:
+        header: true
+        pathGlobFilter: dcc_employee_reference_tables.xlsx
+        sheet_name: country_id_mapping
+
+  - kind: select
+    name: select_cim1
+    context_name: read_cim
+    params:
+      columns:
+        country_id: country_id_cim1
+        country_iso3_id: country_iso3_id_cim1
+      distinct: true
+      
+  - kind: select
+    name: select_cim2
+    context_name: read_cim
+    params:
+      columns:
+        country_id: country_id_cim2
+        country_iso3_id: country_iso3_id_cim2
+      distinct: true
+
+  - kind: join
+    name: join_worker
+    context_name: add_location_id
+    params:
+      - other:
+          select_lcm
+        how:
+          left
+        columns:
+          location_id_substr: location_id_lcm
+      - other:
+          select_cim1
+        how:
+          left
+        columns:
+          country_id: country_iso3_id_cim1
+      - other:
+          select_cim2
+        how:
+          left
+        columns:
+          nationality_id: country_iso3_id_cim2
+
+  - kind: add
+    name: add_primary_nationality_id
+    context_name: join_worker
+    params:
+      - column: primary_nationality_id
+        expression: if(nationality_id is null or nationality_id = '', '', if(country_id_cim2 is null or country_id_cim2 = '', '-1', country_id_cim2))
+
+  - kind: select
+    name: select_worker
+    context_name: add_primary_nationality_id
+    params:
+      columns:
+        object_type: object_type
+        employee_id: employee_id
+        position_id: position_id
+        sup_org_id: supervisory_organisation_id
+        function: department_name
+        sub_function: sub_department_name
+        location_id_substr: location_id
+        country_id_lcm: country_id
+        company_id_substr: company_id
+        business_name: business_unit_id
+        cost_center_id_edit: cost_center_id
+        cost_allocation: cost_center_allocation_id
+        business_title: position_title_local
+        position_name: position_name
+        position_fte: position_fte
+        weekly_hours: scheduled_weekly_hours
+        work_calendars: scheduled_work_calendar_id
+        time_type: position_time_type_id
+        employee_group: employee_group_id
+        empl_sub_group: employee_sub_group_id
+        job_profile_id: job_profile_id
+        worker_subtype_id: employee_sub_type_id
+        prefer_name: preferred_name
+        birth_name: birth_name
+        legal_first_name: first_name
+        legal_last_name: last_name
+        legal_mid_name: middle_name
+        first_name_local: first_name_local
+        last_name_local: last_name_local
+        mid_name_local: middle_name_local
+        home_address: home_address
+        country_id_cim1: home_country_id
+        region_id: home_region_id
+        postal_code: home_postal_code
+        work_phone: work_phone_number
+        work_email: work_email_address
+        emrgncy_contact: emergency_contact
+        worker_type: worker_type_id
+        job_family: job_family_name
+        gender_id: gender_id
+        primary_nationality_id: primary_nationality_id
+        date_of_birth: date_of_birth
+        age: age
+        disability_id: disability_id
+        religion: religion_id
+        marital_status: marital_status_id
+        citizenship: citizenship_status_id
+        national_id: national_id_type_id
+        government_id: government_type_id
+        visa_id: visa_type_id
+        passport: passport_type_id
+        com_language: preferred_communication_language
+        hire_date: effective_hire_date
+        orig_hire_date: original_hire_date
+        contra_end_date: contract_end_date
+        los: time_in_company
+        time_in_jp: time_in_job_profile
+        contract_type: contract_type_id
+        contr_status_id: contract_status_id
+        probation_period: probation_period
+        employee_noti_per: notice_period_employee
+        employer_noti_per: notice_period_employer
+        term_reason: termination_reason_id
+        chnge_job_reason: change_job_reason_id
+        hire_reason: hire_reason_id
+        omada_id: omada_id
+        payroll_id: payroll_id
+        internal_order: internal_order_number
+        salary_plan: salary_plan_id
+        currency: currency_id
+        comp_grade: compensation_grade_id
+        compensation_grade_value: compensation_grade_value
+        comp_grad_profile: compensation_grade_profile_id
+        compensation_grade_profile_value: compensation_grade_profile_value
+        comp_chng_reason: compensation_change_reason_id
+        total_pay_range: total_pay_range
+        pay_rate_type_id: pay_rate_type_id
+        pay_group: pay_group_id
+        payment_election: payment_election_id
+        union: union_id
+        cla_id: collective_agreement_id
+        leave_abs_typ_id: leave_of_absence_type_name
+        absence_balance: absence_balance
+        carryover_balanc: carryover_balance
+        manager_empl_id: line_manager_emloyee_id
+        manager_pos_id: line_manager_position_id
+        sup_org_manager_id: supervisory_organisation_manager_id
+        management_level: management_level
+        matrix_id: matrix_organisation_reference_id
+        termination_date: termination_date
+        personal_sub_area: personal_sub_area_id
+        paid_fte: paid_fte
+        is_on_maternity_leave: is_on_maternity_leave
+        is_overlap_worker: is_overlap_worker
+        is_on_leave: is_on_leave
+        is_manager: is_manager
+        employee_status: employee_status_name
+        controlling_area: controlling_area_id
+        is_international_assignee: is_international_assignee
+      distinct: true
+
+  - kind: cast
+    name: cast_to_string
+    context_name: select_worker
+    params:
+      - column: employee_id
+        to: string
+      - column: cost_center_allocation_id
+        to: string
+      - column: age
+        to: string
+      - column: contract_end_date
+        to: date
+      - column: internal_order_number
+        to: string
+      - column: salary_plan_id
+        to: string
+      - column: absence_balance
+        to: string
+      - column: carryover_balance
+        to: string
+      - column: line_manager_emloyee_id
+        to: string
+      - column: is_on_maternity_leave
+        to: string
+      - column: is_overlap_worker
+        to: string
+      - column: is_on_leave
+        to: string
+      - column: is_manager
+        to: string
+      - column: compensation_grade_profile_value
+        to: integer
+      - column: compensation_grade_value
+        to: integer
+  
+  - kind: write_dataio
+    name: write_dm_employee_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

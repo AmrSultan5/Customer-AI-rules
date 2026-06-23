@@ -1,0 +1,103 @@
+transform:
+  name: dm_vendor_tax
+  operations:
+
+  - kind: read_dataio
+    name: read_dfkkbptaxnum
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: dfkkbptaxnum
+      schema_version: v1
+
+  - kind: select
+    name: select_tax
+    context_name: read_dfkkbptaxnum
+    params:
+      columns:
+        partner: partner
+        taxnum: taxnum
+        taxtype: taxtype
+        sap_cluster: sap_cluster
+      distinct: true  
+
+  - kind: add
+    name: add_tax
+    context_name: select_tax
+    params:
+      - column: vendor_code
+        expression: if(partner like 'V43%', REPLACE(partner, LEFT(partner, 3),'430'),
+                    if(partner like 'V40%', REPLACE(partner, LEFT(partner, 3),'400'),
+                    if(partner like 'V90%', REPLACE(partner, LEFT(partner, 3),'900'), partner)))
+      - column: tax_0_type
+        expression: if(taxtype LIKE '%0', taxtype, '') 
+      - column: tax_0_value
+        expression: if(taxtype LIKE '%0', taxnum, '') 
+      - column: tax_1_type
+        expression: if(taxtype LIKE '%1', taxtype, '')
+      - column: tax_1_value
+        expression: if(taxtype LIKE '%1', taxnum, '')
+      - column: tax_2_type
+        expression: if(taxtype LIKE '%2', taxtype, '')
+      - column: tax_2_value
+        expression: if(taxtype LIKE '%2', taxnum, '')
+      - column: tax_3_type
+        expression: if(taxtype LIKE '%3', taxtype, '')
+      - column: tax_3_value
+        expression: if(taxtype LIKE '%3', taxnum, '')
+      - column: tax_4_type
+        expression: if(taxtype LIKE '%4', taxtype, '')
+      - column: tax_4_value
+        expression: if(taxtype LIKE '%4', taxnum, '')
+      - column: tax_5_type
+        expression: if(taxtype LIKE '%5', taxtype, '')
+      - column: tax_5_value
+        expression: if(taxtype LIKE '%5', taxnum, '')
+      - column: tax_6_type
+        expression: if(taxtype LIKE '%6', taxtype, '')
+      - column: tax_6_value
+        expression: if(taxtype LIKE '%6', taxnum, '')
+
+  - kind: select
+    name: select_tax_final
+    context_name: add_tax
+    params:
+      columns:
+        partner: partner_code
+        vendor_code: vendor_code
+        tax_0_type: tax_0_type
+        tax_0_value: tax_0_value
+        tax_1_type: tax_1_type
+        tax_1_value: tax_1_value
+        tax_2_type: tax_2_type
+        tax_2_value: tax_2_value
+        tax_3_type: tax_3_type
+        tax_3_value: tax_3_value
+        tax_4_type: tax_4_type
+        tax_4_value: tax_4_value
+        tax_5_type: tax_5_type
+        tax_5_value: tax_5_value
+        tax_6_type: tax_6_type
+        tax_6_value: tax_6_value
+        sap_cluster: sap_cluster
+      distinct: true 
+
+  - kind: write_dataio
+    name: write_dm_vendor_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_tax
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

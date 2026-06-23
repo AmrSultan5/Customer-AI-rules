@@ -1,0 +1,239 @@
+transform:
+  name: dm_vendor_company
+  operations:
+
+  - kind: read_dataio
+    name: read_lfb1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: vendor
+      object_name: lfb1
+      schema_version: v1
+
+  - kind: select
+    name: select_lfb1
+    context_name: read_lfb1
+    params:
+      columns:
+        lifnr: lifnr
+        bukrs: bukrs
+        erdat: erdat
+        sperr: sperr
+        loevm: loevm
+        nodel: nodel
+        zahls: zahls
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_company_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: company_code_mapping
+      schema_version: v1    
+
+  - kind: select
+    name: select_company_code_mapping
+    context_name: read_company_code_mapping
+    params:
+      columns:
+        company_code: company_code
+        country_code: country_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cdhdr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdhdr
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdhdr
+    context_name: read_cdhdr
+    params:
+      - condition: objectclas = 'KRED'
+
+  - kind: group
+    name: group_cdhdr
+    context_name: filter_cdhdr
+    params:
+      - aggs:
+          udate: max
+        by:
+        - changenr
+        - sap_cluster
+
+  - kind: select
+    name: select_cdhdr
+    context_name: group_cdhdr
+    params:
+      columns:
+        changenr: changenr
+        max_udate: max_udate
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_cdpos
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdpos
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdpos
+    context_name: read_cdpos
+    params:
+      - condition: objectclas = 'KRED' AND chngind = 'I' AND tabname = 'LFB1'
+
+  - kind: add
+    name: add_tabkey
+    context_name: filter_cdpos
+    params:
+      - column: trim_tabkey
+        expression: 'replace(tabkey, " ", "") as str'
+
+  - kind: select
+    name: select_cdpos
+    context_name: add_tabkey
+    params:
+      columns:
+        changenr: changenr
+        trim_tabkey: trim_tabkey
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_cdhdr_cdpos
+    context_name: select_cdpos
+    params:
+      - other:
+          select_cdhdr
+        how:
+          left
+        columns:
+          changenr: changenr
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_max_udate
+    context_name: join_cdhdr_cdpos
+    params:
+      columns:
+        trim_tabkey: trim_tabkey
+        max_udate: max_udate
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_is_active
+    context_name: select_lfb1
+    params:
+      - column: is_active
+        expression: if((zahls = '' or isnull(zahls)) and (nodel = '' or isnull(nodel)) 
+                    and (sperr = '' or isnull(sperr)) and (loevm = '' or isnull(loevm)), '1', '0')
+      - column: created_on
+        expression: date(erdat) 
+      - column: tabkey
+        expression: concat_ws('', '400', lifnr, bukrs)
+
+  - kind: join
+    name: join_dm_vendor_company
+    context_name: add_is_active
+    params:
+      - other:
+          select_company_code_mapping
+        how:
+          inner
+        columns:
+          bukrs: company_code
+      - other:
+          select_max_udate
+        how:
+          left
+        columns:
+          tabkey: trim_tabkey
+          sap_cluster: sap_cluster
+
+  - kind: cast
+    name: cast_date
+    context_name: join_dm_vendor_company
+    params:
+      - column: max_udate
+        to: date
+
+  - kind: group
+    name: group_dm_vendor_company
+    context_name: cast_date
+    params:
+      - aggs:
+          max_udate: max
+        by:
+        - lifnr
+        - bukrs
+        - country_code
+        - loevm
+        - sperr
+        - zahls
+        - nodel
+        - created_on
+        - is_active
+        - sap_cluster
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: group_dm_vendor_company
+    params:
+      columns:
+        lifnr: vendor_code
+        bukrs: company_code
+        country_code: country_code
+        loevm: deletion_flag
+        sperr: posting_block
+        zahls: payment_block
+        nodel: deletion_block
+        created_on: created_on
+        max_max_udate: extended_on
+        is_active: is_active
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_vendor_company
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_company
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

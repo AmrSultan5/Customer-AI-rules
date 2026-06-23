@@ -1,0 +1,586 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% set uc_catalog_ml_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: FINAL_flavour
+  operations:
+
+########################################################################################################################
+# Read-in SAP data
+########################################################################################################################
+  - kind: read_dataio
+    name: read_sap_ered
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_sap_ered
+    context_name: read_sap_ered
+    params:
+      columns:
+        country_code: country_code
+        product_name_cleansed: ext_product_name_final
+        brand_name: brand_final
+        flavour_name: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: read_dataio
+    name: read_sap_dmt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: sap_portfolio
+      schema_version: v1
+  
+  - kind: select
+    name: select_sap_dmt
+    context_name: read_sap_dmt
+    params:
+      columns:
+        country_code: country_code
+        sap_product_name_final: ext_product_name_final
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: union
+    name: union_sap
+    context_name: select_sap_ered
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_sap_dmt
+
+  - kind: select
+    name: select_sap
+    context_name: union_sap
+    params:
+      columns:
+        country_code: country_code
+        ext_product_name_final: ext_product_name_final
+        brand_final: brand_final
+        flavour_final: flavour_final
+        sub_brand_name: sub_brand_name
+      distinct: true
+
+  - kind: select
+    name: select_sap_flavour
+    context_name: select_sap
+    params:
+      columns:
+        flavour_final: flavour_final
+      distinct: true
+
+  - kind: add
+    name: add_sap_cleansed_flavour_final
+    params:
+      - column: cleansed_flavour_final
+        expression: trim(regexp_replace(regexp_replace(lower(flavour_final), r'[^a-z0-9.]', ' '), '\\s+', ' '))
+      - column: rn_flavour_final
+        window:
+          func: row_number
+          partition_by:
+            - cleansed_flavour_final
+          order_by:
+            - flavour_final: desc
+
+  - kind: filter
+    name: filter_null_flavours
+    params:
+      - condition:
+          flavour_final is not null and flavour_final != '' and rn_flavour_final = 1
+          
+  - kind: select
+    name: select_flavours
+    context_name: filter_null_flavours
+    params:
+      columns:
+        flavour_final: flavour_final_sap
+        cleansed_flavour_final: cleansed_flavour_final
+      distinct: true
+
+########################################################################################################################
+# Read-in data
+########################################################################################################################
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      schema_version: v1
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+  - kind: drop
+    name: drop_process_run_id
+    params:
+      - column: process_run_id
+
+  - kind: filter
+    name: filter_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is null or ext_product_name_src = ''
+
+  - kind: filter
+    name: filter_not_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is not null and ext_product_name_src != ''
+
+  - kind: add
+    name: add_const_1_vendor
+    params:
+      - column: const_1
+        expression: '''1'''
+
+# placeholders 
+  - kind: read_local
+    name: read_conf_data_placeholders
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_placeholders
+
+  - kind: read_local
+    name: read_conf_char_cleanser
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_characteristics_cleanser
+
+  - kind: filter
+    name: filter_conf_char_cleanser
+    params:
+      - condition:
+          characteristic_name = 'flavour' 
+
+  - kind: add
+    name: add_const_1_conf_placeholders
+    context_name: filter_conf_char_cleanser
+    params:
+      - column: const_1_conf_placeholders
+        expression: '''1'''
+
+  - kind: add
+    name: add_struct_placeholders
+    context_name: add_const_1_conf_placeholders
+    params:
+      - column: struct_placeholders
+        expression: struct(cast(priority as int) as key, input_value, output_value)
+
+  - kind: group
+    name: group_struct_placeholders
+    context_name: add_struct_placeholders
+    params:
+      - aggs:
+          struct_placeholders: collect_list
+        by:
+          - country_code
+          - vendor
+
+  - kind: add
+    name: add_sort_struct_placeholders
+    context_name: group_struct_placeholders
+    params:
+      - column: collect_list_struct_placeholders_sorted
+        expression: array_sort(collect_list_struct_placeholders)
+
+  - kind: join
+    name: join_placeholders
+    context_name: add_const_1_vendor
+    params:
+      - other: 
+          add_sort_struct_placeholders
+        how:
+          left
+        columns:
+          country_code: country_code
+          ext_source_name: vendor
+
+  - kind: add
+    name: apply_placeholders
+    context_name: join_placeholders
+    params:
+      - column: flavour_with_placeholders
+        expression: coalesce(reduce(collect_list_struct_placeholders_sorted, lower(ext_flavour_src), (acc, x) -> replace(acc, x.input_value, x.output_value)), lower(ext_flavour_src))
+
+  - kind: add
+    name: add_struct_placeholder_restore
+    context_name: read_conf_data_placeholders
+    params:
+      - column: struct_placeholder_restore
+        expression: struct(placeholder, output_value)
+
+  - kind: add
+    name: add_const_1_placeholder_restore
+    context_name: add_struct_placeholder_restore
+    params:
+      - column: const_1_placeholder_restore
+        expression: '''1'''
+
+  - kind: group
+    name: group_struct_placeholder_restore
+    context_name: add_const_1_placeholder_restore
+    params:
+      - aggs:
+          struct_placeholder_restore: collect_list
+        by:
+          - const_1_placeholder_restore
+
+  - kind: join
+    name: join_placeholder_restore
+    context_name: apply_placeholders
+    params:
+      - other:
+          group_struct_placeholder_restore
+        how:
+          left
+        columns:
+          const_1: const_1_placeholder_restore
+
+  - kind: add
+    name: decode_placeholders
+    context_name: join_placeholder_restore
+    params:
+      - column: flavour_with_placeholders_decoded
+        expression: reduce(collect_list_struct_placeholder_restore, flavour_with_placeholders, (acc, x) -> regexp_replace(acc, x.placeholder, x.output_value))
+      - column: cleansed_ext_flavour_src
+        expression: trim(regexp_replace(regexp_replace(lower(flavour_with_placeholders_decoded), r'[^a-z0-9.]', ' '), '\\s+', ' '))
+      - column: cleansed_ext_flavour_src
+        overwrite: true
+        expression: regexp_replace(cleansed_ext_flavour_src, 'tonic', 'tonic bitter water')
+      - column: cleansed_ext_flavour_pcm
+        expression: trim(regexp_replace(regexp_replace(lower(ext_flavour_pcm), r'[^a-z0-9.]', ' '), '\\s+', ' '))
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: product_name_src_similarity
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: ext_product_name_final
+      input_brand_2: cleansed_ext_flavour_src
+      output_col_name: product_name_flavour_src_sim_score
+
+  - kind: drop
+    name: drop_1
+    params:
+      - column: brand_1_tokenized
+      - column: brand_2_tokenized
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: product_name_pcm_similarity
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: ext_product_name_final
+      input_brand_2: cleansed_ext_flavour_pcm
+      output_col_name: product_name_flavour_pcm_sim_score
+      
+  - kind: drop
+    name: drop_2
+    params:
+      - column: brand_1_tokenized
+      - column: brand_2_tokenized
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: src_pcm_similarity
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: cleansed_ext_flavour_src
+      input_brand_2: cleansed_ext_flavour_pcm
+      output_col_name: flavour_src_flavour_pcm_sim_score
+
+  - kind: add
+    name: add_flavour_final_found
+    context_name: src_pcm_similarity
+    params:
+      - column: flavour_final_found_flag
+        expression: flavour_src_flavour_pcm_sim_score = 1 or cleansed_ext_flavour_src is null or cleansed_ext_flavour_src = ''          
+          
+  - kind: rename
+    name: rename_flavour_final_found
+    context_name: add_flavour_final_found
+    params:
+      - column: brand_1_tokenized
+        to: flavour_src_tokenized
+      - column: brand_2_tokenized
+        to: flavour_pcm_tokenized
+
+  - kind: filter
+    name: filter_flavour_final_found
+    context_name: rename_flavour_final_found
+    params:
+      - condition:
+          flavour_final_found_flag
+
+  - kind: add
+    name: add_ext_flavour_final_found
+    context_name: filter_flavour_final_found
+    params:
+      - column: ext_flavour_final
+        overwrite: true
+        expression: ext_flavour_pcm
+      - column: ext_flavour_final_probability
+        overwrite: true
+        expression: cast(1 as decimal(10,4))
+          
+  - kind: select
+    name: select_flavour_final_found
+    context_name: add_ext_flavour_final_found
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: filter
+    name: filter_flavour_final_not_found
+    context_name: rename_flavour_final_found
+    params:
+      - condition:
+          not flavour_final_found_flag
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.minhash_lsh_similarity.MinHashLSHSimilarityOperation
+    name: src_sap_flavour_similarity
+    context_name: filter_flavour_final_not_found
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.minhash_lsh_similarity_config.MinHashLSHSimilarityOperationConfig
+    params:
+      context_right: select_flavours
+      left_text_col: cleansed_ext_flavour_src
+      right_text_col: cleansed_flavour_final
+      jaccard_threshold: 0.4
+      output_prefix: sap
+      
+  - kind: join
+    name: join_placeholder_restore
+    context_name: src_sap_flavour_similarity
+    params:
+      - other:
+          select_flavours
+        how:
+          left
+        columns:
+          sap_matched_value: cleansed_flavour_final
+
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.brand_similarity_unordered.BrandSimilarityUnorderedOperation
+    name: product_name_sap_similarity
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.brand_similarity_unordered_config.BrandSimilarityUnorderedOperationConfig
+    params:
+      input_brand_1: ext_product_name_final
+      input_brand_2: sap_matched_value
+      output_col_name: product_name_flavour_sap_sim_score
+
+  - kind: add
+    name: add_ext_flavour_final
+    params:
+      - column: size_flavour_pcm
+        expression: length(cleansed_ext_flavour_pcm)
+      - column: size_flavour_sap
+        expression: length(sap_matched_value)
+      - column: ext_flavour_final
+        overwrite: true
+        expression: if(sap_matched_value = '' or sap_matched_value is null, ext_flavour_pcm, 
+                    if(product_name_flavour_sap_sim_score > product_name_flavour_pcm_sim_score, flavour_final_sap, ext_flavour_pcm))
+      - column: ext_flavour_final_probability
+        overwrite: true
+        expression: if(sap_matched_value = '' or sap_matched_value is null, ext_flavour_pcm_probability, 
+                    if(product_name_flavour_sap_sim_score > product_name_flavour_pcm_sim_score, 0.95, ext_flavour_pcm_probability))
+          
+  - kind: select
+    name: select_final_flavour_not_found
+    context_name: add_ext_flavour_final
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+      
+  - kind: union
+    name: union_flavours_found
+    context_name: select_flavour_final_found
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_final_flavour_not_found
+
+  - kind: add
+    name: add_cast_flavour_final_prob
+    params:
+      - column: ext_flavour_final_probability
+        overwrite: true
+        expression: cast(ext_flavour_final_probability as decimal(10,4))
+
+  - kind: union
+    name: union_final
+    context_name: add_cast_flavour_final_prob
+    params:
+      allow_missing: false
+      by_name: true
+      other: filter_null_product_name
+
+  - kind: write_dataio
+    name: write_ext_portfolio_translated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

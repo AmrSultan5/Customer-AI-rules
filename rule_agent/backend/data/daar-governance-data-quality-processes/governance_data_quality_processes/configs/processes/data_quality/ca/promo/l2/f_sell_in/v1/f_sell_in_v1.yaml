@@ -1,0 +1,275 @@
+transform:
+  name: f_sell_in
+  operations:
+
+# Read ca_co004n_profitability_pl
+
+  - kind: read_dataio
+    name: read_ca_co004n_profitability_pl
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: fm
+      object_name: ca_co004n_profitability_pl
+      schema_version: v1
+
+
+  - kind: add
+    name: add_ltrim_bic_ccust
+    params:
+     - column: ltrim_bic_ccust
+       expression: ltrim('0', bic_ccust)
+     - column: ltrim_comp_code
+       expression: ltrim('0', comp_code)
+     - column: ltrim_sku
+       expression: ltrim('0', sku)
+
+  - kind: select
+    name: select_ca_co004n_profitability_pl
+    params:
+      columns:
+        bic_cccweek: bic_cccweek
+        ltrim_comp_code: ltrim_comp_code
+        ltrim_bic_ccust: ltrim_bic_ccust
+        ltrim_sku: ltrim_sku
+        volume_uc: volume_uc
+        nsr: nsr
+      distinct: true
+
+# Read date_v2
+
+  - kind: read_dataio
+    name: read_date
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: date
+      schema_version: v2
+
+  - kind: filter
+    name: filter_date
+    params:
+      - condition:
+          date_id >= add_months(current_date(), -40)
+
+  - kind: add
+    name: add_year_week
+    params:
+     - column: year_week
+       expression: concat(year, week)
+
+  - kind: select
+    name: select_date
+    params:
+      columns:
+        year: year
+        week: week
+        year_week: year_week
+        date_id: date_id
+      distinct: true
+
+# Read ca_salorg_sales_org
+
+  - kind: read_dataio
+    name: read_ca_salorg_sales_org
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_salorg_sales_org
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ca_salorg_sales_org
+    params:
+      - condition:
+          trim(UPPER(country)) IN('HU','IE','GB','RS','CZ','PL', 'IT', 'RO', 'GR', 'RU')
+
+  - kind: add
+    name: add_ltrim_comp_code
+    params:
+     - column: ltrim_comp_code
+       expression: ltrim('0', comp_code)
+
+  - kind: select
+    name: select_ca_salorg_sales_org
+    params:
+      columns:
+        ltrim_comp_code: ltrim_comp_code
+        country: country
+        stat: stat
+      distinct: true
+
+# # Read ca_ccpl01_cpl_master_data
+
+#   - kind: read_dataio
+#     name: read_ca_ccpl01_cpl_master_data
+#     params:
+#       dataio:
+#         ad_id: '{{dataio.ad_id}}'
+#         layer: curated
+#         storage_id: '{{dataio.storage_id}}'
+#       source: cch_bw
+#       namespace: md
+#       object_name: ca_ccpl01_cpl_master_data
+#       schema_version: v1
+
+#   - kind: filter
+#     name: filter_ca_ccpl01_cpl_master_data
+#     params:
+#       - condition:
+#           bic_ccustpllv != ccustpllv_desc
+
+#  - kind: add
+#    name: add_ltrim_bic_ccustpllv
+#    params:
+#      - column: ltrim_bic_ccustpllv
+#        expression: ltrim('0', bic_ccustpllv)
+
+  # - kind: select
+  #   name: select_ca_ccpl01_cpl_master_data
+  #   params:
+  #     columns:
+  #       bic_ccustpllv: bic_ccustpllv
+  #       ltrim_bic_ccustpllv: ltrim_bic_ccustpllv
+  #       ccustpllv_desc: ccustpllv_desc
+  #     distinct: true
+
+# # Read it_nano_aree_cpl
+
+#   - kind: read_dataio
+#     name: read_it_nano_aree_cpl
+#     params:
+#       dataio:
+#         ad_id: '{{dataio.ad_id}}'
+#         layer: curated
+#         storage_id: '{{dataio.storage_id}}'
+#       source: data_quality
+#       namespace: promo
+#       object_name: it_nano_aree_cpl
+#       schema_version: v1
+
+  # - kind: select
+  #   name: select_it_nano_aree_cpl
+  #   params:
+  #     columns:
+  #       cpl_code: cpl_code
+  #       area: area
+  #     distinct: true
+
+# JOINS
+
+  - kind: join
+    name: join_si_cld_cc_cpl_nac
+    context_name: select_ca_co004n_profitability_pl
+    params:
+      - other:
+          select_date
+        how:
+          inner
+        columns:
+          bic_cccweek: year_week
+      - other:
+          select_ca_salorg_sales_org
+        how:
+          inner
+        columns:
+          ltrim_comp_code: ltrim_comp_code
+      # - other:
+      #     select_ca_ccpl01_cpl_master_data
+      #   how:
+      #     left
+      #   columns:
+      #     ltrim_bic_ccust: ltrim_bic_ccustpllv
+      # - other:
+      #     select_it_nano_aree_cpl
+      #   how:
+      #     left
+      #   columns:
+      #     ltrim_bic_ccust: cpl_code
+
+ - kind: add
+   name: add_target_columns
+   params:
+     - column: country
+       expression: if(ltrim_comp_code='480', 'ni',trim(lower(country)))
+     - column: cpl_name
+       expression: if(upper(country)='GR', customer_desc, ccustpllv_desc)
+     - column: currency_code
+       expression: upper(stat)
+     - column: area
+       expression: if(cpl_code IS NOT NULL, area, 'null')
+
+  - kind: select
+    name: select_for_grouping
+    params:
+      columns:
+        ltrim_sku: sku_code
+        ltrim_comp_code: company_code
+        country: country
+        ltrim_bic_ccust: cpl_code
+        cpl_name: cpl_name
+        currency_code: currency_code
+        date_id: date_id
+        volume_uc: volume_uc
+        nsr: nsr
+        area: area
+      distinct: true
+
+  - kind: group
+    name: group_sum_volumne_nsr
+    params:
+      - aggs:
+          volume_uc: sum
+          nsr: sum
+          date_id: min
+        by:
+        - sku_code
+        - company_code
+        - country
+        - cpl_code
+        - cpl_name
+        - currency_code
+        - area
+
+  - kind: select
+    name: select_f_sell_in
+    params:
+      columns:
+        sku_code: sku_code
+        company_code: company_code
+        country: country
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+        currency_code: currency_code
+        min_date_id: date
+        sum_volume_uc: m_sales_regular_uc
+        sum_nsr: m_sales_regular_value
+        area: area
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_sell_in
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: promo
+      namespace: l2
+      object_name: f_sell_in
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

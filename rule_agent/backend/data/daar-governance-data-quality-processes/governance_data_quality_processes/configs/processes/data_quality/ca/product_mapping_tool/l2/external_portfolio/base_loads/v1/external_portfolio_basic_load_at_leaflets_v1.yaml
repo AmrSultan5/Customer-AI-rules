@@ -1,0 +1,311 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: external_portfolio_basic_load_at_leaflets
+  operations:
+
+# Read data marts
+# udm_paat_at.leaflets_v1 - md
+  - kind: read_dataio
+    name: read_at_leaflets
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: at
+      object_name: leaflets
+      schema_version: v1
+
+# required transformation for following nested process - pm_stats 
+  - kind: add
+    name: add_np_pm_stats_req
+    context_name: read_at_leaflets
+    params:
+      - column: ext_product_code_md_in
+        overwrite: true
+        expression: category || '-' || brand || '-' || pack_size || '-' || pack_size_meter || '-' || package_type  
+      - column: in_scope_flg
+        overwrite: true
+        expression: IF(UPPER(category) IN ('SSD', 'WATER', 'NEAR WATER', 'ENERGY', 'SPORT', 'EISTEE', 'BITTER LEMONADES', 'RTD JUICES', 'SÃ¤FTE', 'ICE TEA', 'RTD TEA', 'SÄFTE', 'WATER FLAVOURED', 'WATER REGULAR', 'SAEFTE') AND UPPER(banner) IN ('INTERSPAR', 'SPAR', 'EUROSPAR', 'PENNY MARKT', 'BILLA PLUS', 'BILLA', 'MERKUR'), 1, 0)
+
+# nested process - pm_stats
+  - kind: nested_process
+    name: external_portfolio_basic_load_pm_stats
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_pm_stats_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# end of nested process
+
+  - kind: add
+    name: add_transformations_md
+    context_name: filter_np_pm_stats_final
+    params:
+      # - column: ext_product_code
+      #   overwrite: true
+      #   expression: category || '-' || brand || '-' || pack_size || '-' || pack_size_meter || '-' || package_type  
+      - column: ext_product_name_src
+        overwrite: true
+        expression: brand
+      - column: ext_brand_src
+        overwrite: true
+        expression: brand
+      - column: ext_package_size_src
+        overwrite: true
+        expression: pack_size || '-' || pack_size_meter 
+      - column: ext_package_type_src
+        overwrite: true
+        expression: package_type
+      - column: ext_item_category_src
+        overwrite: true
+        expression: category
+
+  - kind: group
+    name: group_deduplicate_md
+    context_name: add_transformations_md
+    params:
+      - aggs:
+          ext_product_name_src: max
+          ext_brand_src: max
+          ext_package_size_src: max
+          ext_package_type_src: max
+          ext_item_category_src: max
+          in_portfolio_scope_flg: max
+          number_of_sap_matches: max
+          number_of_sap_ban_matches: max
+          in_pm_flg: max
+        by:
+        - ext_product_code_md
+
+  - kind: add
+    name: add_const_1_md
+    context_name: group_deduplicate_md
+    params:
+      - column: const_1_md
+        expression: '''1'''
+
+# # no sellout calculation for this ext source (no data)
+
+# final product select before final steps
+  - kind: select
+    name: select_product_base
+    context_name: add_const_1_md
+    params:
+      columns:
+        ext_product_code_md: product_id_md
+        max_ext_product_name_src: ext_product_name_src
+        max_ext_brand_src: ext_brand_src
+        max_ext_package_size_src: ext_package_size_src
+        max_ext_package_type_src: ext_package_type_src
+        max_ext_item_category_src: ext_item_category_src
+        max_in_portfolio_scope_flg: in_portfolio_scope_flg
+        max_number_of_sap_matches: number_of_sap_matches
+        max_number_of_sap_ban_matches: number_of_sap_ban_matches
+        max_in_pm_flg: in_pm_flg
+      distinct: true
+
+#final step
+  - kind: add
+    name: add_const_values
+    context_name: select_product_base
+    params:
+      - column: ext_product_code
+        overwrite: true
+        expression: product_id_md
+      - column: ean
+        overwrite: true
+        expression: product_id_md
+      - column: country_code
+        overwrite: true
+        expression: '''{{vendor_data.country}}''' 
+      - column: ext_source_name 
+        expression: '''{{vendor_data.vendor}}'''
+      - column: ext_product_name_translated
+        expression: "cast (null as string)"
+      - column: ext_product_name_final
+        expression: "cast (null as string)"
+      # - column: ext_brand_src
+      #   expression: "cast (null as string)"
+      - column: ext_brand_pcm
+        expression: "cast (null as string)"
+      - column: ext_brand_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_brand_final
+        expression: "cast (null as string)"
+      - column: ext_brand_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_flavour_src
+        expression: "cast (null as string)"
+      - column: ext_flavour_pcm
+        expression: "cast (null as string)"
+      - column: ext_flavour_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_flavour_final
+        expression: "cast (null as string)"
+      - column: ext_flavour_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_package_type_src
+      #   expression: "cast (null as string)"
+      - column: ext_package_type_pcm
+        expression: "cast (null as string)"
+      - column: ext_package_type_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_package_type_final
+        expression: "cast (null as string)"
+      - column: ext_package_type_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_package_size_src
+      #   expression: "cast (null as string)"
+      - column: ext_package_size_pcm
+        expression: "cast (null as string)"
+      - column: ext_package_size_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_package_size_final
+        expression: "cast (null as string)"
+      - column: ext_package_size_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sales_unit_src
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_pcm
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sales_unit_final
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sub_brand_src
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_pcm
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sub_brand_final
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_item_category_src
+      #   expression: "cast (null as string)"
+      - column: ext_item_category_final
+        expression: "cast (null as string)"
+      - column: ext_retailer
+        expression: "cast (null as string)"
+      - column: load_date
+        expression: current_timestamp()
+      # - column: in_portfolio_scope_flg
+      #   expression: "1"
+      - column: product_load_status
+        expression: "1"
+      - column: number_of_sap_matches
+        expression: "cast (number_of_sap_matches as integer)"
+        overwrite: true
+      - column: number_of_sap_ban_matches
+        expression: "cast (number_of_sap_ban_matches as integer)"
+        overwrite: true
+      - column: cfy
+        expression: year(current_date())
+      - column: pfy
+        expression: year(current_date()) - 1
+      - column: ppfy
+        expression: year(current_date()) - 2
+      - column: pppfy
+        expression: year(current_date()) - 3
+      - column: sum_cfy
+        expression: "cast (null as decimal(10,4))"
+      - column: sum_pfy
+        expression: "cast (null as decimal(10,4))"
+      - column: sum_ppfy
+        expression: "cast (null as decimal(10,4))"
+      - column: sum_pppfy
+        expression: "cast (null as decimal(10,4))"
+
+  - kind: select
+    name: select_final
+    context_name: add_const_values
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_portfolio
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

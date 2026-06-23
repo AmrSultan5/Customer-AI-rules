@@ -1,0 +1,1041 @@
+transform:
+  name: dm_material
+  operations:
+
+  - kind: read_dataio
+    name: read_sls
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: mtc
+      object_name: ca_fsm003_sales_direct_indirect
+      schema_version: v2
+
+  - kind: filter
+    name: filter_sls
+    context_name: read_sls
+    params:
+      - condition:
+          calday > last_day(add_months(to_date(current_date()), -13)) AND calday <= last_day(add_months(to_date(current_date()), -1))  
+
+  - kind: add
+    name: add_sls
+    context_name: filter_sls
+    params:
+      - column: sum_9400
+        expression: fieldnm013 + kisdlq
+      - column: sum_not_9400
+        expression: fieldnm013 + fieldnm017        
+              
+
+  - kind: group
+    name: group_sls
+    context_name: add_sls
+    params:
+      - aggs:
+          sum_9400: sum
+          sum_not_9400: sum
+        by:
+        - material
+        - salesorg
+
+  - kind: add
+    name: add_sls_flag
+    context_name: group_sls
+    params:
+      - column: is_active_sales
+        expression: "CASE WHEN salesorg = '9400' AND sum_sum_9400 >= 0 THEN '1' WHEN salesorg != '9400' AND sum_sum_not_9400 >= 0 THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_sls
+    params:
+      columns:
+        material: material
+        salesorg: salesorg
+        is_active_sales: is_active_sales
+
+  - kind: read_dataio
+    name: read_som
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: sales_org_mapping
+      schema_version: v1
+
+  - kind: select
+    name: select_som
+    context_name: read_som
+    params:
+      columns:
+        sales_org_code: som_sales_org_code
+        country_code: som_country_code
+        sap_cluster: som_sap_cluster            
+
+#####
+  - kind: read_dataio
+    name: read_mara
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mara
+      schema_version: v1
+
+  - kind: select
+    name: select_mara
+    params:
+      columns:
+        matnr: mara_matnr
+        ean11: mara_ean11
+        matkl: mara_matkl
+        meins: mara_meins
+        mtart: mara_mtart
+        wrkst: mara_wrkst
+        ersda: mara_ersda
+        mtpos_mara: mara_mtpos_mara
+        rmatp: mara_rmatp
+        brgew: mara_brgew
+        ntgew: mara_ntgew
+        gewei: mara_gewei
+        raube: mara_raube
+        mhdhb: mara_mhdhb
+        mhdrz: mara_mhdrz
+        pstat: mara_pstat
+        mstae: mara_mstae
+        herkl: mara_herkl
+        sap_cluster: mara_sap_cluster
+
+  - kind: read_dataio
+    name: read_makt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: makt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_makt
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_makt_E
+    context_name: filter_makt
+    params:
+      columns:
+        matnr: makt_matnr_E
+        maktx: makt_maktx_E
+        spras: makt_spras_E
+        sap_cluster: makt_sap_cluster_E
+      distinct: true
+
+  - kind: select
+    name: select_makt_t001
+    context_name: read_makt
+    params:
+      columns:
+        matnr: makt_matnr_t001
+        maktx: makt_maktx_t001
+        spras: makt_spras_t001
+        sap_cluster: makt_sap_cluster_t001
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mvke
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mvke
+      schema_version: v1
+
+  - kind: select
+    name: select_mvke
+    params:
+      columns:
+        matnr: mvke_matnr
+        vkorg: mvke_vkorg
+        kondm: mvke_kondm
+        mvgr1: mvke_mvgr1
+        mvgr2: mvke_mvgr2
+        mvgr3: mvke_mvgr3
+        mvgr4: mvke_mvgr4
+        mvgr5: mvke_mvgr5
+        prodh: mvke_prodh
+        vtweg: mvke_vtweg
+        zz_kondm: mvke_zz_kondm
+        sap_cluster: mvke_sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvm1t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm1t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvm1t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvm1t
+    context_name: filter_tvm1t
+    params:
+      columns:
+        mvgr1: tv1_mvgr1
+        bezei: tv1_bezei
+        sap_cluster: tv1_sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvm2t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm2t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvm2t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvm2t
+    context_name: filter_tvm2t
+    params:
+      columns:
+        mvgr2: tv2_mvgr2
+        bezei: tv2_bezei
+        sap_cluster: tv2_sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvm3t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm3t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvm3t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvm3t
+    context_name: filter_tvm3t
+    params:
+      columns:
+        mvgr3: tv3_mvgr3
+        bezei: tv3_bezei
+        sap_cluster: tv3_sap_cluster
+      distinct: true
+
+
+  - kind: read_dataio
+    name: read_tvm4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvm4t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvm4t
+    params:
+      columns:
+        mvgr4: tv4_mvgr4
+        bezei: tv4_bezei
+        sap_cluster: tv4_sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvm5t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvm5t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvm5t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvm5t
+    params:
+      columns:
+        mvgr5: tv5_mvgr5
+        bezei: tv5_bezei
+        sap_cluster: tv5_sap_cluster
+      distinct: true
+
+
+  - kind: read_dataio
+    name: read_t179t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t179t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t179t
+    params:
+      - condition:
+          spras = 'E'
+
+
+  - kind: select
+    name: select_t179t
+    context_name: filter_t179t
+    params:
+      columns:
+        prodh: tt_prodh
+        vtext: tt_vtext
+        sap_cluster: tt_sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_t023t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t023t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t023t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t023t
+    context_name: filter_t023t
+    params:
+      columns:
+        matkl: t23_matkl
+        wgbez: t23_wgbez
+        sap_cluster: t23_sap_cluster
+      distinct: true
+
+
+  - kind: read_dataio
+    name: read_zmd_brand_attr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zmd_brand_attr
+      schema_version: v1
+
+  - kind: select
+    name: select_zmd_brand_attr
+    params:
+      columns:
+        mvgr1: zba_mvgr1
+        bezei: zba_bezei
+        trademark: zba_trademark
+        brandowner: zba_brandowner
+        tcccindic: zba_tcccindic
+        lightindic: zba_lightindic
+        sap_cluster: zba_sap_cluster
+      distinct: true
+
+#Read t006a
+
+  - kind: read_dataio
+    name: read_t006a
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t006a
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t006a
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t006a
+    context_name: filter_t006a
+    params:
+      columns:
+        msehl: t006a_msehl
+        msehi: t006a_msehi
+        spras: t006a_spras
+        sap_cluster: t006a_sap_cluster
+      distinct: true
+
+#Read tvko
+
+  - kind: read_dataio
+    name: read_tvko
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvko
+      schema_version: v1
+
+  - kind: select
+    name: select_tvko
+    context_name: read_tvko
+    params:
+      columns:
+        vkorg: tvko_vkorg
+        bukrs: tvko_bukrs
+        sap_cluster: tvko_sap_cluster
+      distinct: true
+
+#Read t001
+
+  - kind: read_dataio
+    name: read_t001
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t001
+      schema_version: v1
+
+  - kind: select
+    name: select_t001
+    context_name: read_t001
+    params:
+      columns:
+        bukrs: t001_bukrs
+        spras: t001_spras
+        sap_cluster: t001_sap_cluster
+      distinct: true
+
+#Read packkp
+
+  - kind: read_dataio
+    name: read_packkp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: packkp
+      schema_version: v1
+
+  - kind: select
+    name: select_packkp
+    context_name: read_packkp
+    params:
+      columns:
+        packnr: packkp_packnr
+        packtyp: packkp_packtyp
+        lot_numitmlay: packkp_lot_numitmlay
+        sap_cluster: packkp_sap_cluster
+      distinct: true 
+
+#Read kondp
+
+  - kind: read_dataio
+    name: read_kondp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: kondp
+      schema_version: v1
+
+  - kind: select
+    name: select_kondp
+    context_name: read_kondp
+    params:
+      columns:
+        knumh: kondp_knumh
+        packnr: kondp_packnr
+        sap_cluster: kondp_sap_cluster
+      distinct: true 
+
+#Read kotp499
+
+  - kind: read_dataio
+    name: read_kotp499
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: kotp499
+      schema_version: v1
+
+  - kind: filter
+    name: filter_kotp499
+    params:
+      - condition:
+          datbi= '9999-12-31 00:00:00.0000000'
+
+  - kind: select
+    name: select_kotp499
+    context_name: filter_kotp499
+    params:
+      columns:
+        datbi: kotp499_datbi
+        knumh: kotp499_knumh
+        rmatp: kotp499_rmatp
+        sap_cluster: kotp499_sap_cluster
+      distinct: true
+
+#Read sapsll_maritc
+
+  - kind: read_dataio
+    name: read_sapsll_maritc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: sapsll_maritc
+      schema_version: v1
+
+  - kind: group
+    name: group_sapsll_maritc_ccngn
+    params:
+      - aggs:
+          ccngn: max
+        by:
+        - matnr
+        - sap_cluster
+
+  - kind: select
+    name: select_sapsll_maritc
+    params:
+      columns:
+        matnr: sapsll_maritc_matnr
+        max_ccngn: sapsll_maritc_ccngn
+        sap_cluster: sapsll_maritc_sap_cluster
+      distinct: true 
+
+####
+
+# ZPP_MES_MAT_SUB
+
+
+  - kind: read_dataio
+    name: read_zpp_mes_mat_sub
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zpp_mes_mat_sub
+      schema_version: v1
+
+  - kind: select
+    name: select_sub_pro_mat
+    params:
+      columns:
+        pro_mat : matnr_sub 
+        sap_cluster: sap_cluster_sub
+      distinct: true 
+
+  - kind: select
+    name: select_sub_purch_mat
+    context_name: read_zpp_mes_mat_sub
+    params:
+      columns:
+        purch_mat: matnr_sub
+        sap_cluster: sap_cluster_sub
+      distinct: true 
+
+  - kind: union
+    name: union_subs
+    context_name: select_sub_pro_mat
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_sub_purch_mat
+
+# INOB
+
+  - kind: read_dataio
+    name: read_inob
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: inob
+      schema_version: v1
+
+  - kind: filter
+    name: filter_inob
+    params:
+      - condition:
+          klart = '023' and obtab = 'MARA'
+
+
+  - kind: select
+    name: select_inob
+    params:
+      columns:
+        objek: objek
+        clint: clint 
+        cuobj: cuobj
+        sap_cluster: sap_cluster_in
+      distinct: true 
+
+
+# Final_ join
+
+  - kind: join
+    name: join_finall
+    context_name: select_mara
+    params:
+      - other:
+          select_makt_E
+        how:
+          left
+        columns:
+          mara_matnr: makt_matnr_E
+          mara_sap_cluster: makt_sap_cluster_E
+      - other:
+          select_t023t
+        how:
+          left
+        columns:
+          mara_matkl: t23_matkl
+          mara_sap_cluster: t23_sap_cluster
+      - other:
+          select_mvke
+        how:
+          left
+        columns:
+          mara_matnr: mvke_matnr
+          mara_sap_cluster: mvke_sap_cluster
+      - other:
+          select_tvm1t
+        how:
+          left
+        columns:
+          mvke_mvgr1: tv1_mvgr1
+          mvke_sap_cluster: tv1_sap_cluster
+      - other:
+          select_tvm2t
+        how:
+          left
+        columns:
+          mvke_mvgr2: tv2_mvgr2
+          mvke_sap_cluster: tv2_sap_cluster
+      - other:
+          select_tvm3t
+        how:
+          left
+        columns:
+          mvke_mvgr3: tv3_mvgr3
+          mvke_sap_cluster: tv3_sap_cluster
+      - other:
+          select_tvm4t
+        how:
+          left
+        columns:
+          mvke_mvgr4: tv4_mvgr4
+          mvke_sap_cluster: tv4_sap_cluster
+      - other:
+          select_tvm5t
+        how:
+          left
+        columns:
+          mvke_mvgr5: tv5_mvgr5
+          mvke_sap_cluster: tv5_sap_cluster
+      - other:
+          select_zmd_brand_attr
+        how:
+          left
+        columns:
+          mvke_mvgr1: zba_mvgr1
+          mvke_sap_cluster: zba_sap_cluster
+      - other:
+          select_t006a
+        how:
+          left
+        columns:
+          mara_meins: t006a_msehi
+          mara_sap_cluster: t006a_sap_cluster
+      - other:
+          select_tvko
+        how:
+          left
+        columns:
+          mvke_vkorg: tvko_vkorg
+          mvke_sap_cluster: tvko_sap_cluster
+      - other:
+          select_t001
+        how:
+          left
+        columns:
+          tvko_bukrs: t001_bukrs
+          tvko_sap_cluster: t001_sap_cluster
+      - other:
+          select_sapsll_maritc
+        how:
+          left
+        columns:
+          mara_matnr: sapsll_maritc_matnr
+          mara_sap_cluster: sapsll_maritc_sap_cluster
+      - other:
+          select_kotp499
+        how:
+          left
+        columns:
+          mara_rmatp: kotp499_rmatp
+          mara_sap_cluster: kotp499_sap_cluster
+      - other:
+          select_kondp
+        how:
+          left
+        columns:
+          kotp499_knumh: kondp_knumh
+          kotp499_sap_cluster: kondp_sap_cluster
+      - other:
+          select_packkp
+        how:
+          left
+        columns:
+          kondp_packnr: packkp_packnr
+          kondp_sap_cluster: packkp_sap_cluster
+      - other:
+          select_t179t
+        how:
+          left
+        columns:
+          mvke_prodh: tt_prodh
+          mvke_sap_cluster: tt_sap_cluster
+      - other:
+          select_sls
+        how:
+          left
+        columns:
+          mara_matnr: material
+          mvke_vkorg: salesorg          
+      - other:
+          select_som
+        how:
+          left
+        columns:
+          mvke_vkorg: som_sales_org_code
+          mvke_sap_cluster: som_sap_cluster
+      - other:
+          union_subs
+        how:
+          left
+        columns:
+          mara_matnr: matnr_sub
+          mara_sap_cluster: sap_cluster_sub
+      - other:
+          select_inob
+        how:
+          left
+        columns:
+          mara_matnr: objek
+          mara_sap_cluster: sap_cluster_in
+      - other:
+          select_makt_t001
+        how:
+          left
+        columns:
+          mara_matnr: makt_matnr_t001
+          mara_sap_cluster: makt_sap_cluster_t001
+          t001_spras: makt_spras_t001
+
+  - kind: add
+    name: add_pakc_size
+    params:
+      - column: pack_size_uom_unified
+        expression: "CASE WHEN tv4_bezei LIKE '%2,4%' THEN 'G' WHEN (LOWER(tv4_bezei) LIKE '%kilogram%' OR tv4_bezei LIKE '%KG%') THEN 'KG' WHEN LOWER(tv4_bezei) LIKE '%gr%' THEN 'G' WHEN ((LOWER(tv4_bezei) LIKE '%litre%' OR LOWER(tv4_bezei) LIKE '%liter%') AND (tv4_bezei LIKE '0.%')) THEN 'ML' WHEN (LOWER(tv4_bezei) LIKE '%litre%' OR LOWER(tv4_bezei) LIKE '%liter%') THEN 'L' ELSE 'UNKNOWN' END"
+      - column: pack_size_volume_unified
+        expression: "CASE WHEN tv4_bezei LIKE '%2,4%' THEN '2.4' WHEN (LOWER(tv4_bezei) LIKE '%kilogram%' OR tv4_bezei LIKE '%KG%') THEN regexp_extract(tv4_bezei, '[0-9]+(?:[.][0-9]+)?', 0) WHEN LOWER(tv4_bezei) LIKE '%gr%' THEN regexp_extract(tv4_bezei, '[0-9]+(?:[.][0-9]+)?', 0) WHEN ((LOWER(tv4_bezei) LIKE '%litre%' OR LOWER(tv4_bezei) LIKE '%liter%') AND (tv4_bezei LIKE '0.%')) THEN 1000*(regexp_extract(tv4_bezei, '[0-9]+(?:[.][0-9]+)?', 0)) WHEN (LOWER(tv4_bezei) LIKE '%litre%' OR LOWER(tv4_bezei) LIKE '%liter%') THEN regexp_extract(tv4_bezei, '[0-9]+(?:[.][0-9]+)?', 0) ELSE 'UNKNOWN' END"
+      - column: product_hierarchy_level_3_code
+        expression: "CASE WHEN (length(mvke_prodh) >= 7) THEN substring(mvke_prodh,1,7) ELSE '' END"
+      - column: product_hierarchy_level_4_code
+        expression: "CASE WHEN (length(mvke_prodh) >= 11) THEN substring(mvke_prodh,1,11) ELSE '' END"
+      - column: product_hierarchy_level_5_code
+        expression: "CASE WHEN (length(mvke_prodh) = 15) THEN mvke_prodh ELSE '' END"
+
+  - kind: select
+    name: select_t179t_l3
+    context_name: select_t179t
+    params:
+      columns:
+        tt_prodh: product_hierarchy_l3_code
+        tt_vtext: product_hierarchy_l3_name
+        tt_sap_cluster: l3_sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_t179t_l4
+    context_name: select_t179t
+    params:
+      columns:
+        tt_prodh: product_hierarchy_l4_code
+        tt_vtext: product_hierarchy_l4_name
+        tt_sap_cluster: l4_sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_t179t_l5
+    context_name: select_t179t
+    params:
+      columns:
+        tt_prodh: product_hierarchy_l5_code
+        tt_vtext: product_hierarchy_l5_name
+        tt_sap_cluster: l5_sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_product_sales_organization
+    context_name: add_pakc_size
+    params:
+      - other:
+          select_t179t_l3
+        how:
+          left
+        columns:
+          product_hierarchy_level_3_code: product_hierarchy_l3_code
+          mvke_sap_cluster: l3_sap_cluster
+      - other:
+          select_t179t_l4
+        how:
+          left
+        columns:
+          product_hierarchy_level_4_code: product_hierarchy_l4_code
+          mvke_sap_cluster: l4_sap_cluster
+      - other:
+          select_t179t_l5
+        how:
+          left
+        columns:
+          product_hierarchy_level_5_code: product_hierarchy_l5_code
+          mvke_sap_cluster: l5_sap_cluster
+
+  - kind: add
+    name: add_package_size_standardized_to_gram_ml
+    params:
+      - column: package_size_standardized_to_gram_ml
+        expression: "CASE WHEN pack_size_uom_unified ='L' THEN 1000 *(pack_size_volume_unified) WHEN pack_size_uom_unified ='KG' THEN 1000 *(pack_size_volume_unified) WHEN pack_size_uom_unified ='G' THEN pack_size_volume_unified WHEN pack_size_uom_unified ='ML' THEN pack_size_volume_unified ELSE pack_size_volume_unified END"
+
+  - kind: cast
+    name: cast_package_size_standardized_to_gram_ml
+    params:
+      - column: package_size_standardized_to_gram_ml
+        to: integer
+
+  - kind: add
+    name: add_material_name_filters
+    params:
+      - column: material_name_filter
+        expression: "NVL(makt_maktx_E, '')"
+      - column: material_name_native_lang_filter
+        expression: "NVL(makt_maktx_t001, '')"
+
+  - kind: add
+    name: add_total_sales_unit_rule
+    params:
+      - column: total_sales_unit
+        expression: "CASE 
+                      WHEN tv5_bezei IS NULL OR tv5_bezei = '' THEN '-1'
+                      WHEN regexp(tv5_bezei, '[0-9]') THEN reduce(transform(split(tv5_bezei, '[+]'), x -> reduce(transform(split(x, '[xX]'), y -> cast(y as int)),1,(m, n) -> coalesce(m, 1) * n)),0,(p, q) -> p + q) 
+                      ELSE '1' 
+                    END"
+
+  - kind: add
+    name: add_material_description
+    params:
+      - column: material_description_weight_flag
+        expression: "CASE WHEN (mara_matkl = '1003012' AND   material_name_filter LIKE '% .0%' ) THEN  regexp_extract(material_name_filter,'([0-9]+(?:[.,][0-9]+)?)', 0)  WHEN (mara_matkl = '1003012' AND  ( material_name_filter LIKE '% .%' OR material_name_filter LIKE '% ,%' )) THEN  CONCAT('0.',regexp_extract(material_name_filter,'([0-9]+(?:[.,][0-9]+)?)', 0)) * 100 WHEN  (mara_matkl = '1003012' AND  regexp(material_name_filter, '((.*?)[0-9]+[.,][0-9]+(.*?))') ) THEN regexp_extract(material_name_filter,'([0-9]+[.,][0-9]+)', 0)  WHEN (mara_matkl = '1003012' AND   material_name_filter LIKE '%GR%' ) THEN regexp_extract(material_name_filter,'([0-9]+(?:[.,][0-9]+)?)', 0) WHEN (mara_matkl = '1003012' AND   (material_name_filter LIKE '% G%' OR material_name_filter LIKE '%G%') ) THEN regexp_extract(material_name_filter,'([0-9]+(?:[.,][0-9]+)?)', 0) ELSE material_name_filter END"
+      - column: material_description_uom
+        expression: "CASE WHEN mara_matkl = '1003012' THEN 'G' ELSE '-1' END"
+      - column: material_substitution_flag
+        expression: "CASE WHEN matnr_sub IS NOT NULL OR matnr_sub != '' THEN '1' ELSE '0' END"
+
+  - kind: add
+    name: add_material_description
+    params:
+      - column: material_description_weight
+        expression: "CASE WHEN (mara_matkl = '1003012' AND   material_description_weight_flag LIKE '0%' ) THEN CAST(CONCAT('0.', material_description_weight_flag) AS float) * 1000  ELSE CAST(material_description_weight_flag AS float)  END"
+  - kind: cast
+    name: cast_material_description_weight
+    params:
+      - column: material_description_weight
+        to: decimal(13,3)
+
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        mara_matnr: material_code
+        material_name_filter: material_name
+        material_name_native_lang_filter: material_name_native_lang
+        mara_mtart: material_type_code
+        mara_matkl: material_group_code
+        t23_wgbez: material_group_name
+        mvke_matnr: material_code_mvke
+        som_country_code: country_code
+        mvke_vkorg: sales_organization
+        mvke_vtweg: distribution_channel
+        mara_wrkst: basic_material_code
+        mara_ersda: creation_date
+        sapsll_maritc_ccngn: external_identification_of_data
+        mvke_prodh: product_hierarchy
+        tt_vtext: product_hierarchy_name
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_l3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_l4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_l5_name: product_hierarchy_level_5_name
+        mvke_mvgr1: brand_code
+        tv1_bezei: brand_description
+        mvke_mvgr2: flavour_code
+        tv2_bezei: flavour_description
+        mvke_mvgr3: package_type_code
+        tv3_bezei: package_type_name
+        mvke_mvgr4: package_size_code
+        tv4_bezei: package_size_name
+        mvke_mvgr5: sales_unit_code
+        tv5_bezei: sales_unit_name
+        pack_size_uom_unified: pack_size_uom_unified
+        pack_size_volume_unified: pack_size_volume_unified
+        package_size_standardized_to_gram_ml: package_size_standardized_to_gram_ml
+        mara_meins: unit_of_measure_code
+        t006a_msehl: unit_of_measure_name
+        mvke_kondm: material_pricing_group
+        mvke_zz_kondm: ss_sm_flag
+        mara_ean11: ean
+        mara_sap_cluster: sap_cluster
+        total_sales_unit: total_sales_units
+        mara_mtpos_mara: general_item_category_group_code
+        mara_rmatp: reference_material_for_packed_materials
+        mara_brgew: gross_weight
+        mara_ntgew: net_weight
+        mara_gewei: weight_unit
+        mara_raube: storage_condition_code
+        mara_mhdhb: total_shelf_life
+        mara_mhdrz: remaining_shelf_life
+        packkp_packnr: packing_object_number
+        packkp_packtyp: packing_object_type
+        packkp_lot_numitmlay: quantity_per_layer
+        mara_pstat: maintenance_status
+        mara_mstae: material_status
+        is_active_sales: is_active_sales
+        material_description_weight: material_description_weight
+        material_description_uom: material_description_uom
+        material_substitution_flag: material_substitution_flag
+        clint: internal_class_number
+        cuobj: internal_object_number
+        mara_herkl: country_code_of_origin
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_material
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      process_run_id: "{{process_run_id}}"
+      schema_version: v4
+      refresh_mode: full

@@ -1,0 +1,155 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+ 
+transform:
+  name: external_products_universe_subbrand_monster
+  operations:
+
+# Read epu after basic load
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+#conf data join
+#spu add const value fpr join
+  - kind: add
+    name: add_const_1_subbrand
+    params:
+      - column: const_1_subbrand
+        expression: '''1'''
+
+#read conf data
+  - kind: read_local
+    name: read_conf_data
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_ered/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: epu_sub_brand
+
+  - kind: add
+    name: add_const_1_conf
+    context_name: read_conf_data
+    params:
+      - column: const_1_conf
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf
+    context_name: add_const_1_conf
+    params:
+      - aggs:
+          input_value: array_agg
+          output_value: array_agg
+          priority: array_agg
+        by:
+        - const_1_conf
+
+  - kind: join
+    name: join_conf
+    context_name: add_const_1_subbrand
+    params:
+      - other:
+          group_arrays_conf
+        how:
+          inner
+        columns:
+          const_1_subbrand: const_1_conf
+
+  - kind: add
+    name: add_conf_structs
+    params:
+      - column: input_output_priority_structs
+        expression: transform(sequence(0, size(array_agg_input_value) - 1), i -> struct(array_agg_input_value[i] as input_val, array_agg_output_value[i] as output_val, CAST(array_agg_priority[i] AS INT) as prio))
+
+  - kind: add
+    name: filter_matching_structs
+    context_name: add_conf_structs
+    params:
+      - column: matching_structs
+        expression: filter(input_output_priority_structs, x -> instr(product_name_cleansed, x.input_val) > 0)
+
+  - kind: add
+    name: sort_matching_structs
+    context_name: filter_matching_structs
+    params:
+      - column: matching_structs
+        expression: array_sort(matching_structs, (left, right) -> case when left.prio < right.prio then -1 when left.prio > right.prio then 1 else 0 end)
+        overwrite: true
+
+  - kind: add
+    name: extract_lowest_priority_output
+    context_name: sort_matching_structs
+    params:
+      - column: subbrand_tmp
+        expression: element_at(transform(slice(matching_structs, 1, 1), x -> x.output_val), 1)
+        overwrite: true
+
+  - kind: add
+    name: add_subbrand_final
+    context_name: extract_lowest_priority_output
+    params:
+      - column: sub_brand_name
+        expression: if(subbrand_tmp is not null and (brand_name = 'monster-ko' or brand_name = 'ultra-ko'), subbrand_tmp, '')
+        overwrite: true
+
+  - kind: select
+    name: select_epu_with_pack_size
+    params:
+      columns:
+        product_code: product_code
+        product_name_raw: product_name_raw
+        product_name_translated: product_name_translated
+        product_name_cleansed: product_name_cleansed
+        product_name_stage: product_name_stage
+        country_code: country_code
+        brand_name: brand_name
+        brand_probability: brand_probability
+        flavour_name: flavour_name
+        flavour_probability: flavour_probability
+        pack_size_name: pack_size_name
+        pack_size_probability: pack_size_probability
+        pack_type_name: pack_type_name
+        pack_type_probability: pack_type_probability
+        sales_unit_name: sales_unit_name
+        sales_unit_probability: sales_unit_probability
+        sparkling_level: sparkling_level
+        blacklisting_mode: blacklisting_mode
+        source_system: source_system
+        sub_brand_name: sub_brand_name
+        process_run_id: process_run_id
+      distinct: true
+      
+  - kind: write_dataio
+    name: write_external_products_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

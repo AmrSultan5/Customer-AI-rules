@@ -1,0 +1,165 @@
+transform:
+  name: FINAL_sales_unit
+  operations:
+
+###############
+# Read data marts
+# external_portfolio - ep
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      schema_version: v1
+###############
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+  - kind: drop
+    name: drop_process_run_id
+    params:
+      - column: process_run_id
+
+  - kind: filter
+    name: filter_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is null or ext_product_name_src = ''
+
+  - kind: filter
+    name: filter_not_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is not null and ext_product_name_src != ''
+          
+  # sales unit extraction
+  - kind: governance_data_quality_processes.custom_operations.product_mapping_tool.sales_unit_parse.SalesUnitParseOperation
+    name: ven_extract_sales_unit_from_src
+    config_kind: governance_data_quality_processes.custom_operation_configs.product_mapping_tool.sales_unit_parse_config.SalesUnitParseOperationConfig
+    params:
+      input_value: ext_sales_unit_src
+      output_col_name: ext_sales_unit_src_parsed
+
+  - kind: add
+    name: add_sales_unit_number
+    params:
+      - column: sales_unit_src_parsed_number
+        expression: cast(regexp_extract(ext_sales_unit_src_parsed_sales_unit, r'(\d+)', 1) as int)
+      - column: sales_unit_pcm_number
+        expression: cast(regexp_extract(ext_sales_unit_pcm, r'(\d+)', 1) as int)
+        
+  - kind: add
+    name: add_sales_unit_final
+    params:
+      - column: ext_sales_unit_final
+        overwrite: true
+        expression: if((ext_sales_unit_src_parsed_sales_unit is null or ext_sales_unit_src_parsed_sales_unit = ''), ext_sales_unit_pcm, 
+                    if((ext_sales_unit_pcm is null or ext_sales_unit_pcm = ''), ext_sales_unit_src_parsed_sales_unit, 
+                    if(ext_sales_unit_src_parsed_sales_unit <> ext_sales_unit_pcm, 
+                        if(sales_unit_src_parsed_number > sales_unit_pcm_number, ext_sales_unit_src_parsed_sales_unit, ext_sales_unit_pcm), ext_sales_unit_pcm)))
+      - column: ext_sales_unit_final_probability
+        overwrite: true
+        expression: "cast (if(ext_sales_unit_final is null or ext_sales_unit_final = '', null, 1) as decimal(10,4))"
+
+  - kind: select
+    name: select_final
+    context_name: add_sales_unit_final
+    params:
+      columns:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: union
+    name: union_final
+    context_name: select_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: filter_null_product_name
+
+  - kind: write_dataio
+    name: write_ext_portfolio
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

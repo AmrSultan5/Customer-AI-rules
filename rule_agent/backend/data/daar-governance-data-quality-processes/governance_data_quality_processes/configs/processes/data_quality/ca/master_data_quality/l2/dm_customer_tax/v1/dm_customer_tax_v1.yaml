@@ -1,0 +1,59 @@
+transform:
+  name: dm_customer_tax
+  operations:
+
+
+  - kind: read_dataio
+    name: read_dfkkbptaxnum
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: dfkkbptaxnum
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dfkkbptaxnum
+    params:
+      - condition:
+          lower(substring(taxtype,1,2)) not in('ru', 'by')
+
+  - kind: add
+    name: add_country_code_tax_code
+    params:
+      - column: country_code
+        expression: lower(substring(taxtype,1,2))
+      - column: tax_code
+        expression: substring(taxtype,3,1)
+
+  - kind: select
+    name: select_dfkkbptaxnum
+    params:
+      columns:
+        partner: customer_code
+        taxtype: tax_type_code
+        taxnum: tax_number
+        country_code: country_code
+        tax_code: tax_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_dm_customer_tax
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_tax
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

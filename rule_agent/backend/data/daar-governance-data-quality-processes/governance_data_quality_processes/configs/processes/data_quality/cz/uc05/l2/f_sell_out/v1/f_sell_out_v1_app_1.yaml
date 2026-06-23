@@ -1,0 +1,76 @@
+transform:
+  name: f_sellout_cz
+  operations:
+  - name: read_and_transform_sell_out_cz
+    kind: governance_data_quality_processes.custom_operations.uc05.f_sell_out_cz.FSelloutCZOperation
+    config_kind: governance_data_quality_processes.custom_operation_configs.uc05.f_sell_out_cz_config.FSelloutCZOperationConfig
+    params:
+      src_sellout_curated:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: curated
+          storage_id: "{{dataio.storage_id}}"
+        namespace: cz
+        object_name: cz_sellout
+        schema_version: v1
+        source: nielsen
+      src_calendar:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: curated
+          storage_id: "{{dataio.storage_id}}"
+        namespace: local
+        object_name: date
+        schema_version: v2
+        source: ppaa_user_input
+      src_sellout:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: udm
+          storage_id: "{{dataio.storage_id}}"
+        domain: paat
+        namespace: ca
+        object_name: universal_schema
+        schema_version: v1
+      src_product_map:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: curated
+          storage_id: "{{dataio.storage_id}}"
+        namespace: local
+        object_name: product_mapping_file
+        schema_version: v1
+        source: ppaa_user_input
+      # src_cpl_mapping:
+      #   dataio:
+      #     ad_id: "{{dataio.ad_id}}"
+      #     layer: application
+      #     storage_id: "{{dataio.storage_id}}"
+      #   application_name: data_quality
+      #   country: cz
+      #   module: uc05
+      #   namespace: l2
+      #   object_name: cpl_mapping
+      #   schema_version: v1
+
+  - kind: add
+    name: add_openhub
+    params:
+      - column: openhub
+        expression: "concat('p_',lower(country))"
+
+  - kind: write_dataio
+    name: write_sell_out_cz
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: uc05
+      namespace: l2
+      object_name: f_sell_out
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

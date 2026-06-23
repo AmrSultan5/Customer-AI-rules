@@ -1,0 +1,91 @@
+trigger:
+  tags:
+    include:
+      - '*'
+
+pool:
+  vmImage: ubuntu-22.04
+
+strategy:
+  matrix:
+    Python39:
+      python.version: '3.10'
+
+variables:
+  FEED: 'daar-governance-data-quality-processes'
+  SERVICE_CONNECTION: 'CCHBC Data Mesh Development'
+  STORAGE_ACCOUNT: 'stdatameshcicd001'
+  CHANGELOG_FILE_NAME: 'datamesh_governance_data_quality_processes_changelog.txt'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+    displayName: 'Use Python $(python.version)'
+
+  - script: |
+      set -ex
+      PROJECT_VERSION=$(python ./scripts/get_project_version.py)
+      echo "##vso[task.setvariable variable=PROJECT_VERSION]$PROJECT_VERSION"
+    displayName: 'Extract project version information'
+
+  - task: PipAuthenticate@1
+    inputs:
+      artifactFeeds: "$(System.TeamProjectId)/daar-datamesh-common, $(System.TeamProjectId)/daar-datamesh-data-io, $(System.TeamProjectId)/daar-datamesh-datalake-kbi, $(System.TeamProjectId)/daar-datamesh-transformation"
+      onlyAddExtraIndex: true
+    displayName: 'Authenticate to project feeds'
+
+  - script: |
+      set -ex
+      python -m pip install --upgrade pip
+      grep -o -m 1 'wheel==[0-9\.]*' development_requirements.txt | xargs python -m pip install --upgrade # "wheel" is required during installation of some dependencies
+      python -m pip install --upgrade -r development_requirements.txt
+      python -m pip list
+    displayName: 'Install python dependencies'
+
+  # - script: |
+  #     set -ex
+  #     sh ./scripts/generate_docs.sh
+  #     cd ./docs/source/_build/html
+  #     zip -r $(Build.ArtifactStagingDirectory)/data_quality_documentation_html_$(date '+%Y%m%d_%H%M%S').zip .
+  #   displayName: 'Generate project documentation'
+
+  - script: |
+      set -ex
+      git log --pretty=format:"%h %ad %<(50)%aE %s" --date=short > $(CHANGELOG_FILE_NAME)
+      cp $(CHANGELOG_FILE_NAME) $(Build.ArtifactStagingDirectory)
+      cat $(CHANGELOG_FILE_NAME)
+    displayName: 'Generate project changelog'
+
+  - script: |
+      set -ex
+      python setup.py sdist bdist_wheel
+      cp -r ./dist/ $(Build.ArtifactStagingDirectory)/dist/
+    displayName: 'Build .whl package'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: $(Build.ArtifactStagingDirectory)
+    displayName: 'Publish build artifacts'
+
+  - task: AzureCLI@2
+    displayName: 'Publish project documentation to $(STORAGE_ACCOUNT)'
+    inputs:
+      azureSubscription: $(SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az config set extension.use_dynamic_install=yes_without_prompt
+        az extension add --name storage-preview
+        az storage azcopy blob upload -c '$web' --account-name $(STORAGE_ACCOUNT) -s "./docs/source/_build/html/*" -d "$(FEED)/$(PROJECT_VERSION)" --recursive
+        az storage azcopy blob upload -c '$web' --account-name $(STORAGE_ACCOUNT) -s "$(CHANGELOG_FILE_NAME)" -d "$(FEED)/$(PROJECT_VERSION)/$(CHANGELOG_FILE_NAME)"
+
+  - task: TwineAuthenticate@1
+    displayName: 'Twine Authenticate'
+    inputs:
+      artifactFeed: $(System.TeamProjectId)/$(FEED)
+
+  - script: |
+      twine upload -r $(FEED) --config-file $(PYPIRC_PATH) $(Build.ArtifactStagingDirectory)/dist/*.whl
+    displayName: 'Upload .whl to feed: $(FEED)'
+    # https://docs.microsoft.com/en-us/azure/devops/artifacts/quickstarts/python-packages?view=azure-devops

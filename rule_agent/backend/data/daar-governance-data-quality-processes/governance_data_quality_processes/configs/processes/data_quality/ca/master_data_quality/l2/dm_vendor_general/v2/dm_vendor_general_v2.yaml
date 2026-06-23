@@ -1,0 +1,221 @@
+transform:
+  name: dm_vendor_general
+  operations:
+
+  - kind: read_dataio
+    name: read_lfa1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: vendor
+      object_name: lfa1
+      schema_version: v1
+
+  - kind: filter
+    name: filter_lfa1
+    params:
+      - condition:
+          lower(land1) not in('ru','by')
+
+  - kind: read_dataio
+    name: read_cdhdr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdhdr
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdhdr
+    context_name: read_cdhdr
+    params:
+      - condition: objectclas = 'KRED'
+
+  - kind: group
+    name: group_cdhdr
+    context_name: filter_cdhdr
+    params:
+      - aggs:
+          udate: max
+        by:
+        - changenr
+        - sap_cluster
+
+  - kind: select
+    name: select_cdhdr
+    context_name: group_cdhdr
+    params:
+      columns:
+        changenr: changenr
+        max_udate: max_udate
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_cdpos
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdpos
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdpos_unblock
+    context_name: read_cdpos
+    params:
+      - condition: objectclas = 'KRED' AND chngind = 'U' AND tabname = 'LFA1' and value_old = 'X' and value_new = '' and fname in('LOEVM', 'SPERM', 'SPERR', 'NODEL')
+
+  - kind: add
+    name: add_tabkey_unblock
+    context_name: filter_cdpos_unblock
+    params:
+      - column: trim_tabkey
+        expression: 'replace(tabkey, " ", "") as str'
+
+  - kind: select
+    name: select_cdpos_unblock
+    context_name: add_tabkey_unblock
+    params:
+      columns:
+        changenr: changenr
+        trim_tabkey: trim_tabkey
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_cdhdr_cdpos_unblock
+    context_name: select_cdpos_unblock
+    params:
+      - other:
+          select_cdhdr
+        how:
+          left
+        columns:
+          changenr: changenr
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_max_udate_unblock
+    context_name: join_cdhdr_cdpos_unblock
+    params:
+      columns:
+        trim_tabkey: trim_tabkey
+        max_udate: max_udate_unblock
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_is_active
+    context_name: filter_lfa1
+    params:
+      - column: is_active
+        expression: if((sperm = '' or isnull(sperm)) and (sperr = '' or isnull(sperr)) 
+                    and (loevm = '' or isnull(loevm)) and (nodel = '' or isnull(nodel)), '1', '0')
+      - column: country_code
+        expression: lower(land1)
+      - column: created_on
+        expression: date(erdat)
+      - column: tabkey
+        expression: concat_ws('', '400', lifnr)
+
+  - kind: join
+    name: join_dm_vendor_general
+    context_name: add_is_active
+    params:
+      - other:
+          select_max_udate_unblock
+        how:
+          left
+        columns:
+          tabkey: trim_tabkey
+          sap_cluster: sap_cluster
+
+  - kind: cast
+    name: cast_date
+    context_name: join_dm_vendor_general
+    params:
+      - column: max_udate_unblock
+        to: date
+
+  - kind: group
+    name: group_dm_vendor_general
+    context_name: cast_date
+    params:
+      - aggs:
+          max_udate_unblock: max
+        by:
+        - lifnr
+        - name1
+        - ktokk
+        - created_on
+        - kunnr
+        - country_code
+        - loevm
+        - sperr
+        - sperm
+        - nodel
+        - is_active
+        - j_1kftind
+        - stceg
+        - stcd1
+        - stcd2
+        - stcd3
+        - stcd4
+        - stcd5
+        - sap_cluster
+
+  - kind: select
+    name: select_dm_vendor_general
+    params:
+      columns:
+        lifnr: vendor_code
+        name1: vendor_name
+        ktokk: account_group_code
+        created_on: created_on
+        max_max_udate_unblock: last_unblock_date
+        kunnr: customer_code
+        country_code: country_code
+        loevm: deletion_flag
+        sperr: posting_block
+        sperm: purchasing_block
+        nodel: deletion_block
+        is_active: is_active
+        j_1kftind: type_of_industry
+        stceg: vat_number
+        stcd1: tax_number_1
+        stcd2: tax_number_2
+        stcd3: tax_number_3
+        stcd4: tax_number_4
+        stcd5: tax_number_5
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_general
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

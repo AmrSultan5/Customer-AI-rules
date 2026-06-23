@@ -1,0 +1,48 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: SAP_load_and_cleanse
+  operations:
+
+########################################################################################################################
+# Load source data
+########################################################################################################################
+# nested process - loader
+  - kind: nested_process
+    name: SAP_basic_load
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/sap_portfolio/v1/sap_portfolio_basic_load_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        product_level: "{{product_level}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+
+########################################################################################################################
+# Cleanse loaded data
+########################################################################################################################
+# nested process - cleanser
+  - kind: nested_process
+    name: ext_product_name_cleanser
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/sap_portfolio/v1/sap_portfolio_cleanser_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}" 

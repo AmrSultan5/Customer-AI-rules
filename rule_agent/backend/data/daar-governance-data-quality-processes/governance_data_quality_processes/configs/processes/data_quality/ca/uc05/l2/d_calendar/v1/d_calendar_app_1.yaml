@@ -1,0 +1,63 @@
+transform:
+  name: d_calendar_in
+  operations:
+  - name: read_and_transform_calendar
+    kind: governance_data_quality_processes.custom_operations.uc05.d_calendar.DCalendarOperation
+    config_kind: governance_data_quality_processes.custom_operation_configs.uc05.d_calendar_config.DCalendarOperationConfig
+    params:
+      src_calendar:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: curated
+          storage_id: "{{dataio.storage_id}}"
+        namespace: local
+        object_name: date
+        schema_version: v2
+        source: ppaa_user_input
+
+  - kind: cast
+    name: cast_d_calendar
+    params:
+      - column: week
+        to: string
+
+  # - kind: add
+  #   name: add_year_week
+  #   params:
+  #     - column: year_week
+  #       expression: concat(year_445, week_445)
+
+  # - kind: select
+  #   name: select_d_calendar
+  #   params:
+  #     columns:
+  #       date_id: date
+  #       month_445: month
+  #       week_445: week
+  #       year_445: year
+  #       year_month: year_month
+  #       year_week: year_week
+  #       country: country
+  #       process_run_id: process_run_id
+
+  # - kind: cast
+  #   name: cast_d_calendar_date
+  #   params:
+  #     - column: date
+  #       to: string
+
+  - kind: write_dataio
+    name: write_calendar
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: uc05
+      namespace: l2
+      object_name: d_calendar
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,275 @@
+transform:
+  name: dm_employee_check_results
+  operations:
+
+  - kind: read_dataio
+    name: read_employee_organisation_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_organisation_completeness
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_employee_organisation_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_organisation_conformity
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_employee_position_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_position_completeness
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_employee_position_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_position_conformity
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_employee_worker_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_worker_completeness
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_employee_worker_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: employee_worker_conformity
+      schema_version: v1
+
+######################################_USER_MESSAGE_###########################################
+
+  - kind: read_dataio
+    name: read_dm_employee_user_message
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_user_message
+      schema_version: v1
+
+  - kind: select
+    name: select_deus
+    context_name: read_dm_employee_user_message
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        user_message_code: user_message_code
+        user_message_name: user_message_name
+        message_added_when: message_added_when
+      distinct: true
+
+  - kind: add
+    name: add_row_number
+    context_name: select_deus
+    params:
+      - column: row_number  
+        expression: 'ROW_NUMBER() OVER (PARTITION BY rule_code, object_id ORDER BY rule_code, object_id, message_added_when DESC)'
+
+  - kind: filter
+    name: filter_row_number
+    context_name: add_row_number
+    params:
+      - condition:
+          row_number = '1'
+
+  - kind: select
+    name: select_user_message_final
+    context_name: filter_row_number
+    params:
+      columns:
+        rule_code: rule_code_msg
+        object_id: object_id_msg
+        # user_message_code: user_message_code_msg
+        user_message_name: user_message_name_msg
+      distinct: true
+
+# ################################################################################
+
+  - kind: read_dataio
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: dim_rules_inventory
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dri
+    context_name: read_dim_rules_inventory
+    params:
+      - condition:
+          is_active = '1'
+
+  - kind: select
+    name: select_dri
+    context_name: filter_dri
+    params:
+      columns:
+        rule_code: rule_code
+        is_sesitive: is_sensitive
+        rule_level: rule_level
+      distinct: true
+
+  - kind: union
+    name: union_employee_check_results
+    context_name: read_employee_organisation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: read_employee_organisation_conformity
+
+  - kind: union
+    name: union_employee_check_results
+    params:
+      allow_missing: false
+      by_name: true
+      other: read_employee_position_completeness
+
+  - kind: union
+    name: union_employee_check_results
+    params:
+      allow_missing: false
+      by_name: true
+      other: read_employee_position_conformity
+
+  - kind: union
+    name: union_employee_check_results
+    params:
+      allow_missing: false
+      by_name: true
+      other: read_employee_worker_completeness
+
+  - kind: union
+    name: union_employee_check_results
+    params:
+      allow_missing: false
+      by_name: true
+      other: read_employee_worker_conformity
+
+  - kind: join
+    name: join_checks_dri
+    context_name: union_employee_check_results
+    params:
+      - other:
+          select_dri
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+      - other:
+          select_user_message_final
+        how:
+          left
+        columns:
+          object_id: object_id_msg
+          rule_code: rule_code_msg
+
+  - kind: add
+    name: add_sensitive_data
+    context_name: join_checks_dri
+    params:
+      - column: value_checked
+        expression: if(is_sensitive = '1', 'Sensitive value has been hidden', value_checked)
+        overwrite: true
+
+  - kind: cast
+    name: cast_to_date
+    context_name: add_sensitive_data
+    params:
+      - column: check_date
+        to: date
+
+  - kind: select
+    name: select_check_results_final
+    context_name: cast_to_date
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        location_code: location_code
+        detailed_message: detailed_message
+        rule_level: object_type
+        user_message_name_msg: user_message_name
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_employee_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

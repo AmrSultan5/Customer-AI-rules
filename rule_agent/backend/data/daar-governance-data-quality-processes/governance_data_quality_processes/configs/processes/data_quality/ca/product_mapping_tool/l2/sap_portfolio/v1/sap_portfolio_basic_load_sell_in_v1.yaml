@@ -1,0 +1,557 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: sap_portfolio_basic_load_sell_in
+  operations:
+
+# final output of this process is last context joined to eligible sap portfolio, with aggregated (sum) respective sell in columns  
+
+# sell in calculation
+# configuration data - sp_included_cpls
+  - kind: filter
+    name: filter_conf_data_sp_fliters_cpl_inclusion
+    context_name: filter_conf_data_sp_fliters
+    params:
+      - condition:
+          filter_name = 'cpl_inclusion'
+
+  - kind: add
+    name: add_const_1_conf_data_sp_fliters_cpl_inclusion
+    context_name: filter_conf_data_sp_fliters_cpl_inclusion
+    params:
+      - column: const_1_conf_data_sp_fliters_cpl_inclusion
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_sp_included_cpls
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_included_cpls
+
+  - kind: filter
+    name: filter_conf_data_sp_included_cpls
+    context_name: read_conf_data_sp_included_cpls
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_sp_included_cpls
+    context_name: filter_conf_data_sp_included_cpls
+    params:
+      - column: const_1_conf_data_sp_included_cpls
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_sp_included_cpls
+    context_name: add_const_1_conf_data_sp_included_cpls
+    params:
+      - aggs:
+          included_cpl: array_agg
+        by:
+        - const_1_conf_data_sp_included_cpls
+
+  - kind: join
+    name: join_conf_data_sp_included_cpls
+    context_name: add_const_1_conf_data_sp_fliters_cpl_inclusion
+    params:
+      - other:
+          group_arrays_conf_data_sp_included_cpls
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_sp_fliters_cpl_inclusion: const_1_conf_data_sp_included_cpls
+
+  - kind: select
+    name: select_conf_data_sp_included_cpls
+    context_name: join_conf_data_sp_included_cpls
+    params:
+      columns:
+        const_1_conf_data_sp_fliters_cpl_inclusion: const_1_conf_data_sp_fliters_cpl_inclusion
+        filter_flag: filter_flag_cpl_inclusion
+        array_agg_included_cpl: array_agg_included_cpl
+      distinct: true
+
+# configuration data - sp_included_comp_codes
+  - kind: filter
+    name: filter_conf_data_sp_fliters_comp_code_inclusion
+    context_name: filter_conf_data_sp_fliters
+    params:
+      - condition:
+          filter_name = 'comp_code_inclusion'
+
+  - kind: add
+    name: add_const_1_conf_data_sp_fliters_comp_code_inclusion
+    context_name: filter_conf_data_sp_fliters_comp_code_inclusion
+    params:
+      - column: const_1_conf_data_sp_fliters_comp_code_inclusion
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_sp_included_comp_codes
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: sp_included_comp_codes
+
+  - kind: filter
+    name: filter_conf_data_sp_included_comp_codes
+    context_name: read_conf_data_sp_included_comp_codes
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_sp_included_comp_codes
+    context_name: filter_conf_data_sp_included_comp_codes
+    params:
+      - column: const_1_conf_data_sp_included_comp_codes
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_sp_included_comp_codes
+    context_name: add_const_1_conf_data_sp_included_comp_codes
+    params:
+      - aggs:
+          included_company_code: array_agg
+        by:
+        - const_1_conf_data_sp_included_comp_codes
+
+  - kind: join
+    name: join_conf_data_sp_included_comp_codes
+    context_name: add_const_1_conf_data_sp_fliters_comp_code_inclusion
+    params:
+      - other:
+          group_arrays_conf_data_sp_included_comp_codes
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_sp_fliters_comp_code_inclusion: const_1_conf_data_sp_included_comp_codes
+
+  - kind: select
+    name: select_conf_data_sp_included_comp_codes
+    context_name: join_conf_data_sp_included_comp_codes
+    params:
+      columns:
+        const_1_conf_data_sp_fliters_comp_code_inclusion: const_1_conf_data_sp_fliters_comp_code_inclusion
+        filter_flag: filter_flag_comp_code_inclusion
+        array_agg_included_company_code: array_agg_included_company_code
+      distinct: true
+
+# sell in source - ca_co004n_profitability_pl - sls
+  - kind: read_dataio
+    name: read_ca_co004n_profitability_pl_ench
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: ca
+      object_name: ca_co004n_profitability_pl_ench
+      schema_version: v1
+
+  - kind: filter
+    name: filter_sls_static
+    context_name: read_ca_co004n_profitability_pl_ench
+    params:
+      - condition:
+          version = '0000' AND sku is not null AND sku != ''
+
+  - kind: add
+    name: add_const_1_sls
+    context_name: filter_sls_static
+    params:
+      - column: const_1_sls
+        expression: '''1'''
+      - column: cfy
+        expression: year(current_date())
+      - column: pfy
+        expression: year(current_date()) - 1
+      - column: ppfy
+        expression: year(current_date()) - 2
+      - column: pppfy
+        expression: year(current_date()) - 3
+
+# join conf data - sell in
+  - kind: join
+    name: join_sls_conf_data
+    context_name: add_const_1_sls
+    params:
+      - other:
+          select_conf_data_sp_included_cpls
+        how:
+          inner
+        columns:
+          const_1_sls: const_1_conf_data_sp_fliters_cpl_inclusion
+      - other:
+          select_conf_data_sp_included_comp_codes
+        how:
+          inner
+        columns:
+          const_1_sls: const_1_conf_data_sp_fliters_comp_code_inclusion
+
+  - kind: filter
+    name: filter_sls_conf_data
+    context_name: join_sls_conf_data
+    params:
+      - condition:
+          IF(filter_flag_cpl_inclusion = 1, array_contains(array_agg_included_cpl, bic_ccust_hst), TRUE) AND IF(filter_flag_comp_code_inclusion = 1, array_contains(array_agg_included_company_code, companycode), TRUE)
+
+  - kind: select
+    name: select_sell_in_base
+    context_name: filter_sls_conf_data
+    params:
+      columns:
+        sku: material_code_sls
+        volume_uc: volume_uc
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        fiscyear: fiscyear
+      distinct: true
+
+  - kind: group
+    name: group_sell_in_base
+    context_name: select_sell_in_base
+    params:
+      - aggs:
+          volume_uc: sum
+        by:
+        - material_code_sls
+        - fiscyear
+        - cfy
+        - pfy
+        - ppfy
+        - pppfy
+
+# cfy
+  - kind: filter
+    name: filter_sell_in_base_cfy
+    context_name: group_sell_in_base
+    params:
+      - condition:
+          fiscyear = cfy
+
+  - kind: select
+    name: select_sell_in_base_cfy
+    context_name: filter_sell_in_base_cfy
+    params:
+      columns:
+        material_code_sls: material_code_sls_cfy
+        #cfy: cfy
+        sum_volume_uc: sum_cfy
+      distinct: true
+
+# pfy
+  - kind: filter
+    name: filter_sell_in_base_pfy
+    context_name: group_sell_in_base
+    params:
+      - condition:
+          fiscyear = pfy
+
+  - kind: select
+    name: select_sell_in_base_pfy
+    context_name: filter_sell_in_base_pfy
+    params:
+      columns:
+        material_code_sls: material_code_sls_pfy
+        #pfy: pfy
+        sum_volume_uc: sum_pfy
+      distinct: true
+
+# ppfy
+  - kind: filter
+    name: filter_sell_in_base_ppfy
+    context_name: group_sell_in_base
+    params:
+      - condition:
+          fiscyear = ppfy
+
+  - kind: select
+    name: select_sell_in_base_ppfy
+    context_name: filter_sell_in_base_ppfy
+    params:
+      columns:
+        material_code_sls: material_code_sls_ppfy
+        #ppfy: ppfy
+        sum_volume_uc: sum_ppfy
+      distinct: true
+
+# pppfy
+  - kind: filter
+    name: filter_sell_in_base_pppfy
+    context_name: group_sell_in_base
+    params:
+      - condition:
+          fiscyear = pppfy
+
+  - kind: select
+    name: select_sell_in_base_pppfy
+    context_name: filter_sell_in_base_pppfy
+    params:
+      columns:
+        material_code_sls: material_code_sls_pppfy
+        #pppfy: pppfy
+        sum_volume_uc: sum_pppfy
+      distinct: true
+
+# sequence of joins for flattening of sell in
+  - kind: join
+    name: join_sls_flatten_sell_in_cfy_pfy
+    context_name: select_sell_in_base_cfy
+    params:
+      - other:
+          select_sell_in_base_pfy
+        how:
+          full_outer
+        columns:
+          material_code_sls_cfy: material_code_sls_pfy
+
+  - kind: add
+    name: add_sls_material_code_after_pfy
+    context_name: join_sls_flatten_sell_in_cfy_pfy
+    params:
+      - column: material_code_sls_after_pfy
+        expression: coalesce(material_code_sls_cfy, material_code_sls_pfy)
+        overwrite: true
+
+  - kind: join
+    name: join_sls_flatten_sell_in_ppfy
+    context_name: add_sls_material_code_after_pfy
+    params:
+      - other:
+          select_sell_in_base_ppfy
+        how:
+          full_outer
+        columns:
+          material_code_sls_after_pfy: material_code_sls_ppfy
+
+  - kind: add
+    name: add_sls_material_code_after_ppfy
+    context_name: join_sls_flatten_sell_in_ppfy
+    params:
+      - column: material_code_sls_after_ppfy
+        expression: coalesce(material_code_sls_after_pfy, material_code_sls_ppfy)
+        overwrite: true
+
+  - kind: join
+    name: join_sls_flatten_sell_in_pppfy
+    context_name: add_sls_material_code_after_ppfy
+    params:
+      - other:
+          select_sell_in_base_pppfy
+        how:
+          full_outer
+        columns:
+          material_code_sls_after_ppfy: material_code_sls_pppfy
+
+  - kind: add
+    name: add_sls_material_code_after_pppfy
+    context_name: join_sls_flatten_sell_in_pppfy
+    params:
+      - column: material_code_sls_after_pppfy
+        expression: coalesce(material_code_sls_after_ppfy, material_code_sls_pppfy)
+        overwrite: true
+
+  {% if np_sellin_mode == "in_scope" %}
+  - kind: filter
+    name: filter_sls_no_sell_in
+    context_name: add_sls_material_code_after_pppfy
+    params:
+      - condition:
+          (sum_cfy is not null AND sum_cfy != 0) OR (sum_pfy is not null AND sum_pfy != 0) OR (sum_ppfy is not null AND sum_ppfy != 0) OR (sum_pppfy is not null AND sum_pppfy != 0)
+  {% endif %}
+
+  - kind: add
+    name: add_fy_after_flattening
+    params:
+      - column: cfy
+        expression: year(current_date())
+        overwrite: true
+      - column: pfy
+        expression: year(current_date()) - 1
+        overwrite: true
+      - column: ppfy
+        expression: year(current_date()) - 2
+        overwrite: true
+      - column: pppfy
+        expression: year(current_date()) - 3
+        overwrite: true
+
+  - kind: select
+    name: select_sell_in_final
+    context_name: add_fy_after_flattening
+    params:
+      columns:
+        material_code_sls_after_pppfy: material_code_sls_final
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  {% if product_level == "material" %}
+  {% if np_sellin_mode == "in_scope" %}
+# inner join sell in back to product
+  - kind: join
+    name: join_product_sell_in
+    context_name: filter_np_sellin_mode_in_scope
+    params:
+      - other:
+          select_sell_in_final
+        how:
+          inner
+        columns:
+          material: material_code_sls_final
+  {% endif %}
+
+  {% if np_sellin_mode == "in_pm" %}
+# left join sell in back to product
+  - kind: join
+    name: join_product_sell_in
+    context_name: filter_np_sellin_mode_in_pm
+    params:
+      - other:
+          select_sell_in_final
+        how:
+          left
+        columns:
+          material: material_code_sls_final
+
+  - kind: add
+    name: add_fy_after_left_join
+    context_name: join_product_sell_in
+    params:
+      - column: cfy
+        expression: year(current_date())
+        overwrite: true
+      - column: pfy
+        expression: year(current_date()) - 1
+        overwrite: true
+      - column: ppfy
+        expression: year(current_date()) - 2
+        overwrite: true
+      - column: pppfy
+        expression: year(current_date()) - 3
+        overwrite: true
+  {% endif %}
+  {% endif %}
+
+  {% if product_level == "ban" %}
+  - kind: select
+    name: select_material_ban_rel
+    context_name: filter_mat03_static
+    params:
+      columns:
+        material: material_rel
+        bic_cpbartno: ban_rel
+      distinct: true
+
+  - kind: join
+    name: join_sell_in_ban
+    context_name: select_sell_in_final
+    params:
+      - other:
+          select_material_ban_rel
+        how:
+          inner
+        columns:
+          material_code_sls_final: material_rel
+
+  - kind: group
+    name: group_sell_in_ban
+    context_name: join_sell_in_ban
+    params:
+      - aggs:
+          cfy: max
+          pfy: max
+          ppfy: max
+          pppfy: max
+          sum_cfy: sum
+          sum_pfy: sum
+          sum_ppfy: sum
+          sum_pppfy: sum
+        by:
+        - ban_rel
+
+  - kind: select
+    name: select_sell_in_ban_final
+    context_name: group_sell_in_ban
+    params:
+      columns:
+        ban_rel: material_code_sls_final_ban
+        max_cfy: cfy
+        max_pfy: pfy
+        max_ppfy: ppfy
+        max_pppfy: pppfy
+        sum_sum_cfy: sum_cfy
+        sum_sum_pfy: sum_pfy
+        sum_sum_ppfy: sum_ppfy
+        sum_sum_pppfy: sum_pppfy
+      distinct: true
+
+  {% if np_sellin_mode == "in_scope" %}
+# inner join sell in ban back to product
+  - kind: join
+    name: join_product_sell_in
+    context_name: filter_np_sellin_mode_in_scope
+    params:
+      - other:
+          select_sell_in_ban_final
+        how:
+          inner
+        columns:
+          material: material_code_sls_final_ban
+  {% endif %}
+
+  {% if np_sellin_mode == "in_pm" %}
+# left join sell in ban back to product
+  - kind: join
+    name: join_product_sell_in
+    context_name: filter_np_sellin_mode_in_pm
+    params:
+      - other:
+          select_sell_in_ban_final
+        how:
+          left
+        columns:
+          material: material_code_sls_final_ban
+
+  - kind: add
+    name: add_fy_after_left_join
+    context_name: join_product_sell_in
+    params:
+      - column: cfy
+        expression: year(current_date())
+        overwrite: true
+      - column: pfy
+        expression: year(current_date()) - 1
+        overwrite: true
+      - column: ppfy
+        expression: year(current_date()) - 2
+        overwrite: true
+      - column: pppfy
+        expression: year(current_date()) - 3
+        overwrite: true
+  {% endif %}
+  {% endif %}

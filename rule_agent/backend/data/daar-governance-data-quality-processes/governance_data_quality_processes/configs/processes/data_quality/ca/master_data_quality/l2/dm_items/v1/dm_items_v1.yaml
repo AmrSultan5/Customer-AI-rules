@@ -1,0 +1,60 @@
+transform:
+  name: dm_items
+  operations:
+
+# Read BSID
+
+  - kind: read_dataio
+    name: read_bsid
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: bsid
+      schema_version: v1
+        
+  - kind: filter
+    name: filter_bsid
+    params:
+      - condition:
+          bukrs not in('0403', '0550')
+
+
+  - kind: select
+    name: select_dm_items
+    params:
+      columns:
+        zuonr: assignment_number
+        fipos: commitment_item
+        bukrs: company_code
+        kunnr: customer_number
+        bstat: document_status
+        blart: document_type
+        mansp: dunning_block
+        sap_cluster: sap_cluster
+        belnr: accounting_document_number
+        aufnr: order_number
+        xblnr: reference_document_number
+        budat: document_posting_date
+        bldat: document_date
+      distinct: true             
+      
+      
+  - kind: write_dataio
+    name: write_dm_items
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_items
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,671 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: external_portfolio_basic_load_sell_out
+  operations:
+
+# final output of this process is last context joined to eligible ext portfolio from unv schemam, with aggregated (sum) respective sell out columns  
+
+# configuration data - ep_filters 
+# for determining which filter is eligible for respective ext source
+  - kind: read_local
+    name: read_conf_data_ep_fliters
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_fliters
+
+  - kind: filter
+    name: filter_conf_data_ep_fliters
+    context_name: read_conf_data_ep_fliters
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+# configuration data - ep_included_areas
+# final output - areas to be included and filter eligibility flag
+  - kind: filter
+    name: filter_conf_data_ep_fliters_area
+    context_name: filter_conf_data_ep_fliters
+    params:
+      - condition:
+          filter_name = 'area'
+
+  - kind: add
+    name: add_const_1_conf_data_ep_fliters_area
+    context_name: filter_conf_data_ep_fliters_area
+    params:
+      - column: const_1_conf_data_ep_fliters_area
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_ep_included_areas
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_included_areas
+
+  - kind: filter
+    name: filter_conf_data_ep_included_areas
+    context_name: read_conf_data_ep_included_areas
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_ep_included_areas
+    context_name: filter_conf_data_ep_included_areas
+    params:
+      - column: const_1_conf_data_ep_included_areas
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_ep_included_areas
+    context_name: add_const_1_conf_data_ep_included_areas
+    params:
+      - aggs:
+          included_area: array_agg
+        by:
+        - const_1_conf_data_ep_included_areas
+
+  - kind: join
+    name: join_conf_data_ep_included_areas
+    context_name: add_const_1_conf_data_ep_fliters_area
+    params:
+      - other:
+          group_arrays_conf_data_ep_included_areas
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_ep_fliters_area: const_1_conf_data_ep_included_areas
+
+  - kind: select
+    name: select_conf_data_ep_included_areas
+    context_name: join_conf_data_ep_included_areas
+    params:
+      columns:
+        const_1_conf_data_ep_fliters_area: const_1_conf_data_ep_fliters_area
+        filter_flag: filter_flag_area
+        array_agg_included_area: array_agg_included_area
+      distinct: true
+
+# configuration data - ep_included_retailer_regions
+# final output - retailer regions to be included and filter eligibility flag
+  - kind: filter
+    name: filter_conf_data_ep_fliters_retailer_region
+    context_name: filter_conf_data_ep_fliters
+    params:
+      - condition:
+          filter_name = 'retailer_region'
+
+  - kind: add
+    name: add_const_1_conf_data_ep_fliters_retailer_region
+    context_name: filter_conf_data_ep_fliters_retailer_region
+    params:
+      - column: const_1_conf_data_ep_fliters_retailer_region
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_ep_included_retailer_regions
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_included_retailer_regions
+
+  - kind: filter
+    name: filter_conf_data_ep_included_retailer_regions
+    context_name: read_conf_data_ep_included_retailer_regions
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_ep_included_retailer_regions
+    context_name: filter_conf_data_ep_included_retailer_regions
+    params:
+      - column: const_1_conf_data_ep_included_retailer_regions
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_ep_included_retailer_regions
+    context_name: add_const_1_conf_data_ep_included_retailer_regions
+    params:
+      - aggs:
+          included_retailer_region: array_agg
+        by:
+        - const_1_conf_data_ep_included_retailer_regions
+
+  - kind: join
+    name: join_conf_data_ep_included_retailer_regions
+    context_name: add_const_1_conf_data_ep_fliters_retailer_region
+    params:
+      - other:
+          group_arrays_conf_data_ep_included_retailer_regions
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_ep_fliters_retailer_region: const_1_conf_data_ep_included_retailer_regions
+
+  - kind: select
+    name: select_conf_data_ep_included_retailer_regions
+    context_name: join_conf_data_ep_included_retailer_regions
+    params:
+      columns:
+        const_1_conf_data_ep_fliters_retailer_region: const_1_conf_data_ep_fliters_retailer_region
+        filter_flag: filter_flag_retailer_region
+        array_agg_included_retailer_region: array_agg_included_retailer_region
+      distinct: true
+
+# sell out source - universal schema - sls
+# version of table should be passed as dynamic parameter (to be done)
+  - kind: read_dataio
+    name: read_universal_schema
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: paat
+      namespace: ca
+      object_name: universal_schema
+      schema_version: '{{unv_schema_version}}'
+
+  - kind: filter
+    name: filter_sls_country_vendor_name
+    context_name: read_universal_schema
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and vendor_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_sls
+    context_name: filter_sls_country_vendor_name
+    params:
+      - column: const_1_sls
+        expression: '''1'''
+      - column: cfy
+        expression: year(current_date())
+      - column: pfy
+        expression: year(current_date()) - 1
+      - column: ppfy
+        expression: year(current_date()) - 2
+      - column: pppfy
+        expression: year(current_date()) - 3
+      - column: year_extracted
+        expression: CASE WHEN date is not null AND NOT regexp_like(date, '.*/.*') THEN floor(cast(regexp_replace(date, '-', '') as integer) / 10000) WHEN year is not null THEN year ELSE cast(substr(timeframe_level, 1, 4) as integer) END
+
+# join conf data
+  - kind: join
+    name: join_sls_conf_data
+    context_name: add_const_1_sls
+    params:
+      - other:
+          select_conf_data_ep_included_areas
+        how:
+          inner
+        columns:
+          const_1_sls: const_1_conf_data_ep_fliters_area
+      - other:
+          select_conf_data_ep_included_retailer_regions
+        how:
+          inner
+        columns:
+          const_1_sls: const_1_conf_data_ep_fliters_retailer_region
+
+  - kind: filter
+    name: filter_sls_conf_data
+    context_name: join_sls_conf_data
+    params:
+      - condition:
+          IF(filter_flag_area = 1, array_contains(array_agg_included_area, area), TRUE) AND IF(filter_flag_retailer_region = 1, array_contains(array_agg_included_retailer_region, retailer_region), TRUE)
+
+  - kind: select
+    name: select_sell_out_base
+    context_name: filter_sls_conf_data
+    params:
+      columns:
+        product_id: product_id_sls
+        stable_key_to_ban_id: stable_key_to_ban_id_sls
+        total_volume_sales: total_volume_sales
+        regular_volume_sales: regular_volume_sales
+        total_unit_sales: total_unit_sales
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        year_extracted: year_extracted
+      distinct: true
+
+  - kind: group
+    name: group_sell_out_base
+    context_name: select_sell_out_base
+    params:
+      - aggs:
+          total_volume_sales: sum
+          regular_volume_sales: sum
+          total_unit_sales: sum
+        by:
+        - product_id_sls
+        - stable_key_to_ban_id_sls
+        - year_extracted
+        - cfy
+        - pfy
+        - ppfy
+        - pppfy
+
+# cfy
+  - kind: filter
+    name: filter_sell_out_base_cfy
+    context_name: group_sell_out_base
+    params:
+      - condition:
+          year_extracted = cfy
+
+  - kind: select
+    name: select_sell_out_base_cfy
+    context_name: filter_sell_out_base_cfy
+    params:
+      columns:
+        product_id_sls: product_id_sls_cfy
+        stable_key_to_ban_id_sls: stable_key_to_ban_id_sls_cfy
+        #cfy: cfy
+        sum_total_volume_sales: sum_total_volume_sales_cfy
+        sum_regular_volume_sales: sum_regular_volume_sales_cfy
+        sum_total_unit_sales: sum_total_unit_sales_cfy
+      distinct: true
+
+# pfy
+  - kind: filter
+    name: filter_sell_out_base_pfy
+    context_name: group_sell_out_base
+    params:
+      - condition:
+          year_extracted = pfy
+
+  - kind: select
+    name: select_sell_out_base_pfy
+    context_name: filter_sell_out_base_pfy
+    params:
+      columns:
+        product_id_sls: product_id_sls_pfy
+        stable_key_to_ban_id_sls: stable_key_to_ban_id_sls_pfy
+        #pfy: pfy
+        sum_total_volume_sales: sum_total_volume_sales_pfy
+        sum_regular_volume_sales: sum_regular_volume_sales_pfy
+        sum_total_unit_sales: sum_total_unit_sales_pfy
+      distinct: true
+
+# ppfy
+  - kind: filter
+    name: filter_sell_out_base_ppfy
+    context_name: group_sell_out_base
+    params:
+      - condition:
+          year_extracted = ppfy
+
+  - kind: select
+    name: select_sell_out_base_ppfy
+    context_name: filter_sell_out_base_ppfy
+    params:
+      columns:
+        product_id_sls: product_id_sls_ppfy
+        stable_key_to_ban_id_sls: stable_key_to_ban_id_sls_ppfy
+        #ppfy: ppfy
+        sum_total_volume_sales: sum_total_volume_sales_ppfy
+        sum_regular_volume_sales: sum_regular_volume_sales_ppfy
+        sum_total_unit_sales: sum_total_unit_sales_ppfy
+      distinct: true
+
+# pppfy
+  - kind: filter
+    name: filter_sell_out_base_pppfy
+    context_name: group_sell_out_base
+    params:
+      - condition:
+          year_extracted = pppfy
+
+  - kind: select
+    name: select_sell_out_base_pppfy
+    context_name: filter_sell_out_base_pppfy
+    params:
+      columns:
+        product_id_sls: product_id_sls_pppfy
+        stable_key_to_ban_id_sls: stable_key_to_ban_id_sls_pppfy
+        #pppfy: pppfy
+        sum_total_volume_sales: sum_total_volume_sales_pppfy
+        sum_regular_volume_sales: sum_regular_volume_sales_pppfy
+        sum_total_unit_sales: sum_total_unit_sales_pppfy
+      distinct: true
+
+# sequence of joins for flattening of sell out
+  - kind: join
+    name: join_sls_flatten_sell_out_cfy_pfy
+    context_name: select_sell_out_base_cfy
+    params:
+      - other:
+          select_sell_out_base_pfy
+        how:
+          full_outer
+        columns:
+          product_id_sls_cfy: product_id_sls_pfy
+
+  - kind: add
+    name: add_sls_product_id_after_pfy
+    context_name: join_sls_flatten_sell_out_cfy_pfy
+    params:
+      - column: product_id_sls_after_pfy
+        expression: coalesce(product_id_sls_cfy, product_id_sls_pfy)
+        overwrite: true
+
+  - kind: join
+    name: join_sls_flatten_sell_out_ppfy
+    context_name: add_sls_product_id_after_pfy
+    params:
+      - other:
+          select_sell_out_base_ppfy
+        how:
+          full_outer
+        columns:
+          product_id_sls_after_pfy: product_id_sls_ppfy
+
+  - kind: add
+    name: add_sls_product_id_after_ppfy
+    context_name: join_sls_flatten_sell_out_ppfy
+    params:
+      - column: product_id_sls_after_ppfy
+        expression: coalesce(product_id_sls_after_pfy, product_id_sls_ppfy)
+        overwrite: true
+
+  - kind: join
+    name: join_sls_flatten_sell_out_pppfy
+    context_name: add_sls_product_id_after_ppfy
+    params:
+      - other:
+          select_sell_out_base_pppfy
+        how:
+          full_outer
+        columns:
+          product_id_sls_after_ppfy: product_id_sls_pppfy
+
+  - kind: add
+    name: add_sls_product_id_after_pppfy
+    context_name: join_sls_flatten_sell_out_pppfy
+    params:
+      - column: product_id_sls_after_pppfy
+        expression: coalesce(product_id_sls_after_ppfy, product_id_sls_pppfy)
+        overwrite: true
+      - column: stable_key_to_ban_id_sls
+        expression: coalesce(stable_key_to_ban_id_sls_cfy, stable_key_to_ban_id_sls_pfy, stable_key_to_ban_id_sls_ppfy, stable_key_to_ban_id_sls_pppfy)
+        overwrite: true
+      - column: const_1_sls_sell_out_base
+        expression: '''1'''
+
+# configuration data - ep_sellout_types
+# final output - sell out type to be used for filtering scope
+  - kind: filter
+    name: filter_conf_data_ep_fliters_sellout_types
+    context_name: filter_conf_data_ep_fliters
+    params:
+      - condition:
+          filter_name = 'sell_out'
+
+  - kind: add
+    name: add_const_1_conf_data_ep_fliters_sell_out
+    context_name: filter_conf_data_ep_fliters_sellout_types
+    params:
+      - column: const_1_conf_data_ep_fliters_sell_out
+        expression: '''1'''
+
+  - kind: read_local
+    name: read_conf_data_ep_sellout_types
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_sellout_types
+
+  - kind: filter
+    name: filter_conf_data_ep_sellout_types
+    context_name: read_conf_data_ep_sellout_types
+    params:
+      - condition:
+          country = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  - kind: add
+    name: add_const_1_conf_data_ep_sellout_types
+    context_name: filter_conf_data_ep_sellout_types
+    params:
+      - column: const_1_conf_data_ep_sellout_types
+        expression: '''1'''
+
+  - kind: group
+    name: group_arrays_conf_data_ep_sellout_types
+    context_name: add_const_1_conf_data_ep_sellout_types
+    params:
+      - aggs:
+          sellout_type: array_agg
+        by:
+        - const_1_conf_data_ep_sellout_types
+
+  - kind: join
+    name: join_conf_data_ep_sellout_types
+    context_name: add_const_1_conf_data_ep_fliters_sell_out
+    params:
+      - other:
+          group_arrays_conf_data_ep_sellout_types
+        how:
+          fullouter
+        columns:
+          const_1_conf_data_ep_fliters_sell_out: const_1_conf_data_ep_sellout_types
+
+  - kind: select
+    name: select_conf_data_ep_sellout_types
+    context_name: join_conf_data_ep_sellout_types
+    params:
+      columns:
+        const_1_conf_data_ep_fliters_sell_out: const_1_conf_data_ep_fliters_sell_out
+        filter_flag: filter_flag_sell_out
+        array_agg_sellout_type: array_agg_sellout_type
+      distinct: true
+
+# filtering out of product ids with no sell out in any of previous 4 years
+  - kind: join
+    name: join_sls_conf_data_sell_out
+    context_name: add_sls_product_id_after_pppfy
+    params:
+      - other:
+          select_conf_data_ep_sellout_types
+        how:
+          inner
+        columns:
+          const_1_sls_sell_out_base: const_1_conf_data_ep_fliters_sell_out
+
+  {% if np_sellout_mode == "in_scope" %}
+  - kind: filter
+    name: filter_sls_conf_data_sell_out
+    context_name: join_sls_conf_data_sell_out
+    params:
+      - condition:
+          IF(filter_flag_sell_out = 1, IF(array_contains(array_agg_sellout_type, 'total_volume_sales'), (sum_total_volume_sales_cfy is not null AND sum_total_volume_sales_cfy != 0) OR (sum_total_volume_sales_pfy is not null AND sum_total_volume_sales_pfy != 0) OR (sum_total_volume_sales_ppfy is not null AND sum_total_volume_sales_ppfy != 0) OR (sum_total_volume_sales_pppfy is not null AND sum_total_volume_sales_pppfy != 0), TRUE), TRUE) AND
+          IF(filter_flag_sell_out = 1, IF(array_contains(array_agg_sellout_type, 'regular_volume_sales'), (sum_regular_volume_sales_cfy is not null AND sum_regular_volume_sales_cfy != 0) OR (sum_regular_volume_sales_pfy is not null AND sum_regular_volume_sales_pfy != 0) OR (sum_regular_volume_sales_ppfy is not null AND sum_regular_volume_sales_ppfy != 0) OR (sum_regular_volume_sales_pppfy is not null AND sum_regular_volume_sales_pppfy != 0), TRUE), TRUE) AND 
+          IF(filter_flag_sell_out = 1, IF(array_contains(array_agg_sellout_type, 'total_unit_sales'), (sum_total_unit_sales_cfy is not null AND sum_total_unit_sales_cfy != 0) OR (sum_total_unit_sales_pfy is not null AND sum_total_unit_sales_pfy != 0) OR (sum_total_unit_sales_ppfy is not null AND sum_total_unit_sales_ppfy != 0) OR (sum_total_unit_sales_pppfy is not null AND sum_total_unit_sales_pppfy != 0), TRUE), TRUE)
+  {% endif %}
+
+  - kind: add
+    name: add_fy_after_flattening
+    params:
+      - column: cfy
+        expression: year(current_date())
+        overwrite: true
+      - column: pfy
+        expression: year(current_date()) - 1
+        overwrite: true
+      - column: ppfy
+        expression: year(current_date()) - 2
+        overwrite: true
+      - column: pppfy
+        expression: year(current_date()) - 3
+        overwrite: true
+
+  {% if unv_schema_level == "product_id" %}
+  - kind: group
+    name: group_to_grain_level
+    context_name: add_fy_after_flattening
+    params:
+      - aggs:
+          cfy: max
+          pfy: max
+          ppfy: max
+          pppfy: max
+          sum_total_volume_sales_cfy: sum
+          sum_total_volume_sales_pfy: sum
+          sum_total_volume_sales_ppfy: sum
+          sum_total_volume_sales_pppfy: sum
+          sum_regular_volume_sales_cfy: sum
+          sum_regular_volume_sales_pfy: sum
+          sum_regular_volume_sales_ppfy: sum
+          sum_regular_volume_sales_pppfy: sum
+          sum_total_unit_sales_cfy: sum
+          sum_total_unit_sales_pfy: sum
+          sum_total_unit_sales_ppfy: sum
+          sum_total_unit_sales_pppfy: sum
+        by:
+        - product_id_sls_after_pppfy
+
+  - kind: select
+    name: select_sell_out_final
+    context_name: group_to_grain_level
+    params:
+      columns:
+        product_id_sls_after_pppfy: product_id_sls_final
+        max_cfy: cfy
+        max_pfy: pfy
+        max_ppfy: ppfy
+        max_pppfy: pppfy
+        sum_sum_total_volume_sales_cfy: sum_total_volume_sales_cfy
+        sum_sum_total_volume_sales_pfy: sum_total_volume_sales_pfy
+        sum_sum_total_volume_sales_ppfy: sum_total_volume_sales_ppfy
+        sum_sum_total_volume_sales_pppfy: sum_total_volume_sales_pppfy
+        sum_sum_regular_volume_sales_cfy: sum_regular_volume_sales_cfy
+        sum_sum_regular_volume_sales_pfy: sum_regular_volume_sales_pfy
+        sum_sum_regular_volume_sales_ppfy: sum_regular_volume_sales_ppfy
+        sum_sum_regular_volume_sales_pppfy: sum_regular_volume_sales_pppfy
+        sum_sum_total_unit_sales_cfy: sum_total_unit_sales_cfy
+        sum_sum_total_unit_sales_pfy: sum_total_unit_sales_pfy
+        sum_sum_total_unit_sales_ppfy: sum_total_unit_sales_ppfy
+        sum_sum_total_unit_sales_pppfy: sum_total_unit_sales_pppfy
+      distinct: true
+  {% endif %}
+
+  {% if unv_schema_level == "stable_key_to_ban_id" %}
+# grouping to grain level
+  - kind: group
+    name: group_to_grain_level
+    context_name: add_fy_after_flattening
+    params:
+      - aggs:
+          cfy: max
+          pfy: max
+          ppfy: max
+          pppfy: max
+          sum_total_volume_sales_cfy: sum
+          sum_total_volume_sales_pfy: sum
+          sum_total_volume_sales_ppfy: sum
+          sum_total_volume_sales_pppfy: sum
+          sum_regular_volume_sales_cfy: sum
+          sum_regular_volume_sales_pfy: sum
+          sum_regular_volume_sales_ppfy: sum
+          sum_regular_volume_sales_pppfy: sum
+          sum_total_unit_sales_cfy: sum
+          sum_total_unit_sales_pfy: sum
+          sum_total_unit_sales_ppfy: sum
+          sum_total_unit_sales_pppfy: sum
+        by:
+        - stable_key_to_ban_id_sls
+
+  - kind: select
+    name: select_sell_out_final
+    context_name: group_to_grain_level
+    params:
+      columns:
+        stable_key_to_ban_id_sls: product_id_sls_final
+        max_cfy: cfy
+        max_pfy: pfy
+        max_ppfy: ppfy
+        max_pppfy: pppfy
+        sum_sum_total_volume_sales_cfy: sum_total_volume_sales_cfy
+        sum_sum_total_volume_sales_pfy: sum_total_volume_sales_pfy
+        sum_sum_total_volume_sales_ppfy: sum_total_volume_sales_ppfy
+        sum_sum_total_volume_sales_pppfy: sum_total_volume_sales_pppfy
+        sum_sum_regular_volume_sales_cfy: sum_regular_volume_sales_cfy
+        sum_sum_regular_volume_sales_pfy: sum_regular_volume_sales_pfy
+        sum_sum_regular_volume_sales_ppfy: sum_regular_volume_sales_ppfy
+        sum_sum_regular_volume_sales_pppfy: sum_regular_volume_sales_pppfy
+        sum_sum_total_unit_sales_cfy: sum_total_unit_sales_cfy
+        sum_sum_total_unit_sales_pfy: sum_total_unit_sales_pfy
+        sum_sum_total_unit_sales_ppfy: sum_total_unit_sales_ppfy
+        sum_sum_total_unit_sales_pppfy: sum_total_unit_sales_pppfy
+      distinct: true
+  {% endif %}
+
+  {% if np_sellout_mode == "in_scope" %}
+# inner join sell out back to product
+  - kind: join
+    name: join_product_sell_out
+    context_name: select_product_base
+    params:
+      - other:
+          select_sell_out_final
+        how:
+          inner
+        columns:
+          product_id_md: product_id_sls_final
+  {% endif %}
+
+  {% if np_sellout_mode == "in_pm" %}
+# left join sell out back to product
+  - kind: join
+    name: join_product_sell_out
+    context_name: select_product_base
+    params:
+      - other:
+          select_sell_out_final
+        how:
+          left
+        columns:
+          product_id_md: product_id_sls_final
+
+  - kind: add
+    name: add_fy_after_left_join
+    context_name: join_product_sell_out
+    params:
+      - column: cfy
+        expression: year(current_date())
+        overwrite: true
+      - column: pfy
+        expression: year(current_date()) - 1
+        overwrite: true
+      - column: ppfy
+        expression: year(current_date()) - 2
+        overwrite: true
+      - column: pppfy
+        expression: year(current_date()) - 3
+        overwrite: true
+  {% endif %}

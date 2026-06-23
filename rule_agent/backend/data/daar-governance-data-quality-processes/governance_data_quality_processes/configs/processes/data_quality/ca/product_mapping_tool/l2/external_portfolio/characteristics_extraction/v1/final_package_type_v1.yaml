@@ -1,0 +1,280 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-dev-001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% set uc_catalog_ml_env = "dc_adb-dg-dataquality-prod-001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% set uc_catalog_ml_env = "dc_datalake_default" %}
+{% endif %}
+
+transform:
+  name: FINAL_package_type
+  operations:
+
+###############
+# Read data marts
+# external_portfolio - ep
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      schema_version: v1
+###############
+
+  {% if vendor_data.country != "all" %}
+
+  - kind: filter
+    name: filter_vendor
+    params:
+      - condition:
+          country_code = '''{{vendor_data.country}}''' and ext_source_name = '''{{vendor_data.vendor}}'''
+
+  {% endif %}
+
+  - kind: drop
+    name: drop_process_run_id
+    params:
+      - column: process_run_id
+
+  - kind: filter
+    name: filter_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is null or ext_product_name_src = ''
+
+  - kind: filter
+    name: filter_not_null_product_name
+    context_name: drop_process_run_id
+    params:
+      - condition:
+          ext_product_name_src is not null and ext_product_name_src != ''
+          
+  - kind: add
+    name: add_const_1_vendor
+    params:
+      - column: const_1
+        expression: '''1'''
+
+# placeholders - not to be translated
+  - kind: read_local
+    name: read_conf_data_placeholders
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_placeholders
+
+  - kind: read_local
+    name: read_conf_char_cleanser
+    params:
+      format: excel
+      location: "/Volumes/{{uc_catalog_env}}/locations/datalake_raw/data_quality/product_mapping_tool/configuration_data/0/configuration_data.xlsx"
+      options:
+        header: true
+        pathGlobFilter: configuration_data.xlsx
+        sheet_name: ep_characteristics_cleanser
+
+  - kind: filter
+    name: filter_conf_char_cleanser
+    params:
+      - condition:
+          characteristic_name = 'package_type' 
+
+  - kind: add
+    name: add_const_1_conf_placeholders
+    context_name: filter_conf_char_cleanser
+    params:
+      - column: const_1_conf_placeholders
+        expression: '''1'''
+
+  - kind: add
+    name: add_struct_placeholders
+    context_name: add_const_1_conf_placeholders
+    params:
+      - column: struct_placeholders
+        expression: struct(input_value, output_value)
+
+  - kind: group
+    name: group_struct_placeholders
+    context_name: add_struct_placeholders
+    params:
+      - aggs:
+          struct_placeholders: collect_list
+        by:
+          - country_code
+
+  - kind: join
+    name: join_placeholders
+    context_name: add_const_1_vendor
+    params:
+      - other:
+          group_struct_placeholders
+        how:
+          left
+        columns:
+          country_code: country_code
+
+  - kind: add
+    name: apply_placeholders
+    context_name: join_placeholders
+    params:
+      - column: package_type_with_placeholders
+        expression: reduce(collect_list_struct_placeholders, lower(ext_package_type_src), (acc, x) -> regexp_replace(acc, x.input_value, x.output_value))
+
+  - kind: add
+    name: add_struct_placeholder_restore
+    context_name: read_conf_data_placeholders
+    params:
+      - column: struct_placeholder_restore
+        expression: struct(placeholder, output_value)
+
+  - kind: add
+    name: add_const_1_placeholder_restore
+    context_name: add_struct_placeholder_restore
+    params:
+      - column: const_1_placeholder_restore
+        expression: '''1'''
+
+  - kind: group
+    name: group_struct_placeholder_restore
+    context_name: add_const_1_placeholder_restore
+    params:
+      - aggs:
+          struct_placeholder_restore: collect_list
+        by:
+          - const_1_placeholder_restore
+
+  - kind: join
+    name: join_placeholder_restore
+    context_name: apply_placeholders
+    params:
+      - other:
+          group_struct_placeholder_restore
+        how:
+          left
+        columns:
+          const_1: const_1_placeholder_restore
+
+  - kind: add
+    name: decode_placeholders
+    context_name: join_placeholder_restore
+    params:
+      - column: package_type_with_placeholders_decoded
+        expression: reduce(collect_list_struct_placeholder_restore, package_type_with_placeholders, (acc, x) -> regexp_replace(acc, x.placeholder, x.output_value))
+
+  - kind: add
+    name: add_package_type_final_0
+    params:
+      - column: ext_package_type_final
+        overwrite: true
+        expression: if(package_type_with_placeholders_decoded is null or package_type_with_placeholders_decoded = '', ext_package_type_pcm, package_type_with_placeholders_decoded)
+      - column: ext_package_type_final_probability
+        overwrite: true
+        expression: cast(if(package_type_with_placeholders_decoded is null or package_type_with_placeholders_decoded = '', ext_package_type_pcm_probability, 1) as decimal(10,4))
+
+  - kind: add
+    name: add_package_type_final
+    params:
+      - column: package_type_hlp
+        expression: lower(ext_package_type_final)
+      - column: ext_package_type_final
+        overwrite: true
+        expression: regexp_replace(package_type_hlp, 'nrgb|nrg|nrb', 'nrgb')
+
+  - kind: select
+    name: select_final
+    context_name: add_package_type_final
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        sparkling_level: sparkling_level
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_cfy: sum_cfy
+        sum_pfy: sum_pfy
+        sum_ppfy: sum_ppfy
+        sum_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: union
+    name: union_final
+    context_name: select_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: filter_null_product_name
+
+  - kind: write_dataio
+    name: write_vendor_cleansed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

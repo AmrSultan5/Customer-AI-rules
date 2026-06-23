@@ -1,0 +1,114 @@
+transform:
+  name: dm_material_procurement
+  operations:
+  - kind: read_dataio
+    name: read_ckmlmv001
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ckmlmv001
+      schema_version: v1
+
+  - kind: select
+    name: select_ckmlmv001
+    params:
+      columns:
+        kalnr: kalnr
+        matnr: matnr
+        werks: werks
+        btyp: btyp
+        verid_nd: verid_nd
+        stlan_nd: stlan_nd
+        stlal_nd: stlal_nd
+        ekorg_nd: ekorg_nd
+        lifnr_nd: lifnr_nd
+        umlwk_nd: umlwk_nd
+        losgr_pc: losgr_pc
+        bwtar: bwtar
+        sap_cluster: sap_cluster_c1
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_ckmlmv003
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ckmlmv003
+      schema_version: v1
+
+  - kind: select
+    name: select_ckmlmv003
+    params:
+      columns:
+        kalnr_bal: kalnr_bal
+        mgtyp: mgtyp
+        gjahr: gjahr
+        perio: perio
+        misch_verh: misch_verh
+        losgr_pc: losgr_pc_c3
+        sap_cluster: sap_cluster_c3
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_c1_c3
+    context_name: select_ckmlmv001
+    params:
+      - other:
+          select_ckmlmv003
+        how:
+          inner
+        columns:
+          kalnr: kalnr_bal
+          sap_cluster_c1: sap_cluster_c3
+
+  - kind: select
+    name: select_ckmlmv001
+    params:
+      columns:
+        kalnr: procurement_alternative_process_number
+        matnr: material_code
+        werks: plant_code
+        btyp: procurement_alternative_process_category
+        verid_nd: production_version
+        stlan_nd: bom_usage
+        stlal_nd: bom_alternative
+        ekorg_nd: purchasing_organization_code
+        lifnr_nd: vendor_code
+        umlwk_nd: special_procurement_plant_code
+        mgtyp: quantity_structure_type
+        gjahr: fiscal_year
+        perio: posting_period
+        kalnr_bal: mixing_process_number
+        misch_verh: mixing_ratio
+        losgr_pc: lot_size_procurement_alternative
+        losgr_pc_c3: lot_size_mixing
+        bwtar: valuation_type
+        sap_cluster_c1: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_material_procurement
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_procurement
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

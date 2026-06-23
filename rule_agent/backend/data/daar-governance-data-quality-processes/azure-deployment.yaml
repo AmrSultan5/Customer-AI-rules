@@ -1,0 +1,102 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-22.04
+
+resources:
+  repositories:
+    - repository: wiki
+      type: git
+      name: CCH-SAFe-Portfolio.wiki
+      ref: wikiMaster
+    - repository: daar-datamesh-devops-tools
+      name: CCH SAFe Portfolio/daar-datamesh-devops-tools
+      type: git
+
+parameters:
+  - name: artifact
+    type: string
+    default: 'governance_data_quality_processes==0.1.376'
+
+  - name: product
+    type: string
+    default: true
+    values:
+      - true
+      - false
+
+  - name: repo
+    type: string
+    default: true
+    values:
+      - true
+      - false
+
+variables:
+  - group: kv-datamesh-cicd-001
+  - name: FEED
+    value: 'daar-governance-data-quality-processes'
+  - name: DATAMESHCICD_APPLICATION_ID
+    value: '2a04154f-5cea-4f55-93db-85c141bce3bf'
+  - name: TENANT_ID
+    value: '7a67a070-8ce9-4692-b1af-bf788306bc66'
+  - name: PROJECT
+    value: 'CCHBC/$(System.TeamProjectId)'
+
+stages:
+- stage: development
+  displayName: 'Development Environment Deployment'
+  jobs:
+  - template: 'azure-deployment-artifact.yaml'
+    parameters:
+      environment: 'adb-dg-dataquality-dev-001'
+      project: $(PROJECT)
+      feed: $(FEED)
+      artifact: ${{parameters.artifact}}
+      application_id: $(DATAMESHCICD_APPLICATION_ID)
+      application_secret: $(DATAMESHCICDSECRET)
+      tenant_id: $(TENANT_ID)
+      databricks_workspace_url: 'https://adb-8167202929316757.17.azuredatabricks.net'
+      cluster_ids:
+        - '0520-160238-k2jnzr4a'
+
+- stage: quality
+  displayName: 'Quality Environment Deployment'
+  jobs:
+  - template: 'azure-deployment-artifact.yaml'
+    parameters:
+      environment: 'adb-dg-dataquality-qlty-001'
+      project: $(PROJECT)
+      feed: $(FEED)
+      artifact: ${{parameters.artifact}}
+      application_id: $(DATAMESHCICD_APPLICATION_ID)
+      application_secret: $(DATAMESHCICDSECRET)
+      tenant_id: $(TENANT_ID)
+      databricks_workspace_url: 'https://adb-7126309232560863.3.azuredatabricks.net/'
+      cluster_ids:
+        - '0521-205546-g7ytwasp'
+
+- stage: production
+  displayName: 'Production Environment Deployment'
+  jobs:
+  - template: 'azure-deployment-artifact.yaml'
+    parameters:
+      environment: 'adb-dg-dataquality-prod-001'
+      project: $(PROJECT)
+      feed: $(FEED)
+      artifact: ${{parameters.artifact}}
+      application_id: $(DATAMESHCICD_APPLICATION_ID)
+      application_secret: $(DATAMESHCICDSECRET)
+      tenant_id: $(TENANT_ID)
+      databricks_workspace_url: 'https://adb-3870119362544329.9.azuredatabricks.net/'
+      cluster_ids:
+        - '0527-091533-faq4md66'
+
+- stage: generate_release_notes
+  displayName: "Generate Release Notes"
+  dependsOn: development
+  jobs:
+  - template: "release-notes-aa/release-notes-aa.yaml@daar-datamesh-devops-tools"
+    parameters: 
+      product: IDQ
+      repo: daar%2Dgovernance%2Ddata%2Dquality%2Dprocesses

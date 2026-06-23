@@ -1,0 +1,619 @@
+transform:
+  name: dm_employee_worker_compensation_plans
+  operations:
+
+  - kind: read_dataio
+    name: read_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: worker
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_worker_eligibility
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: workday
+      namespace: dcc
+      object_name: worker_eligibility
+      schema_version: v1
+
+  - kind: filter
+    name: filter_worker
+    context_name: read_worker
+    params:
+      - condition:
+          worker_type = 'Employee' AND employee_id IS NOT NULL
+
+  - kind: filter
+    name: filter_worker_eligibility
+    context_name: read_worker_eligibility
+    params:
+      - condition:
+          worker_type = 'Employee' AND employee_id IS NOT NULL
+
+########################## PERIOD SALARY PLAN ID #########################################
+
+  - kind: select
+    name: select_wor_pspi
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id_wor
+        prd_salary_plan: plan_value_wor
+      distinct: true
+
+  - kind: add
+    name: add_null_wor_pspi
+    context_name: select_wor_pspi
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_wel_pspi
+    context_name: filter_worker_eligibility
+    params:
+      columns:
+        employee_id: employee_id_wel
+        prd_salary_plan_id: plan_value_wel
+      distinct: true
+
+  - kind: add
+    name: add_null_wel_pspi
+    context_name: select_wel_pspi
+    params:
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+
+  - kind: join
+    name: join_pspi
+    context_name: add_null_wor_pspi
+    params:
+      - other:
+          add_null_wel_pspi
+        how:
+          outer
+        columns:
+          employee_id_wor: employee_id_wel
+          plan_value_wor: plan_value_wel
+
+  - kind: add
+    name: add_flags_pspi
+    context_name: join_pspi
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+      - column: is_eligible_flag
+        expression: if(plan_value_wor = 'null', '',
+                    if(plan_value_wor = plan_value_wel, '1', '0'))
+      - column: is_redundant_flag
+        expression: if((plan_value_wor = 'null' AND plan_value_wel = 'null') OR (employee_id_wel IS NULL), '',
+                    if(plan_value_wor != 'null' AND plan_value_wel != 'null' AND plan_value_wor !=  plan_value_wel, '1',
+                    if(plan_value_wor = 'null' AND plan_value_wel != 'null', '1', '0')))
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', plan_value_wel, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor IS NULL, employee_id_wel, employee_id_wor)
+        overwrite: true
+      - column: plan_name
+        expression: '"period_salary_plan_id"'
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', NULL, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor = 'null', NULL, employee_id_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_pspi_final
+    context_name: add_flags_pspi
+    params:
+      columns:
+        employee_id_wor: employee_id
+        plan_value_wor: plan_value
+        plan_name: plan_name
+        is_eligible_flag: is_eligible_flag
+        is_redundant_flag: is_redundant_flag
+      distinct: true
+
+########################## CALCULATED PLAN ID #########################################
+
+  - kind: select
+    name: select_wor_cpi
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id_wor
+        calculated_plan: plan_value_wor
+      distinct: true
+
+  - kind: add
+    name: add_null_wor_cpi
+    context_name: select_wor_cpi
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_wel_cpi
+    context_name: filter_worker_eligibility
+    params:
+      columns:
+        employee_id: employee_id_wel
+        cal_plan_id: plan_value_wel
+      distinct: true
+
+  - kind: add
+    name: add_null_wel_cpi
+    context_name: select_wel_cpi
+    params:
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+
+  - kind: join
+    name: join_cpi
+    context_name: add_null_wor_cpi
+    params:
+      - other:
+          add_null_wel_cpi
+        how:
+          outer
+        columns:
+          employee_id_wor: employee_id_wel
+          plan_value_wor: plan_value_wel
+
+  - kind: add
+    name: add_flags_cpi
+    context_name: join_cpi
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+      - column: is_eligible_flag
+        expression: if(plan_value_wor = 'null', '',
+                    if(plan_value_wor = plan_value_wel, '1', '0'))
+      - column: is_redundant_flag
+        expression: if((plan_value_wor = 'null' AND plan_value_wel = 'null') OR (employee_id_wel IS NULL), '',
+                    if(plan_value_wor != 'null' AND plan_value_wel != 'null' AND plan_value_wor !=  plan_value_wel, '1',
+                    if(plan_value_wor = 'null' AND plan_value_wel != 'null', '1', '0')))
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', plan_value_wel, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor IS NULL, employee_id_wel, employee_id_wor)
+        overwrite: true
+      - column: plan_name
+        expression: '"calculated_plan_id"'
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', NULL, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor = 'null', NULL, employee_id_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_cpi_final
+    context_name: add_flags_cpi
+    params:
+      columns:
+        employee_id_wor: employee_id
+        plan_value_wor: plan_value
+        plan_name: plan_name
+        is_eligible_flag: is_eligible_flag
+        is_redundant_flag: is_redundant_flag
+      distinct: true
+
+########################## ALLOWANCE PLAN ID #########################################
+
+  - kind: select
+    name: select_wor_api
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id_wor
+        allowance_plan: plan_value_wor
+      distinct: true
+
+  - kind: add
+    name: add_null_wor_api
+    context_name: select_wor_api
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_wel_api
+    context_name: filter_worker_eligibility
+    params:
+      columns:
+        employee_id: employee_id_wel
+        allowance_plan_id: plan_value_wel
+      distinct: true
+
+  - kind: add
+    name: add_null_wel_api
+    context_name: select_wel_api
+    params:
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+
+  - kind: join
+    name: join_api
+    context_name: add_null_wor_api
+    params:
+      - other:
+          add_null_wel_api
+        how:
+          outer
+        columns:
+          employee_id_wor: employee_id_wel
+          plan_value_wor: plan_value_wel
+
+  - kind: add
+    name: add_flags_api
+    context_name: join_api
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+      - column: is_eligible_flag
+        expression: if(plan_value_wor = 'null', '',
+                    if(plan_value_wor = plan_value_wel, '1', '0'))
+      - column: is_redundant_flag
+        expression: if((plan_value_wor = 'null' AND plan_value_wel = 'null') OR (employee_id_wel IS NULL), '',
+                    if(plan_value_wor != 'null' AND plan_value_wel != 'null' AND plan_value_wor !=  plan_value_wel, '1',
+                    if(plan_value_wor = 'null' AND plan_value_wel != 'null', '1', '0')))
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', plan_value_wel, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor IS NULL, employee_id_wel, employee_id_wor)
+        overwrite: true
+      - column: plan_name
+        expression: '"allowance_plan_id"'
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', NULL, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor = 'null', NULL, employee_id_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_api_final
+    context_name: add_flags_api
+    params:
+      columns:
+        employee_id_wor: employee_id
+        plan_value_wor: plan_value
+        plan_name: plan_name
+        is_eligible_flag: is_eligible_flag
+        is_redundant_flag: is_redundant_flag
+      distinct: true
+
+########################## INSURANCE PLAN #########################################
+
+  - kind: select
+    name: select_insurance_plan
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id
+        insurance_plan: plan_value
+      distinct: true
+
+  - kind: add
+    name: add_insurance_plan
+    context_name: select_insurance_plan
+    params:
+      - column: plan_name
+        expression: '"insurance_plan_id"'
+      - column: is_eligible_flag
+        expression: 'NULL'
+      - column: is_redundant_flag
+        expression: 'NULL'
+
+########################## ADDITIONAL BENEFIT PLAN #########################################
+
+  - kind: select
+    name: select_additional_benefit_plan
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id
+        add_benefit_plan: plan_value
+      distinct: true
+
+  - kind: add
+    name: add_additional_benefit_plan
+    context_name: select_additional_benefit_plan
+    params:
+      - column: plan_name
+        expression: '"additional_benefit_plan_id"'
+      - column: is_eligible_flag
+        expression: 'NULL'
+      - column: is_redundant_flag
+        expression: 'NULL'
+
+########################## HEALTHCARE PLAN #########################################
+
+  - kind: select
+    name: select_healthcare_plan
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id
+        health_care_plan: plan_value
+      distinct: true
+
+  - kind: add
+    name: add_healthcare_plan
+    context_name: select_healthcare_plan
+    params:
+      - column: plan_name
+        expression: '"healthcare_plan_id"'
+      - column: is_eligible_flag
+        expression: 'NULL'
+      - column: is_redundant_flag
+        expression: 'NULL'
+
+########################## BONUS PLAN #########################################
+
+  - kind: select
+    name: select_wor_bpi
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id_wor
+        bonus_plan: plan_value_wor
+      distinct: true
+
+  - kind: add
+    name: add_null_wor_bpi
+    context_name: select_wor_bpi
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_wel_bpi
+    context_name: filter_worker_eligibility
+    params:
+      columns:
+        employee_id: employee_id_wel
+        bonus_plan_id: plan_value_wel
+      distinct: true
+
+  - kind: add
+    name: add_null_wel_bpi
+    context_name: select_wel_bpi
+    params:
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+
+  - kind: join
+    name: join_bpi
+    context_name: add_null_wor_bpi
+    params:
+      - other:
+          add_null_wel_bpi
+        how:
+          outer
+        columns:
+          employee_id_wor: employee_id_wel
+          plan_value_wor: plan_value_wel
+
+  - kind: add
+    name: add_flags_bpi
+    context_name: join_bpi
+    params:
+      - column: plan_value_wor
+        expression: if(plan_value_wor is NULL, 'null', plan_value_wor)
+        overwrite: true
+      - column: plan_value_wel
+        expression: if(plan_value_wel is NULL, 'null', plan_value_wel)
+        overwrite: true
+      - column: is_eligible_flag
+        expression: if(plan_value_wor = 'null', '',
+                    if(plan_value_wor = plan_value_wel, '1', '0'))
+      - column: is_redundant_flag
+        expression: if((plan_value_wor = 'null' AND plan_value_wel = 'null') OR (employee_id_wel IS NULL), '',
+                    if(plan_value_wor != 'null' AND plan_value_wel != 'null' AND plan_value_wor !=  plan_value_wel, '1',
+                    if(plan_value_wor = 'null' AND plan_value_wel != 'null', '1', '0')))
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', plan_value_wel, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor IS NULL, employee_id_wel, employee_id_wor)
+        overwrite: true
+      - column: plan_name
+        expression: '"bonus_plan_id"'
+      - column: plan_value_wor
+        expression: if(plan_value_wor = 'null', NULL, plan_value_wor)
+        overwrite: true
+      - column: employee_id_wor
+        expression: if(employee_id_wor = 'null', NULL, employee_id_wor)
+        overwrite: true
+
+  - kind: select
+    name: select_bpi_final
+    context_name: add_flags_bpi
+    params:
+      columns:
+        employee_id_wor: employee_id
+        plan_value_wor: plan_value
+        plan_name: plan_name
+        is_eligible_flag: is_eligible_flag
+        is_redundant_flag: is_redundant_flag
+      distinct: true
+
+########################## RETIREMENT PLAN #########################################
+
+  - kind: select
+    name: select_retirement_plan
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id
+        retirement_plan: plan_value
+      distinct: true
+
+  - kind: add
+    name: add_retirement_plan
+    context_name: select_retirement_plan
+    params:
+      - column: plan_name
+        expression: '"retirement_plan_id"'
+      - column: is_eligible_flag
+        expression: 'NULL'
+      - column: is_redundant_flag
+        expression: 'NULL'
+
+########################## DEPENDENTS #########################################
+
+  - kind: select
+    name: select_dependents
+    context_name: filter_worker
+    params:
+      columns:
+        employee_id: employee_id
+        dependents: plan_value
+      distinct: true
+
+  - kind: add
+    name: add_dependents
+    context_name: select_dependents
+    params:
+      - column: plan_name
+        expression: '"dependents"'
+      - column: is_eligible_flag
+        expression: 'NULL'
+      - column: is_redundant_flag
+        expression: 'NULL'
+
+###################################################################
+  - kind: union
+    name: union_data
+    context_name: select_pspi_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_cpi_final
+
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_api_final
+      
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_insurance_plan
+      
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_additional_benefit_plan
+
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_healthcare_plan
+
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_bpi_final
+
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_retirement_plan
+
+  - kind: union
+    name: union_data
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dependents
+
+  - kind: add
+    name: add_object_type
+    params:
+      - column: object_type
+        expression: '"Employee"'
+
+  - kind: cast
+    name: cast_to_string
+    context_name: add_object_type
+    params:
+      - column: employee_id
+        to: string
+
+  - kind: select
+    name: select_worker_final
+    context_name: cast_to_string
+    params:
+      columns:
+        object_type: object_type
+        employee_id: employee_id
+        plan_name: plan_name
+        plan_value: plan_value
+        is_eligible_flag: is_eligible_flag
+        is_redundant_flag: is_redundant_flag
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_employee_worker_compensation_plans
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker_compensation_plans
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

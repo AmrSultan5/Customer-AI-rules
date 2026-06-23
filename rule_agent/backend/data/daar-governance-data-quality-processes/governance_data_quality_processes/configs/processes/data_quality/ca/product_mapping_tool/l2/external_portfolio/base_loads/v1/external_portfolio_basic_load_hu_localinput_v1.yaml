@@ -1,0 +1,959 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+{% set unv_schema_level = "" %}
+{% set unv_schema_level_value = "product_id" %}
+{% set np_sellout_mode = "" %}
+{% set np_sellout_mode_1 = "in_scope" %}
+{% set np_sellout_mode_2 = "in_pm" %}
+
+transform:
+  name: external_portfolio_basic_load_hu_localinput
+  operations:
+
+# Gathering products by retailer
+# CBA and Coopstar treated as 1 retailer - because of duplicated values in vendor_item/product_id/stable_key_to_ban_id on the level of ext_source_name/vendor/vendor_name
+# CBA 
+# # Read data marts
+# curated_ppaa_web_input_hu.cba_sellout
+  - kind: read_dataio
+    name: read_cba_sellout
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: hu
+      object_name: cba_sellout
+      schema_version: v1
+
+# Coopstar 
+# # Read data marts
+# curated_ppaa_web_input_hu.coopstar_sellout
+  - kind: read_dataio
+    name: read_coopstar_sellout
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: hu
+      object_name: coopstar_sellout
+      schema_version: v1
+
+# union CBA and Coopstar
+  - kind: union
+    name: union_cba_coopstar
+    context_name: read_cba_sellout
+    params:
+      allow_missing: true
+      by_name: true
+      other: read_coopstar_sellout
+
+# required transformation for following nested process - pm_stats 
+  - kind: add
+    name: add_np_pm_stats_req_cba_coopstar
+    context_name: union_cba_coopstar
+    params:
+      - column: ext_product_code_md_in
+        overwrite: true
+        expression: vendor_item  
+      - column: ext_product_name_src
+        overwrite: true
+        expression: product_description
+      - column: ext_brand_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_flavour_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_package_type_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_package_size_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_item_category_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_retailer
+        overwrite: true
+        expression: '''CBA_Coopstar'''
+      - column: in_scope_flg
+        overwrite: true
+        expression: IF((UPPER(product_description) NOT LIKE '%CAPRI%' AND UPPER(product_description) NOT LIKE '%SUN%')
+          AND
+          (
+            (UPPER(product_description) LIKE '%BURN%' AND UPPER(product_description) NOT LIKE '%FAT BURN%') OR
+            UPPER(product_description) LIKE '%CAPPY%' OR
+            UPPER(product_description) LIKE '%COCA COLA%' OR
+            UPPER(product_description) LIKE '%COCA COLA LIGHT%' OR
+            UPPER(product_description) LIKE '%COCA COLA ZERO%' OR
+            UPPER(product_description) LIKE '%COCA COLA ZERO KOFFEINMENTES%' OR
+            UPPER(product_description) LIKE '%FANTA%' OR
+            UPPER(product_description) LIKE '%FANTA ZERO%' OR
+            UPPER(product_description) LIKE '%FUZE TEA%' OR
+            UPPER(product_description) LIKE '%FUZETEA%' OR
+            UPPER(product_description) LIKE '%GLACEAU SMARTWATER%' OR
+            UPPER(product_description) LIKE '%KINLEY%' OR
+            UPPER(product_description) LIKE '%MONSTER%' OR
+            UPPER(product_description) LIKE '%NATURAQUA%' OR
+            UPPER(product_description) LIKE '%POWERADE%' OR
+            UPPER(product_description) LIKE '%ROEMERQUELLE%' OR
+            UPPER(product_description) LIKE '%SPRIT%' OR
+            UPPER(product_description) LIKE '%SPRITE%' OR
+            UPPER(product_description) LIKE '%SPRITE ZERO%'
+            )
+            , 1, 0)
+
+# select for union for following nested process - pm_stats
+  - kind: select
+    name: select_base_cba_coopstar
+    context_name: add_np_pm_stats_req_cba_coopstar
+    params:
+      columns:
+        ext_product_code_md_in: ext_product_code_md_in
+        ext_product_name_src: ext_product_name_src
+        ext_brand_src: ext_brand_src
+        ext_flavour_src: ext_flavour_src
+        ext_package_type_src: ext_package_type_src
+        ext_package_size_src: ext_package_size_src
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_item_category_src: ext_item_category_src
+        ext_retailer: ext_retailer
+        in_scope_flg: in_scope_flg
+      distinct: true
+
+# # CBA 
+# # # Read data marts
+# # curated_ppaa_web_input_hu.cba_sellout
+#   - kind: read_dataio
+#     name: read_cba_sellout
+#     params:
+#       dataio:
+#         ad_id: '{{dataio.ad_id}}'
+#         layer: curated
+#         storage_id: '{{dataio.storage_id}}'
+#       source: ppaa_web_input
+#       namespace: hu
+#       object_name: cba_sellout
+#       schema_version: v1
+
+# # required transformation for following nested process - pm_stats 
+#   - kind: add
+#     name: add_np_pm_stats_req_cba
+#     context_name: read_cba_sellout
+#     params:
+#       - column: ext_product_code_md_in
+#         overwrite: true
+#         expression: vendor_item  
+#       - column: ext_product_name_src
+#         overwrite: true
+#         expression: product_description
+#       - column: ext_brand_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_flavour_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_package_type_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_package_size_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_sales_unit_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_item_category_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_retailer
+#         overwrite: true
+#         expression: cpl
+#       - column: in_scope_flg
+#         overwrite: true
+#         expression: IF((UPPER(product_description) NOT LIKE '%CAPRI%' AND UPPER(product_description) NOT LIKE '%SUN%')
+#           AND
+#           (
+#             (UPPER(product_description) LIKE '%BURN%' AND UPPER(product_description) NOT LIKE '%FAT BURN%') OR
+#             UPPER(product_description) LIKE '%CAPPY%' OR
+#             UPPER(product_description) LIKE '%COCA COLA%' OR
+#             UPPER(product_description) LIKE '%COCA COLA LIGHT%' OR
+#             UPPER(product_description) LIKE '%COCA COLA ZERO%' OR
+#             UPPER(product_description) LIKE '%COCA COLA ZERO KOFFEINMENTES%' OR
+#             UPPER(product_description) LIKE '%FANTA%' OR
+#             UPPER(product_description) LIKE '%FANTA ZERO%' OR
+#             UPPER(product_description) LIKE '%FUZE TEA%' OR
+#             UPPER(product_description) LIKE '%FUZETEA%' OR
+#             UPPER(product_description) LIKE '%GLACEAU SMARTWATER%' OR
+#             UPPER(product_description) LIKE '%KINLEY%' OR
+#             UPPER(product_description) LIKE '%MONSTER%' OR
+#             UPPER(product_description) LIKE '%NATURAQUA%' OR
+#             UPPER(product_description) LIKE '%POWERADE%' OR
+#             UPPER(product_description) LIKE '%ROEMERQUELLE%' OR
+#             UPPER(product_description) LIKE '%SPRIT%' OR
+#             UPPER(product_description) LIKE '%SPRITE%' OR
+#             UPPER(product_description) LIKE '%SPRITE ZERO%'
+#             )
+#             , 1, 0)
+
+# # select for union for following nested process - pm_stats
+#   - kind: select
+#     name: select_base_cba
+#     context_name: add_np_pm_stats_req_cba
+#     params:
+#       columns:
+#         ext_product_code_md_in: ext_product_code_md_in
+#         ext_product_name_src: ext_product_name_src
+#         ext_brand_src: ext_brand_src
+#         ext_flavour_src: ext_flavour_src
+#         ext_package_type_src: ext_package_type_src
+#         ext_package_size_src: ext_package_size_src
+#         ext_sales_unit_src: ext_sales_unit_src
+#         ext_item_category_src: ext_item_category_src
+#         ext_retailer: ext_retailer
+#         in_scope_flg: in_scope_flg
+#       distinct: true
+
+# # Coopstar 
+# # # Read data marts
+# # curated_ppaa_web_input_hu.coopstar_sellout
+#   - kind: read_dataio
+#     name: read_coopstar_sellout
+#     params:
+#       dataio:
+#         ad_id: '{{dataio.ad_id}}'
+#         layer: curated
+#         storage_id: '{{dataio.storage_id}}'
+#       source: ppaa_web_input
+#       namespace: hu
+#       object_name: coopstar_sellout
+#       schema_version: v1
+
+# # required transformation for following nested process - pm_stats 
+#   - kind: add
+#     name: add_np_pm_stats_req_coopstar
+#     context_name: read_coopstar_sellout
+#     params:
+#       - column: ext_product_code_md_in
+#         overwrite: true
+#         expression: vendor_item  
+#       - column: ext_product_name_src
+#         overwrite: true
+#         expression: product_description
+#       - column: ext_brand_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_flavour_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_package_type_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_package_size_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_sales_unit_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_item_category_src
+#         overwrite: true
+#         expression: "cast (null as string)"
+#       - column: ext_retailer
+#         overwrite: true
+#         expression: cpl
+#       - column: in_scope_flg
+#         overwrite: true
+#         expression: IF((UPPER(product_description) NOT LIKE '%CAPRI%' AND UPPER(product_description) NOT LIKE '%SUN%')
+#           AND
+#           (
+#             (UPPER(product_description) LIKE '%BURN%' AND UPPER(product_description) NOT LIKE '%FAT BURN%') OR
+#             UPPER(product_description) LIKE '%CAPPY%' OR
+#             UPPER(product_description) LIKE '%COCA COLA%' OR
+#             UPPER(product_description) LIKE '%COCA COLA LIGHT%' OR
+#             UPPER(product_description) LIKE '%COCA COLA ZERO%' OR
+#             UPPER(product_description) LIKE '%COCA COLA ZERO KOFFEINMENTES%' OR
+#             UPPER(product_description) LIKE '%FANTA%' OR
+#             UPPER(product_description) LIKE '%FANTA ZERO%' OR
+#             UPPER(product_description) LIKE '%FUZE TEA%' OR
+#             UPPER(product_description) LIKE '%FUZETEA%' OR
+#             UPPER(product_description) LIKE '%GLACEAU SMARTWATER%' OR
+#             UPPER(product_description) LIKE '%KINLEY%' OR
+#             UPPER(product_description) LIKE '%MONSTER%' OR
+#             UPPER(product_description) LIKE '%NATURAQUA%' OR
+#             UPPER(product_description) LIKE '%POWERADE%' OR
+#             UPPER(product_description) LIKE '%ROEMERQUELLE%' OR
+#             UPPER(product_description) LIKE '%SPRIT%' OR
+#             UPPER(product_description) LIKE '%SPRITE%' OR
+#             UPPER(product_description) LIKE '%SPRITE ZERO%'
+#             )
+#             , 1, 0)
+
+# # select for union for following nested process - pm_stats
+#   - kind: select
+#     name: select_base_coopstar
+#     context_name: add_np_pm_stats_req_coopstar
+#     params:
+#       columns:
+#         ext_product_code_md_in: ext_product_code_md_in
+#         ext_product_name_src: ext_product_name_src
+#         ext_brand_src: ext_brand_src
+#         ext_flavour_src: ext_flavour_src
+#         ext_package_type_src: ext_package_type_src
+#         ext_package_size_src: ext_package_size_src
+#         ext_sales_unit_src: ext_sales_unit_src
+#         ext_item_category_src: ext_item_category_src
+#         ext_retailer: ext_retailer
+#         in_scope_flg: in_scope_flg
+#       distinct: true
+
+# SPAR
+# # Read data marts
+# curated_ppaa_web_input_hu.spar_sellout
+  - kind: read_dataio
+    name: read_spar_sellout
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: hu
+      object_name: spar_sellout
+      schema_version: v1
+
+# required transformation for following nested process - pm_stats 
+  - kind: add
+    name: add_np_pm_stats_req_spar
+    context_name: read_spar_sellout
+    params:
+      - column: ext_product_code_md_in
+        overwrite: true
+        expression: vendor_item  
+      - column: ext_product_name_src
+        overwrite: true
+        expression: product_description
+      - column: ext_brand_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_flavour_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_package_type_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_package_size_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_src
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: ext_item_category_src
+        overwrite: true
+        expression: category
+      - column: ext_retailer
+        overwrite: true
+        expression: cpl
+      - column: in_scope_flg
+        overwrite: true
+        expression: IF(supplier = 'CCHBC' AND ((UPPER(product_description) NOT LIKE '%CAPRI%' AND UPPER(product_description) NOT LIKE '%SUN%')
+          AND
+          (
+            UPPER(product_description) LIKE '%APEROL%' OR
+            UPPER(product_description) LIKE '%ASTI MARTINI%' OR
+            UPPER(product_description) LIKE '%BACARDI%' OR
+            UPPER(product_description) LIKE '%BOMBAY%' OR
+            UPPER(product_description) LIKE '%BURN%' OR
+            UPPER(product_description) LIKE '%CAMPARI%' OR
+            UPPER(product_description) LIKE '%CAPPY%' OR
+            UPPER(product_description) LIKE '%CINZANO%' OR
+            UPPER(product_description) LIKE '%COCA COLA%' OR
+            UPPER(product_description) LIKE '%COCA-COLA%' OR
+            UPPER(product_description) LIKE '%COCA-COLA LIGHT%' OR
+            UPPER(product_description) LIKE '%COCA-COLA ZERO%' OR
+            UPPER(product_description) LIKE '%COKE%' OR
+            UPPER(product_description) LIKE '%COSTA%' OR
+            UPPER(product_description) LIKE '%FANTA%' OR
+            UPPER(product_description) LIKE '%FINLANDIA%' OR
+            UPPER(product_description) LIKE '%FINLANDIA BOTANICAL%' OR
+            UPPER(product_description) LIKE '%FINLANDIA VODKA%' OR
+            UPPER(product_description) LIKE '%FUZETEA%' OR
+            UPPER(product_description) LIKE '%GENTLEMAN JACK%' OR
+            UPPER(product_description) LIKE '%GREY GOOSE%' OR
+            UPPER(product_description) LIKE '%GROUSE%' OR
+            UPPER(product_description) LIKE '%JACK D%' OR
+            UPPER(product_description) LIKE '%JACK DANIEL S TENNESS.%' OR
+            UPPER(product_description) LIKE '%JACK DANIELS SINGLE%' OR
+            UPPER(product_description) LIKE '%JACK DANIEL�S TENESSY HONEY%' OR
+            UPPER(product_description) LIKE '%JACK DANIELS TENNESSEE%' OR
+            UPPER(product_description) LIKE '%JACK DANIELS TENNESSEE HONEY%' OR
+            UPPER(product_description) LIKE '%KINLEY%' OR
+            UPPER(product_description) LIKE '%MARTINI%' OR
+            UPPER(product_description) LIKE '%MARTINI ASTI%' OR
+            UPPER(product_description) LIKE '%MONSTER%' OR
+            UPPER(product_description) LIKE '%NATURAQUA%' OR
+            UPPER(product_description) LIKE '%PATRON%' OR
+            UPPER(product_description) LIKE '%POWERADE%' OR
+            UPPER(product_description) LIKE '%RÖMERQELLE%' OR
+            UPPER(product_description) LIKE '%RÉZANGYAL%' OR
+            UPPER(product_description) LIKE '%SMARTWATER%' OR
+            UPPER(product_description) LIKE '%SPRITE%' OR
+            UPPER(product_description) LIKE '%SPRITE ZERO%' OR
+            UPPER(product_description) LIKE '%VERGNANO%' OR
+            UPPER(product_description) LIKE '%WOODFORD RESERVE%'
+            ))
+            , 1, 0)
+
+  - kind: group
+    name: group_deduplicate_pm_stats_req_spar
+    context_name: add_np_pm_stats_req_spar
+    params:
+      - aggs:
+          ext_product_name_src: max
+          ext_brand_src: max
+          ext_flavour_src: max
+          ext_package_type_src: max
+          ext_package_size_src: max
+          ext_sales_unit_src: max
+          ext_item_category_src: max
+          ext_retailer: max
+          in_scope_flg: max
+        by:
+        - ext_product_code_md_in
+
+# select for union for following nested process - pm_stats
+  - kind: select
+    name: select_base_spar
+    context_name: group_deduplicate_pm_stats_req_spar
+    params:
+      columns:
+        ext_product_code_md_in: ext_product_code_md_in
+        max_ext_product_name_src: ext_product_name_src
+        max_ext_brand_src: ext_brand_src
+        max_ext_flavour_src: ext_flavour_src
+        max_ext_package_type_src: ext_package_type_src
+        max_ext_package_size_src: ext_package_size_src
+        max_ext_sales_unit_src: ext_sales_unit_src
+        max_ext_item_category_src: ext_item_category_src
+        max_ext_retailer: ext_retailer
+        max_in_scope_flg: in_scope_flg
+      distinct: true
+
+# Tesco
+# # Read data marts
+# curated_ppaa_web_input_hu.tesco_sellout
+  - kind: read_dataio
+    name: read_tesco_sellout
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: hu
+      object_name: tesco_sellout
+      schema_version: v1
+
+# required transformation for following nested process - pm_stats 
+  - kind: add
+    name: add_np_pm_stats_req_tesco
+    context_name: read_tesco_sellout
+    params:
+      - column: ext_product_code_md_in
+        overwrite: true
+        expression: vendor_item  
+      - column: ext_product_name_src
+        overwrite: true
+        expression: product_description
+      - column: ext_brand_src
+        overwrite: true
+        expression: brand
+      - column: ext_flavour_src
+        overwrite: true
+        expression: flavour
+      - column: ext_package_type_src
+        overwrite: true
+        expression: package_type
+      - column: ext_package_size_src
+        overwrite: true
+        expression: pack_size
+      - column: ext_sales_unit_src
+        overwrite: true
+        expression: item_pack
+      - column: ext_item_category_src
+        overwrite: true
+        expression: category
+      - column: ext_retailer
+        overwrite: true
+        expression: cpl
+      - column: in_scope_flg
+        overwrite: true
+        expression: IF((UPPER(product_description) NOT LIKE '%CAPRI%' AND UPPER(product_description) NOT LIKE '%SUN%')
+          AND
+          (
+            UPPER(product_description) LIKE '%BURN%' OR
+            UPPER(product_description) LIKE '%CAPPY%' OR
+            UPPER(product_description) LIKE '%CAPPY P. %' OR
+            UPPER(product_description) LIKE '%CAPPY PULPY%' OR
+            UPPER(product_description) LIKE '%CC %' OR
+            UPPER(product_description) LIKE '%CHERRY CO%' OR
+            UPPER(product_description) LIKE '%COCA COLA%' OR
+            UPPER(product_description) LIKE '%COCA LIGHT%' OR
+            UPPER(product_description) LIKE '%COCA Z.%' OR
+            UPPER(product_description) LIKE '%COLA Z%' OR
+            UPPER(product_description) LIKE '%COCA ZERO%' OR
+            UPPER(product_description) LIKE '%COCA ZZ%' OR
+            UPPER(product_description) LIKE '%COCA-COLA%' OR
+            UPPER(product_description) LIKE '%COCA-COLA LIGHT%' OR
+            UPPER(product_description) LIKE '%COKE LIGHT%' OR
+            UPPER(product_description) LIKE '%COKE ZERO%' OR
+            UPPER(product_description) LIKE '%FANTA%' OR
+            UPPER(product_description) LIKE '%FUZE TEA%' OR
+            UPPER(product_description) LIKE '%FUZETEA%' OR
+            UPPER(product_description) LIKE '%KIN TONI%' OR
+            UPPER(product_description) LIKE '%KINLEY%' OR
+            UPPER(product_description) LIKE '%MONSTER%' OR
+            UPPER(product_description) LIKE '%NAQ%' OR
+            UPPER(product_description) LIKE '%NATURA.%' OR
+            UPPER(product_description) LIKE '%NATURAQUA%' OR
+            (UPPER(product_description) LIKE '%NQ%' AND UPPER(product_description) NOT LIKE '%FUNKY FOREST%') OR
+            UPPER(product_description) LIKE '%POWERADE%' OR
+            UPPER(product_description) LIKE '%SMARTWATER%' OR
+            UPPER(product_description) LIKE '%SPRITE%' OR
+            UPPER(product_description) LIKE '%SPRITE ZERO%'
+            )
+            , 1, 0)
+
+  - kind: group
+    name: group_deduplicate_pm_stats_req_tesco
+    context_name: add_np_pm_stats_req_tesco
+    params:
+      - aggs:
+          ext_product_name_src: max
+          ext_brand_src: max
+          ext_flavour_src: max
+          ext_package_type_src: max
+          ext_package_size_src: max
+          ext_sales_unit_src: max
+          ext_item_category_src: max
+          ext_retailer: max
+          in_scope_flg: max
+        by:
+        - ext_product_code_md_in
+
+# select for union for following nested process - pm_stats
+  - kind: select
+    name: select_base_tesco
+    context_name: group_deduplicate_pm_stats_req_tesco
+    params:
+      columns:
+        ext_product_code_md_in: ext_product_code_md_in
+        max_ext_product_name_src: ext_product_name_src
+        max_ext_brand_src: ext_brand_src
+        max_ext_flavour_src: ext_flavour_src
+        max_ext_package_type_src: ext_package_type_src
+        max_ext_package_size_src: ext_package_size_src
+        max_ext_sales_unit_src: ext_sales_unit_src
+        max_ext_item_category_src: ext_item_category_src
+        max_ext_retailer: ext_retailer
+        max_in_scope_flg: in_scope_flg
+      distinct: true
+
+# base for np - pm_stats
+  - kind: union
+    name: union_base_for_np_pm_stats_1
+    context_name: select_base_cba_coopstar
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_base_spar
+
+  - kind: union
+    name: union_base_for_np_pm_stats_2
+    context_name: union_base_for_np_pm_stats_1
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_base_tesco
+
+  - kind: add
+    name: add_np_pm_stats_req
+    context_name: union_base_for_np_pm_stats_2
+    params:
+      - column: const_1_np_pm_stats
+        expression: '''1'''
+
+# nested process - pm_stats
+  - kind: nested_process
+    name: external_portfolio_basic_load_pm_stats
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_pm_stats_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# end of nested process
+
+  - kind: add
+    name: add_const_1_md
+    context_name: filter_np_pm_stats_final
+    params:
+      - column: const_1_md
+        expression: '''1'''
+      - column: product_id_md
+        expression: coalesce(ext_product_code_md, 0)
+        overwrite: true
+
+# subset of data for following nested process - sell out, mode - inscope -> calculating for products incscope, but not in pm
+  - kind: filter
+    name: filter_np_sellout_mode_in_scope
+    context_name: add_const_1_md
+    params:
+      - condition:
+          in_pm_flg = 0
+
+# final product select before nested process - needs to be list of unique ext products identifies by product_id_md and need to be named select_product_base
+  - kind: select
+    name: select_product_base
+    context_name: filter_np_sellout_mode_in_scope
+    params:
+      columns:
+        product_id_md: product_id_md
+        ext_product_name_src: ext_product_name_src
+        ext_brand_src: ext_brand_src
+        ext_flavour_src: ext_flavour_src
+        ext_package_type_src: ext_package_type_src
+        ext_package_size_src: ext_package_size_src
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_item_category_src: ext_item_category_src
+        ext_retailer: ext_retailer
+        in_scope_flg: in_scope_flg
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        in_pm_flg: in_pm_flg
+      distinct: true
+
+# nested process - sell out calculation - inscope
+  - kind: nested_process
+    name: external_portfolio_basic_load_sell_out
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_sell_out_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        schema_version: '{{unv_schema_version}}'
+        np_sellout_mode: '{{np_sellout_mode_1}}'
+        unv_schema_level: '{{unv_schema_level_value}}'
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# # end of nested process
+
+# capture results of np into dataframe, for union later
+# np_sellout_mode_in_scope
+  - kind: add
+    name: add_np_sellout_mode_in_scope
+    context_name: join_product_sell_out
+    params:
+      - column: const_1_union
+        expression: '''1'''
+# ready for union - np_sellout_mode_in_scope
+
+# subset of data for following nested process - sell out, mode - in_pm -> calculating for products in_pm, regardless of scope
+  - kind: filter
+    name: filter_np_sellout_mode_in_pm
+    context_name: add_const_1_md
+    params:
+      - condition:
+          in_pm_flg = 1
+
+# final product select before nested process - needs to be list of unique ext products identifies by product_id_md and need to be named select_product_base
+  - kind: select
+    name: select_product_base
+    context_name: filter_np_sellout_mode_in_pm
+    params:
+      columns:
+        product_id_md: product_id_md
+        ext_product_name_src: ext_product_name_src
+        ext_brand_src: ext_brand_src
+        ext_flavour_src: ext_flavour_src
+        ext_package_type_src: ext_package_type_src
+        ext_package_size_src: ext_package_size_src
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_item_category_src: ext_item_category_src
+        ext_retailer: ext_retailer
+        in_scope_flg: in_scope_flg
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        in_pm_flg: in_pm_flg
+      distinct: true
+
+# nested process - sell out calculation - in_pm
+  - kind: nested_process
+    name: external_portfolio_basic_load_sell_out
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_sell_out_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        schema_version: '{{unv_schema_version}}'
+        np_sellout_mode: '{{np_sellout_mode_2}}'
+        unv_schema_level: '{{unv_schema_level_value}}'
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# # end of nested process
+
+# capture results of np into dataframe, for union later
+# np_sellout_mode_in_pm
+  - kind: add
+    name: add_np_sellout_mode_in_pm
+    context_name: add_fy_after_left_join
+    params:
+      - column: const_1_union
+        expression: '''1'''
+# ready for union - np_sellout_mode_in_pm
+
+  - kind: union
+    name: union_np_sellout
+    context_name: add_np_sellout_mode_in_pm
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_np_sellout_mode_in_scope
+
+# final transformations specific for hu localinput
+  - kind: add
+    name: add_sell_out_calc
+    context_name: union_np_sellout
+    params:
+      - column: sum_total_unit_sales_cfy
+        expression: cast(sum_total_unit_sales_cfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: sum_total_unit_sales_pfy
+        expression: cast(sum_total_unit_sales_pfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: sum_total_unit_sales_ppfy
+        expression: cast(sum_total_unit_sales_ppfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: sum_total_unit_sales_pppfy
+        expression: cast(sum_total_unit_sales_pppfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: number_of_sap_matches
+        expression: cast(number_of_sap_matches as integer)
+        overwrite: true
+      - column: number_of_sap_ban_matches
+        expression: cast(number_of_sap_ban_matches as integer)
+        overwrite: true
+      # - column: ean
+      #   expression: IF(ext_retailer = 'Tesco', product_id_md, cast (null as string))
+      #   overwrite: true
+
+#final step
+  - kind: add
+    name: add_const_values
+    context_name: add_sell_out_calc
+    params:
+      - column: ext_product_code
+        overwrite: true
+        expression: product_id_md
+      - column: ean
+        overwrite: true
+        expression: "cast (null as string)"
+      - column: country_code
+        overwrite: true
+        expression: '''{{vendor_data.country}}''' 
+      - column: ext_source_name 
+        expression: '''{{vendor_data.vendor}}'''
+      - column: ext_product_name_translated
+        expression: "cast (null as string)"
+      - column: ext_product_name_final
+        expression: "cast (null as string)"
+      # - column: ext_brand_src
+      #   expression: "cast (null as string)"
+      - column: ext_brand_pcm
+        expression: "cast (null as string)"
+      - column: ext_brand_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_brand_final
+        expression: "cast (null as string)"
+      - column: ext_brand_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_flavour_src
+      #   expression: "cast (null as string)"
+      - column: ext_flavour_pcm
+        expression: "cast (null as string)"
+      - column: ext_flavour_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_flavour_final
+        expression: "cast (null as string)"
+      - column: ext_flavour_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_package_type_src
+      #   expression: "cast (null as string)"
+      - column: ext_package_type_pcm
+        expression: "cast (null as string)"
+      - column: ext_package_type_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_package_type_final
+        expression: "cast (null as string)"
+      - column: ext_package_type_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_package_size_src
+      #   expression: "cast (null as string)"
+      - column: ext_package_size_pcm
+        expression: "cast (null as string)"
+      - column: ext_package_size_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_package_size_final
+        expression: "cast (null as string)"
+      - column: ext_package_size_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_sales_unit_src
+      #   expression: "cast (null as string)"
+      - column: ext_sales_unit_pcm
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sales_unit_final
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sub_brand_src
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_pcm
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sub_brand_final
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_item_category_src
+      #   expression: "cast (null as string)"
+      - column: ext_item_category_final
+        expression: "cast (null as string)"
+      # - column: ext_retailer
+      #   expression: "cast (null as string)"
+      - column: load_date
+        expression: current_timestamp()
+      # - column: in_portfolio_scope_flg
+      #   expression: "1"
+      - column: product_load_status
+        expression: "1"
+      # - column: number_of_sap_matches
+      #   expression: "cast (null as integer)"
+      # - column: number_of_sap_ban_matches
+      #   expression: "cast (null as integer)"
+      # - column: cfy
+      #   expression: "cast (null as integer)"
+      # - column: pfy
+      #   expression: "cast (null as integer)"
+      # - column: ppfy
+      #   expression: "cast (null as integer)"
+      # - column: sum_cfy
+      #   expression: "cast (null as decimal(10,4))"
+      # - column: sum_pfy
+      #   expression: "cast (null as decimal(10,4))"
+      # - column: sum_ppfy
+      #   expression: "cast (null as decimal(10,4))"
+
+  - kind: select
+    name: select_final
+    context_name: add_const_values
+    params:
+      columns:
+        ext_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_product_name_src: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        ean: ean
+        ext_brand_src: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        ext_package_size_src: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        ext_sales_unit_src: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_total_unit_sales_cfy: sum_cfy
+        sum_total_unit_sales_pfy: sum_pfy
+        sum_total_unit_sales_ppfy: sum_ppfy
+        sum_total_unit_sales_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_portfolio
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,187 @@
+transform:
+  name: dm_purchasing_info
+  operations:
+
+  - kind: read_dataio
+    name: read_eina
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: eina
+      schema_version: v1
+
+
+  - kind: select
+    name: select_eina
+    params:
+      columns:
+        infnr: infnr_a
+        matnr: matnr_a
+        lifnr: lifnr_a
+        urztp: urztp_a
+        loekz: loekz_a
+        sap_cluster: sap_cluster_a
+      distinct: true
+    skip_next: false
+
+  - kind: read_dataio
+    name: read_eine
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: eine
+      schema_version: v1
+
+  - kind: select
+    name: select_eine
+    params:
+      columns:
+        infnr: infnr_e
+        esokz: esokz_e
+        ekorg: ekorg_e
+        werks: werks_e
+        prdat: prdat_e
+        loekz: loekz_e
+        bprme: bprme_e
+        verid: verid_e
+        sap_cluster: sap_cluster_e
+      distinct: true
+    skip_next: false
+
+
+  - kind: read_dataio
+    name: read_a017
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: a017
+      schema_version: v1
+
+  - kind: group
+    name: group_datbi_max
+    params:
+      - aggs:
+          datbi: max
+        by:
+        - matnr
+        - werks
+        - lifnr
+        - sap_cluster
+        - esokz
+
+  - kind: select
+    name: select_a017_group
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        lifnr: lifnr
+        esokz: esokz
+        max_datbi: max_datbi
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: joina_b_datbi
+    context_name: read_a017
+    params:
+      - other:
+          select_a017_group
+        how:
+          inner
+        columns:
+          matnr: matnr
+          werks: werks
+          lifnr: lifnr
+          esokz: esokz
+          datbi: max_datbi
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_a017
+    params:
+      columns:
+        matnr: matnr_b
+        werks: werks_b
+        lifnr: lifnr_b
+        esokz: esokz_b
+        ekorg: ekorg_b
+        knumh: knumh_b
+        max_datbi: datbi_b
+        sap_cluster: sap_cluster_b
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: joina_a_b_e
+    context_name: select_eina
+    params:
+      - other:
+          select_eine
+        how:
+          inner
+        columns:
+          infnr_a: infnr_e
+          sap_cluster_a: sap_cluster_e
+      - other:
+          select_a017
+        how:
+          left
+        columns:
+          matnr_a: matnr_b
+          lifnr_a: lifnr_b
+          esokz_e: esokz_b
+          ekorg_e: ekorg_b
+          werks_e: werks_b
+          sap_cluster_a: sap_cluster_b
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        infnr_a: purchasing_info_record
+        matnr_a: material_code
+        lifnr_a: vendor_code
+        werks_e: plant_code
+        urztp_a: certificate_category_code
+        loekz_a: general_deletion_flag
+        ekorg_e: purchasing_organization_code
+        esokz_e: info_record_category_code
+        prdat_e: price_valid_to_date
+        loekz_e: purchase_org_deletion_flag
+        bprme_e: order_price_unit_code
+        knumh_b: condition_record_number
+        datbi_b: valid_to_date
+        verid_e: production_version
+        sap_cluster_a: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_purchasing_info
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_purchasing_info
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

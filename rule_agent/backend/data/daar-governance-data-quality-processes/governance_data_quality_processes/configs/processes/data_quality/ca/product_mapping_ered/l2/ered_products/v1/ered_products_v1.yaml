@@ -1,0 +1,337 @@
+transform:
+  name: ered_products
+  operations:
+
+# Read data marts
+# udm_ered_fsa_ca.grocery_qcs_v1 - gr
+  - kind: read_dataio
+    name: read_grocery_qcs
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: grocery_qcs
+      schema_version: v1
+
+  - kind: select
+    name: select_grocery_qcs
+    context_name: read_grocery_qcs
+    params:
+      columns:
+        id: id_gr
+        country: country
+        fsa: fsa
+        qc_name: qc_name
+        address: address
+      distinct: true
+
+# udm_ered_fsa_ca.grocery_qc_products_v1 - grp
+  - kind: read_dataio
+    name: read_grocery_qc_products
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: grocery_qc_products
+      schema_version: v1
+
+  - kind: select
+    name: select_grocery_qc_products
+    context_name: read_grocery_qc_products
+    params:
+      columns:
+        qcid: qcid
+        brand_id: brand_id
+        beverage_type_id: beverage_type_id
+        manufacturer_id: manufacturer_id
+        product_category_id: product_category_id
+        id: product_code
+        product_name: product_name
+      distinct: true
+
+#join qc
+  - kind: join
+    name: join_qc
+    context_name: select_grocery_qcs
+    params:
+      - other:
+          select_grocery_qc_products
+        how:
+          inner
+        columns:
+          id_gr: qcid
+
+  - kind: select
+    name: select_qc
+    context_name: join_qc
+    params:
+      columns:
+        product_code: product_code
+        product_name: product_name
+        country: country_code
+        fsa: fsa
+        qc_name: qc_name
+        address: qc_address
+        brand_id: brand_id
+        beverage_type_id: beverage_type_id
+        manufacturer_id: manufacturer_id
+        product_category_id: product_category_id
+      distinct: true
+
+#udm_ered_fsa_ca.grocery_third_parties_v1 - gtp
+  - kind: read_dataio
+    name: read_grocery_third_parties
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: grocery_third_parties
+      schema_version: v1
+
+  - kind: select
+    name: select_grocery_third_parties
+    context_name: read_grocery_third_parties
+    params:
+      columns:
+        id: id_gr
+        country: country
+        fsa: fsa
+        third_party_name: qc_name
+        address: address
+      distinct: true
+
+#udm_ered_fsa_ca.grocery_third_party_products_v1 - tpp
+  - kind: read_dataio
+    name: read_grocery_third_party_products
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: grocery_third_party_products
+      schema_version: v1
+
+  - kind: select
+    name: select_grocery_third_party_products
+    context_name: read_grocery_third_party_products
+    params:
+      columns:
+        third_party_id: qcid
+        brand_id: brand_id
+        beverage_type_id: beverage_type_id
+        manufacturer_id: manufacturer_id
+        product_category_id: product_category_id
+        id: product_code
+        product_name: product_name
+      distinct: true
+
+#join tpp
+  - kind: join
+    name: join_tpp
+    context_name: select_grocery_third_parties
+    params:
+      - other:
+          select_grocery_third_party_products
+        how:
+          inner
+        columns:
+          id_gr: qcid
+
+  - kind: select
+    name: select_tpp
+    context_name: join_tpp
+    params:
+      columns:
+        product_code: product_code
+        product_name: product_name
+        country: country_code
+        fsa: fsa
+        qc_name: qc_name
+        address: qc_address
+        brand_id: brand_id
+        beverage_type_id: beverage_type_id
+        manufacturer_id: manufacturer_id
+        product_category_id: product_category_id
+      distinct: true
+
+#union products
+  - kind: union
+    name: union_products
+    context_name: select_qc
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_tpp
+
+# udm_ered_fsa_ca.brands_v1 - br
+  - kind: read_dataio
+    name: read_brands
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: brands
+      schema_version: v1
+
+  - kind: select
+    name: select_brands
+    context_name: read_brands
+    params:
+      columns:
+        id: id_br
+        brand_name: brand_name
+      distinct: true
+
+# udm_ered_fsa_ca.beverage_types_v1 - br
+  - kind: read_dataio
+    name: read_beverage_types
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: beverage_types
+      schema_version: v1
+
+  - kind: select
+    name: select_beverage_types
+    context_name: read_beverage_types
+    params:
+      columns:
+        id: id_bt
+        beverage_name: beverage_name
+      distinct: true
+
+# udm_ered_fsa_ca.manufactures_v1 - ma
+  - kind: read_dataio
+    name: read_manufactures
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: manufactures
+      schema_version: v1
+
+  - kind: select
+    name: select_manufactures
+    context_name: read_manufactures
+    params:
+      columns:
+        id: id_ma
+        manufacture_name: manufacture_name
+      distinct: true
+
+# udm_ered_fsa_ca.product_categories_v1 - pc
+  - kind: read_dataio
+    name: read_product_categories
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: ca
+      domain: ered_fsa
+      object_name: product_categories
+      schema_version: v1
+
+  - kind: filter
+    name: filter_product_categories
+    context_name: read_product_categories
+    params:
+      - condition:
+          name = 'CCH'
+
+  - kind: select
+    name: select_product_categories
+    context_name: filter_product_categories
+    params:
+      columns:
+        id: id_pc
+      distinct: true
+
+# join data marts
+  - kind: join
+    name: join_ered_products
+    context_name: union_products
+    params:
+      - other:
+          select_brands
+        how:
+          left
+        columns:
+          brand_id: id_br
+      - other:
+          select_beverage_types
+        how:
+          left
+        columns:
+          beverage_type_id: id_bt
+      - other:
+          select_manufactures
+        how:
+          left
+        columns:
+          manufacturer_id: id_ma
+      - other:
+          select_product_categories
+        how:
+          inner
+        columns:
+          product_category_id: id_pc
+
+  - kind: add
+    name: add_source_system
+    params:
+      - column: source_system
+        expression: '''ered'''
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        product_code: product_code
+        product_name: product_name
+        country_code: country_code
+        brand_name: brand_name
+        beverage_name: beverage_type
+        manufacture_name: manufacturer
+        fsa: fsa
+        qc_name: qc_name
+        qc_address: qc_address
+        source_system: source_system
+      distinct: true
+
+  - kind: write_dataio
+    name: write_ered_products
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: ered_products
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

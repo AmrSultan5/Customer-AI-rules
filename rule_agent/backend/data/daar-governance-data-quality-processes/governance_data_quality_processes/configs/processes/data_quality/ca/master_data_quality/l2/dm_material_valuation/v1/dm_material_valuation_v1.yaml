@@ -1,0 +1,57 @@
+transform:
+  name: dm_material_valuation
+  operations:
+  - kind: read_dataio
+    name: read_mbew
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mbew
+      schema_version: v1
+
+  - kind: select
+    name: select_mbew
+    params:
+      columns:
+        matnr: matnr
+        bwkey: bwkey
+        bklas: bklas
+        vprsv: vprsv
+        bwtar: bwtar
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_mbew_fin
+    params:
+      columns:
+        matnr: material_code
+        bwkey: plant_valuation_area
+        bklas: valuation_class_code
+        vprsv: price_control_flag
+        bwtar: valuation_type
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_material_valuation
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_valuation
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

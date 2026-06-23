@@ -1,0 +1,493 @@
+{% if dataio.storage_id == "datalake_dev" %}
+{% set uc_catalog_env = "dc_datalake_dev_001" %}
+{% elif dataio.storage_id == "datalake_prod" %}
+{% set uc_catalog_env = "dc_datalake_prod_001" %}
+{% else %}
+{% set uc_catalog_env = "dc_datalake_default" %}
+{% endif %}
+
+{% set unv_schema_level = "" %}
+{% set unv_schema_level_value = "product_id" %}
+{% set np_sellout_mode = "" %}
+{% set np_sellout_mode_1 = "in_scope" %}
+{% set np_sellout_mode_2 = "in_pm" %}
+
+transform:
+  name: external_portfolio_basic_load_it_nielsen
+  operations:
+
+# Read data marts
+# curated_nielsen_it.tccc_product_v2 - tp
+  - kind: read_dataio
+    name: read_tccc_product
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: nielsen
+      namespace: it
+      object_name: tccc_product
+      schema_version: v2
+
+# required transformation for following nested process - pm_stats 
+  - kind: add
+    name: add_np_pm_stats_req
+    context_name: read_tccc_product
+    params:
+      - column: ext_product_code_md_in
+        overwrite: true
+        expression: prdc_cd
+      - column: in_scope_flg
+        overwrite: true
+        expression: IF(cstm_638890 = 'CCHBC' AND hierarchy_level_name = 'ITEM CODE' AND SUBSTR(UPPER(prdc_lng_dsc),-3,3)<>'C&C' AND cstm_626097 != 'SCHWEPPES', 1, 0)
+
+# nested process - pm_stats
+  - kind: nested_process
+    name: external_portfolio_basic_load_pm_stats
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_pm_stats_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# end of nested process
+
+  - kind: add
+    name: add_transformation_md
+    context_name: filter_np_pm_stats_final
+    params:
+      - column: ext_package_type_src_in
+        overwrite: true
+        expression: concat(cstm_623515, ' ', cstm_623532)
+
+  - kind: group
+    name: group_deduplicate_md
+    context_name: add_transformation_md
+    params:
+      - aggs:
+          prdc_cd: max
+          prdc_lng_dsc: max
+          cstm_626097: max
+          ext_package_type_src_in: max
+          cstm_623555: max
+          cstm_623540: max
+          in_portfolio_scope_flg: max
+          number_of_sap_matches: max
+          number_of_sap_ban_matches: max
+          in_pm_flg: max
+        by:
+        - product_id
+        - ext_product_code_md
+
+  - kind: add
+    name: add_const_1_md
+    context_name: group_deduplicate_md
+    params:
+      - column: const_1_md
+        expression: '''1'''
+      - column: product_id
+        expression: coalesce(product_id, 0)
+        overwrite: true
+
+# subset of data for following nested process - sell out, mode - inscope -> calculating for products incscope, but not in pm
+  - kind: filter
+    name: filter_np_sellout_mode_in_scope
+    context_name: add_const_1_md
+    params:
+      - condition:
+          max_in_pm_flg = 0
+
+# final product select before nested process - sell out - needs to be list of unique ext products identifies by product_id_md and need to be named select_product_base
+  - kind: select
+    name: select_product_base
+    context_name: filter_np_sellout_mode_in_scope
+    params:
+      columns:
+        product_id: product_id_md
+        max_prdc_cd: prdc_cd
+        max_prdc_lng_dsc: max_prdc_lng_dsc
+        max_cstm_626097: max_cstm_626097
+        max_ext_package_type_src_in: max_ext_package_type_src_in
+        max_cstm_623555: max_cstm_623555
+        max_cstm_623540: max_cstm_623540
+        ext_product_code_md: ext_product_code_md
+        max_in_portfolio_scope_flg: in_portfolio_scope_flg
+        max_number_of_sap_matches: number_of_sap_matches
+        max_number_of_sap_ban_matches: number_of_sap_ban_matches
+        max_in_pm_flg: in_pm_flg
+      distinct: true
+
+# nested process - sell out calculation - inscope
+  - kind: nested_process
+    name: external_portfolio_basic_load_sell_out
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_sell_out_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        schema_version: '{{unv_schema_version}}'
+        np_sellout_mode: '{{np_sellout_mode_1}}'
+        unv_schema_level: '{{unv_schema_level_value}}'
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# # end of nested process
+
+# capture results of np into dataframe, for union later
+# np_sellout_mode_in_scope
+  - kind: add
+    name: add_np_sellout_mode_in_scope
+    context_name: join_product_sell_out
+    params:
+      - column: const_1_union
+        expression: '''1'''
+# ready for union - np_sellout_mode_in_scope
+
+# subset of data for following nested process - sell out, mode - in_pm -> calculating for products in_pm, regardless of scope
+  - kind: filter
+    name: filter_np_sellout_mode_in_pm
+    context_name: add_const_1_md
+    params:
+      - condition:
+          max_in_pm_flg = 1
+
+# final product select before nested process - sell out - needs to be list of unique ext products identifies by product_id_md and need to be named select_product_base
+  - kind: select
+    name: select_product_base
+    context_name: filter_np_sellout_mode_in_pm
+    params:
+      columns:
+        product_id: product_id_md
+        max_prdc_cd: prdc_cd
+        max_prdc_lng_dsc: max_prdc_lng_dsc
+        max_cstm_626097: max_cstm_626097
+        max_ext_package_type_src_in: max_ext_package_type_src_in
+        max_cstm_623555: max_cstm_623555
+        max_cstm_623540: max_cstm_623540
+        ext_product_code_md: ext_product_code_md
+        max_in_portfolio_scope_flg: in_portfolio_scope_flg
+        max_number_of_sap_matches: number_of_sap_matches
+        max_number_of_sap_ban_matches: number_of_sap_ban_matches
+        max_in_pm_flg: in_pm_flg
+      distinct: true
+
+# nested process - sell out calculation - in_pm
+  - kind: nested_process
+    name: external_portfolio_basic_load_sell_out
+    params:
+      config_path: "processes/data_quality/ca/product_mapping_tool/l2/external_portfolio/base_loads/v1/external_portfolio_basic_load_sell_out_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+        schema_version: '{{unv_schema_version}}'
+        np_sellout_mode: '{{np_sellout_mode_2}}'
+        unv_schema_level: '{{unv_schema_level_value}}'
+        vendor_data:
+          country: "{{vendor_data.country}}"
+          vendor: "{{vendor_data.vendor}}"        
+# # end of nested process
+
+# capture results of np into dataframe, for union later
+# np_sellout_mode_in_pm
+  - kind: add
+    name: add_np_sellout_mode_in_pm
+    context_name: add_fy_after_left_join
+    params:
+      - column: const_1_union
+        expression: '''1'''
+# ready for union - np_sellout_mode_in_pm
+
+  - kind: union
+    name: union_np_sellout
+    context_name: add_np_sellout_mode_in_pm
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_np_sellout_mode_in_scope
+
+# final transformations specific for it nielsen
+  - kind: group
+    name: group_to_grain_level
+    context_name: union_np_sellout
+    params:
+      - aggs:
+          prdc_cd: max
+          max_prdc_lng_dsc: max
+          max_cstm_626097: max
+          max_ext_package_type_src_in: max
+          max_cstm_623555: max
+          max_cstm_623540: max
+          in_portfolio_scope_flg: max
+          number_of_sap_matches: max
+          number_of_sap_ban_matches: max
+          cfy: max
+          pfy: max
+          ppfy: max
+          pppfy: max
+          sum_total_volume_sales_cfy: sum
+          sum_total_volume_sales_pfy: sum
+          sum_total_volume_sales_ppfy: sum
+          sum_total_volume_sales_pppfy: sum
+          sum_regular_volume_sales_cfy: sum
+          sum_regular_volume_sales_pfy: sum
+          sum_regular_volume_sales_ppfy: sum
+          sum_regular_volume_sales_pppfy: sum
+          sum_total_unit_sales_cfy: sum
+          sum_total_unit_sales_pfy: sum
+          sum_total_unit_sales_ppfy: sum
+          sum_total_unit_sales_pppfy: sum
+        by:
+        - ext_product_code_md
+
+  - kind: select
+    name: select_group_to_grain_level
+    context_name: group_to_grain_level
+    params:
+      columns:
+        # max_prdc_cd: prdc_cd
+        ext_product_code_md: prdc_cd
+        max_max_prdc_lng_dsc: prdc_lng_dsc
+        max_max_cstm_626097: cstm_626097
+        max_max_ext_package_type_src_in: ext_package_type_src_in
+        max_max_cstm_623555: cstm_623555
+        max_max_cstm_623540: cstm_623540
+        max_in_portfolio_scope_flg: in_portfolio_scope_flg
+        max_number_of_sap_matches: number_of_sap_matches
+        max_number_of_sap_ban_matches: number_of_sap_ban_matches
+        max_cfy: cfy
+        max_pfy: pfy
+        max_ppfy: ppfy
+        max_pppfy: pppfy
+        sum_sum_total_volume_sales_cfy: sum_total_volume_sales_cfy
+        sum_sum_total_volume_sales_pfy: sum_total_volume_sales_pfy
+        sum_sum_total_volume_sales_ppfy: sum_total_volume_sales_ppfy
+        sum_sum_total_volume_sales_pppfy: sum_total_volume_sales_pppfy
+        sum_sum_regular_volume_sales_cfy: sum_regular_volume_sales_cfy
+        sum_sum_regular_volume_sales_pfy: sum_regular_volume_sales_pfy
+        sum_sum_regular_volume_sales_ppfy: sum_regular_volume_sales_ppfy
+        sum_sum_regular_volume_sales_pppfy: sum_regular_volume_sales_pppfy
+        sum_sum_total_unit_sales_cfy: sum_total_unit_sales_cfy
+        sum_sum_total_unit_sales_pfy: sum_total_unit_sales_pfy
+        sum_sum_total_unit_sales_ppfy: sum_total_unit_sales_ppfy
+        sum_sum_total_unit_sales_ppfy: sum_total_unit_sales_ppfy
+      distinct: true
+
+  - kind: add
+    name: add_sell_out_calc
+    context_name: select_group_to_grain_level
+    params:
+      - column: sum_total_volume_sales_cfy
+        expression: cast(sum_total_volume_sales_cfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: sum_total_volume_sales_pfy
+        expression: cast(sum_total_volume_sales_pfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: sum_total_volume_sales_ppfy
+        expression: cast(sum_total_volume_sales_ppfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: sum_total_volume_sales_pppfy
+        expression: cast(sum_total_volume_sales_pppfy / 5.678 as decimal(10,4))
+        overwrite: true
+      - column: number_of_sap_matches
+        expression: cast(number_of_sap_matches as integer)
+        overwrite: true
+      - column: number_of_sap_ban_matches
+        expression: cast(number_of_sap_ban_matches as integer)
+        overwrite: true
+
+#final step
+  - kind: add
+    name: add_const_values
+    context_name: add_sell_out_calc
+    params:
+      - column: prdc_cd_product_code
+        overwrite: true
+        expression: prdc_cd
+      - column: prdc_cd_ean
+        overwrite: true
+        expression: prdc_cd
+      - column: country_code
+        overwrite: true
+        expression: '''{{vendor_data.country}}''' 
+      - column: ext_source_name 
+        expression: '''{{vendor_data.vendor}}'''
+      - column: ext_product_name_translated
+        expression: "cast (null as string)"
+      - column: ext_product_name_final
+        expression: "cast (null as string)"
+      # - column: ext_brand_src
+      #   expression: "cast (null as string)"
+      - column: ext_brand_pcm
+        expression: "cast (null as string)"
+      - column: ext_brand_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_brand_final
+        expression: "cast (null as string)"
+      - column: ext_brand_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_flavour_src
+        expression: "cast (null as string)"
+      - column: ext_flavour_pcm
+        expression: "cast (null as string)"
+      - column: ext_flavour_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_flavour_final
+        expression: "cast (null as string)"
+      - column: ext_flavour_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_package_type_src
+      #   expression: "cast (null as string)"
+      - column: ext_package_type_pcm
+        expression: "cast (null as string)"
+      - column: ext_package_type_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_package_type_final
+        expression: "cast (null as string)"
+      - column: ext_package_type_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_package_size_src
+      #   expression: "cast (null as string)"
+      - column: ext_package_size_pcm
+        expression: "cast (null as string)"
+      - column: ext_package_size_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_package_size_final
+        expression: "cast (null as string)"
+      - column: ext_package_size_final_probability
+        expression: "cast (null as decimal(10,4))"
+      # - column: ext_sales_unit_src
+      #   expression: "cast (null as string)"
+      - column: ext_sales_unit_pcm
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sales_unit_final
+        expression: "cast (null as string)"
+      - column: ext_sales_unit_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sub_brand_src
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_pcm
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_pcm_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_sub_brand_final
+        expression: "cast (null as string)"
+      - column: ext_sub_brand_final_probability
+        expression: "cast (null as decimal(10,4))"
+      - column: ext_item_category_src
+        expression: "cast (null as string)"
+      - column: ext_item_category_final
+        expression: "cast (null as string)"
+      - column: ext_retailer
+        expression: "cast (null as string)"
+      - column: load_date
+        expression: current_timestamp()
+      # - column: in_portfolio_scope_flg
+      #   expression: "1"
+      - column: product_load_status
+        expression: "1"
+      # - column: number_of_sap_matches
+      #   expression: "cast (null as integer)"
+      # - column: number_of_sap_ban_matches
+      #   expression: "cast (null as integer)"
+      # - column: cfy
+      #   expression: "cast (null as integer)"
+      # - column: pfy
+      #   expression: "cast (null as integer)"
+      # - column: ppfy
+      #   expression: "cast (null as integer)"
+      # - column: sum_cfy
+      #   expression: "cast (null as decimal(10,4))"
+      # - column: sum_pfy
+      #   expression: "cast (null as decimal(10,4))"
+      # - column: sum_ppfy
+      #   expression: "cast (null as decimal(10,4))"
+
+  - kind: select
+    name: select_final
+    context_name: add_const_values
+    params:
+      columns:
+        prdc_cd_product_code: ext_product_code
+        country_code: country_code
+        ext_source_name: ext_source_name
+        prdc_lng_dsc: ext_product_name_src
+        ext_product_name_translated: ext_product_name_translated
+        ext_product_name_final: ext_product_name_final
+        prdc_cd_ean: ean
+        cstm_626097: ext_brand_src
+        ext_brand_pcm: ext_brand_pcm
+        ext_brand_pcm_probability: ext_brand_pcm_probability
+        ext_brand_final: ext_brand_final
+        ext_brand_final_probability: ext_brand_final_probability
+        ext_flavour_src: ext_flavour_src
+        ext_flavour_pcm: ext_flavour_pcm
+        ext_flavour_pcm_probability: ext_flavour_pcm_probability
+        ext_flavour_final: ext_flavour_final
+        ext_flavour_final_probability: ext_flavour_final_probability
+        ext_package_type_src_in: ext_package_type_src
+        ext_package_type_pcm: ext_package_type_pcm
+        ext_package_type_pcm_probability: ext_package_type_pcm_probability
+        ext_package_type_final: ext_package_type_final
+        ext_package_type_final_probability: ext_package_type_final_probability
+        cstm_623555: ext_package_size_src
+        ext_package_size_pcm: ext_package_size_pcm
+        ext_package_size_pcm_probability: ext_package_size_pcm_probability
+        ext_package_size_final: ext_package_size_final
+        ext_package_size_final_probability: ext_package_size_final_probability
+        cstm_623540: ext_sales_unit_src
+        ext_sales_unit_pcm: ext_sales_unit_pcm
+        ext_sales_unit_pcm_probability: ext_sales_unit_pcm_probability
+        ext_sales_unit_final: ext_sales_unit_final
+        ext_sales_unit_final_probability: ext_sales_unit_final_probability
+        ext_sub_brand_src: ext_sub_brand_src
+        ext_sub_brand_pcm: ext_sub_brand_pcm
+        ext_sub_brand_pcm_probability: ext_sub_brand_pcm_probability
+        ext_sub_brand_final: ext_sub_brand_final
+        ext_sub_brand_final_probability: ext_sub_brand_final_probability
+        ext_item_category_src: ext_item_category_src
+        ext_item_category_final: ext_item_category_final
+        ext_retailer: ext_retailer
+        load_date: load_date
+        in_portfolio_scope_flg: in_portfolio_scope_flg
+        product_load_status: product_load_status
+        number_of_sap_matches: number_of_sap_matches
+        number_of_sap_ban_matches: number_of_sap_ban_matches
+        cfy: cfy
+        pfy: pfy
+        ppfy: ppfy
+        pppfy: pppfy
+        sum_total_volume_sales_cfy: sum_cfy
+        sum_total_volume_sales_pfy: sum_pfy
+        sum_total_volume_sales_ppfy: sum_ppfy
+        sum_total_volume_sales_pppfy: sum_pppfy
+      distinct: true
+
+  - kind: write_dataio
+    name: write_external_portfolio_it_nielsen
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: l2
+      object_name: external_portfolio
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

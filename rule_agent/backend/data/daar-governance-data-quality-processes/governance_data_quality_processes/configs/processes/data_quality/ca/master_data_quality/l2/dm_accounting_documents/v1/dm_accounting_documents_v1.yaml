@@ -1,0 +1,111 @@
+transform:
+  name: dm_accounting_documents
+  operations:
+
+  - kind: read_dataio
+    name: read_bsak_bck
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: bsak_bck
+      schema_version: v1
+
+  - kind: add
+    name: add_bsak_bck
+    params:
+      - column: account_type
+        expression: ''''''
+      - column: source
+        expression: '''Cleared'''
+
+  - kind: select
+    name: select_bsak_bck
+    params:
+      columns:
+        bukrs: company_code
+        lifnr: vendor_code
+        xarch: archive_flag
+        umsks: gl_transaction_type
+        umskz: gl_indicator_flag
+        augdt: clearing_date
+        augbl: document_number_of_clearing
+        zuonr: assignment_number
+        gjahr: fiscal_year
+        belnr: accounting_document_number
+        buzei: line_item_number
+        account_type: account_type
+        bstat: document_status
+        budat: posting_date
+        source: source
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_bseg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: bseg
+      schema_version: v1
+
+  - kind: add
+    name: add_bseg
+    params:
+      - column: archive_flag
+        expression: ''''''
+      - column: source
+        expression: '''Active'''
+
+  - kind: select
+    name: select_bseg
+    params:
+      columns:
+        bukrs: company_code
+        lifnr: vendor_code
+        archive_flag: archive_flag
+        umsks: gl_transaction_type
+        umskz: gl_indicator_flag
+        augdt: clearing_date
+        augbl: document_number_of_clearing
+        zuonr: assignment_number
+        gjahr: fiscal_year
+        belnr: accounting_document_number
+        buzei: line_item_number
+        koart: account_type
+        h_bstat: document_status
+        h_budat: posting_date
+        source: source
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_dm_accounting_documents
+    context_name: select_bseg
+    params:
+      other: select_bsak_bck
+      allow_missing: false
+      by_name: true
+
+  - kind: write_dataio
+    name: write_dm_accounting_documents
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_accounting_documents
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

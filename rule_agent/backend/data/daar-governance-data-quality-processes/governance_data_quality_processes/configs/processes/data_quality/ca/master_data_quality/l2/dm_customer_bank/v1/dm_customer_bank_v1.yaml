@@ -1,0 +1,130 @@
+transform:
+  name: dm_customer_bank
+  operations:
+
+ #read BUT0BK
+  - kind: read_dataio
+    name: read_but0bk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: bank_data
+      object_name: but0bk
+      schema_version: v1
+
+  - kind: filter
+    name: filter_but0bk
+    params:
+      - condition:
+          banks not in('RU', 'BY')
+
+  - kind: add
+    name: add_values
+    params:
+      - column: bk_valid_to
+        expression: date_format(to_date(left(bk_valid_to,8),'yyyyMMdd'), 'yyyy-MM-dd')
+        overwrite: true
+      - column: bk_valid_from
+        expression: date_format(to_date(left(bk_valid_from,8),'yyyyMMdd'), 'yyyy-MM-dd')
+        overwrite: true
+
+  - kind: cast
+    name: cast_bk_valid_to_from
+    params:
+      - column: bk_valid_to
+        to: string
+      - column: bk_valid_from
+        to: string
+
+
+  - kind: select
+    name: select_but0bk
+    params:
+      columns:
+        partner: partner
+        bankl: bankl
+        bankn: bankn
+        banks: banks
+        bkont: bkont
+        bkvid: bkvid
+        sap_cluster: sap_cluster
+        bk_valid_to: bk_valid_to
+        bk_valid_from: bk_valid_from
+      distinct: true
+
+
+#read TIBAN
+  - kind: read_dataio
+    name: read_tiban
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: bank_data
+      object_name: tiban
+      schema_version: v1
+
+  - kind: select
+    name: select_tiban
+    params:
+      columns:
+        iban: iban
+        bankl: bankl
+        bankn: bankn
+        banks: banks
+        bkont: bkont
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: join
+    name: join_a_b
+    context_name: select_but0bk
+    params:
+      - other:
+          select_tiban
+        how:
+          left
+        columns:
+          bankl: bankl
+          bankn: bankn
+          banks: banks
+          bkont: bkont
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_dm_customer_bank
+    params:
+      columns:
+        partner: customer_code
+        bankl: bank_key
+        bankn: bank_account
+        iban: iban
+        banks: bank_country
+        bkvid: bank_type
+        bkont: bank_control_key
+        bk_valid_from: bank_validity_from
+        bk_valid_to: bank_validity_to
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_bank
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_bank
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

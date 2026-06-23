@@ -1,0 +1,795 @@
+transform:
+  name: dm_material_characteristics
+  operations:
+
+  - kind: read_dataio
+    name: read_ausp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: ausp
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_cabn
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: cabn
+      schema_version: v1
+
+  - kind: select
+    name: select_ausp_pre
+    context_name: read_ausp
+    params:
+      columns:
+        objek: objek
+        atzhl: atzhl
+        klart: klart_au
+        atawe: atawe
+        atinn: atinn_au
+        atwrt: atwrt
+        atflv: atflv
+        datuv: datuv_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_atzhl
+    params:
+      - aggs:
+          atzhl: max
+        by:
+        - objek
+        - klart_au
+        - atinn_au
+        - sap_cluster
+
+  - kind: join
+    name: join_ausp_max_atzhl
+    context_name: select_ausp_pre
+    params:
+      - other:
+          group_atzhl
+        how:
+          inner
+        columns:
+          objek: objek
+          klart_au: klart_au
+          atzhl: max_atzhl
+          atinn_au: atinn_au
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_ausp
+    params:
+      columns:
+        objek: objek
+        max_atzhl: atzhl
+        klart_au: klart_au
+        atawe: atawe
+        atinn_au: atinn_au
+        atwrt: atwrt
+        atflv: atflv
+        datuv_au: datuv_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_cabn
+    context_name: read_cabn
+    params:
+      columns:
+        atinn: atinn
+        atnam: atnam
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_ausp_cabn
+    context_name: select_ausp
+    params:
+      - other:
+          select_cabn
+        how:
+          inner
+        columns:
+          atinn_au: atinn
+          sap_cluster: sap_cluster
+
+
+  - kind: filter
+    name: filter_cch
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam = 'CCHBC_COFFEE_CHANNEL'
+      
+  - kind: filter
+    name: filter_cc
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam = 'CCHBC_COFFEE_CLASS'
+
+  - kind: filter
+    name: filter_cf
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam = 'CCHBC_COFFEE_FORMAT'
+
+  - kind: filter
+    name: filter_cm
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam = 'CCHBC_COFFEE_METHOD'
+
+  - kind: filter
+    name: filter_bp
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam =  'CCHBC_BPP_CODE'
+
+
+  - kind: filter
+    name: filter_colour
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_COLOUR_NW', 'SPR_MM_COLOUR')  
+
+  - kind: filter
+    name: filter_core_material
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_CORE_MATERIAL', 'SPR_MM_CORE_MATERIAL', 'SPR_MM_CORE_MATERIAL_FG')  
+
+
+  - kind: filter
+    name: filter_plant_pet
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_PLANT_PET', 'SPR_MM_PLANT_PET')  
+
+
+  - kind: filter
+    name: filter_preform_additive
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_PREFORM_ADDITIVE', 'SPR_MM_PREFORM_ADDITIVE')          
+
+  - kind: filter
+    name: filter_resin_recycle_type
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_RESIN_RECYCLE_TYPE', 'SPR_MM_RESIN_RECYCLE_TYPE')       
+
+
+  - kind: filter
+    name: filter_rpet_chips
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_RPET_CHIPS', 'SPR_MM_RPET_CHIPS')       
+
+
+  - kind: filter
+    name: filter_rpet_flake
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_RPET_FLAKE', 'SPR_MM_RPET_FLAKE')       
+
+  - kind: filter
+    name: filter_rpet_meltin
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_RPET_MELTIN', 'SPR_MM_RPET_MELTIN')       
+
+  - kind: filter
+    name: filter_shape
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_SHAPE', 'SPR_MM_SHAPE')       
+
+
+  - kind: filter
+    name: filter_virgin
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_VIRGIN', 'SPR_MM_VIRGIN')       
+
+
+  - kind: filter
+    name: filter_weight
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_WEIGHT_NEW', 'SPR_MM_WEIGHT', 'SPR_MM_WEIGHT_E')       
+
+
+  - kind: filter
+    name: filter_rm_qty
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('SPR_MM_RM_QTY_E', 'SPR_MM_RM_QTY')       
+
+  - kind: filter
+    name: filter_recycle_content
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_RECYCLE_CONTENT_NEW', 'SPR_MM_RECYCLE_CONTENT', 'SPR_MM_RECYCLE_CONTENT_E')       
+
+  - kind: filter
+    name: filter_co2
+    context_name: join_ausp_cabn
+    params:
+      - condition:
+          atnam IN('CPC_MM_CO2', 'SPR_MM_CO2','SPR_MM_CO2_E')       
+
+###
+  - kind: select
+    name: select_distinct_ausp
+    context_name: join_ausp_cabn
+    params:
+      columns:
+        objek: objek
+        klart_au: klart_au
+        datuv_au: datuv
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_ausp_cch
+    context_name: filter_cch
+    params:
+      columns:
+        objek: objek
+        atwrt: coffee_channel_code
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_ausp_cc
+    context_name: filter_cc
+    params:
+      columns:
+        objek: objek
+        atwrt: coffee_class_code
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_ausp_cf
+    context_name: filter_cf
+    params:
+      columns:
+        objek: objek
+        atwrt: coffee_format_code
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_ausp_cm
+    context_name: filter_cm
+    params:
+      columns:
+        objek: objek
+        atwrt: coffee_method_code
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_ausp_bp
+    context_name: filter_bp
+    params:
+      columns:
+        objek: objek
+        atwrt: bpp_code
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+# ###
+
+
+
+  - kind: add
+    name: add_classification_name_colour
+    context_name: filter_colour
+    params:
+      - column: colour
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_colour
+    params:
+      columns:
+        objek: objek
+        atnam: atnam
+        klart_au: klart_au
+        colour: colour
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_core_material
+    context_name: filter_core_material
+    params:
+      - column: core_material
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_core_material
+    params:
+      columns:
+        objek: objek
+        core_material: core_material
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_plant_pet
+    context_name: filter_plant_pet
+    params:
+      - column: plant_pet
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_plant_pet
+    params:
+      columns:
+        objek: objek
+        plant_pet: plant_pet
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_preform_additive
+    context_name: filter_preform_additive
+    params:
+      - column: preform_additive
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_preform_additive
+    params:
+      columns:
+        objek: objek
+        preform_additive: preform_additive
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_resin_recycle_type
+    context_name: filter_resin_recycle_type
+    params:
+      - column: resin_recycle_type
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_resin_recycle_type
+    params:
+      columns:
+        objek: objek
+        resin_recycle_type: resin_recycle_type
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_rpet_chips
+    context_name: filter_rpet_chips
+    params:
+      - column: rpet_chips
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_rpet_chips
+    params:
+      columns:
+        objek: objek
+        rpet_chips: rpet_chips
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_rpet_flake
+    context_name: filter_rpet_flake
+    params:
+      - column: rpet_flake
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_rpet_flake
+    params:
+      columns:
+        objek: objek
+        rpet_flake: rpet_flake
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_rpet_meltin
+    context_name: filter_rpet_meltin
+    params:
+      - column: rpet_meltin
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_rpet_meltin
+    params:
+      columns:
+        objek: objek
+        rpet_meltin: rpet_meltin
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_shape
+    context_name: filter_shape
+    params:
+      - column: shape
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_shape
+    params:
+      columns:
+        objek: objek
+        shape: shape
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_virgin
+    context_name: filter_virgin
+    params:
+      - column: virgin
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atwrt END"
+
+  - kind: select
+    name: select_ausp_virgin
+    params:
+      columns:
+        objek: objek
+        virgin: virgin
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: add
+    name: add_classification_name_weight
+    context_name: filter_weight
+    params:
+      - column: weight
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atflv END"
+
+  - kind: select
+    name: select_ausp_weight
+    params:
+      columns:
+        objek: objek
+        weight: weight
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_rm_qty
+    context_name: filter_rm_qty
+    params:
+      - column: rm_qty
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atflv END"
+
+  - kind: select
+    name: select_ausp_rm_qty
+    params:
+      columns:
+        objek: objek
+        rm_qty: rm_qty
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_recycle_content
+    context_name: filter_recycle_content
+    params:
+      - column: recycle_content
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atflv END"
+
+  - kind: select
+    name: select_ausp_recycle_content
+    params:
+      columns:
+        objek: objek
+        recycle_content: recycle_content
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_classification_name_co2
+    context_name: filter_co2
+    params:
+      - column: co2
+        expression: "CASE WHEN (atinn IS NULL OR atinn = '') THEN '-1' ELSE atflv END"
+
+  - kind: select
+    name: select_ausp_co2
+    params:
+      columns:
+        objek: objek
+        co2: co2
+        atnam: atnam
+        klart_au: klart_au
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+# ## join
+
+
+  - kind: join
+    name: join_ausp_all
+    context_name: select_distinct_ausp
+    params:
+      - other:
+          select_ausp_cch
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_cc
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_cf
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_cm
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_bp
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_colour
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_core_material
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_plant_pet
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_preform_additive
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_resin_recycle_type
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_rpet_chips
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_rpet_flake
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_rpet_meltin
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_shape
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_virgin
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_weight
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_rm_qty
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_recycle_content
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_co2
+        how:
+          left
+        columns:
+          objek: objek
+          klart_au: klart_au
+          sap_cluster: sap_cluster
+
+  - kind: cast
+    name: cast_outputs
+    params:
+      - column: co2
+        to: float
+      - column: recycle_content
+        to: float
+      - column: rm_qty
+        to: float
+      - column: weight
+        to: float
+
+
+  - kind: select
+    name: select_dm_material_characteristics
+    params:
+      columns:
+        objek: object_code
+        klart_au: class_type
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        bpp_code: bpp_code
+        datuv: valid_from_date
+        colour: colour
+        core_material: core_material
+        plant_pet: plant_pet
+        preform_additive: preform_additive
+        resin_recycle_type: resin_recycle_type
+        rpet_chips: rpet_chips
+        rpet_flake: rpet_flake
+        rpet_meltin: rpet_meltin
+        shape: shape
+        virgin: virgin
+        weight: weight
+        rm_qty: rm_qty
+        recycle_content: recycle_content
+        co2: co2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_material_characteristics
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_characteristics
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

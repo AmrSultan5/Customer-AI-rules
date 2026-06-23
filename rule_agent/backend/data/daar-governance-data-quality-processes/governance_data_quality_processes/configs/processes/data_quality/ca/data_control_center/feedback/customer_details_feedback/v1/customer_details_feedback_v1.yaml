@@ -1,0 +1,179 @@
+transform:
+  name: feedback_export_process
+  operations:
+    - name: initialize_schema_configuration
+      kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+      params:
+        module_name: governance_data_quality_processes
+        config_name: dcc_schema_versions
+    - name: df_calendar
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+          dataio:
+              layer: curated
+              storage_id: '{{dataio.storage_id}}'
+              ad_id: '{{dataio.ad_id}}'
+          source: cch_bw
+          namespace: md
+          object_name: ca_faccal_calendar
+
+    - name: df_feedback_previous_raw
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: feedback
+        object_name: customer_details_feedback
+        dataio:
+          layer: application
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+
+    - name: df_feedback_previous_raw
+      kind: drop
+      params:
+        - column: process_run_id
+
+    - kind: filter
+      name: df_feedback_previous
+      context_name: df_feedback_previous_raw
+      params:
+        - condition:
+            check = 'Activeness'
+
+    - name: df_feedback_files
+      kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_sharepoint.ReadSharepointOperation
+      config_kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_sharepoint.CustomReadSharepointOperationConfig
+      params:
+          domain: cchellenic
+          site: spaces-BSS-DropZone
+          remote_path: "Manual Submissions/ca/data_quality_user_input/data_control_center/Activeness/"
+          client_id: SHAREPOINTDROPZONECLIENTID
+          client_secret: SHAREPOINTDROPZONECLIENTSECRET
+          file_regex: ".+.xlsx$"
+          local_path: /dbfs/tmp/sp_import/Activeness/
+          as_of_date: "{{as_of_date}}"
+
+    - name: df_export_data
+      kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_local.ReadLocalOperation
+      config_kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_local.CustomReadLocalOperationConfig
+      params:
+        format: excel
+        location: /dbfs/tmp/sp_import/Activeness/
+        as_of_date: "{{as_of_date}}"
+        check_name: "Activeness"
+
+    - name: write_feedback
+      kind: write_dataio
+      context_name: df_export_data
+      params:
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: feedback
+        object_name: customer_details_feedback
+        schema_version: v1
+        dataio:
+          layer: application
+          ad_id: '{{dataio.ad_id}}'
+          storage_id: '{{dataio.storage_id}}'
+        process_run_id: "{{process_run_id}}"
+        refresh_mode: full
+        ignore_empty: True
+
+    - kind: filter
+      name: df_feedback_previous
+      context_name: df_feedback_previous_raw
+      params:
+        - condition:
+            check = 'Uniqness'
+
+    - name: df_feedback_files
+      kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_sharepoint.ReadSharepointOperation
+      config_kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_sharepoint.CustomReadSharepointOperationConfig
+      params:
+          domain: cchellenic
+          site: spaces-BSS-DropZone
+          remote_path: "Manual Submissions/ca/data_quality_user_input/data_control_center/Uniqness/"
+          client_id: SHAREPOINTDROPZONECLIENTID
+          client_secret: SHAREPOINTDROPZONECLIENTSECRET
+          file_regex: ".+.xlsx$"
+          local_path: /dbfs/tmp/sp_import/Uniqness/
+          as_of_date: "{{as_of_date}}"
+
+    - name: df_export_data
+      kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_local.ReadLocalOperation
+      config_kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_local.CustomReadLocalOperationConfig
+      params:
+        format: excel
+        location: /dbfs/tmp/sp_import/Uniqness/
+        as_of_date: "{{as_of_date}}"
+        check_name: "Uniqness"
+
+    - name: write_feedback
+      kind: write_dataio
+      context_name: df_export_data
+      params:
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: feedback
+        object_name: customer_details_feedback
+        schema_version: v1
+        dataio:
+          layer: application
+          ad_id: '{{dataio.ad_id}}'
+          storage_id: '{{dataio.storage_id}}'
+        process_run_id: "{{process_run_id}}"
+        refresh_mode: full
+        ignore_empty: True
+
+    - kind: filter
+      name: df_feedback_previous
+      context_name: df_feedback_previous_raw
+      params:
+        - condition:
+            check = 'Customer Feedback Upload'
+
+    - name: df_feedback_files
+      kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_sharepoint.ReadSharepointOperation
+      config_kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_sharepoint.CustomReadSharepointOperationConfig
+      params:
+          domain: cchellenic
+          site: spaces-BSS-DropZone
+          remote_path: "Manual Submissions/ca/data_quality_user_input/data_control_center/Customer Feedback Upload/"
+          client_id: SHAREPOINTDROPZONECLIENTID
+          client_secret: SHAREPOINTDROPZONECLIENTSECRET
+          file_regex: ".+.xlsx$"
+          local_path: /dbfs/tmp/sp_import/Customer Feedback Upload/
+          as_of_date: "{{as_of_date}}"
+
+    - name: df_export_data
+      kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_local.ReadLocalOperation
+      config_kind: governance_data_quality_processes.operations.data_control_center.feedback_import.read_local.CustomReadLocalOperationConfig
+      params:
+        format: excel
+        location: /dbfs/tmp/sp_import/Customer Feedback Upload/
+        as_of_date: "{{as_of_date}}"
+        check_name: "Customer Feedback Upload"
+
+    - name: write_feedback
+      kind: write_dataio
+      context_name: df_export_data
+      params:
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: feedback
+        object_name: customer_details_feedback
+        schema_version: v1
+        dataio:
+          layer: application
+          ad_id: '{{dataio.ad_id}}'
+          storage_id: '{{dataio.storage_id}}'
+        process_run_id: "{{process_run_id}}"
+        refresh_mode: full
+        ignore_empty: True
