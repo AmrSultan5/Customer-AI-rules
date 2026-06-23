@@ -4640,6 +4640,108 @@ textarea:focus-visible {
   background: var(--bg-base);
   border-right: 1px solid var(--border);
   overflow: hidden;
+  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.conv-sidebar.collapsed {
+  width: 0;
+  border-right-width: 0;
+}
+
+.conv-sidebar-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Floating Sidebar Tab Toggle ────────────────────────────────────────── */
+.conv-float-toggle {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  width: 20px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 11px 11px 0;
+  background: var(--bg-card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--text-muted);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow:
+    2px 0 8px rgba(0, 0, 0, 0.28),
+    0 4px 16px rgba(0, 0, 0, 0.18);
+  transition:
+    left var(--spring),
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.conv-float-toggle.open {
+  left: 280px;
+  color: var(--accent);
+  background: linear-gradient(160deg, rgba(232,0,13,0.08) 0%, var(--bg-card) 70%);
+  border-color: rgba(232, 0, 13, 0.22);
+  box-shadow:
+    2px 0 12px rgba(232, 0, 13, 0.1),
+    0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.conv-float-toggle:hover {
+  color: var(--accent);
+  background: linear-gradient(160deg, rgba(232,0,13,0.14) 0%, var(--bg-hover) 70%);
+  border-color: rgba(232, 0, 13, 0.4);
+  box-shadow:
+    2px 0 16px rgba(232, 0, 13, 0.18),
+    0 0 0 1px rgba(232, 0, 13, 0.12),
+    0 4px 24px rgba(0, 0, 0, 0.22);
+}
+
+.conv-float-toggle:active {
+  transform: translateY(-50%) scaleY(0.96);
+  transition: transform 80ms ease, left var(--spring), color 180ms, background 180ms, border-color 180ms, box-shadow 180ms;
+}
+
+.cft-logo,
+.cft-arrow {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 220ms ease, transform 220ms ease;
+  will-change: opacity, transform;
+}
+
+/* Sidebar OPEN → logo visible */
+.conv-float-toggle.open .cft-logo {
+  opacity: 1;
+  transform: scale(1) translateX(0);
+}
+.conv-float-toggle.open .cft-arrow {
+  opacity: 0;
+  transform: scale(0.55) translateX(10px);
+}
+
+/* Sidebar CLOSED → arrow visible */
+.conv-float-toggle:not(.open) .cft-logo {
+  opacity: 0;
+  transform: scale(0.55) translateX(-10px);
+}
+.conv-float-toggle:not(.open) .cft-arrow {
+  opacity: 1;
+  transform: scale(1) translateX(0);
 }
 
 .conv-sidebar-user {
@@ -4878,8 +4980,13 @@ textarea:focus-visible {
 .conv-row:hover { background: var(--bg-hover); }
 .conv-row.active { background: var(--bg-card); }
 .conv-row.active .conv-title { color: var(--text-primary); }
-.conv-main {
+.conv-row > .tooltip-anchor {
   flex: 1;
+  min-width: 0;
+}
+
+.conv-main {
+  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;

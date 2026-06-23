@@ -7,7 +7,13 @@ const STEPS = [
   {
     target: null,
     title: 'Welcome to Rule Intelligence',
-    body: 'Your assistant for the Coca-Cola HBC customer data-quality rules. Ask anything in plain language, or explore the catalog visually. Here are the four things worth knowing — about a minute.',
+    body: 'Your assistant for the Coca-Cola HBC customer data-quality rules. Ask anything in plain language, or explore the catalog visually. Here are the five things worth knowing — about a minute.',
+  },
+  {
+    target: '[data-tour="conv-sidebar"]',
+    placement: 'right',
+    title: 'Your conversations',
+    body: 'All your past chats live here. Start a new one in Analyst, Data Engineer, or Project Manager mode, and organise related chats into projects. Collapse or expand the panel with the arrow button at the top.',
   },
   {
     target: '[data-tour="views"]',
@@ -96,15 +102,24 @@ export default function Onboarding({ open, onClose }) {
   // Position the popover relative to the highlight, flipping above when low on the screen.
   let popStyle
   if (hl) {
-    const flip = hl.top + hl.height + MARGIN + 180 > window.innerHeight
-    const top = flip
-      ? Math.max(MARGIN, hl.top - MARGIN) // bottom edge will be anchored via transform
-      : hl.top + hl.height + MARGIN
-    let left = hl.left + hl.width / 2 - POP_WIDTH / 2
-    left = Math.max(MARGIN, Math.min(left, window.innerWidth - POP_WIDTH - MARGIN))
-    popStyle = flip
-      ? { top, left, transform: 'translateY(-100%)' }
-      : { top, left }
+    if (current.placement === 'right') {
+      const left = Math.min(hl.left + hl.width + MARGIN, window.innerWidth - POP_WIDTH - MARGIN)
+      const top = Math.max(MARGIN, Math.min(
+        hl.top + hl.height / 2 - 110,
+        window.innerHeight - 240 - MARGIN
+      ))
+      popStyle = { top, left }
+    } else {
+      const flip = hl.top + hl.height + MARGIN + 180 > window.innerHeight
+      const top = flip
+        ? Math.max(MARGIN, hl.top - MARGIN) // bottom edge will be anchored via transform
+        : hl.top + hl.height + MARGIN
+      let left = hl.left + hl.width / 2 - POP_WIDTH / 2
+      left = Math.max(MARGIN, Math.min(left, window.innerWidth - POP_WIDTH - MARGIN))
+      popStyle = flip
+        ? { top, left, transform: 'translateY(-100%)' }
+        : { top, left }
+    }
   } else {
     // Centred welcome card.
     popStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }

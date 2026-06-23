@@ -664,6 +664,19 @@ export default function ChatBox({
         </div>
 
         <div className="chat-header-right">
+          {hasHistory ? (
+            <Tooltip content="Start a new chat">
+              <button className="clear-btn" onClick={newChat}>
+                <TrashIcon />New chat
+              </button>
+            </Tooltip>
+          ) : (
+            /* Invisible placeholder keeps the header from reflowing when the
+               first message arrives. */
+            <button className="clear-btn is-hidden" tabIndex={-1} aria-hidden="true">
+              <TrashIcon />New chat
+            </button>
+          )}
           {mode === 'analyst' && (
             <Tooltip
               content={
@@ -689,19 +702,6 @@ export default function ChatBox({
                 Validate YAML
               </button>
             </Tooltip>
-          )}
-          {hasHistory ? (
-            <Tooltip content="Start a new chat">
-              <button className="clear-btn" onClick={newChat}>
-                <TrashIcon />New chat
-              </button>
-            </Tooltip>
-          ) : (
-            /* Invisible placeholder keeps the header from reflowing when the
-               first message arrives. */
-            <button className="clear-btn is-hidden" tabIndex={-1} aria-hidden="true">
-              <TrashIcon />New chat
-            </button>
           )}
         </div>
       </div>

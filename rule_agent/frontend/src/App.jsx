@@ -63,6 +63,26 @@ const PanelIcon = () => (
   </svg>
 )
 
+const SidebarTabToggle = ({ open, onClick }) => (
+  <button
+    className={`conv-float-toggle${open ? ' open' : ''}`}
+    onClick={onClick}
+    aria-label={open ? 'Collapse chat history' : 'Expand chat history'}
+  >
+    <span className="cft-logo" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 17 17" fill="none">
+        <path d="M2 10.5C5.2 6.6 8.2 12.6 11.2 9.2c1.6-1.8 2.7-3.1 3.8-4.2"
+          stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+      </svg>
+    </span>
+    <span className="cft-arrow" aria-hidden="true">
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+        <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  </button>
+)
+
 const CloseIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
     <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
@@ -127,6 +147,7 @@ export default function App() {
   const [showGraph,   setShowGraph]       = useState(false)
   const [chatPrefill, setChatPrefill]     = useState('')
   const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [convSidebarOpen, setConvSidebarOpen] = useState(true)
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem(THEME_KEY) || 'dark' } catch { return 'dark' }
   })
@@ -361,7 +382,9 @@ export default function App() {
           activeConversationId={activeConversation?.id ?? null}
           onSelectConversation={handleSelectConversation}
           reloadSignal={convReload}
+          open={convSidebarOpen}
         />
+        <SidebarTabToggle open={convSidebarOpen} onClick={() => setConvSidebarOpen(v => !v)} />
 
         {showGraph && (
           <GraphView

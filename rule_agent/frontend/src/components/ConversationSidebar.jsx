@@ -104,10 +104,12 @@ function ConversationRow({ conv, active, projects, onSelect, onChanged }) {
   return (
     <>
       <div className={`conv-row${active ? ' active' : ''}`}>
-        <button className="conv-main" onClick={() => onSelect(conv)} title={conv.title ?? 'New chat'}>
-          <span className={`conv-persona-badge persona-${conv.persona}`}>{personaLabel(conv.persona)}</span>
-          <span className="conv-title">{conv.title ?? 'New chat'}</span>
-        </button>
+        <Tooltip content={conv.title ?? 'New chat'}>
+          <button className="conv-main" onClick={() => onSelect(conv)}>
+            <span className={`conv-persona-badge persona-${conv.persona}`}>{personaLabel(conv.persona)}</span>
+            <span className="conv-title">{conv.title ?? 'New chat'}</span>
+          </button>
+        </Tooltip>
         <button className="conv-kebab" onClick={() => setMenuOpen(o => !o)} aria-label="Conversation actions">⋯</button>
         {menuOpen && (
           <div className="conv-menu" onMouseLeave={() => setMenuOpen(false)}>
@@ -160,6 +162,7 @@ export default function ConversationSidebar({
   activeConversationId,
   onSelectConversation,
   reloadSignal,
+  open = true,
 }) {
   const [projects, setProjects] = useState([])
   const [conversations, setConversations] = useState([])
@@ -209,14 +212,16 @@ export default function ConversationSidebar({
   const convsByProject = (pid) => conversations.filter(c => c.project_id === pid)
 
   return (
-    <aside className="conv-sidebar">
+    <aside className={`conv-sidebar${open ? '' : ' collapsed'}`} data-tour="conv-sidebar">
       <div className="conv-sidebar-user">
         <span className="conv-user-name" title={username}>{username}</span>
-        <Tooltip content="Switch user">
-          <button className="conv-user-switch" onClick={onChangeUser} aria-label="Switch user">
-            <SwitchUserIcon />
-          </button>
-        </Tooltip>
+        <div className="conv-sidebar-user-actions">
+          <Tooltip content="Switch user">
+            <button className="conv-user-switch" onClick={onChangeUser} aria-label="Switch user">
+              <SwitchUserIcon />
+            </button>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="conv-sidebar-actions">
