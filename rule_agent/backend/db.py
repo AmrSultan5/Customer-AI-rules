@@ -20,7 +20,9 @@ calls, each on a fresh loop, which a pooled connection would break.
 """
 
 import os
+import ssl
 from pathlib import Path
+from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import (
@@ -46,17 +48,34 @@ def _to_sync_url(async_url: str) -> str:
     return async_url.replace("+asyncpg", "+psycopg").replace("+aiosqlite", "")
 
 
+def _strip_sslmode(url: str) -> str:
+    """Remove sslmode from query string — asyncpg uses connect_args ssl, not sslmode."""
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    params.pop("sslmode", None)
+    new_query = urlencode({k: v[0] for k, v in params.items()})
+    return urlunparse(parsed._replace(query=new_query))
+
+
 SYNC_DATABASE_URL = os.environ.get("DATABASE_URL_SYNC", _to_sync_url(DATABASE_URL))
 
 _is_sqlite = SYNC_DATABASE_URL.startswith("sqlite")
 _sync_connect_args = {"check_same_thread": False} if _is_sqlite else {}
+
+# asyncpg requires ssl=True instead of sslmode=require in the DSN.
+# Strip sslmode from the URL and pass ssl via connect_args when connecting to Postgres.
+_is_postgres_async = DATABASE_URL.startswith("postgresql")
+_async_url = _strip_sslmode(DATABASE_URL) if _is_postgres_async else DATABASE_URL
+_async_connect_args = {"ssl": True} if _is_postgres_async else {}
 
 
 class Base(DeclarativeBase):
     pass
 
 
-async_engine = create_async_engine(DATABASE_URL, future=True, poolclass=NullPool)
+async_engine = create_async_engine(
+    _async_url, future=True, poolclass=NullPool, connect_args=_async_connect_args
+)
 AsyncSessionLocal = async_sessionmaker(
     async_engine, expire_on_commit=False, class_=AsyncSession
 )
