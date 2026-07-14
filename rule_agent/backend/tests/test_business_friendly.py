@@ -152,3 +152,57 @@ def test_fields_answer_none_detected(monkeypatch):
 def test_both_paths_use_shared_fields_formatter():
     assert "_format_fields_answer" in inspect.getsource(chat_agent.handle_message)
     assert "_format_fields_answer" in inspect.getsource(chat_agent.stream_message)
+
+
+def test_fields_answer_lookup_failure_falls_back(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["rule_parser"], "extract_sap_fields", lambda logic: ["KNA1-KUNNR"],
+    )
+    monkeypatch.setattr(
+        sys.modules["sap_mapper"], "lookup_sap_field",
+        MagicMock(side_effect=RuntimeError("boom")),
+    )
+    out = chat_agent._format_fields_answer("TEST_1", "KUNNR IS NOT NULL")
+    assert "`KNA1-KUNNR`" in out
+
+
+def test_handle_message_fields_is_business_friendly(monkeypatch):
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "fields")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+    monkeypatch.setattr(
+        sys.modules["rule_parser"], "extract_sap_fields", lambda logic: ["KNA1-KUNNR"],
+    )
+    monkeypatch.setattr(
+        sys.modules["sap_mapper"], "lookup_sap_field",
+        lambda f: {"field": "KNA1-KUNNR", "business_name": "Customer Number"},
+    )
+    result = chat_agent.handle_message("Which fields does TEST_1 use?")
+    assert "**Customer Number**" in result["response"]
+
+
+def test_stream_message_fields_is_business_friendly(monkeypatch):
+    import asyncio
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "fields")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+    monkeypatch.setattr(
+        sys.modules["rule_parser"], "extract_sap_fields", lambda logic: ["KNA1-KUNNR"],
+    )
+    monkeypatch.setattr(
+        sys.modules["sap_mapper"], "lookup_sap_field",
+        lambda f: {"field": "KNA1-KUNNR", "business_name": "Customer Number"},
+    )
+
+    async def collect():
+        import json
+        text = []
+        async for ev in chat_agent.stream_message("Which fields does TEST_1 use?"):
+            # Each event is an SSE line: "data: {...}\n\n". Reassemble the
+            # chunk text the way a client would, so assertions are not broken
+            # by chunk boundaries or JSON escaping.
+            payload = json.loads(ev[len("data: "):])
+            if payload.get("type") == "chunk":
+                text.append(payload["text"])
+        return "".join(text)
+
+    out = asyncio.run(collect())
+    assert "Customer Number" in out

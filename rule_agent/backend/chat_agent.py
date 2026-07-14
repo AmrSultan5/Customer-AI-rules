@@ -144,19 +144,30 @@ def _format_sap_column_answer(rule_id: str, table: str, col: str) -> str:
 
 def _format_fields_answer(rule_id: str, logic: str) -> str:
     """Plain-language answer for the fields intent — business names first,
-    SAP identifiers in parentheses."""
+    SAP identifiers in parentheses; falls back to raw identifiers when no
+    business name is known or a lookup fails."""
     from rule_parser import extract_sap_fields
     from sap_mapper import lookup_sap_field
-    raw_fields = extract_sap_fields(logic)
+    try:
+        raw_fields = extract_sap_fields(logic)
+    except Exception as exc:
+        log.warning("[fields] SAP field extraction failed: %s", exc)
+        raw_fields = []
     names: list[str] = []
-    for f in (lookup_sap_field(rf) for rf in raw_fields):
+    for rf in raw_fields:
+        try:
+            f = lookup_sap_field(rf)
+        except Exception as exc:
+            log.warning("[fields] business-name lookup failed for %s: %s", rf, exc)
+            names.append(f"`{rf}`")
+            continue
         bn = f.get("business_name", "")
         if bn and bn != "Unknown field":
-            names.append(f"**{bn}** (SAP field: {f['field']})")
+            names.append(f"**{bn}** (SAP name: `{f.get('field', rf)}`)")
         else:
-            names.append(f"`{f['field']}`")
+            names.append(f"`{f.get('field', rf)}`")
     if not names:
-        return f"Rule {rule_id} references these fields: none detected."
+        return f"Rule {rule_id} looks at these fields: none detected."
     return f"Rule **{rule_id}** looks at these fields: " + ", ".join(names) + "."
 
 
