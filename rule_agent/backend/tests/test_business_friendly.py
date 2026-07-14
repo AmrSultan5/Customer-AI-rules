@@ -78,3 +78,34 @@ def test_both_paths_use_shared_table_formatter():
     assert "_format_sap_table_answer" in inspect.getsource(chat_agent.stream_message)
     assert "_format_sap_column_answer" in inspect.getsource(chat_agent.handle_message)
     assert "_format_sap_column_answer" in inspect.getsource(chat_agent.stream_message)
+
+
+def test_stream_message_sap_table_is_business_friendly(monkeypatch):
+    import asyncio
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "sap_table")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+
+    async def collect():
+        import json
+        text = []
+        async for ev in chat_agent.stream_message("Which table does TEST_1 check?"):
+            # Each event is an SSE line: "data: {...}\n\n". Reassemble the
+            # chunk text the way a client would, so assertions are not broken
+            # by chunk boundaries or JSON escaping.
+            payload = json.loads(ev[len("data: "):])
+            if payload.get("type") == "chunk":
+                text.append(payload["text"])
+        return "".join(text)
+
+    out = asyncio.run(collect())
+    assert "customer master" in out
+    assert "KNA1" in out
+
+
+def test_sap_column_answer_lookup_failure_falls_back(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["sap_mapper"], "lookup_sap_field",
+        MagicMock(side_effect=RuntimeError("boom")),
+    )
+    out = chat_agent._format_sap_column_answer("TEST_1", "KNA1", "KUNNR")
+    assert out == "The SAP column checked by rule **TEST_1** is: `KUNNR`"

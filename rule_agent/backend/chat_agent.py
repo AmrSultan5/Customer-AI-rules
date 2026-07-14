@@ -134,7 +134,8 @@ def _format_sap_column_answer(rule_id: str, table: str, col: str) -> str:
         from sap_mapper import lookup_sap_field
         key = f"{table}-{col}" if table else col
         biz = lookup_sap_field(key).get("business_name", "")
-    except Exception:
+    except Exception as exc:
+        log.warning("[sap_column] business-name lookup failed: %s", exc)
         biz = ""
     if biz and biz != "Unknown field" and biz.upper() != col.upper():
         return f"Rule **{rule_id}** checks the **{biz}** field (SAP name: `{col}`)."
