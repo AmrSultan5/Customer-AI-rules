@@ -171,6 +171,48 @@ def _format_fields_answer(rule_id: str, logic: str) -> str:
     return f"Rule **{rule_id}** looks at these fields: " + ", ".join(names) + "."
 
 
+def _format_lineage_answer(rule_id: str, lin: dict) -> str:
+    """Markdown-bulleted lineage answer — business labels first, technical
+    identifiers kept but secondary. Falls back to a no-data message when the
+    lineage dict has nothing to show."""
+    lines: list[str] = []
+    responsibility = lin.get("rule_responsibility", "")
+    module = lin.get("module", "")
+    grp = lin.get("group", "")
+    datamarts = lin.get("datamart_or_reference_table_used", "")
+    sources = lin.get("pipeline_sources", [])
+    steps = lin.get("workflow_steps", [])
+    custom_ops = lin.get("custom_operations", [])
+    siblings = lin.get("sibling_rules", [])
+
+    if responsibility:
+        lines.append(f"- **Owned by:** {responsibility}")
+    if module or grp:
+        area = " / ".join(p for p in (module, grp) if p)
+        lines.append(f"- **Business area:** {area}")
+    if datamarts:
+        dm_list = [d.strip() for d in datamarts.replace("\n", ",").split(",") if d.strip()]
+        lines.append(f"- **Data comes from:** {', '.join(dm_list[:5])}")
+    if sources:
+        lines.append(f"- **Technical sources:** {', '.join(sources[:5])}")
+    if steps:
+        lines.append(f"- **How it runs:** {' → '.join(steps[:6])}")
+    if custom_ops:
+        lines.append(f"- **Custom checks involved:** {'; '.join(custom_ops[:5])}")
+    if siblings:
+        shown = ", ".join(siblings[:10])
+        more = f" (+{len(siblings) - 10} more)" if len(siblings) > 10 else ""
+        plural = "rule" if len(siblings) == 1 else "rules"
+        pipeline = lin.get("pipeline_name", "")
+        via = f" in `{pipeline}`" if pipeline else ""
+        lines.append(f"- **Runs alongside {len(siblings)} related {plural}{via}:** {shown}{more}")
+
+    if not lines:
+        return f"No lineage information found for rule {rule_id}."
+    return (f"**Where rule {rule_id}'s data comes from and how it runs:**\n\n"
+            + "\n".join(lines))
+
+
 def _instructions_block(extra_context: str | None) -> str:
     """Render project standing-instructions as a prefix block for the LLM prompt."""
     if extra_context and extra_context.strip():
@@ -940,39 +982,7 @@ async def stream_message(
         return
 
     elif intent in ("lineage", "workflow"):
-        lin = get_lineage(rule_id)
-        steps = lin.get("workflow_steps", [])
-        sources = lin.get("pipeline_sources", [])
-        module = lin.get("module", "")
-        grp = lin.get("group", "")
-        datamarts = lin.get("datamart_or_reference_table_used", "")
-        responsibility = lin.get("rule_responsibility", "")
-        parts = []
-        if module:
-            parts.append(f"Module: {module}")
-        if grp:
-            parts.append(f"Group: {grp}")
-        if responsibility:
-            parts.append(f"Responsibility: {responsibility}")
-        if datamarts:
-            dm_list = [d.strip() for d in datamarts.replace("\n", ",").split(",") if d.strip()]
-            parts.append(f"Data sources: {', '.join(dm_list[:5])}")
-        if sources:
-            parts.append(f"Pipeline sources: {', '.join(sources[:5])}")
-        if steps:
-            parts.append(f"Pipeline steps: {', '.join(steps[:6])}")
-        custom_ops = lin.get("custom_operations", [])
-        if custom_ops:
-            parts.append(f"Custom operations: {'; '.join(custom_ops[:5])}")
-        siblings = lin.get("sibling_rules", [])
-        if siblings:
-            parts.append(
-                f"Co-evaluated rules in same pipeline ({lin.get('pipeline_name', '')}): "
-                + ", ".join(siblings[:10])
-                + (f" (+{len(siblings) - 10} more)" if len(siblings) > 10 else "")
-            )
-        response = (f"Lineage for rule {rule_id}: " + "; ".join(parts)
-                    if parts else f"No lineage information found for rule {rule_id}.")
+        response = _format_lineage_answer(rule_id, get_lineage(rule_id))
         async for part in _stream_text(response):
             yield part
         yield _sse({"type": "done", "rule_id": rule_id,
@@ -1087,41 +1097,7 @@ def handle_message(
         response = _format_fields_answer(rule_id, logic)
 
     elif intent in ("lineage", "workflow"):
-        lin = get_lineage(rule_id)
-        steps = lin.get("workflow_steps", [])
-        sources = lin.get("pipeline_sources", [])
-        module = lin.get("module", "")
-        grp = lin.get("group", "")
-        datamarts = lin.get("datamart_or_reference_table_used", "")
-        responsibility = lin.get("rule_responsibility", "")
-        parts = []
-        if module:
-            parts.append(f"Module: {module}")
-        if grp:
-            parts.append(f"Group: {grp}")
-        if responsibility:
-            parts.append(f"Responsibility: {responsibility}")
-        if datamarts:
-            dm_list = [d.strip() for d in datamarts.replace("\n", ",").split(",") if d.strip()]
-            parts.append(f"Data sources: {', '.join(dm_list[:5])}")
-        if sources:
-            parts.append(f"Pipeline sources: {', '.join(sources[:5])}")
-        if steps:
-            parts.append(f"Pipeline steps: {', '.join(steps[:6])}")
-        custom_ops = lin.get("custom_operations", [])
-        if custom_ops:
-            parts.append(f"Custom operations: {'; '.join(custom_ops[:5])}")
-        siblings = lin.get("sibling_rules", [])
-        if siblings:
-            parts.append(
-                f"Co-evaluated rules in same pipeline ({lin.get('pipeline_name', '')}): "
-                + ", ".join(siblings[:10])
-                + (f" (+{len(siblings) - 10} more)" if len(siblings) > 10 else "")
-            )
-        response = (
-            f"Lineage for rule {rule_id}: " + "; ".join(parts)
-            if parts else f"No lineage information found for rule {rule_id}."
-        )
+        response = _format_lineage_answer(rule_id, get_lineage(rule_id))
 
     else:  # explain or show
         from explanation_engine import explain_rule

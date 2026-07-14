@@ -206,3 +206,36 @@ def test_stream_message_fields_is_business_friendly(monkeypatch):
 
     out = asyncio.run(collect())
     assert "Customer Number" in out
+
+
+# ── Task 3: lineage formatter ─────────────────────────────────────────────────
+
+_FULL_LINEAGE = {
+    "module": "Customer",
+    "group": "Completeness",
+    "rule_responsibility": "MDM Team",
+    "datamart_or_reference_table_used": "dm_customer, ref_country",
+    "pipeline_sources": ["src_kna1"],
+    "workflow_steps": ["load", "validate", "report"],
+    "custom_operations": ["dedupe_customers"],
+    "sibling_rules": ["TEST_2"],
+    "pipeline_name": "golden/completeness.yaml",
+}
+
+
+def test_lineage_answer_is_markdown_bullets():
+    out = chat_agent._format_lineage_answer("TEST_1", _FULL_LINEAGE)
+    assert "- **Owned by:** MDM Team" in out
+    assert "- **Data comes from:** dm_customer, ref_country" in out
+    assert "- **Runs alongside 1 related rule" in out
+    assert ";" not in out.split("\n")[0]  # headline is not the old semicolon dump
+
+
+def test_lineage_answer_empty_falls_back():
+    out = chat_agent._format_lineage_answer("TEST_1", {})
+    assert out == "No lineage information found for rule TEST_1."
+
+
+def test_both_paths_use_shared_lineage_formatter():
+    assert "_format_lineage_answer" in inspect.getsource(chat_agent.handle_message)
+    assert "_format_lineage_answer" in inspect.getsource(chat_agent.stream_message)
