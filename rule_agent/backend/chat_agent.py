@@ -68,6 +68,79 @@ def _safe(val) -> str:
 _SEVERITY_MAP = {"1": "Critical", "2": "High", "3": "Medium", "4": "Low"}
 
 
+# Business names for SAP tables that appear in the rule inventory. Lookup
+# misses fall back to the raw technical answer format, so this list only
+# needs the tables business users actually ask about.
+_TABLE_BUSINESS_NAMES = {
+    "KNA1": "customer master — general data",
+    "KNB1": "customer master — company code data",
+    "KNB5": "customer master — dunning data",
+    "KNVV": "customer master — sales area data",
+    "KNVP": "customer master — partner functions",
+    "KNVA": "customer master — unloading points",
+    "KNVH": "customer hierarchy",
+    "KNVI": "customer master — tax indicators",
+    "ADRC": "central address data",
+    "ADR2": "telephone numbers",
+    "ADR3": "fax numbers",
+    "ADR6": "email addresses",
+    "BUT000": "business partner — general data",
+    "BUT050": "business partner relationships",
+    "BUT051": "business partner contact persons",
+    "BUT0BK": "business partner bank details",
+    "BUT0IS": "business partner industry sectors",
+    "CVI_CUST_LINK": "customer / business-partner link",
+    "DFKKBPTAXNUM": "business partner tax numbers",
+    "UKMBP_CMS": "credit management profile",
+    "UKMBP_CMS_SGM": "credit management segment",
+    "LFA1": "vendor master — general data",
+    "LFB1": "vendor master — company code data",
+    "LFM1": "vendor master — purchasing data",
+    "MARA": "material master — general data",
+    "MARC": "material master — plant data",
+    "MAKT": "material descriptions",
+    "MVKE": "material master — sales data",
+    "MBEW": "material valuation",
+    "MARM": "material units of measure",
+    "MLAN": "material tax classifications",
+    "MLGN": "material master — warehouse data",
+    "SKA1": "G/L account master — chart of accounts",
+    "SKAT": "G/L account descriptions",
+    "SKB1": "G/L account master — company code",
+    "CSKS": "cost center master",
+    "CSKB": "cost element master",
+    "CEPC": "profit center master",
+    "ANLA": "asset master",
+}
+
+
+def _format_sap_table_answer(rule_id: str, table: str) -> str:
+    """Plain-language answer for the sap_table intent; falls back to the
+    technical format for tables without a business name."""
+    if not table:
+        return f"No SAP table information available for rule {rule_id}."
+    biz = _TABLE_BUSINESS_NAMES.get(table.strip().upper())
+    if biz:
+        return f"Rule **{rule_id}** checks the **{biz}** table (SAP name: `{table}`)."
+    return f"The SAP table checked by rule **{rule_id}** is: `{table}`"
+
+
+def _format_sap_column_answer(rule_id: str, table: str, col: str) -> str:
+    """Plain-language answer for the sap_column intent; falls back to the
+    technical format when no business name is known."""
+    if not col:
+        return f"No SAP column information available for rule {rule_id}."
+    try:
+        from sap_mapper import lookup_sap_field
+        key = f"{table}-{col}" if table else col
+        biz = lookup_sap_field(key).get("business_name", "")
+    except Exception:
+        biz = ""
+    if biz and biz != "Unknown field" and biz.upper() != col.upper():
+        return f"Rule **{rule_id}** checks the **{biz}** field (SAP name: `{col}`)."
+    return f"The SAP column checked by rule **{rule_id}** is: `{col}`"
+
+
 def _instructions_block(extra_context: str | None) -> str:
     """Render project standing-instructions as a prefix block for the LLM prompt."""
     if extra_context and extra_context.strip():
@@ -800,9 +873,7 @@ async def stream_message(
         return
 
     elif intent == "sap_table":
-        table = _safe(row.get("table_name_checked", ""))
-        response = (f"The SAP table checked by rule **{rule_id}** is: `{table}`"
-                    if table else f"No SAP table information available for rule {rule_id}.")
+        response = _format_sap_table_answer(rule_id, _safe(row.get("table_name_checked", "")))
         async for part in _stream_text(response):
             yield part
         yield _sse({"type": "done", "rule_id": rule_id,
@@ -810,9 +881,11 @@ async def stream_message(
         return
 
     elif intent == "sap_column":
-        col = _safe(row.get("column_name_checked", ""))
-        response = (f"The SAP column checked by rule **{rule_id}** is: `{col}`"
-                    if col else f"No SAP column information available for rule {rule_id}.")
+        response = _format_sap_column_answer(
+            rule_id,
+            _safe(row.get("table_name_checked", "")),
+            _safe(row.get("column_name_checked", "")),
+        )
         async for part in _stream_text(response):
             yield part
         yield _sse({"type": "done", "rule_id": rule_id,
@@ -971,17 +1044,13 @@ def handle_message(
         )
 
     elif intent == "sap_table":
-        table = _safe(row.get("table_name_checked", ""))
-        response = (
-            f"The SAP table checked by rule **{rule_id}** is: `{table}`"
-            if table else f"No SAP table information available for rule {rule_id}."
-        )
+        response = _format_sap_table_answer(rule_id, _safe(row.get("table_name_checked", "")))
 
     elif intent == "sap_column":
-        col = _safe(row.get("column_name_checked", ""))
-        response = (
-            f"The SAP column checked by rule **{rule_id}** is: `{col}`"
-            if col else f"No SAP column information available for rule {rule_id}."
+        response = _format_sap_column_answer(
+            rule_id,
+            _safe(row.get("table_name_checked", "")),
+            _safe(row.get("column_name_checked", "")),
         )
 
     elif intent == "severity":
