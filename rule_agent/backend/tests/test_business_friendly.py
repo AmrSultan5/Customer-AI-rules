@@ -109,3 +109,46 @@ def test_sap_column_answer_lookup_failure_falls_back(monkeypatch):
     )
     out = chat_agent._format_sap_column_answer("TEST_1", "KNA1", "KUNNR")
     assert out == "The SAP column checked by rule **TEST_1** is: `KUNNR`"
+
+
+# ── Task 2: fields formatter ──────────────────────────────────────────────────
+
+
+def test_fields_answer_business_name_first(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["rule_parser"], "extract_sap_fields", lambda logic: ["KNA1-KUNNR"],
+    )
+    monkeypatch.setattr(
+        sys.modules["sap_mapper"], "lookup_sap_field",
+        lambda f: {"field": "KNA1-KUNNR", "business_name": "Customer Number"},
+    )
+    out = chat_agent._format_fields_answer("TEST_1", "KUNNR IS NOT NULL")
+    assert "**Customer Number**" in out
+    assert "KNA1-KUNNR" in out
+    # business name comes before the SAP identifier
+    assert out.index("Customer Number") < out.index("KNA1-KUNNR")
+
+
+def test_fields_answer_unknown_field_shows_raw(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["rule_parser"], "extract_sap_fields", lambda logic: ["KNA1-XYZ99"],
+    )
+    monkeypatch.setattr(
+        sys.modules["sap_mapper"], "lookup_sap_field",
+        lambda f: {"field": "KNA1-XYZ99", "business_name": "Unknown field"},
+    )
+    out = chat_agent._format_fields_answer("TEST_1", "XYZ99 > 0")
+    assert "`KNA1-XYZ99`" in out
+
+
+def test_fields_answer_none_detected(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["rule_parser"], "extract_sap_fields", lambda logic: [],
+    )
+    out = chat_agent._format_fields_answer("TEST_1", "")
+    assert "none detected" in out
+
+
+def test_both_paths_use_shared_fields_formatter():
+    assert "_format_fields_answer" in inspect.getsource(chat_agent.handle_message)
+    assert "_format_fields_answer" in inspect.getsource(chat_agent.stream_message)

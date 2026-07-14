@@ -142,6 +142,24 @@ def _format_sap_column_answer(rule_id: str, table: str, col: str) -> str:
     return f"The SAP column checked by rule **{rule_id}** is: `{col}`"
 
 
+def _format_fields_answer(rule_id: str, logic: str) -> str:
+    """Plain-language answer for the fields intent — business names first,
+    SAP identifiers in parentheses."""
+    from rule_parser import extract_sap_fields
+    from sap_mapper import lookup_sap_field
+    raw_fields = extract_sap_fields(logic)
+    names: list[str] = []
+    for f in (lookup_sap_field(rf) for rf in raw_fields):
+        bn = f.get("business_name", "")
+        if bn and bn != "Unknown field":
+            names.append(f"**{bn}** (SAP field: {f['field']})")
+        else:
+            names.append(f"`{f['field']}`")
+    if not names:
+        return f"Rule {rule_id} references these fields: none detected."
+    return f"Rule **{rule_id}** looks at these fields: " + ", ".join(names) + "."
+
+
 def _instructions_block(extra_context: str | None) -> str:
     """Render project standing-instructions as a prefix block for the LLM prompt."""
     if extra_context and extra_context.strip():
@@ -837,8 +855,6 @@ async def stream_message(
 
     # ── Rule ID found ─────────────────────────────────────────────────────────
     from data_loader import get_rules
-    from rule_parser import extract_sap_fields
-    from sap_mapper import lookup_sap_field
     from lineage_service import get_lineage
     from explanation_engine import build_sap_context
 
@@ -905,11 +921,7 @@ async def stream_message(
         return
 
     elif intent == "fields":
-        raw_fields = extract_sap_fields(logic)
-        mapped = [lookup_sap_field(f) for f in raw_fields]
-        names = [f"{f['field']} ({f['business_name']})" for f in mapped]
-        response = (f"Rule {rule_id} references these fields: "
-                    f"{', '.join(names) if names else 'none detected'}.")
+        response = _format_fields_answer(rule_id, logic)
         async for part in _stream_text(response):
             yield part
         yield _sse({"type": "done", "rule_id": rule_id,
@@ -1018,8 +1030,6 @@ def handle_message(
         )
 
     from data_loader import get_rules
-    from rule_parser import extract_sap_fields
-    from sap_mapper import lookup_sap_field
     from lineage_service import get_lineage
     from explanation_engine import explain_rule, build_sap_context
 
@@ -1063,13 +1073,7 @@ def handle_message(
         )
 
     elif intent == "fields":
-        raw_fields = extract_sap_fields(logic)
-        mapped = [lookup_sap_field(f) for f in raw_fields]
-        names = [f"{f['field']} ({f['business_name']})" for f in mapped]
-        response = (
-            f"Rule {rule_id} references these fields: "
-            f"{', '.join(names) if names else 'none detected'}."
-        )
+        response = _format_fields_answer(rule_id, logic)
 
     elif intent in ("lineage", "workflow"):
         lin = get_lineage(rule_id)
