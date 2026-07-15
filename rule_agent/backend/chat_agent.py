@@ -715,6 +715,11 @@ def _is_conversational(message: str) -> bool:
     return message.strip().lower().rstrip("!.,") in _CONVERSATIONAL
 
 
+# The followups model sometimes wraps its JSON array in ```json fences or a
+# short prose preamble despite the prompt — extract the array before parsing.
+_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+
+
 def _generate_followups(
     rule_id: str,
     question: str,
@@ -733,7 +738,8 @@ def _generate_followups(
     )
     try:
         result = call_openai(_FOLLOWUPS_SYSTEM, user_msg, max_tokens=120, tier="fast")
-        parsed = json.loads(result)
+        array_match = _JSON_ARRAY_RE.search(result)
+        parsed = json.loads(array_match.group(0) if array_match else result)
         if isinstance(parsed, list):
             return [str(s) for s in parsed[:3]]
         return []

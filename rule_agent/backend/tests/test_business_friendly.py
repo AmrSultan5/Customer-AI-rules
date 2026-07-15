@@ -368,3 +368,41 @@ def test_search_fallback_copy_is_natural(monkeypatch):
     result = chat_agent._find_rule_by_description("something about postcodes")
     assert "makes sure every customer" in result["response"]
     assert "RCCOMP_103.1" in result["response"]  # one rule-ID example kept
+
+
+# ── Follow-up JSON parsing robustness (prod: model wraps JSON in fences) ──────
+
+
+def test_generate_followups_handles_fenced_json(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["explanation_engine"], "call_openai",
+        lambda *a, **k: '```json\n["How critical is this rule?", "What happens if it fails?"]\n```',
+    )
+    out = chat_agent._generate_followups("TEST_1", "which table?", "answer", {})
+    assert out == ["How critical is this rule?", "What happens if it fails?"]
+
+
+def test_generate_followups_handles_prose_preamble(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["explanation_engine"], "call_openai",
+        lambda *a, **k: 'Here are the suggestions: ["What data does it protect?"]',
+    )
+    out = chat_agent._generate_followups("TEST_1", "which table?", "answer", {})
+    assert out == ["What data does it protect?"]
+
+
+def test_generate_followups_bare_json_still_works(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["explanation_engine"], "call_openai",
+        lambda *a, **k: '["A?", "B?", "C?", "D?"]',
+    )
+    out = chat_agent._generate_followups("TEST_1", "which table?", "answer", {})
+    assert out == ["A?", "B?", "C?"]  # capped at 3
+
+
+def test_generate_followups_garbage_returns_empty(monkeypatch):
+    monkeypatch.setattr(
+        sys.modules["explanation_engine"], "call_openai",
+        lambda *a, **k: "Sorry, I cannot produce suggestions right now.",
+    )
+    assert chat_agent._generate_followups("TEST_1", "which table?", "answer", {}) == []
