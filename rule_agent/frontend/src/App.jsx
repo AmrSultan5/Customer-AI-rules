@@ -427,6 +427,9 @@ export default function App() {
           />
         </main>
 
+        {sidebarOpen && (
+          <div className="mobile-overlay-backdrop" onClick={() => setSidebarOpen(false)} />
+        )}
         <aside className={`rule-sidebar${sidebarOpen ? ' open' : ''}`}>
           <div className="rule-sidebar-header">
             <span className="rule-sidebar-title">Rule Details</span>
