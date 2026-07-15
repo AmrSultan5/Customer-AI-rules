@@ -324,3 +324,28 @@ def test_system_prompt_requires_why_it_matters():
     # explain_rule accepts the new parameter
     import inspect as _inspect
     assert "impact_digest" in _inspect.signature(ee.explain_rule).parameters
+
+
+def test_stream_message_explain_includes_impact_digest(monkeypatch):
+    import asyncio
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "explain")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+    monkeypatch.setattr(
+        chat_agent, "_impact_digest",
+        lambda rid, row: "severity: Critical; runs in 2 pipeline(s)",
+    )
+    captured = {}
+
+    async def fake_stream(system_prompt, user_msg, max_tokens=800, history=None, tier="standard"):
+        captured["user_msg"] = user_msg
+        yield "Explanation chunk."
+
+    monkeypatch.setattr(sys.modules["explanation_engine"], "call_openai_stream", fake_stream)
+
+    async def collect():
+        async for _ in chat_agent.stream_message("Explain TEST_1"):
+            pass
+
+    asyncio.run(collect())
+    assert "severity: Critical; runs in 2 pipeline(s)" in captured["user_msg"]
+    assert "Impact data" in captured["user_msg"]
