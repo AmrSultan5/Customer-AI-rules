@@ -397,7 +397,12 @@ export default function App() {
         )}
 
         {(showBrowser || showTree) && !showGraph && (
-          <div className="browser-panel">
+          <>
+            <div
+              className="mobile-overlay-backdrop"
+              onClick={() => { setShowBrowser(false); setShowTree(false) }}
+            />
+            <div className="browser-panel">
             {showTree ? (
               <TreeView
                 onRuleSelected={loadRuleById}
@@ -409,7 +414,8 @@ export default function App() {
                 onClose={() => setShowBrowser(false)}
               />
             )}
-          </div>
+            </div>
+          </>
         )}
 
         <main className="chat-main">
