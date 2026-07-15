@@ -4,7 +4,7 @@
 
 **Goal:** Make `rule_agent/frontend` fully usable on phones (≤768px) — chat, conversation history, rule detail, Browse, Tree, Graph — via full-screen overlay drawers, without changing any desktop (>768px) behavior.
 
-**Architecture:** One new, additive `@media (max-width: 768px)` block appended to the end of `frontend/src/styles/main.css`, turning the three push-panels (conversation sidebar, rule sidebar, Browse/Tree panel) into full-screen overlays with a shared tap-to-dismiss backdrop. Three small `App.jsx` JSX additions render that backdrop. `GraphView.jsx` gets new touch event handlers (pan + pinch-zoom) added alongside its existing mouse/wheel handlers — no existing code paths are modified, only new listeners added.
+**Architecture:** One new, additive `@media (max-width: 768px)` block appended to the end of `frontend/src/styles/main.css`, turning the three push-panels (conversation sidebar, rule sidebar, Browse/Tree panel) into full-screen overlays with a shared tap-to-dismiss backdrop. These overlays use `position: absolute; inset: 0` scoped to `.app-body` (which already has `position: relative` and sits below the 60px topbar in normal flex flow) — the same convention the existing `.graph-overlay` already uses — rather than `position: fixed`, so the topbar (`z-index: 100`) never paints on top of them. Three small `App.jsx` JSX additions render the backdrop. `GraphView.jsx` gets new touch event handlers (pan + pinch-zoom) added alongside its existing mouse/wheel handlers — no existing code paths are modified, only new listeners added.
 
 **Tech Stack:** React 18 (no router), plain CSS (no CSS-in-JS/Tailwind), D3 (GraphView only). No test framework exists in this frontend (`rule_agent/frontend/package.json` has no jest/vitest/testing-library) — verification is manual via `npm run dev` + browser devtools device emulation, not automated tests. Do not add a test framework; that's out of scope per the design spec (no new dependencies).
 
@@ -97,13 +97,18 @@ git commit -m "feat(mobile): add mobile breakpoint skeleton, viewport-height fix
 
 - [ ] **Step 1: Append backdrop base style + conversation sidebar overlay rules to the CSS**
 
+Note: `App.jsx`'s `.app-body` div already has `style={{ position: 'relative' }}` inline (see `App.jsx:378`), so `position: absolute; inset: 0` on children of `.app-body` positions them relative to that box — i.e. below the topbar, not covering it. This is the same setup `.graph-overlay` (`main.css:2637-2640`) already relies on.
+
 Inside the same `@media (max-width: 768px) { ... }` block from Task 1, right before its closing `}`, add:
 
 ```css
 
-  /* ── Shared overlay backdrop (mobile only) ── */
+  /* ── Shared overlay backdrop (mobile only) ──
+     position: absolute (not fixed) scoped to .app-body, matching the
+     existing .graph-overlay convention — .app-body already sits below the
+     topbar in normal flex flow, so this never paints over the topbar. */
   .mobile-overlay-backdrop {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     z-index: 55;
@@ -117,7 +122,7 @@ Inside the same `@media (max-width: 768px) { ... }` block from Task 1, right bef
 
   /* ── Conversation history sidebar → full-screen overlay ── */
   .conv-sidebar {
-    position: fixed;
+    position: absolute;
     inset: 0;
     width: 0;
     z-index: 56;
@@ -197,9 +202,10 @@ Inside the `@media (max-width: 768px) { ... }` block, before its closing `}`, ad
 
 ```css
 
-  /* ── Rule detail sidebar → full-screen overlay ── */
+  /* ── Rule detail sidebar → full-screen overlay ──
+     position: absolute (not fixed), same reasoning as .conv-sidebar in Task 2. */
   .rule-sidebar {
-    position: fixed;
+    position: absolute;
     inset: 0;
     width: 0;
     z-index: 56;
@@ -256,9 +262,10 @@ Inside the `@media (max-width: 768px) { ... }` block, before its closing `}`, ad
 
 ```css
 
-  /* ── Browse/Tree panel → full-screen overlay (Graph is already full-screen) ── */
+  /* ── Browse/Tree panel → full-screen overlay (Graph is already full-screen) ──
+     position: absolute (not fixed), same reasoning as .conv-sidebar in Task 2. */
   .browser-panel {
-    position: fixed;
+    position: absolute;
     inset: 0;
     width: 100vw;
     z-index: 56;
@@ -347,7 +354,7 @@ Replace with:
   const containerRef = useRef(null)
   const searchRef    = useRef(null)
   const dragRef      = useRef(null)
-  const pinchRef      = useRef(null)
+  const pinchRef     = useRef(null)
 ```
 
 - [ ] **Step 2: Add touch handlers after the existing `onMouseDown`**
@@ -406,8 +413,11 @@ Insert a new block between them (leaving `onMouseDown` and `toggle` untouched):
   }
 
   function onTouchMove(e) {
+    // No e.preventDefault() here — React 17+ attaches touchmove listeners as
+    // passive by default, so it would be a silent no-op (and log a console
+    // warning). `touchAction: 'none'` on the canvas (added below) is what
+    // actually suppresses native scroll/zoom gestures.
     if (e.touches.length === 1 && dragRef.current) {
-      e.preventDefault()
       const t = e.touches[0]
       const { tx: stx, ty: sty, sx, sy } = dragRef.current
       setTx(prev => ({ ...prev, x: stx + t.clientX - sx, y: sty + t.clientY - sy }))
@@ -484,8 +494,11 @@ Find the touch handlers added in Task 5:
   }
 
   function onTouchMove(e) {
+    // No e.preventDefault() here — React 17+ attaches touchmove listeners as
+    // passive by default, so it would be a silent no-op (and log a console
+    // warning). `touchAction: 'none'` on the canvas (added below) is what
+    // actually suppresses native scroll/zoom gestures.
     if (e.touches.length === 1 && dragRef.current) {
-      e.preventDefault()
       const t = e.touches[0]
       const { tx: stx, ty: sty, sx, sy } = dragRef.current
       setTx(prev => ({ ...prev, x: stx + t.clientX - sx, y: sty + t.clientY - sy }))
@@ -520,13 +533,15 @@ Replace with:
   }
 
   function onTouchMove(e) {
+    // No e.preventDefault() here — React 17+ attaches touchmove listeners as
+    // passive by default, so it would be a silent no-op (and log a console
+    // warning). `touchAction: 'none'` on the canvas (added in Task 5) is what
+    // actually suppresses native scroll/zoom gestures.
     if (e.touches.length === 1 && dragRef.current) {
-      e.preventDefault()
       const t = e.touches[0]
       const { tx: stx, ty: sty, sx, sy } = dragRef.current
       setTx(prev => ({ ...prev, x: stx + t.clientX - sx, y: sty + t.clientY - sy }))
     } else if (e.touches.length === 2 && pinchRef.current) {
-      e.preventDefault()
       const rect = containerRef.current.getBoundingClientRect()
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
@@ -575,7 +590,9 @@ In devtools device toolbar, test at both 375px (phone) and 768px (the breakpoint
 - Open a rule card, confirm the rule sidebar overlay opens full-screen and its `×` closes it.
 - Open Browse, then Tree; confirm both take over the full screen and their close controls work.
 - Open Graph; confirm it's full-screen (as it always was), pan/zoom via touch works, and the existing close button works.
+- With each overlay (conversation history, rule detail, Browse, Tree) open, confirm the panel's own header/close controls near the top of the screen are visible and clickable — not hidden underneath the topbar. This checks the `position: absolute` (not `fixed`) fix from the plan-validation pass.
 - Rotate width just above 768px (e.g. 769px, 800px) and confirm the layout snaps back to the desktop push-panel behavior.
+- Take the onboarding tour (topbar help `?` button) at 375px width and confirm the spotlight/tooltip positioning isn't badly broken by the new mobile layout (not a hard blocker if minor, but should be visibly usable).
 
 - [ ] **Step 3: Report results**
 
@@ -588,3 +605,5 @@ If every check in Steps 1–2 passes, the feature is complete — no further com
 - Spec coverage: viewport-height fix (Task 1), topbar tightening (Task 1), conversation sidebar overlay (Task 2), rule sidebar overlay (Task 3), browse/tree overlay (Task 4), chat padding (Task 4), Graph touch pan (Task 5), Graph pinch-zoom (Task 6), full manual verification incl. desktop-unaffected check (Task 7). Admin pages explicitly out of scope per spec — no task touches them.
 - All CSS additions live inside the single new `@media (max-width: 768px)` block; no existing rule is edited, satisfying "don't change the laptop version."
 - `GraphView.jsx` changes only add new functions/handlers and a new ref; the existing `onMouseDown`, `onWheel`, and `zoomBy` are untouched.
+
+**Plan-validation pass (post-write, pre-execution):** A Plan agent independently verified every "Find" code snippet against current file contents (no drift) and caught one real bug: the overlays were originally specified as `position: fixed`, which — because `.topbar` sits in the same root stacking context at `z-index: 100` — would have painted the topbar over the top ~60px of every "full-screen" overlay, hiding their close controls. Fixed by switching to `position: absolute` scoped to `.app-body` (which already has inline `position: relative` and sits below the topbar in flex flow), matching the existing `.graph-overlay` convention. Also dropped two no-op `e.preventDefault()` calls inside JSX-bound `onTouchMove` handlers (React attaches touch listeners as passive by default, so these calls did nothing but log console warnings) — `touchAction: 'none'` on the canvas already suppresses native gestures. Both fixes are reflected in the task text above.
