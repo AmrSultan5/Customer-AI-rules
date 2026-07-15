@@ -40,7 +40,7 @@ _SYSTEM_PROMPT = (
     "If the rule logic is unclear or the question is ambiguous, ask the user to clarify. "
     "If specific information is not available in the rule provided, say so and suggest "
     "what related details the user could ask about instead (e.g. description, severity, SAP table, lineage). "
-    "End every explanation with a final line starting with '**Why it matters:**' — "
+    "End every explanation (but not clarifying questions) with a final line starting with '**Why it matters:**' — "
     "one or two sentences on the business consequence if this rule is violated, "
     "grounded ONLY in the rule logic and any impact data provided. If impact data "
     "is provided, reflect its severity and dependency counts; never invent "

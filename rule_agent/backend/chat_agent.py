@@ -162,7 +162,7 @@ def _format_fields_answer(rule_id: str, logic: str) -> str:
             names.append(f"`{rf}`")
             continue
         bn = f.get("business_name", "")
-        if bn and bn != "Unknown field":
+        if bn and bn != "Unknown field" and bn.upper() != f.get("field", rf).upper():
             names.append(f"**{bn}** (SAP name: `{f.get('field', rf)}`)")
         else:
             names.append(f"`{f.get('field', rf)}`")
