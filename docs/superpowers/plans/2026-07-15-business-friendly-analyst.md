@@ -1,4 +1,4 @@
-# Business-Friendly Analyst Answer Layer Implementation Plan
+﻿# Business-Friendly Analyst Answer Layer Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -57,7 +57,7 @@ _spec.loader.exec_module(chat_agent)
 - Modify: `rule_agent/backend/chat_agent.py` (new dict + 2 formatters after `_SEVERITY_MAP` at line 68; replace intent blocks in `handle_message` ~line 973 and `stream_message` ~line 802)
 - Test: `rule_agent/backend/tests/test_business_friendly.py` (create)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `rule_agent/backend/tests/test_business_friendly.py` with the boilerplate header above, then append:
 
@@ -120,12 +120,12 @@ def test_both_paths_use_shared_table_formatter():
     assert "_format_sap_column_answer" in inspect.getsource(chat_agent.stream_message)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run (from `rule_agent/backend/`): `python -m pytest tests/test_business_friendly.py -v`
 Expected: FAIL — `AttributeError: module 'chat_agent_business' has no attribute '_format_sap_table_answer'`
 
-- [ ] **Step 3: Implement the dict and both formatters**
+- [x] **Step 3: Implement the dict and both formatters**
 
 In `rule_agent/backend/chat_agent.py`, directly after `_SEVERITY_MAP = {...}` (line 68), add:
 
@@ -203,7 +203,7 @@ def _format_sap_column_answer(rule_id: str, table: str, col: str) -> str:
     return f"The SAP column checked by rule **{rule_id}** is: `{col}`"
 ```
 
-- [ ] **Step 4: Wire both call sites**
+- [x] **Step 4: Wire both call sites**
 
 In `handle_message` (~line 973), replace the `sap_table` and `sap_column` blocks:
 
@@ -243,17 +243,17 @@ In `stream_message` (~line 802), replace only the `response = (...)` expression 
         return
 ```
 
-- [ ] **Step 5: Run the new tests — expect all PASS**
+- [x] **Step 5: Run the new tests — expect all PASS**
 
 Run: `python -m pytest tests/test_business_friendly.py -v`
 Expected: all PASS.
 
-- [ ] **Step 6: Run the full suite — no regressions**
+- [x] **Step 6: Run the full suite — no regressions**
 
 Run: `python -m pytest tests/ -v`
 Expected: all PASS (same pass count as before this task, plus the new tests).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add rule_agent/backend/chat_agent.py rule_agent/backend/tests/test_business_friendly.py
@@ -268,7 +268,7 @@ git commit -m "feat(analyst): business-friendly table/column lookup answers"
 - Modify: `rule_agent/backend/chat_agent.py` (new formatter next to the Task-1 formatters; wire `fields` intent in both `handle_message` ~line 995 and `stream_message` ~line 833)
 - Test: `rule_agent/backend/tests/test_business_friendly.py` (append)
 
-- [ ] **Step 1: Write the failing tests** — append to `test_business_friendly.py`:
+- [x] **Step 1: Write the failing tests** — append to `test_business_friendly.py`:
 
 ```python
 # ── Task 2: fields formatter ──────────────────────────────────────────────────
@@ -314,12 +314,12 @@ def test_both_paths_use_shared_fields_formatter():
     assert "_format_fields_answer" in inspect.getsource(chat_agent.stream_message)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/test_business_friendly.py -v -k fields`
 Expected: FAIL — no attribute `_format_fields_answer`.
 
-- [ ] **Step 3: Implement** — add after `_format_sap_column_answer` in `chat_agent.py`:
+- [x] **Step 3: Implement** — add after `_format_sap_column_answer` in `chat_agent.py`:
 
 ```python
 def _format_fields_answer(rule_id: str, logic: str) -> str:
@@ -340,7 +340,7 @@ def _format_fields_answer(rule_id: str, logic: str) -> str:
     return f"Rule **{rule_id}** looks at these fields: " + ", ".join(names) + "."
 ```
 
-- [ ] **Step 4: Wire both call sites**
+- [x] **Step 4: Wire both call sites**
 
 `handle_message` `fields` block (~line 995) becomes:
 
@@ -363,9 +363,9 @@ Then delete the two now-unused lazy imports at the top of `handle_message` (line
         return
 ```
 
-- [ ] **Step 5: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
-- [ ] **Step 6: Full suite — no regressions**: `python -m pytest tests/ -v`
-- [ ] **Step 7: Commit**
+- [x] **Step 5: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
+- [x] **Step 6: Full suite — no regressions**: `python -m pytest tests/ -v`
+- [x] **Step 7: Commit**
 
 ```bash
 git add rule_agent/backend/chat_agent.py rule_agent/backend/tests/test_business_friendly.py
@@ -380,7 +380,7 @@ git commit -m "feat(analyst): business-name-first fields answers"
 - Modify: `rule_agent/backend/chat_agent.py` (new formatter; wire `lineage`/`workflow` intent in `handle_message` ~line 1004 and `stream_message` ~line 845)
 - Test: `rule_agent/backend/tests/test_business_friendly.py` (append)
 
-- [ ] **Step 1: Write the failing tests** — append:
+- [x] **Step 1: Write the failing tests** — append:
 
 ```python
 # ── Task 3: lineage formatter ─────────────────────────────────────────────────
@@ -416,9 +416,9 @@ def test_both_paths_use_shared_lineage_formatter():
     assert "_format_lineage_answer" in inspect.getsource(chat_agent.stream_message)
 ```
 
-- [ ] **Step 2: Run to verify FAIL**: `python -m pytest tests/test_business_friendly.py -v -k lineage`
+- [x] **Step 2: Run to verify FAIL**: `python -m pytest tests/test_business_friendly.py -v -k lineage`
 
-- [ ] **Step 3: Implement** — add after `_format_fields_answer`:
+- [x] **Step 3: Implement** — add after `_format_fields_answer`:
 
 ```python
 def _format_lineage_answer(rule_id: str, lin: dict) -> str:
@@ -462,7 +462,7 @@ def _format_lineage_answer(rule_id: str, lin: dict) -> str:
             + "\n".join(lines))
 ```
 
-- [ ] **Step 4: Wire both call sites**
+- [x] **Step 4: Wire both call sites**
 
 `handle_message` (~line 1004): replace the whole `elif intent in ("lineage", "workflow"):` block body with:
 
@@ -485,9 +485,9 @@ def _format_lineage_answer(rule_id: str, lin: dict) -> str:
 
 (`get_lineage` is already lazily imported in both functions — keep those imports.)
 
-- [ ] **Step 5: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
-- [ ] **Step 6: Full suite — no regressions**: `python -m pytest tests/ -v`
-- [ ] **Step 7: Commit**
+- [x] **Step 5: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
+- [x] **Step 6: Full suite — no regressions**: `python -m pytest tests/ -v`
+- [x] **Step 7: Commit**
 
 ```bash
 git add rule_agent/backend/chat_agent.py rule_agent/backend/tests/test_business_friendly.py
@@ -503,7 +503,7 @@ git commit -m "feat(analyst): readable markdown lineage answers"
 - Modify: `rule_agent/backend/explanation_engine.py` (`_SYSTEM_PROMPT` line 34; `explain_rule` line 148)
 - Test: `rule_agent/backend/tests/test_business_friendly.py` (append)
 
-- [ ] **Step 1: Write the failing tests** — append:
+- [x] **Step 1: Write the failing tests** — append:
 
 ```python
 # ── Task 4: impact digest + Why-it-matters prompt ─────────────────────────────
@@ -558,10 +558,10 @@ def test_system_prompt_requires_why_it_matters():
 
 NOTE for the worker: `test_system_prompt_requires_why_it_matters` loads the real `explanation_engine` (its `anthropic` / `httpx` imports are installed; `analytics` may already be mocked or importable — the `setdefault` covers both). If this test errors for an unrelated import reason, report it — do not silently weaken the test.
 
-- [ ] **Step 2: Run to verify FAIL**: `python -m pytest tests/test_business_friendly.py -v -k "impact or why"`
+- [x] **Step 2: Run to verify FAIL**: `python -m pytest tests/test_business_friendly.py -v -k "impact or why"`
 Expected: FAIL — no attribute `_impact_digest`; "Why it matters" not in prompt.
 
-- [ ] **Step 3: Implement `_impact_digest`** — add after `_format_lineage_answer` in `chat_agent.py`:
+- [x] **Step 3: Implement `_impact_digest`** — add after `_format_lineage_answer` in `chat_agent.py`:
 
 ```python
 def _impact_digest(rule_id: str, row) -> str:
@@ -590,7 +590,7 @@ def _impact_digest(rule_id: str, row) -> str:
         return ""
 ```
 
-- [ ] **Step 4: Extend `_SYSTEM_PROMPT`** in `explanation_engine.py` (line 34) — replace the whole assignment with:
+- [x] **Step 4: Extend `_SYSTEM_PROMPT`** in `explanation_engine.py` (line 34) — replace the whole assignment with:
 
 ```python
 _SYSTEM_PROMPT = (
@@ -610,7 +610,7 @@ _SYSTEM_PROMPT = (
 )
 ```
 
-- [ ] **Step 5: Extend `explain_rule`** in `explanation_engine.py` (line 148) — new signature and user_msg:
+- [x] **Step 5: Extend `explain_rule`** in `explanation_engine.py` (line 148) — new signature and user_msg:
 
 ```python
 def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard",
@@ -628,7 +628,7 @@ def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard",
 
 (The rest of the function body is unchanged.)
 
-- [ ] **Step 6: Wire both explain call sites in `chat_agent.py`**
+- [x] **Step 6: Wire both explain call sites in `chat_agent.py`**
 
 `handle_message` explain/show branch (~line 1045): change
 
@@ -652,9 +652,9 @@ to
                      f"'Why it matters' line):\n{digest}")
 ```
 
-- [ ] **Step 7: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
-- [ ] **Step 8: Full suite — no regressions**: `python -m pytest tests/ -v`
-- [ ] **Step 9: Commit**
+- [x] **Step 7: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
+- [x] **Step 8: Full suite — no regressions**: `python -m pytest tests/ -v`
+- [x] **Step 9: Commit**
 
 ```bash
 git add rule_agent/backend/chat_agent.py rule_agent/backend/explanation_engine.py rule_agent/backend/tests/test_business_friendly.py
@@ -669,7 +669,7 @@ git commit -m "feat(analyst): grounded 'Why it matters' line in rule explanation
 - Modify: `rule_agent/backend/chat_agent.py` (`_FOLLOWUPS_SYSTEM` line 516; `_find_rule_by_description` fallback ~line 282)
 - Test: `rule_agent/backend/tests/test_business_friendly.py` (append)
 
-- [ ] **Step 1: Write the failing tests** — append:
+- [x] **Step 1: Write the failing tests** — append:
 
 ```python
 # ── Task 5: follow-up steering + fallback copy ────────────────────────────────
@@ -691,9 +691,9 @@ def test_search_fallback_copy_is_natural(monkeypatch):
     assert "RCCOMP_103.1" in result["response"]  # one rule-ID example kept
 ```
 
-- [ ] **Step 2: Run to verify FAIL**: `python -m pytest tests/test_business_friendly.py -v -k "followups_prompt or fallback"`
+- [x] **Step 2: Run to verify FAIL**: `python -m pytest tests/test_business_friendly.py -v -k "followups_prompt or fallback"`
 
-- [ ] **Step 3: Replace `_FOLLOWUPS_SYSTEM`** (line 516) with:
+- [x] **Step 3: Replace `_FOLLOWUPS_SYSTEM`** (line 516) with:
 
 ```python
 _FOLLOWUPS_SYSTEM = """\
@@ -713,7 +713,7 @@ Rules:
 """
 ```
 
-- [ ] **Step 4: Replace the fallback copy** in `_find_rule_by_description` (~line 282):
+- [x] **Step 4: Replace the fallback copy** in `_find_rule_by_description` (~line 282):
 
 ```python
         return {
@@ -728,9 +728,9 @@ Rules:
         }
 ```
 
-- [ ] **Step 5: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
-- [ ] **Step 6: Full suite — no regressions**: `python -m pytest tests/ -v`
-- [ ] **Step 7: Commit**
+- [x] **Step 5: Run new tests — PASS**: `python -m pytest tests/test_business_friendly.py -v`
+- [x] **Step 6: Full suite — no regressions**: `python -m pytest tests/ -v`
+- [x] **Step 7: Commit**
 
 ```bash
 git add rule_agent/backend/chat_agent.py rule_agent/backend/tests/test_business_friendly.py

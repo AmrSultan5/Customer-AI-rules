@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-14
 **Project:** `rule_agent` (backend only)
-**Status:** Awaiting user review
+**Status:** Implemented on `dev` (commits `20747e4`..`20efc0d`, 2026-07-15)
 
 ## Problem
 
