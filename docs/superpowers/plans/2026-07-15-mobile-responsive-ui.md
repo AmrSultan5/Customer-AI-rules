@@ -482,7 +482,7 @@ git commit -m "feat(mobile): add single-finger touch pan to Graph view"
 
 - [ ] **Step 1: Add a distance helper and extend the touch handlers for two-finger pinch**
 
-Find the touch handlers added in Task 5:
+Find the touch handlers added in Task 5. Note: Task 5's code-quality review caught a stale-touch-identity bug (a second finger touching down while panning, followed by the original finger lifting first, could cause a pan "jump") and fixed it by having `onTouchStart` clear `dragRef.current` whenever the touch count isn't exactly 1 — so the actual code in the file now has an `else` branch that wasn't in the original Task 5 spec text. Find this (already-fixed) version:
 
 ```jsx
   // Touch pan (single finger). Pinch-zoom (two fingers) is added in Task 6.
@@ -490,6 +490,8 @@ Find the touch handlers added in Task 5:
     if (e.touches.length === 1) {
       const t = e.touches[0]
       dragRef.current = { sx: t.clientX, sy: t.clientY, tx: tx.x, ty: tx.y }
+    } else {
+      dragRef.current = null
     }
   }
 
