@@ -376,6 +376,9 @@ export default function App() {
       </header>
 
       <div className="app-body" style={{ position: 'relative' }}>
+        {convSidebarOpen && (
+          <div className="mobile-overlay-backdrop" onClick={() => setConvSidebarOpen(false)} />
+        )}
         <ConversationSidebar
           username={username}
           onChangeUser={handleChangeUser}
