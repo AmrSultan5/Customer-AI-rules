@@ -89,6 +89,7 @@ export default function GraphView({ onRuleSelected, onClose }) {
   const containerRef = useRef(null)
   const searchRef    = useRef(null)
   const dragRef      = useRef(null)
+  const pinchRef     = useRef(null)
 
   const [rawTree,     setRawTree]     = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -225,6 +226,34 @@ export default function GraphView({ onRuleSelected, onClose }) {
     window.addEventListener('mouseup', onUp)
   }
 
+  // Touch pan (single finger). Pinch-zoom (two fingers) is added in a later task.
+  function onTouchStart(e) {
+    if (e.touches.length === 1) {
+      const t = e.touches[0]
+      dragRef.current = { sx: t.clientX, sy: t.clientY, tx: tx.x, ty: tx.y }
+    } else {
+      dragRef.current = null
+    }
+  }
+
+  function onTouchMove(e) {
+    // No e.preventDefault() here — React 17+ attaches touchmove listeners as
+    // passive by default, so it would be a silent no-op (and log a console
+    // warning). `touchAction: 'none'` on the canvas (added below) is what
+    // actually suppresses native scroll/zoom gestures.
+    if (e.touches.length === 1 && dragRef.current) {
+      const t = e.touches[0]
+      const { tx: stx, ty: sty, sx, sy } = dragRef.current
+      setTx(prev => ({ ...prev, x: stx + t.clientX - sx, y: sty + t.clientY - sy }))
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (e.touches.length === 0) {
+      dragRef.current = null
+    }
+  }
+
   function toggle(id) {
     setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
@@ -345,7 +374,10 @@ export default function GraphView({ onRuleSelected, onClose }) {
         ref={containerRef}
         className="graph-canvas"
         onMouseDown={onMouseDown}
-        style={{ cursor: dragRef.current ? 'grabbing' : 'grab' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ cursor: dragRef.current ? 'grabbing' : 'grab', touchAction: 'none' }}
       >
         {loading && (
           <div className="graph-state-center">
