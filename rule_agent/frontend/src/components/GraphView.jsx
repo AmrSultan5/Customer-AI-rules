@@ -226,11 +226,20 @@ export default function GraphView({ onRuleSelected, onClose }) {
     window.addEventListener('mouseup', onUp)
   }
 
-  // Touch pan (single finger). Pinch-zoom (two fingers) is added in a later task.
+  // Touch pan (single finger) + pinch-to-zoom (two fingers).
+  function touchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return Math.hypot(dx, dy)
+  }
+
   function onTouchStart(e) {
     if (e.touches.length === 1) {
       const t = e.touches[0]
       dragRef.current = { sx: t.clientX, sy: t.clientY, tx: tx.x, ty: tx.y }
+    } else if (e.touches.length === 2) {
+      dragRef.current = null
+      pinchRef.current = { dist: touchDistance(e.touches), k: tx.k }
     } else {
       dragRef.current = null
     }
@@ -239,18 +248,28 @@ export default function GraphView({ onRuleSelected, onClose }) {
   function onTouchMove(e) {
     // No e.preventDefault() here — React 17+ attaches touchmove listeners as
     // passive by default, so it would be a silent no-op (and log a console
-    // warning). `touchAction: 'none'` on the canvas (added below) is what
-    // actually suppresses native scroll/zoom gestures.
+    // warning). `touchAction: 'none'` on the canvas (added in a prior task) is
+    // what actually suppresses native scroll/zoom gestures.
     if (e.touches.length === 1 && dragRef.current) {
       const t = e.touches[0]
       const { tx: stx, ty: sty, sx, sy } = dragRef.current
       setTx(prev => ({ ...prev, x: stx + t.clientX - sx, y: sty + t.clientY - sy }))
+    } else if (e.touches.length === 2 && pinchRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+      const factor = touchDistance(e.touches) / pinchRef.current.dist
+      setTx(t => {
+        const k = Math.min(Math.max(pinchRef.current.k * factor, MIN_SCALE), MAX_SCALE)
+        return { x: midX - (midX - t.x) * (k / t.k), y: midY - (midY - t.y) * (k / t.k), k }
+      })
     }
   }
 
   function onTouchEnd(e) {
     if (e.touches.length === 0) {
       dragRef.current = null
+      pinchRef.current = null
     }
   }
 
