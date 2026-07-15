@@ -239,3 +239,38 @@ def test_lineage_answer_empty_falls_back():
 def test_both_paths_use_shared_lineage_formatter():
     assert "_format_lineage_answer" in inspect.getsource(chat_agent.handle_message)
     assert "_format_lineage_answer" in inspect.getsource(chat_agent.stream_message)
+
+
+def test_handle_message_lineage_is_business_friendly(monkeypatch):
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "lineage")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+    monkeypatch.setattr(
+        sys.modules["lineage_service"], "get_lineage", lambda rid: dict(_FULL_LINEAGE),
+    )
+    result = chat_agent.handle_message("Where does TEST_1 data come from?")
+    assert "- **Owned by:** MDM Team" in result["response"]
+
+
+def test_stream_message_lineage_is_business_friendly(monkeypatch):
+    import asyncio
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "lineage")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+    monkeypatch.setattr(
+        sys.modules["lineage_service"], "get_lineage", lambda rid: dict(_FULL_LINEAGE),
+    )
+
+    async def collect():
+        import json
+        text = []
+        async for ev in chat_agent.stream_message("Where does TEST_1 data come from?"):
+            # Each event is an SSE line: "data: {...}\n\n". Reassemble the
+            # chunk text the way a client would, so assertions are not broken
+            # by chunk boundaries or JSON escaping.
+            payload = json.loads(ev[len("data: "):])
+            if payload.get("type") == "chunk":
+                text.append(payload["text"])
+        return "".join(text)
+
+    out = asyncio.run(collect())
+    assert "Owned by:" in out
+    assert "MDM Team" in out

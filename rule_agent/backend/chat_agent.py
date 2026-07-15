@@ -194,13 +194,13 @@ def _format_lineage_answer(rule_id: str, lin: dict) -> str:
         dm_list = [d.strip() for d in datamarts.replace("\n", ",").split(",") if d.strip()]
         lines.append(f"- **Data comes from:** {', '.join(dm_list[:5])}")
     if sources:
-        lines.append(f"- **Technical sources:** {', '.join(sources[:5])}")
+        lines.append(f"- **Technical sources:** {', '.join(str(s) for s in sources[:5])}")
     if steps:
-        lines.append(f"- **How it runs:** {' → '.join(steps[:6])}")
+        lines.append(f"- **How it runs:** {' → '.join(str(s) for s in steps[:6])}")
     if custom_ops:
-        lines.append(f"- **Custom checks involved:** {'; '.join(custom_ops[:5])}")
+        lines.append(f"- **Custom checks involved:** {'; '.join(str(c) for c in custom_ops[:5])}")
     if siblings:
-        shown = ", ".join(siblings[:10])
+        shown = ", ".join(str(s) for s in siblings[:10])
         more = f" (+{len(siblings) - 10} more)" if len(siblings) > 10 else ""
         plural = "rule" if len(siblings) == 1 else "rules"
         pipeline = lin.get("pipeline_name", "")
