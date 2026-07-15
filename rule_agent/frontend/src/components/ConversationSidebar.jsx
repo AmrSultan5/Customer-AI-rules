@@ -16,6 +16,11 @@ const PERSONAS = [
 
 const personaLabel = (id) => PERSONAS.find(p => p.id === id)?.label ?? id
 
+// Titles are plain text in the sidebar; strip markdown formatting the title
+// generator sometimes emits (and that older stored titles still contain).
+// Underscores stay — rule IDs like RCCOMP_103.1 legitimately contain them.
+const cleanTitle = (t) => (t ?? '').replace(/[*`#]+/g, '').trim() || 'New chat'
+
 function PersonaPicker({ onPick, onCancel }) {
   return (
     <div className="persona-picker">
@@ -104,10 +109,10 @@ function ConversationRow({ conv, active, projects, onSelect, onChanged }) {
   return (
     <>
       <div className={`conv-row${active ? ' active' : ''}`}>
-        <Tooltip content={conv.title ?? 'New chat'}>
+        <Tooltip content={cleanTitle(conv.title)}>
           <button className="conv-main" onClick={() => onSelect(conv)}>
             <span className={`conv-persona-badge persona-${conv.persona}`}>{personaLabel(conv.persona)}</span>
-            <span className="conv-title">{conv.title ?? 'New chat'}</span>
+            <span className="conv-title">{cleanTitle(conv.title)}</span>
           </button>
         </Tooltip>
         <button className="conv-kebab" onClick={() => setMenuOpen(o => !o)} aria-label="Conversation actions">⋯</button>
@@ -136,7 +141,7 @@ function ConversationRow({ conv, active, projects, onSelect, onChanged }) {
       {dialog === 'rename' && (
         <RenameDialog
           title="Rename conversation"
-          initialValue={conv.title ?? ''}
+          initialValue={cleanTitle(conv.title) === 'New chat' && !conv.title ? '' : cleanTitle(conv.title)}
           placeholder="Conversation title…"
           onSave={doRename}
           onCancel={() => setDialog(null)}

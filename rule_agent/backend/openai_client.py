@@ -9,6 +9,7 @@ is recorded through `analytics` so the admin dashboard reflects this spend too.
 import asyncio
 import logging
 import os
+import re
 
 log = logging.getLogger(__name__)
 
@@ -18,9 +19,21 @@ _client = None
 _TITLE_SYSTEM = (
     "You write very short titles for chat conversations. Given the first user "
     "message and the assistant's reply, respond with a concise title of at most "
-    "6 words that captures the topic. No quotes, no trailing punctuation, no "
-    "prefix like 'Title:'. Just the title."
+    "6 words that captures the topic. Plain text only — no markdown, no "
+    "asterisks, no backticks, no quotes, no trailing punctuation, no prefix "
+    "like 'Title:'. Just the title."
 )
+
+# The sidebar renders titles as plain text, so markdown the model (or the
+# user's own first message, via the fallback) sneaks in shows up literally.
+# Underscores are kept — rule IDs like RCCOMP_103.1 legitimately contain them.
+_MD_CHARS_RE = re.compile(r"[*`#>]+")
+
+
+def _clean_title(title: str) -> str:
+    """Strip markdown formatting and collapse whitespace for plain-text display."""
+    text = _MD_CHARS_RE.sub("", title or "")
+    return " ".join(text.split()).strip("\"' ")
 
 
 def _get_client():
@@ -34,7 +47,7 @@ def _get_client():
 
 def _fallback_title(first_user_msg: str) -> str:
     text = (first_user_msg or "New chat").strip().splitlines()[0] if first_user_msg else "New chat"
-    return text[:60].strip() or "New chat"
+    return _clean_title(text[:60]) or "New chat"
 
 
 def generate_title(first_user_msg: str, first_assistant_msg: str = "") -> str:
@@ -57,7 +70,7 @@ def generate_title(first_user_msg: str, first_assistant_msg: str = "") -> str:
             max_tokens=20,
             temperature=0.3,
         )
-        title = (resp.choices[0].message.content or "").strip().strip('"').strip()
+        title = _clean_title(resp.choices[0].message.content or "")
         _track_usage(resp)
         return title[:80] or fallback
     except Exception as exc:

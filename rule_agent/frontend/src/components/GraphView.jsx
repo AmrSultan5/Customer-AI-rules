@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import * as d3 from 'd3'
+import { apiGet } from '../api.js'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const LEVEL_H   = 118
@@ -126,7 +127,7 @@ export default function GraphView({ onRuleSelected, onClose }) {
 
   // Fetch
   useEffect(() => {
-    fetch('/api/tree')
+    apiGet('/tree')
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(data => {
         const catIds = new Set()

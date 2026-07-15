@@ -1,5 +1,6 @@
 ﻿import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import Tooltip from './Tooltip.jsx'
 import YamlValidator from './YamlValidator.jsx'
 import RichInput from './RichInput.jsx'
@@ -136,7 +137,14 @@ function ChatHero({ mode, onAsk }) {
 const RULE_ID_RE = /\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b/g
 
 function addRuleLinks(text) {
-  return text.replace(RULE_ID_RE, (match) => `[${match}](#rule:${match})`)
+  // Rule IDs inside fenced blocks or inline code must stay literal — link
+  // syntax injected there renders as raw [ID](#rule:ID) text in the code.
+  return text
+    .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/)
+    .map(seg =>
+      seg.startsWith('`') ? seg : seg.replace(RULE_ID_RE, (match) => `[${match}](#rule:${match})`)
+    )
+    .join('')
 }
 
 function CodeBlockPre({ children }) {
@@ -738,20 +746,20 @@ export default function ChatBox({
                       ) : msg.isStreaming ? (
                         // Answer text: render markdown live so it's formatted as it streams
                         <>
-                          <ReactMarkdown components={mdComponents}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                             {addRuleLinks(msg.text)}
                           </ReactMarkdown>
                           <span className="streaming-cursor" aria-hidden="true" />
                         </>
                       ) : (
-                        <ReactMarkdown components={mdComponents}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                           {addRuleLinks(msg.text)}
                         </ReactMarkdown>
                       )}
                     </div>
                   ) : (
                     <div className="md-body">
-                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
                     </div>
                   )}
                 </div>

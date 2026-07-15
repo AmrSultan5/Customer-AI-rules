@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import FieldTable from './FieldTable.jsx'
 import Tooltip from './Tooltip.jsx'
+import { apiGet } from '../api.js'
 
 const DatabaseIcon = () => (
   <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
@@ -143,7 +145,7 @@ export default function RuleCard({ rule, onAskAboutRule, onRuleSelected }) {
   useEffect(() => {
     if (!rule?.rule_id) return
     setRelatedRules([])
-    fetch(`/api/rules/related/${rule.rule_id}`)
+    apiGet(`/rules/related/${rule.rule_id}`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setRelatedRules(data))
       .catch(() => {})
@@ -242,7 +244,7 @@ export default function RuleCard({ rule, onAskAboutRule, onRuleSelected }) {
           <span className="section-eyebrow accent">Business Explanation</span>
         </div>
         <div className="explanation-text">
-          <ReactMarkdown>{rule.business_explanation}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{rule.business_explanation}</ReactMarkdown>
         </div>
       </div>
 
