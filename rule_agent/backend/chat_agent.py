@@ -213,6 +213,32 @@ def _format_lineage_answer(rule_id: str, lin: dict) -> str:
             + "\n".join(lines))
 
 
+def _impact_digest(rule_id: str, row) -> str:
+    """One-line deterministic impact summary fed to the explanation prompt so
+    the 'Why it matters' line is grounded in real data. '' on any failure —
+    the explanation then behaves exactly as before."""
+    try:
+        parts: list[str] = []
+        sev = _safe(row.get("severity", ""))
+        if sev:
+            parts.append(f"severity: {_SEVERITY_MAP.get(str(sev), sev)}")
+        from impact_service import get_rule_impact
+        impact = get_rule_impact(rule_id) or {}
+        dependents = impact.get("dependent_rules", [])
+        if dependents:
+            parts.append(f"{len(dependents)} other rule(s) depend on this one")
+        pipelines = impact.get("pipelines", [])
+        if pipelines:
+            parts.append(f"runs in {len(pipelines)} pipeline(s)")
+        same_target = impact.get("same_target_rules", [])
+        if same_target:
+            parts.append(f"{len(same_target)} other rule(s) check the same table/column")
+        return "; ".join(parts)
+    except Exception as exc:
+        log.warning("[IMPACT] digest failed for %s: %s", rule_id, exc)
+        return ""
+
+
 def _instructions_block(extra_context: str | None) -> str:
     """Render project standing-instructions as a prefix block for the LLM prompt."""
     if extra_context and extra_context.strip():
@@ -996,6 +1022,10 @@ async def stream_message(
     user_msg = f"{_instructions_block(extra_context)}Rule logic:\n{logic}"
     if ctx:
         user_msg += f"\n\nField reference (do not use these names in the explanation):\n{ctx}"
+    digest = _impact_digest(rule_id, row)
+    if digest:
+        user_msg += ("\n\nImpact data (deterministic — use only this for the "
+                     f"'Why it matters' line):\n{digest}")
 
     accumulated = ""
     try:
@@ -1103,7 +1133,8 @@ def handle_message(
         from explanation_engine import explain_rule
         ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
         instr = _instructions_block(extra_context)
-        response = explain_rule(logic, (instr + ctx) if instr else ctx)
+        response = explain_rule(logic, (instr + ctx) if instr else ctx,
+                                impact_digest=_impact_digest(rule_id, row))
 
         # Append a clear notice when the rule references other rules
         active_refs = [r for r in ref_rules if r.get("active")]

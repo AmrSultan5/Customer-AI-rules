@@ -39,7 +39,12 @@ _SYSTEM_PROMPT = (
     "and a fuller explanation for rules with multiple conditions, dependencies, or pipeline steps. "
     "If the rule logic is unclear or the question is ambiguous, ask the user to clarify. "
     "If specific information is not available in the rule provided, say so and suggest "
-    "what related details the user could ask about instead (e.g. description, severity, SAP table, lineage)."
+    "what related details the user could ask about instead (e.g. description, severity, SAP table, lineage). "
+    "End every explanation with a final line starting with '**Why it matters:**' — "
+    "one or two sentences on the business consequence if this rule is violated, "
+    "grounded ONLY in the rule logic and any impact data provided. If impact data "
+    "is provided, reflect its severity and dependency counts; never invent "
+    "consequences the provided context does not support."
 )
 
 # ── Model tiers ──────────────────────────────────────────────────────────────
@@ -145,7 +150,8 @@ async def probe_llm() -> None:
 
 
 @lru_cache(maxsize=256)
-def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard") -> str:
+def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard",
+                 impact_digest: str = "") -> str:
     """Translate rule_logic into plain English via Claude."""
     if not rule_logic or rule_logic.strip() in ("", "nan", "None"):
         return "No technical rule definition available for this rule."
@@ -153,6 +159,8 @@ def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard")
     user_msg = f"Rule logic:\n{rule_logic}"
     if sap_context:
         user_msg += f"\n\nField reference (do not use these names in the explanation):\n{sap_context}"
+    if impact_digest:
+        user_msg += f"\n\nImpact data (deterministic — use only this for the 'Why it matters' line):\n{impact_digest}"
 
     model = _model(tier)
 

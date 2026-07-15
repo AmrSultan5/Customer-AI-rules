@@ -274,3 +274,53 @@ def test_stream_message_lineage_is_business_friendly(monkeypatch):
     out = asyncio.run(collect())
     assert "Owned by:" in out
     assert "MDM Team" in out
+
+
+# ── Task 4: impact digest + Why-it-matters prompt ─────────────────────────────
+
+
+def test_impact_digest_includes_severity_and_counts(monkeypatch):
+    fake = MagicMock()
+    fake.get_rule_impact.return_value = {
+        "dependent_rules": [{"rule_id": "A"}, {"rule_id": "B"}],
+        "pipelines": [{"name": "p1"}],
+        "same_target_rules": [],
+    }
+    monkeypatch.setitem(sys.modules, "impact_service", fake)
+    out = chat_agent._impact_digest("TEST_1", {"severity": "2"})
+    assert "High" in out
+    assert "2 other rule(s) depend" in out
+    assert "1 pipeline(s)" in out
+
+
+def test_impact_digest_failure_returns_empty(monkeypatch):
+    fake = MagicMock()
+    fake.get_rule_impact.side_effect = RuntimeError("boom")
+    monkeypatch.setitem(sys.modules, "impact_service", fake)
+    assert chat_agent._impact_digest("TEST_1", {"severity": "1"}) == ""
+
+
+def test_handle_message_explain_passes_digest(monkeypatch):
+    monkeypatch.setattr(chat_agent, "_classify_intent_llm", lambda m, r: "explain")
+    monkeypatch.setattr(chat_agent, "_generate_followups", lambda *a, **k: [])
+    monkeypatch.setattr(chat_agent, "_impact_digest",
+                        lambda rid, row: "severity: High; 2 other rule(s) depend on this one")
+    fake_explain = MagicMock(return_value="Explanation.")
+    monkeypatch.setattr(sys.modules["explanation_engine"], "explain_rule", fake_explain)
+    result = chat_agent.handle_message("Explain TEST_1")
+    assert result["response"].startswith("Explanation.")
+    kwargs = fake_explain.call_args.kwargs
+    assert kwargs.get("impact_digest") == "severity: High; 2 other rule(s) depend on this one"
+
+
+def test_system_prompt_requires_why_it_matters():
+    sys.modules.setdefault("analytics", MagicMock())
+    spec = importlib.util.spec_from_file_location(
+        "explanation_engine_real", os.path.join(_BACKEND_DIR, "explanation_engine.py")
+    )
+    ee = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ee)
+    assert "Why it matters" in ee._SYSTEM_PROMPT
+    # explain_rule accepts the new parameter
+    import inspect as _inspect
+    assert "impact_digest" in _inspect.signature(ee.explain_rule).parameters
