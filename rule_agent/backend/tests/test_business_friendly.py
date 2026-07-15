@@ -349,3 +349,22 @@ def test_stream_message_explain_includes_impact_digest(monkeypatch):
     asyncio.run(collect())
     assert "severity: Critical; runs in 2 pipeline(s)" in captured["user_msg"]
     assert "Impact data" in captured["user_msg"]
+
+
+# ── Task 5: follow-up steering + fallback copy ────────────────────────────────
+
+
+def test_followups_prompt_steers_business_first():
+    prompt = chat_agent._FOLLOWUPS_SYSTEM.lower()
+    assert "business" in prompt
+    assert "what happens if" in prompt
+    assert "only suggest technical" in prompt
+
+
+def test_search_fallback_copy_is_natural(monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("LLM down")
+    monkeypatch.setattr(sys.modules["explanation_engine"], "call_openai", boom)
+    result = chat_agent._find_rule_by_description("something about postcodes")
+    assert "makes sure every customer" in result["response"]
+    assert "RCCOMP_103.1" in result["response"]  # one rule-ID example kept

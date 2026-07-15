@@ -451,10 +451,10 @@ def _find_rule_by_description(message: str, extra_context: str | None = None) ->
         log.error("[ERROR] _find_rule_by_description failed: %s", e)
         return {
             "response": (
-                "I couldn't search for that rule right now. Try:\n\n"
-                "- **By rule ID**: `Explain rule RCCOMP_103.1`\n"
-                "- **By category**: `List all completeness rules`\n"
-                "- **By table**: `Which rules check KNA1?`"
+                "I couldn't search for that rule right now. You can try again by:\n\n"
+                "- **Describing what the rule should check** — e.g. `the rule that makes sure every customer has a postal code`\n"
+                "- **Naming the quality area** — e.g. `list all completeness rules`\n"
+                "- **Giving a rule ID if you know it** — e.g. `Explain rule RCCOMP_103.1`"
             ),
             "rule_id": None,
             "suggested_followups": [],
@@ -685,14 +685,17 @@ def _handle_no_rule_id(
 _MAX_HISTORY = 20
 
 _FOLLOWUPS_SYSTEM = """\
-You are a follow-up question generator for a data quality rule assistant.
+You are a follow-up question generator for a data quality rule assistant whose
+users are mostly business people, not engineers.
 
-Given the user's question and the answer they just received, suggest 2-3 short follow-up questions they are likely to ask next.
+Given the user's question and the answer they just received, suggest 2-3 short
+follow-up questions they are likely to ask next.
 
 Rules:
 - Each suggestion must directly build on the current question or the answer — do not suggest generic questions that could apply to any rule
 - Do not repeat the user's current question in any form
-- Think about what the user would naturally want to know after seeing this specific answer (e.g. if they asked about a table, they might next ask about the column or severity; if they asked for an explanation, they might want to know which SAP fields are used or how critical the rule is)
+- Prefer business-oriented follow-ups: how critical the rule is, what happens if it fails, which business data or process it protects, which related checks exist
+- Only suggest technical follow-ups (SAP tables, fields, pipelines) when the user's own question was technical
 - Keep each question short (under 12 words) and phrased as a natural follow-up
 - Return only a JSON array of 2-3 strings. No other text.\
 """

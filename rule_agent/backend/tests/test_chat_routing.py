@@ -89,8 +89,8 @@ def test_router_failure_falls_back_to_search(llm):
     result = chat_agent._handle_no_rule_id(
         "Is there a wiki page that explains the git flow?", allow_general=True
     )
-    # Search path's own failure fallback — old behavior preserved end to end
-    assert "By rule ID" in result["response"]
+    # Search path's own failure fallback — behavior preserved end to end
+    assert "Giving a rule ID" in result["response"]
     assert result["rule_id"] is None
 
 
