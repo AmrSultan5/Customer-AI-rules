@@ -342,15 +342,10 @@ if __name__ == "__main__":
     load_dotenv(Path(__file__).parent / ".env")
 
     from data_loader import get_rules
-    from rule_parser import extract_sap_fields
-    from sap_mapper import lookup_sap_field
 
     rules = get_rules()
     row = rules[rules["rule_logic"].notna()].iloc[2]
     logic = str(row["rule_logic"])
-    raw_fields = extract_sap_fields(logic)
-    mapped = [lookup_sap_field(f) for f in raw_fields]
-    ctx = build_sap_context(mapped)
 
     print(f"Logic: {logic[:200]}")
-    print(f"\nExplanation:\n{explain_rule(logic, ctx)}")
+    print(f"\nExplanation:\n{explain_rule(logic)}")

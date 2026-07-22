@@ -48,19 +48,6 @@ _data_loader.reload_all.return_value = {
     "rules_loaded": 2, "yaml_pipelines": 0, "custom_ops": 0, "sap_fields": 0,
 }
 
-_lineage = MagicMock()
-_lineage.get_lineage.return_value = {
-    "workflow_steps": [],
-    "yaml_reference": "",
-    "pipeline_sources": [],
-}
-
-_rule_parser = MagicMock()
-_rule_parser.extract_sap_fields.return_value = []
-
-_sap_mapper = MagicMock()
-_sap_mapper.lookup_sap_field.return_value = {"field": "KUNNR", "business_name": "Customer"}
-
 _explanation_engine = MagicMock()
 _explanation_engine.explain_rule.return_value = "Test explanation."
 _explanation_engine.build_sap_context.return_value = ""
@@ -74,9 +61,6 @@ _chat_agent = MagicMock()
 _chat_agent.handle_message.return_value = {"response": "Test chat response.", "rule_id": None}
 
 sys.modules["data_loader"] = _data_loader
-sys.modules["lineage_service"] = _lineage
-sys.modules["rule_parser"] = _rule_parser
-sys.modules["sap_mapper"] = _sap_mapper
 sys.modules["explanation_engine"] = _explanation_engine
 sys.modules["schema_validator"] = _schema_validator
 sys.modules["chat_agent"] = _chat_agent

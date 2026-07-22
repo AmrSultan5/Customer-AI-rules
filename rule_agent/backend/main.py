@@ -36,21 +36,10 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from data_loader import (
-    extract_rule_section_from_yaml,
-    find_yaml_for_rule,
-    get_referenced_rules,
-    get_rules,
-    get_yaml_raw,
-    get_yaml_rules,
-)
-from lineage_service import get_lineage
-from rule_parser import extract_sap_fields
-from sap_mapper import lookup_sap_field
-from explanation_engine import build_sap_context, explain_rule
+from data_loader import get_rules, get_yaml_rules
 from schema_validator import validate_rules, validate_sap
 from chat_agent import handle_message, stream_message
-from analytics import track_rule_view, track_chat_event, track_feedback, get_dashboard_data
+from analytics import track_chat_event, track_feedback
 
 import db
 import conversation_service as cs
@@ -77,10 +66,11 @@ _CORS_ORIGINS: list[str] = [
     if o.strip()
 ]
 _MAX_MESSAGE_LEN = int(os.environ.get("MAX_MESSAGE_LENGTH", "2000"))
-# Persona modes (engineer/pm) accept pasted user stories, which are longer than
-# analyst questions. The Pydantic schema admits the larger cap; the analyst cap
-# is enforced per-request in the endpoints.
-_MAX_PERSONA_MESSAGE_LEN = int(os.environ.get("MAX_PERSONA_MESSAGE_LENGTH", "12000"))
+# The schema admits a larger cap than the live-input limit above so that an
+# assistant answer echoed back as history (which can run longer than a user
+# question) is not rejected; the stricter live-input cap is enforced
+# per-request below. Env var name kept for deployment compatibility.
+_MAX_MESSAGE_SCHEMA_LEN = int(os.environ.get("MAX_PERSONA_MESSAGE_LENGTH", "12000"))
 _MAX_HISTORY = 20
 _MAX_HISTORY_ITEM_LEN = 8000  # server-side truncation before passing to the agent
 
@@ -177,10 +167,10 @@ class AdminLoginRequest(BaseModel):
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
-    # Persona-mode answers can be long and are sent back as history next turn,
-    # so the schema cap matches the persona message cap. Items are truncated
+    # Assistant answers can be long and are sent back as history next turn, so
+    # the schema cap is looser than the live-input cap. Items are truncated
     # server-side to _MAX_HISTORY_ITEM_LEN before reaching the agent.
-    content: Annotated[str, Field(max_length=_MAX_PERSONA_MESSAGE_LEN)]
+    content: Annotated[str, Field(max_length=_MAX_MESSAGE_SCHEMA_LEN)]
 
 
 class FeedbackRequest(BaseModel):
@@ -189,18 +179,11 @@ class FeedbackRequest(BaseModel):
     rule_id: Annotated[str | None, Field(max_length=64)] = None
 
 
-class YamlValidationRequest(BaseModel):
-    # Cap matches yaml_validation.MAX_YAML_CHARS — enforced here so oversized
-    # payloads are rejected by the schema before reaching the validator.
-    yaml_text: Annotated[str, Field(min_length=1, max_length=600_000)]
-
-
 class ChatRequest(BaseModel):
-    # Schema admits the persona cap; the stricter analyst cap is enforced
-    # per-request in the endpoints based on mode.
-    message: Annotated[str, Field(min_length=1, max_length=_MAX_PERSONA_MESSAGE_LEN)]
+    # Schema admits the larger cap; the stricter live-input cap is enforced
+    # per-request in the endpoints (see _MAX_MESSAGE_LEN).
+    message: Annotated[str, Field(min_length=1, max_length=_MAX_MESSAGE_SCHEMA_LEN)]
     context_rule_id: str | None = None
-    mode: Literal["analyst", "engineer", "pm"] = "analyst"
     # Analyst-only opt-in: when true, off-catalog questions get a direct general
     # answer instead of being forced through rule search. Toggled by a button in
     # the UI; default false keeps the strict rules-only behavior.
@@ -210,8 +193,8 @@ class ChatRequest(BaseModel):
         default_factory=list
     )
     # When set, the conversation is loaded/persisted server-side: history comes
-    # from the DB, both messages are stored, the persona is taken from the
-    # conversation, and project instructions (if any) are injected.
+    # from the DB, both messages are stored, and project instructions (if any)
+    # are injected.
     conversation_id: int | None = None
 
 
@@ -292,81 +275,6 @@ app.add_middleware(
 )
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-
-def _build_rule_response(rule_id: str) -> dict:
-    rules = get_rules()
-    get_yaml_rules()  # ensure cache is warm
-
-    match = rules[rules["rule_id"].str.upper() == rule_id.upper()]
-    if match.empty:
-        raise HTTPException(status_code=404, detail={"error": "Rule not found"})
-
-    row = match.iloc[0]
-    excel_logic = str(row.get("rule_logic", "") or "")
-
-    yaml_match = find_yaml_for_rule(rule_id)
-    if yaml_match:
-        yaml_filename = yaml_match["yaml_file"]
-        raw_yaml = get_yaml_raw(yaml_filename)
-        technical_rule = extract_rule_section_from_yaml(raw_yaml, rule_id)
-        yaml_ref = yaml_filename
-        log.info("[INFO] technical_rule sourced from YAML: %s", yaml_filename)
-    else:
-        technical_rule = excel_logic
-        yaml_ref = ""
-        log.info("[INFO] No YAML match for %s — falling back to Excel logic", rule_id)
-
-    raw_fields = extract_sap_fields(excel_logic)
-    mapped_fields = [lookup_sap_field(f) for f in raw_fields]
-    ctx = build_sap_context(mapped_fields)
-    explanation = explain_rule(excel_logic, ctx)
-
-    lin = get_lineage(rule_id)
-    workflow_steps: list[str] = lin.get("workflow_steps", [])
-    if not yaml_ref:
-        yaml_ref = lin.get("yaml_reference", "")
-    sources: list[str] = lin.get("pipeline_sources", [])
-
-    origin_parts = []
-    for key in ("module", "group", "sub_domain", "quality_category"):
-        val = str(row.get(key, "") or "").strip()
-        if val and val.lower() not in ("nan", "none", ""):
-            origin_parts.append(val)
-    origin = " / ".join(origin_parts) if origin_parts else "Customer"
-
-    ref_rules_raw = get_referenced_rules(rule_id)
-    referenced_rules = [
-        {
-            "rule_id":          ref["rule_id"],
-            "source":           ref["source"],
-            "active":           ref.get("active", False),
-            "description":      ref.get("rule_description", ""),
-            "quality_category": ref.get("quality_category", ""),
-            "severity":         ref.get("severity", ""),
-        }
-        for ref in ref_rules_raw
-    ]
-
-    return {
-        "rule_id":              str(row.get("rule_id", "")),
-        "business_explanation": explanation,
-        "technical_rule":       technical_rule,
-        "sap_fields":           mapped_fields,
-        "origin":               origin,
-        "workflow_steps":       workflow_steps,
-        "yaml_reference":       yaml_ref,
-        "sources":              sources,
-        "description":          str(row.get("rule_description", "") or ""),
-        "quality_category":     str(row.get("quality_category", "") or ""),
-        "severity":             str(row.get("severity", "") or ""),
-        "table_checked":        str(row.get("table_name_checked", "") or ""),
-        "column_checked":       str(row.get("column_name_checked", "") or ""),
-        "referenced_rules":     referenced_rules,
-    }
-
-
 # ── Public endpoints ───────────────────────────────────────────────────────────
 
 
@@ -428,86 +336,6 @@ def ready():
 router = APIRouter(dependencies=[Depends(_check_auth)])
 
 
-@router.get("/rules")
-def list_rules():
-    rules = get_rules()
-    return [
-        {
-            "rule_id":          str(row.get("rule_id", "") or ""),
-            "quality_category": str(row.get("quality_category", "") or ""),
-            "table_checked":    str(row.get("table_name_checked", "") or ""),
-            "description":      str(row.get("rule_description", "") or ""),
-            "severity":         str(row.get("severity", "") or ""),
-        }
-        for _, row in rules.iterrows()
-    ]
-
-
-@router.get("/rules/related/{rule_id}")
-def get_related_rules(rule_id: str):
-    rules = get_rules()
-    match = rules[rules["rule_id"].str.upper() == rule_id.upper()]
-    if match.empty:
-        raise HTTPException(status_code=404, detail={"error": "Rule not found"})
-
-    row = match.iloc[0]
-    category = str(row.get("quality_category", "") or "").strip()
-    table    = str(row.get("table_name_checked", "") or "").strip()
-
-    others = rules[rules["rule_id"].str.upper() != rule_id.upper()].copy()
-    masks = []
-    if category:
-        masks.append(
-            others["quality_category"].fillna("").str.strip().str.lower() == category.lower()
-        )
-    if table and "table_name_checked" in others.columns:
-        masks.append(
-            others["table_name_checked"].fillna("").str.strip().str.lower() == table.lower()
-        )
-    if not masks:
-        return []
-
-    combined = masks[0]
-    for m in masks[1:]:
-        combined = combined | m
-
-    subset = others[combined].head(4)
-    return [
-        {
-            "rule_id":          str(r.get("rule_id", "") or ""),
-            "quality_category": str(r.get("quality_category", "") or ""),
-            "severity":         str(r.get("severity", "") or ""),
-            "table_checked":    str(r.get("table_name_checked", "") or ""),
-        }
-        for _, r in subset.iterrows()
-    ]
-
-
-@router.get("/rule/{rule_id}")
-async def get_rule(rule_id: str):
-    result = _build_rule_response(rule_id)
-    asyncio.create_task(track_rule_view(rule_id))
-    return result
-
-
-@router.get("/rules/impact/{rule_id}")
-def get_rule_impact_endpoint(rule_id: str):
-    """Deterministic impact graph for a rule: dependents, pipelines, custom ops,
-    same-target rules, and the file paths a change would touch. No LLM."""
-    from impact_service import get_rule_impact
-    impact = get_rule_impact(rule_id)
-    if impact is None:
-        raise HTTPException(status_code=404, detail={"error": "Rule not found"})
-    return impact
-
-
-@router.post("/validate/yaml")
-def validate_yaml_endpoint(body: YamlValidationRequest):
-    """Structural validation for a pasted pipeline YAML (engineer paste-back check)."""
-    from yaml_validation import validate_pipeline_yaml
-    return validate_pipeline_yaml(body.yaml_text)
-
-
 @router.post("/feedback")
 async def submit_feedback(body: FeedbackRequest):
     """Record a thumbs up/down on an assistant answer."""
@@ -527,11 +355,6 @@ def _history_for_agent(body: ChatRequest) -> list[dict] | None:
 @limiter.limit(_chat_rate_limit)
 async def chat(request: Request, body: ChatRequest):
     # async def is required for slowapi's decorator to work correctly on Python 3.12+.
-    if body.mode != "analyst":
-        raise HTTPException(
-            status_code=400,
-            detail={"detail": "Persona modes are only available on /chat/stream."},
-        )
     if len(body.message.strip()) > _MAX_MESSAGE_LEN:
         raise HTTPException(
             status_code=400,
@@ -569,18 +392,17 @@ async def chat_stream(
     """Streaming SSE variant of /chat.
 
     Returns Server-Sent Events; each event is a JSON object on a `data:` line.
-    Event types: {"type":"chunk","text":"..."}, {"type":"status","text":"..."}
-    (persona modes only) and {"type":"done","rule_id":"...","suggested_followups":[...]}.
+    Event types: {"type":"chunk","text":"..."} and
+    {"type":"done","rule_id":"...","suggested_followups":[...]}.
     The existing /chat endpoint is unchanged for non-streaming clients.
 
     When body.conversation_id is set, history is loaded from the DB, both the
-    user and assistant messages are persisted, the persona is taken from the
-    conversation, and any project instructions are injected as context.
+    user and assistant messages are persisted, and any project instructions
+    are injected as context.
     """
     message = body.message.strip()
 
-    # ── Resolve persistence context (conversation / persona / instructions) ──
-    mode = body.mode
+    # ── Resolve persistence context (conversation / instructions) ────────────
     history = _history_for_agent(body)
     extra_context: str | None = None
     conv_id = body.conversation_id
@@ -598,7 +420,6 @@ async def chat_stream(
         conv = await cs.get_conversation(session, conv_id, user.id)
         if conv is None:
             raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
-        mode = conv.persona  # the conversation's persona drives the answer flow
         context_rule_id = body.context_rule_id or conv.context_rule_id
         db_hist = await cs.recent_history(session, conv_id)
         if db_hist:
@@ -611,9 +432,7 @@ async def chat_stream(
 
     # Validate before starting the generator — once StreamingResponse begins,
     # the HTTP 200 header is already sent and we cannot return a 4xx.
-    # Analyst mode keeps the stricter cap; persona modes accept pasted user
-    # stories up to the schema cap (_MAX_PERSONA_MESSAGE_LEN, enforced by Pydantic).
-    if mode == "analyst" and len(message) > _MAX_MESSAGE_LEN:
+    if len(message) > _MAX_MESSAGE_LEN:
         raise HTTPException(
             status_code=400,
             detail={"detail": f"Message exceeds maximum length of {_MAX_MESSAGE_LEN} characters."},
@@ -627,7 +446,7 @@ async def chat_stream(
         followups: list = []
         try:
             async for event in stream_message(
-                body.message, context_rule_id, history=history, mode=mode,
+                body.message, context_rule_id, history=history,
                 allow_general=body.general, extra_context=extra_context,
             ):
                 if event.startswith("data:"):
@@ -690,77 +509,9 @@ async def _persist_assistant_turn(
         log.warning("[chat] persist assistant turn failed: %s", type(exc).__name__)
 
 
-@router.get("/tree")
-def get_rule_tree():
-    df = get_rules().copy()
-
-    def _s(val) -> str:
-        s = str(val or "").strip()
-        return "General" if s.lower() in ("nan", "none", "") else s
-
-    def _sev(val) -> int:
-        try:
-            return int(float(val))
-        except (ValueError, TypeError):
-            return 1
-
-    df["_sub"] = df["sub_domain"].apply(_s) if "sub_domain" in df.columns else "General"
-    df["_cat"] = df["quality_category"].apply(_s) if "quality_category" in df.columns else "General"
-
-    root_children = []
-    for subdomain, sd_df in df.groupby("_sub"):
-        cat_children = []
-        for category, cat_df in sd_df.groupby("_cat"):
-            rules_list = []
-            for _, row in cat_df.sort_values("rule_id").iterrows():
-                desc = _s(row.get("rule_description", ""))
-                desc = "" if desc == "General" else desc[:120]
-                table = _s(row.get("table_name_checked", ""))
-                table = "" if table == "General" else table
-                rules_list.append({
-                    "id":          str(row["rule_id"]),
-                    "name":        str(row["rule_id"]),
-                    "type":        "rule",
-                    "description": desc,
-                    "severity":    _sev(row.get("severity", "")),
-                    "table":       table,
-                })
-            cat_children.append({
-                "id":       f"cat__{subdomain}__{category}",
-                "name":     category,
-                "type":     "category",
-                "count":    len(rules_list),
-                "children": rules_list,
-            })
-        cat_children.sort(key=lambda x: x["name"])
-        root_children.append({
-            "id":       f"sd__{subdomain}",
-            "name":     subdomain,
-            "type":     "subdomain",
-            "count":    len(sd_df),
-            "children": cat_children,
-        })
-
-    root_children.sort(key=lambda x: x["name"])
-    return {
-        "id":       "root",
-        "name":     "Customer Rules",
-        "type":     "root",
-        "count":    len(df),
-        "children": root_children,
-    }
-
-
 # ── Admin router ───────────────────────────────────────────────────────────────
 
 admin_router = APIRouter(prefix="/admin", dependencies=[Depends(_check_admin_auth)])
-
-
-@admin_router.get("/dashboard")
-async def admin_dashboard():
-    """Return aggregated analytics for the Rule Health Dashboard."""
-    total = len(get_rules())
-    return await get_dashboard_data(total)
 
 
 @admin_router.post("/reload")
@@ -780,17 +531,6 @@ async def admin_reload():
             content={"ok": False, "error": f"Reload failed ({type(exc).__name__}) — previous data is still being served."},
         )
     return {"ok": True, **counts}
-
-
-@admin_router.get("/probe-llm")
-async def admin_probe_llm():
-    """Admin-only LLM connectivity check. Calls the Anthropic API; never used as a recurring probe."""
-    from explanation_engine import probe_llm
-    try:
-        await probe_llm()
-        return {"llm": "ok"}
-    except Exception as exc:
-        return JSONResponse(status_code=503, content={"llm": "degraded", "llm_error": type(exc).__name__})
 
 
 # ── Chat workspace router (users, projects, conversations) ───────────────────

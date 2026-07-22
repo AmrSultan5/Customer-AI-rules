@@ -148,10 +148,9 @@ def test_append_and_recent_history_ordering_and_cap():
 def test_chat_stream_persists_and_titles_and_injects_instructions(monkeypatch):
     captured = {}
 
-    async def fake_stream(message, context_rule_id=None, history=None, mode="analyst",
+    async def fake_stream(message, context_rule_id=None, history=None,
                           allow_general=False, extra_context=None):
         captured["extra_context"] = extra_context
-        captured["mode"] = mode
         captured["history"] = history
         yield f"data: {_json.dumps({'type': 'chunk', 'text': 'Hello '})}\n\n"
         yield f"data: {_json.dumps({'type': 'chunk', 'text': 'world'})}\n\n"
@@ -164,7 +163,8 @@ def test_chat_stream_persists_and_titles_and_injects_instructions(monkeypatch):
     monkeypatch.setattr(main_module, "stream_message", fake_stream)
     monkeypatch.setattr(openai_client, "generate_title_async", fake_title)
 
-    # project with instructions + an engineer conversation in it
+    # project with instructions + a conversation in it (persona is stored but
+    # no longer drives the answer flow — analyst-only as of Phase 1)
     pid = client.post(
         "/projects", headers=_hdr("dave"),
         json={"name": "P", "instructions": "Always mention DCC."},
@@ -181,8 +181,7 @@ def test_chat_stream_persists_and_titles_and_injects_instructions(monkeypatch):
     assert r.status_code == 200
     assert "world" in r.text
 
-    # persona came from the conversation, instructions were injected
-    assert captured["mode"] == "engineer"
+    # instructions were injected regardless of the conversation's stored persona
     assert captured["extra_context"] == "Always mention DCC."
 
     # both turns persisted, assistant text accumulated, title generated

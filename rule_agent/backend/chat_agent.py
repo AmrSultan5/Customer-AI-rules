@@ -143,32 +143,17 @@ def _format_sap_column_answer(rule_id: str, table: str, col: str) -> str:
 
 
 def _format_fields_answer(rule_id: str, logic: str) -> str:
-    """Plain-language answer for the fields intent — business names first,
-    SAP identifiers in parentheses; falls back to raw identifiers when no
-    business name is known or a lookup fails."""
-    from rule_parser import extract_sap_fields
-    from sap_mapper import lookup_sap_field
-    try:
-        raw_fields = extract_sap_fields(logic)
-    except Exception as exc:
-        log.warning("[fields] SAP field extraction failed: %s", exc)
-        raw_fields = []
-    names: list[str] = []
-    for rf in raw_fields:
-        try:
-            f = lookup_sap_field(rf)
-        except Exception as exc:
-            log.warning("[fields] business-name lookup failed for %s: %s", rf, exc)
-            names.append(f"`{rf}`")
-            continue
-        bn = f.get("business_name", "")
-        if bn and bn != "Unknown field" and bn.upper() != f.get("field", rf).upper():
-            names.append(f"**{bn}** (SAP name: `{f.get('field', rf)}`)")
-        else:
-            names.append(f"`{f.get('field', rf)}`")
-    if not names:
-        return f"Rule {rule_id} looks at these fields: none detected."
-    return f"Rule **{rule_id}** looks at these fields: " + ", ".join(names) + "."
+    """Fallback answer for the fields intent.
+
+    Field-level SAP identifier extraction and business-name mapping lived in
+    rule_parser/sap_mapper, which were removed along with the engineer/PM
+    tooling (Phase 1 trim). Point the user at the lookups that are still
+    available instead of silently returning nothing.
+    """
+    return (
+        f"Detailed field-level lookups aren't available for rule {rule_id} in this view. "
+        "Ask about its SAP table, column, description, or severity instead."
+    )
 
 
 def _format_lineage_answer(rule_id: str, lin: dict) -> str:
@@ -211,32 +196,6 @@ def _format_lineage_answer(rule_id: str, lin: dict) -> str:
         return f"No lineage information found for rule {rule_id}."
     return (f"**Where rule {rule_id}'s data comes from and how it runs:**\n\n"
             + "\n".join(lines))
-
-
-def _impact_digest(rule_id: str, row) -> str:
-    """One-line deterministic impact summary fed to the explanation prompt so
-    the 'Why it matters' line is grounded in real data. '' on any failure —
-    the explanation then behaves exactly as before."""
-    try:
-        parts: list[str] = []
-        sev = _safe(row.get("severity", ""))
-        if sev:
-            parts.append(f"severity: {_SEVERITY_MAP.get(str(sev), sev)}")
-        from impact_service import get_rule_impact
-        impact = get_rule_impact(rule_id) or {}
-        dependents = impact.get("dependent_rules", [])
-        if dependents:
-            parts.append(f"{len(dependents)} other rule(s) depend on this one")
-        pipelines = impact.get("pipelines", [])
-        if pipelines:
-            parts.append(f"runs in {len(pipelines)} pipeline(s)")
-        same_target = impact.get("same_target_rules", [])
-        if same_target:
-            parts.append(f"{len(same_target)} other rule(s) check the same table/column")
-        return "; ".join(parts)
-    except Exception as exc:
-        log.warning("[IMPACT] digest failed for %s: %s", rule_id, exc)
-        return ""
 
 
 def _instructions_block(extra_context: str | None) -> str:
@@ -789,13 +748,10 @@ def _build_rule_context(
         find_yaml_for_rule, get_yaml_raw, extract_rule_section_from_yaml,
         get_custom_operations, get_referenced_rules,
     )
-    from rule_parser import extract_sap_fields
-    from sap_mapper import lookup_sap_field
-    from explanation_engine import build_sap_context
 
-    raw_fields = extract_sap_fields(logic)
-    mapped = [lookup_sap_field(f) for f in raw_fields]
-    ctx = build_sap_context(mapped)
+    # SAP field-name mapping (rule_parser/sap_mapper) was removed with the
+    # engineer/PM tooling; context now starts from cross-rule/YAML data only.
+    ctx = ""
 
     # ── Primary cross-rule dependencies ──────────────────────────────────────
     ref_rules = get_referenced_rules(rule_id)
@@ -889,30 +845,16 @@ async def stream_message(
     message: str,
     context_rule_id: str | None = None,
     history: list[dict] | None = None,
-    mode: str = "analyst",
     allow_general: bool = False,
     extra_context: str | None = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream a chat response as Server-Sent Events.
+    """Stream a chat response as Server-Sent Events (analyst flow only).
 
     Each yielded string is a complete SSE data line ending with \\n\\n.
     Event types:
       {"type":"chunk","text":"..."}   — one or more text chunks
-      {"type":"status","text":"..."}  — transient progress (persona modes only)
       {"type":"done","rule_id":"...","suggested_followups":[...]}  — final event
-
-    mode="engineer"/"pm" dispatches to persona_agent (length caps enforced by
-    the API layer); mode="analyst" is the original rule-Q&A flow.
     """
-    if mode in ("engineer", "pm"):
-        from persona_agent import stream_persona_message
-        async for event in stream_persona_message(
-            message, mode, context_rule_id=context_rule_id, history=history,
-            extra_context=extra_context,
-        ):
-            yield event
-        return
-
     message = message.strip()
     if len(message) > 2000:
         raise ValueError("Message exceeds maximum length of 2000 characters.")
@@ -943,8 +885,6 @@ async def stream_message(
 
     # ── Rule ID found ─────────────────────────────────────────────────────────
     from data_loader import get_rules
-    from lineage_service import get_lineage
-    from explanation_engine import build_sap_context
 
     rules = get_rules()
     match = rules[rules["rule_id"].str.upper() == rule_id]
@@ -1017,7 +957,9 @@ async def stream_message(
         return
 
     elif intent in ("lineage", "workflow"):
-        response = _format_lineage_answer(rule_id, get_lineage(rule_id))
+        # lineage_service was removed with the impact/lineage graph; the
+        # formatter's own "no lineage information" fallback covers this now.
+        response = _format_lineage_answer(rule_id, {})
         async for part in _stream_text(response):
             yield part
         yield _sse({"type": "done", "rule_id": rule_id,
@@ -1025,16 +967,11 @@ async def stream_message(
         return
 
     # ── LLM streaming: explain / show ─────────────────────────────────────────
-    from data_loader import get_rules as _get_rules_inner
     ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
 
     user_msg = f"{_instructions_block(extra_context)}Rule logic:\n{logic}"
     if ctx:
         user_msg += f"\n\nField reference (do not use these names in the explanation):\n{ctx}"
-    digest = _impact_digest(rule_id, row)
-    if digest:
-        user_msg += ("\n\nImpact data (deterministic — use only this for the "
-                     f"'Why it matters' line):\n{digest}")
 
     accumulated = ""
     try:
@@ -1090,8 +1027,7 @@ def handle_message(
         )
 
     from data_loader import get_rules
-    from lineage_service import get_lineage
-    from explanation_engine import explain_rule, build_sap_context
+    from explanation_engine import explain_rule
 
     rules = get_rules()
     match = rules[rules["rule_id"].str.upper() == rule_id]
@@ -1136,14 +1072,14 @@ def handle_message(
         response = _format_fields_answer(rule_id, logic)
 
     elif intent in ("lineage", "workflow"):
-        response = _format_lineage_answer(rule_id, get_lineage(rule_id))
+        # lineage_service was removed with the impact/lineage graph; the
+        # formatter's own "no lineage information" fallback covers this now.
+        response = _format_lineage_answer(rule_id, {})
 
     else:  # explain or show
-        from explanation_engine import explain_rule
         ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
         instr = _instructions_block(extra_context)
-        response = explain_rule(logic, (instr + ctx) if instr else ctx,
-                                impact_digest=_impact_digest(rule_id, row))
+        response = explain_rule(logic, (instr + ctx) if instr else ctx)
 
         # Append a clear notice when the rule references other rules
         active_refs = [r for r in ref_rules if r.get("active")]
