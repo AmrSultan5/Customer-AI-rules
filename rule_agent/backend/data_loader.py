@@ -688,19 +688,28 @@ def clear_caches() -> None:
         fn.cache_clear()
 
 
-def reload_all() -> dict:
+def reload_all(descriptor: Any = None) -> dict:
     """Reload all data sources from disk, validating BEFORE swapping the caches.
 
     Loads fresh copies first and runs schema validation on them; only when the
     new data is good are the caches cleared and re-warmed. A broken Excel/YAML
     edit therefore raises here while the app keeps serving the old data.
+
+    `descriptor` is optional (Phase 2): when passed (a KBDescriptor), validation
+    runs against its field_map-declared required columns via
+    schema_validator.validate_against_descriptor. Existing callers that pass
+    nothing (main.py's /admin/reload) keep the original hardcoded-column
+    validation — same effective required set for customer_sap either way.
     """
-    from schema_validator import validate_rules, validate_sap
+    from schema_validator import validate_against_descriptor, validate_rules, validate_sap
 
     new_rules = load_rules()
     new_sap = load_sap_map()
-    validate_rules(new_rules)
-    validate_sap(new_sap)
+    if descriptor is not None:
+        validate_against_descriptor(new_rules, new_sap, descriptor)
+    else:
+        validate_rules(new_rules)
+        validate_sap(new_sap)
     new_yamls = load_yaml_rules()
     new_ops = load_custom_operations()
 

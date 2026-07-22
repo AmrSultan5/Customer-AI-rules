@@ -22,10 +22,25 @@ _CATEGORIES = [
     "accuracy", "timeliness", "conformity",
 ]
 
+# Phase 2: entity-id extraction and rule context assembly are now owned by the
+# KnowledgeProvider seam (providers/structured.py), reached via the registry's
+# default KB. Built lazily (not at import time) and cached module-wide, same
+# spirit as the lazy data_loader/explanation_engine imports below.
+_provider = None
+
+
+def _get_provider():
+    global _provider
+    if _provider is None:
+        from providers.registry import KnowledgeBaseRegistry
+
+        registry = KnowledgeBaseRegistry()
+        _provider = registry.get_provider(registry.default_kb_id)
+    return _provider
+
 
 def _extract_rule_id(message: str) -> str | None:
-    m = _RULE_ID_RE.search(message)
-    return m.group(1).upper() if m else None
+    return _get_provider().extract_entity_id(message)
 
 
 def _intent(message: str) -> str:
@@ -725,9 +740,6 @@ async def _stream_text(text: str, words_per_chunk: int = 5) -> AsyncGenerator[st
             await asyncio.sleep(0.02)
 
 
-_MAX_SIBLINGS = 10
-
-
 def _build_rule_context(
     rule_id: str,
     row: Any,
@@ -736,109 +748,19 @@ def _build_rule_context(
 ) -> "tuple[str, list[dict], dict | None]":
     """Build full LLM context for the explain/show intent.
 
-    Performs a second retrieval hop over sibling rules so the LLM always has
-    rich metadata for co-evaluated or referenced rules, not just bare IDs.
+    Phase 2: the deterministic cross-rule + YAML context assembly (second
+    retrieval hop over sibling rules, etc.) now lives on the KnowledgeProvider
+    (providers/structured.py:StructuredTabularProvider.build_context) so the
+    provider owns context building. This is a thin back-compat delegator —
+    same signature/return shape as before, so both call sites below are
+    unchanged and analyst answers are identical.
 
     Returns:
         ctx        — context string ready to append to the LLM user message
         ref_rules  — list of referenced rule dicts (for the cross-rule notice)
         yaml_match — YAML metadata dict or None
     """
-    from data_loader import (
-        find_yaml_for_rule, get_yaml_raw, extract_rule_section_from_yaml,
-        get_custom_operations, get_referenced_rules,
-    )
-
-    # SAP field-name mapping (rule_parser/sap_mapper) was removed with the
-    # engineer/PM tooling; context now starts from cross-rule/YAML data only.
-    ctx = ""
-
-    # ── Primary cross-rule dependencies ──────────────────────────────────────
-    ref_rules = get_referenced_rules(rule_id)
-    if ref_rules:
-        ref_lines = []
-        for ref in ref_rules:
-            if not ref.get("active"):
-                continue
-            via = "depends on" if ref["source"] == "dependent_on" else "references"
-            desc = ref.get("rule_description", "")
-            logic_snip = ref.get("rule_logic", "")[:150]
-            ref_lines.append(
-                f"This rule {via} {ref['rule_id']}: {desc}. Logic: {logic_snip}"
-            )
-        if ref_lines:
-            ctx += "\n\nRule dependencies:\n" + "\n".join(ref_lines)
-
-    # ── YAML pipeline section ─────────────────────────────────────────────────
-    yaml_match = find_yaml_for_rule(rule_id)
-    yaml_sibling_ids: list[str] = []
-    if yaml_match:
-        yaml_content = get_yaml_raw(yaml_match["yaml_file"])
-        if yaml_content:
-            section = extract_rule_section_from_yaml(yaml_content, rule_id)
-            ctx += f"\n\nPipeline steps (YAML):\n{section[:1500]}"
-        yaml_sibling_ids = [
-            r for r in yaml_match.get("rule_ids_in_yaml", [])
-            if r.upper() != rule_id.upper()
-        ]
-        if yaml_sibling_ids:
-            sib_lines = []
-            for sid in yaml_sibling_ids:
-                sib_match = rules[rules["rule_id"].str.upper() == sid.upper()]
-                desc = _safe(sib_match.iloc[0].get("rule_description", "")) if not sib_match.empty else ""
-                sib_lines.append(f"- {sid}: {desc}" if desc else f"- {sid}")
-            ctx += (
-                f"\n\nThis rule is part of the '{yaml_match['name']}' pipeline "
-                f"which also evaluates:\n" + "\n".join(sib_lines)
-            )
-        custom_ops_index = get_custom_operations()
-        cop_lines = [
-            f"{meta['class_name']}: {meta['docstring']}"
-            for key in yaml_match.get("custom_ops_used", [])
-            if (meta := custom_ops_index.get(key)) and meta.get("docstring")
-        ]
-        if cop_lines:
-            ctx += "\n\nCustom operations: " + "; ".join(cop_lines)
-
-    # ── Second retrieval hop: expand sibling details ──────────────────────────
-    # Union both sibling sources, deduplicated, capped at _MAX_SIBLINGS.
-    ref_active_ids = [r["rule_id"] for r in ref_rules if r.get("active")]
-    all_sibling_ids = list(dict.fromkeys(ref_active_ids + yaml_sibling_ids))[:_MAX_SIBLINGS]
-
-    if all_sibling_ids:
-        sibling_blocks: list[str] = []
-        for sid in all_sibling_ids:
-            sib_match = rules[rules["rule_id"].str.upper() == sid.upper()]
-            if sib_match.empty:
-                continue  # skip silently
-            sib_row = sib_match.iloc[0]
-            desc = _safe(sib_row.get("rule_description", ""))[:200]
-            cat = _safe(sib_row.get("quality_category", ""))
-            sev = _safe(sib_row.get("severity", ""))
-            sev_label = _SEVERITY_MAP.get(str(sev), sev)
-            table = _safe(sib_row.get("table_name_checked", ""))
-            sib_yaml = find_yaml_for_rule(sid)
-            pipeline = sib_yaml["name"] if sib_yaml else ""
-            block: list[str] = [f"Sibling Rule: {sid}"]
-            if desc:
-                block.append(f"Description: {desc}")
-            if cat or sev_label:
-                block.append(f"Category: {cat} | Severity: {sev_label}")
-            if pipeline:
-                block.append(f"Pipeline: {pipeline}")
-            if table:
-                block.append(f"Table: {table}")
-            sibling_blocks.append("\n".join(block))
-
-        if sibling_blocks:
-            ctx += "\n\n## Sibling Rule Context (co-evaluated or referenced rules)\n\n"
-            ctx += "\n\n".join(sibling_blocks)
-            log.debug(
-                "[CONTEXT] Second-hop expanded %d sibling rules for %s",
-                len(sibling_blocks), rule_id,
-            )
-
-    return ctx, ref_rules, yaml_match
+    return _get_provider().build_context(rule_id, row, logic, rules)
 
 
 async def stream_message(

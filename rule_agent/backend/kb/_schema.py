@@ -26,6 +26,11 @@ class FieldMap(BaseModel):
 
     rules: dict[str, ColumnMap] = Field(default_factory=dict)
     sap: dict[str, ColumnMap] = Field(default_factory=dict)
+    # Logical keys (subset of `rules` / `sap` above) that schema_validator
+    # treats as required. Empty means "caller falls back to its own legacy
+    # defaults" — see schema_validator.validate_against_descriptor.
+    required_rules: list[str] = Field(default_factory=list)
+    required_sap: list[str] = Field(default_factory=list)
 
 
 class StructuredSource(BaseModel):
