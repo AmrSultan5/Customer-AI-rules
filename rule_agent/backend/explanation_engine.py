@@ -31,21 +31,13 @@ from analytics import track_token_usage, track_token_usage_sync
 
 log = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
-    "You are a business analyst. Explain the following data rule in plain "
-    "English for a non-technical business user. Use business terminology. "
-    "No code. No SAP field names. No jargon. "
-    "Tailor depth to complexity — use 2-3 sentences for simple rules, "
-    "and a fuller explanation for rules with multiple conditions, dependencies, or pipeline steps. "
-    "If the rule logic is unclear or the question is ambiguous, ask the user to clarify. "
-    "If specific information is not available in the rule provided, say so and suggest "
-    "what related details the user could ask about instead (e.g. description, severity, SAP table, lineage). "
-    "End every explanation (but not clarifying questions) with a final line starting with '**Why it matters:**' — "
-    "one or two sentences on the business consequence if this rule is violated, "
-    "grounded ONLY in the rule logic and any impact data provided. If impact data "
-    "is provided, reflect its severity and dependency counts; never invent "
-    "consequences the provided context does not support."
-)
+# Phase 3: the module-level analyst system prompt moved to prompts.py
+# (prompts.build_system_prompt), which assembles it from a KB descriptor's
+# prompts/vocab instead of a hardcoded constant. explain_rule() takes the
+# assembled prompt in via system_prompt; when a caller omits it, _default_
+# system_prompt() below falls back to the customer_sap descriptor (loaded
+# directly via kb._schema, not the provider registry, so this module stays
+# decoupled from the provider seam).
 
 # ── Model tiers ──────────────────────────────────────────────────────────────
 # Resolved from the environment on every call so a tier can be re-pointed live
@@ -85,6 +77,19 @@ _SELECTION_SCHEMA = {
 
 _client: anthropic.Anthropic | None = None
 _async_client: anthropic.AsyncAnthropic | None = None
+
+_default_system_prompt_cache: str | None = None
+
+
+def _default_system_prompt() -> str:
+    """Back-compat analyst system prompt (customer_sap, no custom prompt),
+    cached after first build. Used by explain_rule() when a caller doesn't
+    thread a system_prompt in from a provider/descriptor."""
+    global _default_system_prompt_cache
+    if _default_system_prompt_cache is None:
+        import prompts
+        _default_system_prompt_cache = prompts.default_system_prompt()
+    return _default_system_prompt_cache
 
 
 def _require_key() -> str:
@@ -151,8 +156,13 @@ async def probe_llm() -> None:
 
 @lru_cache(maxsize=256)
 def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard",
-                 impact_digest: str = "") -> str:
-    """Translate rule_logic into plain English via Claude."""
+                 impact_digest: str = "", system_prompt: str | None = None) -> str:
+    """Translate rule_logic into plain English via Claude.
+
+    system_prompt: assembled via prompts.build_system_prompt(kb, custom_prompt)
+    by the caller (chat_agent, which has the active provider/descriptor). When
+    omitted, falls back to the customer_sap default (see _default_system_prompt).
+    """
     if not rule_logic or rule_logic.strip() in ("", "nan", "None"):
         return "No technical rule definition available for this rule."
 
@@ -163,13 +173,14 @@ def explain_rule(rule_logic: str, sap_context: str = "", tier: str = "standard",
         user_msg += f"\n\nImpact data (deterministic — use only this for the 'Why it matters' line):\n{impact_digest}"
 
     model = _model(tier)
+    system_prompt = system_prompt or _default_system_prompt()
 
     try:
         client = _get_client()
         response = client.messages.create(
             model=model,
             max_tokens=1000,
-            system=_SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[{"role": "user", "content": user_msg}],
         )
         if response.usage:

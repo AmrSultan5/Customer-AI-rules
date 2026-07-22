@@ -55,11 +55,23 @@ def test_id_pattern_matches_chat_agent():
     assert descriptor.id_pattern == real_chat_agent._RULE_ID_RE.pattern
 
 
-def test_vocab_matches_chat_agent_constants():
+def test_vocab_matches_pre_phase3_chat_agent_constants():
+    """chat_agent._CATEGORIES/_SEVERITY_MAP/_TABLE_BUSINESS_NAMES were deleted in
+    Phase 3 (callers now read provider.kb.vocab.* instead) — see
+    tests/test_prompts.py, which keeps a golden literal copy of their values
+    and is the source of truth for this parity check going forward."""
+    from tests.test_prompts import (
+        _OLD_CATEGORIES, _OLD_SEVERITY_MAP, _OLD_TABLE_BUSINESS_NAMES,
+    )
+
+    assert not hasattr(real_chat_agent, "_CATEGORIES")
+    assert not hasattr(real_chat_agent, "_SEVERITY_MAP")
+    assert not hasattr(real_chat_agent, "_TABLE_BUSINESS_NAMES")
+
     descriptor = load_descriptor(_KB_DIR / "customer_sap.yaml")
-    assert descriptor.vocab.categories == real_chat_agent._CATEGORIES
-    assert descriptor.vocab.severity_map == real_chat_agent._SEVERITY_MAP
-    assert descriptor.vocab.business_names == real_chat_agent._TABLE_BUSINESS_NAMES
+    assert descriptor.vocab.categories == _OLD_CATEGORIES
+    assert descriptor.vocab.severity_map == _OLD_SEVERITY_MAP
+    assert descriptor.vocab.business_names == _OLD_TABLE_BUSINESS_NAMES
 
 
 def test_structured_source_matches_data_loader_paths():

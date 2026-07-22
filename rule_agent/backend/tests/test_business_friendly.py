@@ -210,17 +210,36 @@ def test_impact_digest_removed_from_chat_agent():
 
 
 def test_system_prompt_requires_why_it_matters():
+    """Phase 3: the module-level explanation_engine._SYSTEM_PROMPT constant was
+    deleted; the analyst system prompt is now assembled by
+    prompts.build_system_prompt(kb, custom_prompt) and threaded into
+    explain_rule via its system_prompt parameter (chat_agent._get_system_prompt
+    does this for customer_sap). explain_rule still falls back to that same
+    assembled prompt when system_prompt is omitted (see
+    explanation_engine._default_system_prompt)."""
     sys.modules.setdefault("analytics", MagicMock())
     spec = importlib.util.spec_from_file_location(
         "explanation_engine_real", os.path.join(_BACKEND_DIR, "explanation_engine.py")
     )
     ee = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ee)
-    assert "Why it matters" in ee._SYSTEM_PROMPT
+    assert not hasattr(ee, "_SYSTEM_PROMPT")
+
+    import prompts
+    from kb._schema import load_descriptor
+
+    descriptor = load_descriptor(os.path.join(_BACKEND_DIR, "kb", "customer_sap.yaml"))
+    system_prompt = prompts.build_system_prompt(descriptor)
+    assert "Why it matters" in system_prompt
+    assert system_prompt == ee._default_system_prompt()
+
     # explain_rule still accepts impact_digest (unused by chat_agent now, but
     # the parameter itself is explanation_engine's concern, untouched in Phase 1)
+    # and now also accepts system_prompt (Phase 3).
     import inspect as _inspect
-    assert "impact_digest" in _inspect.signature(ee.explain_rule).parameters
+    params = _inspect.signature(ee.explain_rule).parameters
+    assert "impact_digest" in params
+    assert "system_prompt" in params
 
 
 # ── Task 5: follow-up steering + fallback copy ────────────────────────────────

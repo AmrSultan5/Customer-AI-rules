@@ -5,8 +5,16 @@
 # wording and structure — including the mandatory "**Why it matters:**"
 # closing-line rule — is preserved exactly. A KB descriptor that omits
 # prompts.analyst_system inherits this template (see kb/_schema.load_descriptor).
-analyst_system: |
-  You are a business analyst. Explain the following {entity_singular} in plain
+#
+# NOTE on YAML style: this MUST stay a folded (">-") scalar, not a literal
+# ("|") one. The original _SYSTEM_PROMPT was built by concatenating string
+# literals with single spaces (no embedded newlines); folded style collapses
+# these wrapped lines back into single spaces the same way, and "-" strips the
+# trailing newline. Switching to "|" (or adding one) would leave literal "\n"
+# characters in the assembled prompt and break the customer_sap byte-identity
+# snapshot test (tests/test_prompts.py).
+analyst_system: >-
+  You are a business analyst. Explain the following data {entity_singular} in plain
   English for a non-technical business user. Use business terminology. No code.
   No SAP field names. No jargon. Tailor depth to complexity — use 2-3 sentences
   for simple {entity_plural}, and a fuller explanation for {entity_plural} with

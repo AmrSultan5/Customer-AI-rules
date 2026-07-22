@@ -17,15 +17,15 @@ _RULE_ID_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CATEGORIES = [
-    "completeness", "uniqueness", "validity", "consistency",
-    "accuracy", "timeliness", "conformity",
-]
-
 # Phase 2: entity-id extraction and rule context assembly are now owned by the
 # KnowledgeProvider seam (providers/structured.py), reached via the registry's
 # default KB. Built lazily (not at import time) and cached module-wide, same
 # spirit as the lazy data_loader/explanation_engine imports below.
+#
+# Phase 3: vocab (_CATEGORIES/_SEVERITY_MAP/_TABLE_BUSINESS_NAMES) and the
+# analyst system prompt (explanation_engine._SYSTEM_PROMPT) also moved to the
+# provider's descriptor (provider.kb.vocab / prompts.build_system_prompt) —
+# see _get_system_prompt() below and the vocab lookups inline where they're used.
 _provider = None
 
 
@@ -37,6 +37,18 @@ def _get_provider():
         registry = KnowledgeBaseRegistry()
         _provider = registry.get_provider(registry.default_kb_id)
     return _provider
+
+
+def _get_system_prompt() -> str:
+    """Analyst system prompt for the active KB (Phase 3: kb.prompts + vocab,
+    replacing the old explanation_engine._SYSTEM_PROMPT constant).
+
+    custom_prompt wiring from the DB (per-KB, user-authored) lands in a later
+    phase; pass None here for now so customer_sap output is unchanged.
+    """
+    import prompts
+
+    return prompts.build_system_prompt(_get_provider().kb, custom_prompt=None)
 
 
 def _extract_rule_id(message: str) -> str | None:
@@ -69,7 +81,7 @@ def _intent(message: str) -> str:
 
 def _detect_category(message: str) -> str | None:
     low = message.lower()
-    for cat in _CATEGORIES:
+    for cat in _get_provider().kb.vocab.categories:
         if cat in low:
             return cat
     return None
@@ -80,61 +92,12 @@ def _safe(val) -> str:
     return "" if s.lower() in ("nan", "none", "null") else s
 
 
-_SEVERITY_MAP = {"1": "Critical", "2": "High", "3": "Medium", "4": "Low"}
-
-
-# Business names for SAP tables that appear in the rule inventory. Lookup
-# misses fall back to the raw technical answer format, so this list only
-# needs the tables business users actually ask about.
-_TABLE_BUSINESS_NAMES = {
-    "KNA1": "customer master — general data",
-    "KNB1": "customer master — company code data",
-    "KNB5": "customer master — dunning data",
-    "KNVV": "customer master — sales area data",
-    "KNVP": "customer master — partner functions",
-    "KNVA": "customer master — unloading points",
-    "KNVH": "customer hierarchy",
-    "KNVI": "customer master — tax indicators",
-    "ADRC": "central address data",
-    "ADR2": "telephone numbers",
-    "ADR3": "fax numbers",
-    "ADR6": "email addresses",
-    "BUT000": "business partner — general data",
-    "BUT050": "business partner relationships",
-    "BUT051": "business partner contact persons",
-    "BUT0BK": "business partner bank details",
-    "BUT0IS": "business partner industry sectors",
-    "CVI_CUST_LINK": "customer / business-partner link",
-    "DFKKBPTAXNUM": "business partner tax numbers",
-    "UKMBP_CMS": "credit management profile",
-    "UKMBP_CMS_SGM": "credit management segment",
-    "LFA1": "vendor master — general data",
-    "LFB1": "vendor master — company code data",
-    "LFM1": "vendor master — purchasing data",
-    "MARA": "material master — general data",
-    "MARC": "material master — plant data",
-    "MAKT": "material descriptions",
-    "MVKE": "material master — sales data",
-    "MBEW": "material valuation",
-    "MARM": "material units of measure",
-    "MLAN": "material tax classifications",
-    "MLGN": "material master — warehouse data",
-    "SKA1": "G/L account master — chart of accounts",
-    "SKAT": "G/L account descriptions",
-    "SKB1": "G/L account master — company code",
-    "CSKS": "cost center master",
-    "CSKB": "cost element master",
-    "CEPC": "profit center master",
-    "ANLA": "asset master",
-}
-
-
 def _format_sap_table_answer(rule_id: str, table: str) -> str:
     """Plain-language answer for the sap_table intent; falls back to the
     technical format for tables without a business name."""
     if not table:
         return f"No SAP table information available for rule {rule_id}."
-    biz = _TABLE_BUSINESS_NAMES.get(table.strip().upper())
+    biz = _get_provider().kb.vocab.business_names.get(table.strip().upper())
     if biz:
         return f"Rule **{rule_id}** checks the **{biz}** table (SAP name: `{table}`)."
     return f"The SAP table checked by rule **{rule_id}** is: `{table}`"
@@ -250,8 +213,14 @@ Examples of GENERAL: "is there a wiki page that explains the git flow?", "what i
 Reply with exactly one word: RULES or GENERAL. Nothing else.\
 """
 
+# {repository_label} is filled in from provider.kb.prompts.repository_label at
+# call time (see _answer_general below) — for customer_sap this is exactly
+# "Customer data quality rule repository", so the assembled text is unchanged.
+# The rest of this prompt (folder names, file paths, Databricks/SAP mention)
+# stays hardcoded: it doesn't map cleanly onto descriptor fields without risking
+# wording drift, so it's left for a later pass.
 _GENERAL_ASSISTANT_SYSTEM = """\
-You are the analyst assistant for a Customer data quality rule repository
+You are the analyst assistant for a {repository_label}
 (YAML rule pipelines under golden/, custom Python operations under
 custom_operations/, rule inventory in data/dim_rules_inventory.xlsx, running
 on Databricks against SAP customer data).
@@ -294,8 +263,11 @@ def _answer_general(
     """Answer a general (non-rule) question as a helpful assistant."""
     from explanation_engine import call_openai
     try:
+        system_prompt = _GENERAL_ASSISTANT_SYSTEM.format(
+            repository_label=_get_provider().kb.prompts.repository_label
+        )
         ai_text = call_openai(
-            _GENERAL_ASSISTANT_SYSTEM,
+            system_prompt,
             _instructions_block(extra_context) + message,
             max_tokens=700,
             history=history,
@@ -781,7 +753,7 @@ async def stream_message(
     if len(message) > 2000:
         raise ValueError("Message exceeds maximum length of 2000 characters.")
 
-    from explanation_engine import _SYSTEM_PROMPT, call_openai_stream
+    from explanation_engine import call_openai_stream
 
     if history:
         history = history[-_MAX_HISTORY:]
@@ -861,7 +833,7 @@ async def stream_message(
 
     elif intent == "severity":
         sev = _safe(row.get("severity", ""))
-        sev_label = _SEVERITY_MAP.get(str(sev), sev)
+        sev_label = _get_provider().kb.vocab.severity_map.get(str(sev), sev)
         response = (f"Rule **{rule_id}** has a severity of **{sev_label}**."
                     if sev else f"No severity information available for rule {rule_id}.")
         async for part in _stream_text(response):
@@ -898,7 +870,7 @@ async def stream_message(
     accumulated = ""
     try:
         async for chunk_text in call_openai_stream(
-            _SYSTEM_PROMPT,
+            _get_system_prompt(),
             user_msg,
             max_tokens=1000,
         ):
@@ -984,7 +956,7 @@ def handle_message(
 
     elif intent == "severity":
         sev = _safe(row.get("severity", ""))
-        sev_label = _SEVERITY_MAP.get(str(sev), sev)
+        sev_label = _get_provider().kb.vocab.severity_map.get(str(sev), sev)
         response = (
             f"Rule **{rule_id}** has a severity of **{sev_label}**."
             if sev else f"No severity information available for rule {rule_id}."
@@ -1001,7 +973,9 @@ def handle_message(
     else:  # explain or show
         ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
         instr = _instructions_block(extra_context)
-        response = explain_rule(logic, (instr + ctx) if instr else ctx)
+        response = explain_rule(
+            logic, (instr + ctx) if instr else ctx, system_prompt=_get_system_prompt(),
+        )
 
         # Append a clear notice when the rule references other rules
         active_refs = [r for r in ref_rules if r.get("active")]
