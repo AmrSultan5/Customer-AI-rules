@@ -1,0 +1,157 @@
+# Descriptor for the existing Customer / SAP data-quality rule dataset.
+#
+# Every value below is extracted verbatim from the current hardcoded code:
+#   - source paths      -> data_loader.py (RULES_FILE, SAP_FILE, SAP_FILE_Z11,
+#                          GOLDEN_DIR, CUSTOM_OPS_DIR)
+#   - field_map         -> schema_validator.py (REQUIRED_*_COLS) + the fuzzy
+#                          aliases in data_loader.load_rules
+#   - id_pattern        -> chat_agent._RULE_ID_RE.pattern
+#   - vocab.categories  -> chat_agent._CATEGORIES
+#   - vocab.severity_map-> chat_agent._SEVERITY_MAP
+#   - vocab.business_names -> chat_agent._TABLE_BUSINESS_NAMES
+# This phase only needs the descriptor to load and validate; nothing consumes it
+# yet. adapter/retrieval_mode are declared "hybrid" ahead of the Phase 8 RAG
+# work so the registry needs no later migration.
+id: customer_sap
+name: Customer SAP Data Quality Rules
+description: >-
+  Customer/SAP data-quality rule repository — YAML rule pipelines, custom Python
+  operations, and the SAP field reference for customer master data governance.
+adapter: hybrid
+retrieval_mode: hybrid
+
+source:
+  kind: hybrid
+  structured:
+    kind: structured
+    files:
+      rules_file: data/dim_rules_inventory.xlsx
+      sap_file: data/MDG Official Z1_AI_AGENT.xlsx
+      sap_file_z11: data/MDG Official Z11.xlsx
+    dirs:
+      golden_dir: data/daar-governance-data-quality-processes/governance_data_quality_processes/configs/processes/data_quality
+      custom_ops_dir: data/daar-governance-data-quality-processes/governance_data_quality_processes/custom_operations
+  # rag source is added in Phase 8 (ingestion of the governance repo)
+  rag: null
+
+field_map:
+  # Required rules columns (schema_validator.REQUIRED_RULES_COLS) carry the
+  # exact fuzzy alias lists from data_loader.load_rules' _find_best_column calls.
+  rules:
+    rule_id:
+      physical: rule_id
+      aliases: [rule_code, rule_id, id, code]
+    domain:
+      physical: domain
+      aliases: [domain]
+    is_active:
+      physical: is_active
+      aliases: [is_active, active, is_active_flag]
+    rule_logic:
+      physical: rule_logic
+      aliases: [technical_definition, rule_logic, logic, definition, expression]
+    # Other logical columns accessed directly (normalized snake_case, not
+    # fuzzy-resolved in current code) — identity maps.
+    rule_description:
+      physical: rule_description
+    quality_category:
+      physical: quality_category
+    table_name_checked:
+      physical: table_name_checked
+    column_name_checked:
+      physical: column_name_checked
+    severity:
+      physical: severity
+    dependent_on:
+      physical: dependent_on
+  # SAP columns: required (schema_validator.REQUIRED_SAP_COLS) + the rest built
+  # in data_loader.load_sap_map / _parse_template_sheet. Identity maps.
+  sap:
+    sap_table:
+      physical: sap_table
+    sap_field:
+      physical: sap_field
+    field_label:
+      physical: field_label
+    cchbc_field_usage_comments:
+      physical: cchbc_field_usage_comments
+    mdg_validation_rules:
+      physical: mdg_validation_rules
+    required_optional:
+      physical: required_optional
+    sap_field_format:
+      physical: sap_field_format
+    reference_table:
+      physical: reference_table
+
+# Exact source of chat_agent._RULE_ID_RE.pattern
+id_pattern: '\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b'
+
+vocab:
+  entity_singular: rule
+  entity_plural: rules
+  domain_noun: Customer data quality rule
+  # chat_agent._CATEGORIES
+  categories:
+    - completeness
+    - uniqueness
+    - validity
+    - consistency
+    - accuracy
+    - timeliness
+    - conformity
+  # chat_agent._SEVERITY_MAP
+  severity_map:
+    "1": Critical
+    "2": High
+    "3": Medium
+    "4": Low
+  # chat_agent._TABLE_BUSINESS_NAMES (verbatim)
+  business_names:
+    KNA1: customer master — general data
+    KNB1: customer master — company code data
+    KNB5: customer master — dunning data
+    KNVV: customer master — sales area data
+    KNVP: customer master — partner functions
+    KNVA: customer master — unloading points
+    KNVH: customer hierarchy
+    KNVI: customer master — tax indicators
+    ADRC: central address data
+    ADR2: telephone numbers
+    ADR3: fax numbers
+    ADR6: email addresses
+    BUT000: business partner — general data
+    BUT050: business partner relationships
+    BUT051: business partner contact persons
+    BUT0BK: business partner bank details
+    BUT0IS: business partner industry sectors
+    CVI_CUST_LINK: customer / business-partner link
+    DFKKBPTAXNUM: business partner tax numbers
+    UKMBP_CMS: credit management profile
+    UKMBP_CMS_SGM: credit management segment
+    LFA1: vendor master — general data
+    LFB1: vendor master — company code data
+    LFM1: vendor master — purchasing data
+    MARA: material master — general data
+    MARC: material master — plant data
+    MAKT: material descriptions
+    MVKE: material master — sales data
+    MBEW: material valuation
+    MARM: material units of measure
+    MLAN: material tax classifications
+    MLGN: material master — warehouse data
+    SKA1: G/L account master — chart of accounts
+    SKAT: G/L account descriptions
+    SKB1: G/L account master — company code
+    CSKS: cost center master
+    CSKB: cost element master
+    CEPC: profit center master
+    ANLA: asset master
+  platform_terms:
+    - SAP
+    - Databricks
+    - golden/
+
+prompts:
+  # analyst_system omitted -> inherits kb/_defaults.yaml template
+  repository_label: Customer data quality rule repository
