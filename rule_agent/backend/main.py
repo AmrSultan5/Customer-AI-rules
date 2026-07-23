@@ -793,11 +793,19 @@ async def admin_reload(kb: str | None = None):
         provider = _kb_registry.get_provider(kb)
         if provider is None:
             raise HTTPException(status_code=404, detail={"error": f"Unknown knowledge base: {kb!r}"})
+        # Explicit per-KB reload runs the provider's full reload — for a RAG KB
+        # that means re-ingesting (clone + embed), which is deliberate here.
         targets = {kb: provider}
     else:
+        # "Reload everything" hot-reloads structured data from disk cheaply. It
+        # deliberately SKIPS RAG-only KBs: their reload() re-embeds the whole
+        # corpus (network + cost), which must be triggered explicitly via
+        # ?kb=<id> or `python -m ingest --kb <id>`, not as a side effect.
         targets = {
-            descriptor.id: _kb_registry.get_provider(descriptor.id)
+            descriptor.id: provider
             for descriptor in _kb_registry.list_descriptors()
+            if (provider := _kb_registry.get_provider(descriptor.id)) is not None
+            and "entity" in provider.capabilities()
         }
 
     try:

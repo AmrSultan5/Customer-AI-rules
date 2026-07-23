@@ -105,8 +105,8 @@ def test_field_map_covers_required_columns():
 
 def test_registry_lists_customer_sap_as_default():
     registry = KnowledgeBaseRegistry(kb_dir=_KB_DIR, active_kb="customer_sap")
-    descriptors = registry.list_descriptors()
-    assert [d.id for d in descriptors] == ["customer_sap"]
+    ids = {d.id for d in registry.list_descriptors()}
+    assert "customer_sap" in ids  # docs_demo (Phase 8b) may also be registered
     assert registry.default_kb_id == "customer_sap"
     assert registry.get_descriptor("customer_sap") is not None
     assert registry.get_descriptor("nonexistent") is None

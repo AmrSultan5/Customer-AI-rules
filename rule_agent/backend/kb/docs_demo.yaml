@@ -1,0 +1,37 @@
+# Demo RAG (docs-only) knowledge base — proves the engine serves more than one
+# KB and that a rag-only KB answers from ingested chunks rather than the
+# structured rule flow. Points at the small committed sample docs under
+# kb/sample_docs; run `python -m ingest --kb docs_demo` (needs OPENAI_API_KEY)
+# to embed them into the vector store.
+id: docs_demo
+name: Docs Demo
+description: >-
+  A small sample documentation knowledge base (Acme Widgets docs) used to
+  demonstrate retrieval-augmented answering over arbitrary documents.
+adapter: rag
+retrieval_mode: rag
+
+source:
+  kind: rag
+  roots:
+    - kb/sample_docs
+  include_globs:
+    - "**/*.md"
+
+# Unused by RAG (no addressable entities), but the schema requires a pattern.
+id_pattern: '\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b'
+
+vocab:
+  entity_singular: document
+  entity_plural: documents
+
+prompts:
+  repository_label: Acme Widgets documentation
+  # Own analyst_system (document Q&A), NOT the rule-specific default template.
+  analyst_system: >-
+    You are a helpful assistant answering questions about {repository_label}.
+    Answer using ONLY the context provided from the knowledge base. Cite the
+    source file (shown after "Source:") when you use it. If the answer is not
+    contained in the provided context, say you don't have that information and
+    suggest what the user could ask about instead. Be clear and concise; do not
+    invent details that are not in the context.

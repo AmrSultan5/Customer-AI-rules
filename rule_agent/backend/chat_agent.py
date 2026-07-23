@@ -762,6 +762,34 @@ def _build_rule_context(
     return _get_provider().build_context(rule_id, row, logic, rules)
 
 
+def _rag_user_message(message: str, ctx: str, extra_context: str | None) -> str:
+    """User message for the RAG answer path: the question plus retrieved
+    context (or a note that nothing relevant was found)."""
+    prefix = _instructions_block(extra_context)
+    if ctx:
+        return (f"{prefix}Question: {message}\n\n"
+                f"Context from the knowledge base:\n{ctx}")
+    return (f"{prefix}Question: {message}\n\n"
+            "(No relevant context was found in the knowledge base for this question.)")
+
+
+def _run_coro(coro):
+    """Run a coroutine to completion from a synchronous caller.
+
+    handle_message is sync but the RAG retrieval + async LLM call are
+    coroutines. With no event loop running in this thread (FastAPI runs sync
+    path operations in a threadpool; sync tests) asyncio.run is used directly;
+    if a loop is already running in this thread the coroutine is executed in a
+    fresh worker thread so the live loop is never touched."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(lambda: asyncio.run(coro)).result()
+
+
 async def stream_message(
     message: str,
     context_rule_id: str | None = None,
@@ -796,6 +824,26 @@ async def stream_message(
     try:
         def _sse(obj: dict) -> str:
             return f"data: {json.dumps(obj)}\n\n"
+
+        # ── RAG-only KB: answer from retrieved chunks (Phase 8b) ─────────────
+        # A rag-only provider exposes no addressable entities/rules, so skip
+        # the structured rule-lookup flow entirely and ground the answer in the
+        # top-k semantic chunks for this KB.
+        _prov = _get_provider()
+        if "entity" not in _prov.capabilities():
+            ctx = await _prov.retrieve_context_for_query(message, limit=8)
+            user_msg = _rag_user_message(message, ctx, extra_context)
+            try:
+                async for chunk_text in call_openai_stream(
+                    _get_system_prompt(), user_msg, max_tokens=1000,
+                ):
+                    yield _sse({"type": "chunk", "text": chunk_text})
+            except Exception as e:
+                log.error("[ERROR] stream_message RAG path failed: %s", type(e).__name__)
+                yield _sse({"type": "chunk",
+                            "text": "Unable to answer from the knowledge base at this time."})
+            yield _sse({"type": "done", "rule_id": None, "suggested_followups": []})
+            return
 
         rule_id = _extract_rule_id(message)
 
@@ -966,6 +1014,22 @@ def handle_message(
     provider_token = _provider_override.set(provider)
     prompt_token = _custom_prompt_override.set(custom_prompt)
     try:
+        # ── RAG-only KB: answer from retrieved chunks (Phase 8b) ─────────────
+        _prov = _get_provider()
+        if "entity" not in _prov.capabilities():
+            from explanation_engine import call_openai_async
+            ctx = _run_coro(_prov.retrieve_context_for_query(message, limit=8))
+            user_msg = _rag_user_message(message, ctx, extra_context)
+            try:
+                response = _run_coro(call_openai_async(
+                    _get_system_prompt(), user_msg, max_tokens=1000,
+                    knowledge_base_id=_prov.kb.id,
+                ))
+            except Exception as e:
+                log.error("[ERROR] handle_message RAG path failed: %s", type(e).__name__)
+                response = "Unable to answer from the knowledge base at this time."
+            return {"response": response, "rule_id": None, "suggested_followups": []}
+
         rule_id = _extract_rule_id(message)
         if not rule_id:
             return _handle_no_rule_id(
