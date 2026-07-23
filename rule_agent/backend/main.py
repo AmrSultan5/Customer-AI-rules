@@ -36,10 +36,16 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from data_loader import get_rules, get_yaml_rules
+from data_loader import (
+    get_rules, get_yaml_rules, find_yaml_for_rule, get_yaml_raw,
+    extract_rule_section_from_yaml, get_referenced_rules,
+)
 from schema_validator import validate_rules, validate_sap
 from chat_agent import handle_message, stream_message
 from analytics import track_chat_event, track_feedback
+from lineage_service import get_lineage
+from rule_parser import extract_sap_fields
+from sap_mapper import lookup_sap_field
 
 import db
 import conversation_service as cs
@@ -446,6 +452,138 @@ async def get_kb_detail(kb_id: str, session: AsyncSession = Depends(get_session)
         "custom_prompt": row.custom_prompt if row else None,
         "enhanced_prompt": row.enhanced_prompt if row else None,
     }
+
+
+# ── Entity (rule) detail — the rule card, for entity-capable KBs only ────────
+
+
+def _require_entity_kb(kb_id: str):
+    """Resolve a KB and 404 unless it exposes addressable entities (rules).
+    The rule card is only meaningful for structured/hybrid KBs; a rag-only KB
+    has no rule to render."""
+    provider = get_provider(kb_id)
+    if "entity" not in provider.capabilities():
+        raise HTTPException(
+            status_code=404,
+            detail={"error": f"Knowledge base {kb_id!r} has no addressable entities."},
+        )
+    return provider
+
+
+def _build_rule_response(rule_id: str) -> dict:
+    """Full rule-card payload: business explanation, technical YAML, SAP field
+    table, lineage/workflow, origin, and cross-rule references. Restored with
+    the sap_mapper/rule_parser/lineage_service modules for the rule card."""
+    rules = get_rules()
+    get_yaml_rules()  # warm the cache
+
+    match = rules[rules["rule_id"].str.upper() == rule_id.upper()]
+    if match.empty:
+        raise HTTPException(status_code=404, detail={"error": "Rule not found"})
+
+    row = match.iloc[0]
+    excel_logic = str(row.get("rule_logic", "") or "")
+
+    yaml_match = find_yaml_for_rule(rule_id)
+    if yaml_match:
+        yaml_filename = yaml_match["yaml_file"]
+        technical_rule = extract_rule_section_from_yaml(get_yaml_raw(yaml_filename), rule_id)
+        yaml_ref = yaml_filename
+    else:
+        technical_rule = excel_logic
+        yaml_ref = ""
+
+    raw_fields = extract_sap_fields(excel_logic)
+    mapped_fields = [lookup_sap_field(f) for f in raw_fields]
+    ctx = explanation_engine.build_sap_context(mapped_fields)
+    explanation = explanation_engine.explain_rule(excel_logic, ctx)
+
+    lin = get_lineage(rule_id)
+    workflow_steps = lin.get("workflow_steps", [])
+    if not yaml_ref:
+        yaml_ref = lin.get("yaml_reference", "")
+    sources = lin.get("pipeline_sources", [])
+
+    origin_parts = []
+    for key in ("module", "group", "sub_domain", "quality_category"):
+        val = str(row.get(key, "") or "").strip()
+        if val and val.lower() not in ("nan", "none", ""):
+            origin_parts.append(val)
+    origin = " / ".join(origin_parts)
+
+    referenced_rules = [
+        {
+            "rule_id": ref["rule_id"],
+            "source": ref["source"],
+            "active": ref.get("active", False),
+            "description": ref.get("rule_description", ""),
+            "quality_category": ref.get("quality_category", ""),
+            "severity": ref.get("severity", ""),
+        }
+        for ref in get_referenced_rules(rule_id)
+    ]
+
+    return {
+        "rule_id": str(row.get("rule_id", "")),
+        "business_explanation": explanation,
+        "technical_rule": technical_rule,
+        "sap_fields": mapped_fields,
+        "origin": origin,
+        "workflow_steps": workflow_steps,
+        "yaml_reference": yaml_ref,
+        "sources": sources,
+        "description": str(row.get("rule_description", "") or ""),
+        "quality_category": str(row.get("quality_category", "") or ""),
+        "severity": str(row.get("severity", "") or ""),
+        "table_checked": str(row.get("table_name_checked", "") or ""),
+        "column_checked": str(row.get("column_name_checked", "") or ""),
+        "referenced_rules": referenced_rules,
+    }
+
+
+@router.get("/kb/{kb_id}/entity/{entity_id}")
+async def get_kb_entity(kb_id: str, entity_id: str):
+    """Full rule card for one entity. 404 for a KB without addressable
+    entities (e.g. a rag-only docs KB)."""
+    _require_entity_kb(kb_id)
+    return _build_rule_response(entity_id)
+
+
+@router.get("/kb/{kb_id}/entities/related/{entity_id}")
+async def get_kb_related_entities(kb_id: str, entity_id: str):
+    """Up to 4 rules sharing this rule's category or table."""
+    _require_entity_kb(kb_id)
+    rules = get_rules()
+    match = rules[rules["rule_id"].str.upper() == entity_id.upper()]
+    if match.empty:
+        raise HTTPException(status_code=404, detail={"error": "Rule not found"})
+
+    row = match.iloc[0]
+    category = str(row.get("quality_category", "") or "").strip()
+    table = str(row.get("table_name_checked", "") or "").strip()
+    others = rules[rules["rule_id"].str.upper() != entity_id.upper()]
+
+    masks = []
+    if category:
+        masks.append(others["quality_category"].fillna("").str.strip().str.lower() == category.lower())
+    if table and "table_name_checked" in others.columns:
+        masks.append(others["table_name_checked"].fillna("").str.strip().str.lower() == table.lower())
+    if not masks:
+        return []
+
+    combined = masks[0]
+    for m in masks[1:]:
+        combined = combined | m
+
+    return [
+        {
+            "rule_id": str(r.get("rule_id", "") or ""),
+            "quality_category": str(r.get("quality_category", "") or ""),
+            "severity": str(r.get("severity", "") or ""),
+            "table_checked": str(r.get("table_name_checked", "") or ""),
+        }
+        for _, r in others[combined].head(4).iterrows()
+    ]
 
 
 # ── Prompt enhance / save (Phase 6) ─────────────────────────────────────────

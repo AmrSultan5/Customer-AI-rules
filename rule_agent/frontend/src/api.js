@@ -121,6 +121,11 @@ export const enhancePrompt = (kbId, draft) =>
 export const saveKBPrompt = (kbId, { custom_prompt, enhanced_prompt }) =>
   _json(`/kb/${kbId}/prompt`, { method: 'PUT', body: { custom_prompt, enhanced_prompt } })
 
+/** Full rule-card payload for one entity (rule) in a KB. Entity-capable KBs only. */
+export const getRuleCard = (kbId, entityId) => _json(`/kb/${kbId}/entity/${entityId}`)
+/** Up to 4 rules related to this one (same category/table). */
+export const getRelatedRules = (kbId, entityId) => _json(`/kb/${kbId}/entities/related/${entityId}`)
+
 export const listProjects = () => _json('/projects')
 export const createProject = (name, instructions = null) =>
   _json('/projects', { method: 'POST', body: { name, instructions } })

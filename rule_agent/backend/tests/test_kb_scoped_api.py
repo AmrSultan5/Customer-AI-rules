@@ -267,3 +267,23 @@ def test_get_provider_ignores_explicit_kb_when_switcher_disabled(monkeypatch):
     # so this must NOT 404.
     provider = main_module.get_provider("does_not_exist")
     assert provider.kb.id == settings.active_kb
+
+
+# ── Rule card (entity detail) capability gating ──────────────────────────────
+
+def test_entity_route_404_for_rag_only_kb():
+    # docs_demo is rag-only (no "entity" capability) — the rule card must 404.
+    r = client.get("/kb/docs_demo/entity/RCCOMP_103.1", headers=AUTH)
+    assert r.status_code == 404
+    r2 = client.get("/api/kb/docs_demo/entity/RCCOMP_103.1", headers=AUTH)
+    assert r2.status_code == 404
+
+
+def test_entity_route_404_for_unknown_kb():
+    r = client.get("/kb/does_not_exist/entity/RCCOMP_103.1", headers=AUTH)
+    assert r.status_code == 404
+
+
+def test_related_entities_route_404_for_rag_only_kb():
+    r = client.get("/kb/docs_demo/entities/related/RCCOMP_103.1", headers=AUTH)
+    assert r.status_code == 404

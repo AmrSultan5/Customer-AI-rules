@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Tooltip from './Tooltip.jsx'
@@ -95,11 +95,36 @@ function CodeBlockPre({ children }) {
   )
 }
 
-const mdComponents = {
-  pre: CodeBlockPre,
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-  ),
+// Entity-id auto-linking (rule cards). Rule IDs in agent answers become
+// clickable links (href "rule:<id>") that open the rule card — only when the
+// active KB is entity-capable (onRuleSelected is provided). Code spans/blocks
+// are left untouched.
+const RULE_ID_RE = /\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b/g
+
+function linkifyRules(text, enabled) {
+  if (!enabled || !text) return text
+  return text
+    .split(/(```[\s\S]*?```|`[^`]*`)/g)
+    .map(seg => (seg.startsWith('`') ? seg : seg.replace(RULE_ID_RE, m => `[${m}](rule:${m})`)))
+    .join('')
+}
+
+function makeMdComponents(onRuleSelected) {
+  return {
+    pre: CodeBlockPre,
+    a: ({ href, children }) => {
+      if (href && href.startsWith('rule:')) {
+        const id = href.slice(5)
+        return (
+          <a className="rule-link" href="#"
+            onClick={e => { e.preventDefault(); onRuleSelected?.(id) }}>
+            {children}
+          </a>
+        )
+      }
+      return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    },
+  }
 }
 
 const AgentIcon = () => (
@@ -205,7 +230,10 @@ export default function ChatBox({
   onConversationCreated,
   onConversationUpdated,
   onStartNewChat,
+  onRuleSelected = null,
+  prefill = null,
 }) {
+  const md = useMemo(() => makeMdComponents(onRuleSelected), [onRuleSelected])
   const [messages, setMessages] = useState(() => initialMessages())
   const [loading, setLoading] = useState(false)
   const [generalMode, setGeneralMode] = useState(() => {
@@ -216,6 +244,7 @@ export default function ChatBox({
   const bottomRef        = useRef(null)
   const richInputRef     = useRef(null)
   const loadedConvRef    = useRef(null)   // conversation id whose messages are in state
+  const lastPrefillRef   = useRef(null)   // prefill token already sent (avoid re-send)
 
   // Load messages when the active conversation changes (skip if ChatBox just
   // created it during send — loadedConvRef already points at it).
@@ -384,6 +413,8 @@ export default function ChatBox({
               }
               return updated
             })
+            // Open the rule card for the resolved entity (entity-capable KBs).
+            if (parsed.rule_id && onRuleSelected) onRuleSelected(parsed.rule_id)
           }
         }
       }
@@ -436,6 +467,14 @@ export default function ChatBox({
       rule_id: msg.ruleId ?? null,
     }).catch(() => {})
   }
+
+  // "Ask about this rule" (from the rule card) → send that question.
+  useEffect(() => {
+    if (!prefill?.id || lastPrefillRef.current === prefill.id) return
+    lastPrefillRef.current = prefill.id
+    if (prefill.text) send(prefill.text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill])
 
   const userMsgCount  = messages.filter(m => m.role === 'user').length
   const hasHistory    = messages.length > 1
@@ -524,14 +563,14 @@ export default function ChatBox({
                       ) : msg.isStreaming ? (
                         // Answer text: render markdown live so it's formatted as it streams
                         <>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {msg.text}
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>
+                            {linkifyRules(msg.text, !!onRuleSelected)}
                           </ReactMarkdown>
                           <span className="streaming-cursor" aria-hidden="true" />
                         </>
                       ) : (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                          {msg.text}
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>
+                          {linkifyRules(msg.text, !!onRuleSelected)}
                         </ReactMarkdown>
                       )}
                     </div>

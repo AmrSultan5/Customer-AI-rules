@@ -3,8 +3,9 @@ import ChatBox from './components/ChatBox.jsx'
 import ConversationSidebar from './components/ConversationSidebar.jsx'
 import Login from './components/Login.jsx'
 import Settings from './components/Settings.jsx'
+import RuleCard from './components/RuleCard.jsx'
 import { branding } from './config/branding.js'
-import { getUsername, setUsername, listKBs } from './api.js'
+import { getUsername, setUsername, listKBs, getRuleCard } from './api.js'
 
 const THEME_KEY = 'rule_agent_theme'
 const ACTIVE_KB_KEY = 'rule_agent_active_kb'
@@ -119,6 +120,28 @@ export default function App() {
   const activeKb = knowledgeBases.find(k => k.id === activeKbId) ?? null
   const showKbSelector = switcherEnabled && knowledgeBases.length > 1
 
+  // ── Rule card (only for entity-capable KBs, e.g. a rule repo) ───────────────
+  const entityCapable = !!activeKb?.capabilities?.includes('entity')
+  const [activeRuleId, setActiveRuleId] = useState(null)
+  const [ruleData, setRuleData] = useState(null)
+  const [chatPrefill, setChatPrefill] = useState(null)
+
+  const loadRule = useCallback(async (ruleId) => {
+    if (!ruleId || !activeKbId) return
+    setActiveRuleId(ruleId)
+    setRuleData(null)
+    try {
+      setRuleData(await getRuleCard(activeKbId, ruleId))
+    } catch {
+      setRuleData(null)
+    }
+  }, [activeKbId])
+
+  const closeRule = useCallback(() => { setActiveRuleId(null); setRuleData(null) }, [])
+
+  // Clear the rule panel when the active KB changes (rule IDs aren't shared).
+  useEffect(() => { setActiveRuleId(null); setRuleData(null) }, [activeKbId])
+
   if (!username) {
     return <Login onDone={(name) => setUsernameState(name)} />
   }
@@ -187,8 +210,31 @@ export default function App() {
             onConversationCreated={(conv) => { handleSelectConversation(conv); bumpConvReload() }}
             onConversationUpdated={bumpConvReload}
             onStartNewChat={() => setActiveConversation(null)}
+            onRuleSelected={entityCapable ? loadRule : undefined}
+            prefill={chatPrefill}
           />
         </main>
+
+        {entityCapable && activeRuleId && (
+          <aside className="rule-panel">
+            <div className="rule-panel-header">
+              <span className="rule-panel-title">{activeRuleId}</span>
+              <button className="rule-sidebar-close" onClick={closeRule} aria-label="Close rule card">×</button>
+            </div>
+            <div className="rule-panel-body">
+              {ruleData ? (
+                <RuleCard
+                  rule={ruleData}
+                  kbId={activeKbId}
+                  onRuleSelected={loadRule}
+                  onAskAboutRule={(id) => setChatPrefill({ text: `Explain rule ${id}`, id: Date.now() })}
+                />
+              ) : (
+                <div className="rule-panel-loading">Loading {activeRuleId}…</div>
+              )}
+            </div>
+          </aside>
+        )}
       </div>
 
       {settingsOpen && (
