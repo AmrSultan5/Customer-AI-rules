@@ -44,7 +44,10 @@ from analytics import track_chat_event, track_feedback
 import db
 import conversation_service as cs
 import openai_client
+from config import settings
 from db import get_session
+from models import KnowledgeBase
+from providers.registry import KnowledgeBaseRegistry
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -85,6 +88,40 @@ if not _DEV_MODE and not _AUTH_TOKEN:
         f"RULE_AGENT_API_TOKEN must be set when RULE_AGENT_ENV={_RULE_AGENT_ENV!r}. "
         'Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
     )
+
+# ── Knowledge base registry / resolver (Phase 5) ───────────────────────────────
+#
+# One module-level registry, built once at import time (same descriptors
+# chat_agent.py's own lazily-built registry reads — both load
+# backend/kb/*.yaml, so they always agree on which KBs exist and resolve to
+# behaviorally-identical providers for a given kb_id).
+_kb_registry = KnowledgeBaseRegistry()
+
+
+def get_provider(kb_id: str | None = None, conversation_kb: str | None = None):
+    """Resolve which KB provider a request should use.
+
+    Precedence: explicit `kb_id` (only honored when `settings.enable_kb_switcher`
+    is true) → `conversation_kb` (a conversation row's stored knowledge_base_id)
+    → `settings.active_kb`. This is the single seam that gives dual-mode KB
+    selection: an in-app switcher (Settings) when enabled, or a config-pinned
+    single KB (`ENABLE_KB_SWITCHER=false`) that always wins regardless of what
+    a caller requests.
+
+    Raises HTTPException(404) if the resolved id has no registered KB.
+    """
+    resolved_id = (
+        (kb_id if kb_id and settings.enable_kb_switcher else None)
+        or conversation_kb
+        or settings.active_kb
+    )
+    provider = _kb_registry.get_provider(resolved_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": f"Unknown knowledge base: {resolved_id!r}"},
+        )
+    return provider
 
 # ── Rate limiting ──────────────────────────────────────────────────────────────
 
@@ -196,6 +233,10 @@ class ChatRequest(BaseModel):
     # from the DB, both messages are stored, and project instructions (if any)
     # are injected.
     conversation_id: int | None = None
+    # Explicit KB selection (Phase 5). Only honored when settings.enable_kb_switcher
+    # is true; ignored in favor of the conversation's stored KB / the active KB
+    # otherwise. See get_provider() for the full precedence.
+    knowledge_base_id: Annotated[str | None, Field(max_length=64)] = None
 
 
 # ── Chat workspace request models ───────────────────────────────────────────
@@ -220,6 +261,10 @@ class ConversationCreateRequest(BaseModel):
     project_id: int | None = None
     title: Annotated[str | None, Field(max_length=200)] = None
     context_rule_id: Annotated[str | None, Field(max_length=64)] = None
+    # Explicit KB selection for the new conversation (Phase 5); only honored
+    # when settings.enable_kb_switcher is true. Falls back to settings.active_kb
+    # (see conversation_service.create_conversation).
+    knowledge_base_id: Annotated[str | None, Field(max_length=64)] = None
 
 
 class ConversationUpdateRequest(BaseModel):
@@ -338,11 +383,75 @@ def ready():
 router = APIRouter(dependencies=[Depends(_check_auth)])
 
 
+# ── KB listing (Phase 5) ────────────────────────────────────────────────────
+
+
+@router.get("/kbs")
+async def list_kbs():
+    """List every registered KB plus which one is active / whether the
+    in-app switcher is enabled (drives the frontend KB chooser)."""
+    kbs = []
+    for descriptor in _kb_registry.list_descriptors():
+        provider = _kb_registry.get_provider(descriptor.id)
+        kbs.append({
+            "id": descriptor.id,
+            "name": descriptor.name,
+            "description": descriptor.description,
+            "adapter": descriptor.adapter,
+            "retrieval_mode": descriptor.retrieval_mode,
+            "capabilities": sorted(provider.capabilities()) if provider else [],
+        })
+    return {
+        "knowledge_bases": kbs,
+        "active_kb": settings.active_kb,
+        "switcher_enabled": settings.enable_kb_switcher,
+    }
+
+
+@router.get("/kbs/{kb_id}")
+async def get_kb_detail(kb_id: str, session: AsyncSession = Depends(get_session)):
+    """Descriptor detail for one KB plus its current stored custom/enhanced
+    prompt (Settings → custom prompt, Phase 6 populates enhanced_prompt)."""
+    descriptor = _kb_registry.get_descriptor(kb_id)
+    if descriptor is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown knowledge base: {kb_id!r}"})
+    provider = _kb_registry.get_provider(kb_id)
+    row = await session.get(KnowledgeBase, kb_id)
+    return {
+        "id": descriptor.id,
+        "name": descriptor.name,
+        "description": descriptor.description,
+        "adapter": descriptor.adapter,
+        "retrieval_mode": descriptor.retrieval_mode,
+        "capabilities": sorted(provider.capabilities()) if provider else [],
+        "custom_prompt": row.custom_prompt if row else None,
+        "enhanced_prompt": row.enhanced_prompt if row else None,
+    }
+
+
+# ── Feedback ─────────────────────────────────────────────────────────────────
+
+
+async def _feedback_handler(kb_id_path: str | None, body: FeedbackRequest) -> dict:
+    """Shared body for /feedback and /kb/{kb_id}/feedback."""
+    provider = get_provider(kb_id_path)
+    await track_feedback(body.rating, body.mode, body.rule_id, knowledge_base_id=provider.kb.id)
+    return {"ok": True}
+
+
 @router.post("/feedback")
 async def submit_feedback(body: FeedbackRequest):
-    """Record a thumbs up/down on an assistant answer."""
-    await track_feedback(body.rating, body.mode, body.rule_id)
-    return {"ok": True}
+    """Record a thumbs up/down on an assistant answer (active/default KB)."""
+    return await _feedback_handler(None, body)
+
+
+@router.post("/kb/{kb_id}/feedback")
+async def kb_submit_feedback(kb_id: str, body: FeedbackRequest):
+    """Record a thumbs up/down scoped to a specific KB."""
+    return await _feedback_handler(kb_id, body)
+
+
+# ── Chat (non-streaming) ─────────────────────────────────────────────────────
 
 
 def _history_for_agent(body: ChatRequest) -> list[dict] | None:
@@ -353,24 +462,39 @@ def _history_for_agent(body: ChatRequest) -> list[dict] | None:
     ] or None
 
 
-@router.post("/chat")
-@limiter.limit(_chat_rate_limit)
-async def chat(request: Request, body: ChatRequest):
-    # async def is required for slowapi's decorator to work correctly on Python 3.12+.
+def _resolve_chat_provider(
+    kb_id_path: str | None, body_kb_id: str | None, conversation_kb: str | None = None,
+):
+    """Explicit-selection precedence for the chat routes: a scoped route's URL
+    path segment wins over the request body's knowledge_base_id, which in turn
+    is the "explicit kb_id" get_provider() weighs against the conversation's
+    stored KB / the active KB (see get_provider's own precedence)."""
+    return get_provider(kb_id_path or body_kb_id, conversation_kb)
+
+
+async def _chat_handler(
+    kb_id_path: str | None, body: ChatRequest, session: AsyncSession,
+) -> dict:
+    """Shared body for /chat and /kb/{kb_id}/chat."""
     if len(body.message.strip()) > _MAX_MESSAGE_LEN:
         raise HTTPException(
             status_code=400,
             detail={"detail": f"Message exceeds maximum length of {_MAX_MESSAGE_LEN} characters."},
         )
     try:
+        provider = _resolve_chat_provider(kb_id_path, body.knowledge_base_id)
+        custom_prompt = await cs.get_kb_prompt(session, provider.kb.id)
         history = _history_for_agent(body)
         result = handle_message(
             body.message, body.context_rule_id, history=history, allow_general=body.general,
+            provider=provider, custom_prompt=custom_prompt,
         )
-        asyncio.create_task(track_chat_event(result.get("rule_id") or body.context_rule_id, None))
+        asyncio.create_task(track_chat_event(
+            result.get("rule_id") or body.context_rule_id, None, knowledge_base_id=provider.kb.id,
+        ))
         return result
     except HTTPException:
-        raise  # let rate-limiter and auth exceptions propagate as-is
+        raise  # let rate-limiter, auth, and KB-resolution exceptions propagate as-is
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"detail": str(exc)})
     except Exception as exc:
@@ -383,24 +507,40 @@ async def chat(request: Request, body: ChatRequest):
         )
 
 
-@router.post("/chat/stream")
+@router.post("/chat")
 @limiter.limit(_chat_rate_limit)
-async def chat_stream(
-    request: Request,
-    body: ChatRequest,
-    x_user: Annotated[str | None, Header()] = None,
-    session: AsyncSession = Depends(get_session),
+async def chat(request: Request, body: ChatRequest, session: AsyncSession = Depends(get_session)):
+    # async def is required for slowapi's decorator to work correctly on Python 3.12+.
+    return await _chat_handler(None, body, session)
+
+
+@router.post("/kb/{kb_id}/chat")
+@limiter.limit(_chat_rate_limit)
+async def kb_chat(
+    request: Request, kb_id: str, body: ChatRequest, session: AsyncSession = Depends(get_session),
 ):
-    """Streaming SSE variant of /chat.
+    return await _chat_handler(kb_id, body, session)
+
+
+# ── Chat (streaming) ─────────────────────────────────────────────────────────
+
+
+async def _chat_stream_handler(
+    kb_id_path: str | None,
+    body: ChatRequest,
+    x_user: str | None,
+    session: AsyncSession,
+) -> StreamingResponse:
+    """Shared body for /chat/stream and /kb/{kb_id}/chat/stream.
 
     Returns Server-Sent Events; each event is a JSON object on a `data:` line.
     Event types: {"type":"chunk","text":"..."} and
     {"type":"done","rule_id":"...","suggested_followups":[...]}.
-    The existing /chat endpoint is unchanged for non-streaming clients.
 
     When body.conversation_id is set, history is loaded from the DB, both the
-    user and assistant messages are persisted, and any project instructions
-    are injected as context.
+    user and assistant messages are persisted, project instructions (if any)
+    are injected as context, and the conversation's own stored KB feeds into
+    KB resolution (see _resolve_chat_provider / get_provider).
     """
     message = body.message.strip()
 
@@ -410,6 +550,7 @@ async def chat_stream(
     conv_id = body.conversation_id
     user_id: int | None = None
     context_rule_id = body.context_rule_id
+    conversation_kb: str | None = None
 
     if conv_id is not None:
         if not x_user or not x_user.strip():
@@ -423,6 +564,7 @@ async def chat_stream(
         if conv is None:
             raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
         context_rule_id = body.context_rule_id or conv.context_rule_id
+        conversation_kb = conv.knowledge_base_id
         db_hist = await cs.recent_history(session, conv_id)
         if db_hist:
             history = db_hist
@@ -431,6 +573,10 @@ async def chat_stream(
         # Persist the user turn before streaming.
         await cs.append_message(session, conv_id, "user", body.message)
         await session.commit()
+
+    provider = _resolve_chat_provider(kb_id_path, body.knowledge_base_id, conversation_kb)
+    custom_prompt = await cs.get_kb_prompt(session, provider.kb.id)
+    resolved_kb_id = provider.kb.id
 
     # Validate before starting the generator — once StreamingResponse begins,
     # the HTTP 200 header is already sent and we cannot return a 4xx.
@@ -450,6 +596,7 @@ async def chat_stream(
             async for event in stream_message(
                 body.message, context_rule_id, history=history,
                 allow_general=body.general, extra_context=extra_context,
+                provider=provider, custom_prompt=custom_prompt,
             ):
                 if event.startswith("data:"):
                     try:
@@ -470,7 +617,9 @@ async def chat_stream(
             yield f"data: {json.dumps({'type': 'chunk', 'text': assistant_text})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'rule_id': None, 'suggested_followups': []})}\n\n"
         finally:
-            asyncio.create_task(track_chat_event(resolved_rule_id, None, user_id))
+            asyncio.create_task(
+                track_chat_event(resolved_rule_id, None, user_id, knowledge_base_id=resolved_kb_id)
+            )
             if conv_id is not None and assistant_text.strip():
                 # Awaited (not fire-and-forget): the `done` event has already been
                 # sent, so this only briefly delays closing the stream, and it
@@ -484,6 +633,29 @@ async def chat_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/chat/stream")
+@limiter.limit(_chat_rate_limit)
+async def chat_stream(
+    request: Request,
+    body: ChatRequest,
+    x_user: Annotated[str | None, Header()] = None,
+    session: AsyncSession = Depends(get_session),
+):
+    return await _chat_stream_handler(None, body, x_user, session)
+
+
+@router.post("/kb/{kb_id}/chat/stream")
+@limiter.limit(_chat_rate_limit)
+async def kb_chat_stream(
+    request: Request,
+    kb_id: str,
+    body: ChatRequest,
+    x_user: Annotated[str | None, Header()] = None,
+    session: AsyncSession = Depends(get_session),
+):
+    return await _chat_stream_handler(kb_id, body, x_user, session)
 
 
 async def _persist_assistant_turn(
@@ -517,22 +689,42 @@ admin_router = APIRouter(prefix="/admin", dependencies=[Depends(_check_admin_aut
 
 
 @admin_router.post("/reload")
-async def admin_reload():
-    """Reload all data sources (Excel inventory, golden/ YAML, custom ops) from disk.
+async def admin_reload(kb: str | None = None):
+    """Reload data sources from disk for one KB (`?kb=<id>`) or, with no `kb`
+    query param, every registered KB's provider.
 
-    The reload validates the fresh data BEFORE swapping caches, so a broken
-    file leaves the running app serving the previous data and returns 503.
+    Each provider's reload() validates the fresh data BEFORE swapping caches,
+    so a broken file leaves the running app serving the previous data and
+    this returns 503.
     """
-    import data_loader
+    if kb is not None:
+        provider = _kb_registry.get_provider(kb)
+        if provider is None:
+            raise HTTPException(status_code=404, detail={"error": f"Unknown knowledge base: {kb!r}"})
+        targets = {kb: provider}
+    else:
+        targets = {
+            descriptor.id: _kb_registry.get_provider(descriptor.id)
+            for descriptor in _kb_registry.list_descriptors()
+        }
+
     try:
-        counts = await asyncio.to_thread(data_loader.reload_all)
+        counts: dict[str, dict] = {}
+        for kb_id, provider in targets.items():
+            counts[kb_id] = await asyncio.to_thread(provider.reload)
     except Exception as exc:
         log.error("[ERROR] /admin/reload failed: %s — %s", type(exc).__name__, exc)
         return JSONResponse(
             status_code=503,
             content={"ok": False, "error": f"Reload failed ({type(exc).__name__}) — previous data is still being served."},
         )
-    return {"ok": True, **counts}
+
+    # A single-KB reload (explicit ?kb=, or only one KB is registered) keeps
+    # the original flat {"ok": True, **counts} shape for back-compat; only a
+    # true multi-KB "reload everything" response nests per-KB results.
+    if len(counts) == 1:
+        return {"ok": True, **next(iter(counts.values()))}
+    return {"ok": True, "results": counts}
 
 
 # ── Chat workspace router (users, projects, conversations) ───────────────────
@@ -606,9 +798,18 @@ async def post_conversation(
 ):
     if body.project_id is not None and await cs.get_project(session, body.project_id, user.id) is None:
         raise HTTPException(status_code=404, detail={"error": "Project not found."})
+    kb_id: str | None = None
+    if body.knowledge_base_id and settings.enable_kb_switcher:
+        if _kb_registry.get_descriptor(body.knowledge_base_id) is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": f"Unknown knowledge base: {body.knowledge_base_id!r}"},
+            )
+        kb_id = body.knowledge_base_id
     return await cs.create_conversation(
         session, user.id, persona=body.persona, project_id=body.project_id,
         title=body.title, context_rule_id=body.context_rule_id,
+        knowledge_base_id=kb_id,
     )
 
 

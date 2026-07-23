@@ -209,7 +209,7 @@ def test_chat_stream_persists_and_titles_and_injects_instructions(monkeypatch):
     captured = {}
 
     async def fake_stream(message, context_rule_id=None, history=None,
-                          allow_general=False, extra_context=None):
+                          allow_general=False, extra_context=None, **kwargs):
         captured["extra_context"] = extra_context
         captured["history"] = history
         yield f"data: {_json.dumps({'type': 'chunk', 'text': 'Hello '})}\n\n"
@@ -255,7 +255,7 @@ def test_chat_stream_persists_and_titles_and_injects_instructions(monkeypatch):
 
 
 def test_chat_stream_unknown_conversation_404(monkeypatch):
-    async def fake_stream(*a, **k):
+    async def fake_stream(*a, **kwargs):
         yield f"data: {_json.dumps({'type': 'done', 'rule_id': None, 'suggested_followups': []})}\n\n"
         return
 

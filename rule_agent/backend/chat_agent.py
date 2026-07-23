@@ -4,6 +4,7 @@ Intent detection and routing for the /chat endpoint.
 """
 
 import asyncio
+import contextvars
 import json
 import logging
 import re
@@ -28,8 +29,32 @@ _RULE_ID_RE = re.compile(
 # see _get_system_prompt() below and the vocab lookups inline where they're used.
 _provider = None
 
+# Phase 5: handle_message/stream_message accept an optional `provider` +
+# `custom_prompt` (the caller's resolved KB + its stored enhanced_prompt).
+# Every private helper below (_extract_rule_id, _detect_category,
+# _get_system_prompt, _build_rule_context, the sap_table/sap_column/severity
+# formatters, …) still just calls the parameterless _get_provider() — rather
+# than threading a `provider` argument through that whole call graph, the two
+# public entry points stash the per-request provider/custom_prompt in
+# contextvars for the duration of the call, so _get_provider() transparently
+# resolves to it. contextvars (not a plain module-global) so concurrent
+# requests never see each other's KB: each asyncio Task (stream_message) and
+# each threadpool-run sync call (handle_message, run via Starlette's
+# copy-context threadpool) gets its own isolated copy. When no provider is
+# passed (the default), behavior is byte-identical to pre-Phase-5: the module
+# default (customer_sap) with custom_prompt=None.
+_provider_override: "contextvars.ContextVar[Any | None]" = contextvars.ContextVar(
+    "chat_agent_provider_override", default=None
+)
+_custom_prompt_override: "contextvars.ContextVar[str | None]" = contextvars.ContextVar(
+    "chat_agent_custom_prompt_override", default=None
+)
+
 
 def _get_provider():
+    override = _provider_override.get()
+    if override is not None:
+        return override
     global _provider
     if _provider is None:
         from providers.registry import KnowledgeBaseRegistry
@@ -43,12 +68,14 @@ def _get_system_prompt() -> str:
     """Analyst system prompt for the active KB (Phase 3: kb.prompts + vocab,
     replacing the old explanation_engine._SYSTEM_PROMPT constant).
 
-    custom_prompt wiring from the DB (per-KB, user-authored) lands in a later
-    phase; pass None here for now so customer_sap output is unchanged.
+    Phase 5: custom_prompt comes from `_custom_prompt_override` — the resolved
+    KB's stored enhanced_prompt, set for the duration of handle_message/
+    stream_message. None (the default) reproduces customer_sap's unchanged
+    output, same as before Phase 5.
     """
     import prompts
 
-    return prompts.build_system_prompt(_get_provider().kb, custom_prompt=None)
+    return prompts.build_system_prompt(_get_provider().kb, custom_prompt=_custom_prompt_override.get())
 
 
 def _extract_rule_id(message: str) -> str | None:
@@ -741,6 +768,8 @@ async def stream_message(
     history: list[dict] | None = None,
     allow_general: bool = False,
     extra_context: str | None = None,
+    provider: Any = None,
+    custom_prompt: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat response as Server-Sent Events (analyst flow only).
 
@@ -748,6 +777,10 @@ async def stream_message(
     Event types:
       {"type":"chunk","text":"..."}   — one or more text chunks
       {"type":"done","rule_id":"...","suggested_followups":[...]}  — final event
+
+    `provider`/`custom_prompt` (Phase 5): the caller's resolved KB provider
+    and that KB's stored enhanced_prompt. Both default to None, which
+    reproduces the pre-Phase-5 default-KB (customer_sap) behavior exactly.
     """
     message = message.strip()
     if len(message) > 2000:
@@ -758,226 +791,134 @@ async def stream_message(
     if history:
         history = history[-_MAX_HISTORY:]
 
-    def _sse(obj: dict) -> str:
-        return f"data: {json.dumps(obj)}\n\n"
-
-    rule_id = _extract_rule_id(message)
-
-    # ── No rule ID in message ─────────────────────────────────────────────────
-    if not rule_id:
-        result = _handle_no_rule_id(
-            message, context_rule_id, history=history, allow_general=allow_general,
-            extra_context=extra_context,
-        )
-        text = result.get("response", "")
-        rid = result.get("rule_id")
-        async for part in _stream_text(text):
-            yield part
-        followups = result.get("suggested_followups", [])
-        yield _sse({"type": "done", "rule_id": rid, "suggested_followups": followups})
-        return
-
-    # ── Rule ID found ─────────────────────────────────────────────────────────
-    from data_loader import get_rules
-
-    rules = get_rules()
-    match = rules[rules["rule_id"].str.upper() == rule_id]
-
-    if match.empty:
-        async for part in _stream_text(f"Rule {rule_id} was not found in the active Customer rules."):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id, "suggested_followups": []})
-        return
-
-    row = match.iloc[0]
-    logic = str(row.get("rule_logic", "") or "")
-    intent = _classify_intent_llm(message, rule_id)
-
-    available = {
-        "has_severity": bool(_safe(row.get("severity", ""))),
-        "has_lineage": True,
-        "has_yaml": bool(logic),
-        "has_sap_fields": bool(_safe(row.get("column_name_checked", ""))),
-    }
-
-    # ── Data-lookup intents (instant, no LLM streaming needed) ───────────────
-    if intent == "description":
-        desc = _safe(row.get("rule_description", ""))
-        response = (f"**Description for {rule_id}:**\n\n{desc}"
-                    if desc else f"No description available for rule {rule_id}.")
-        async for part in _stream_text(response):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id,
-                    "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
-        return
-
-    elif intent == "sap_table":
-        response = _format_sap_table_answer(rule_id, _safe(row.get("table_name_checked", "")))
-        async for part in _stream_text(response):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id,
-                    "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
-        return
-
-    elif intent == "sap_column":
-        response = _format_sap_column_answer(
-            rule_id,
-            _safe(row.get("table_name_checked", "")),
-            _safe(row.get("column_name_checked", "")),
-        )
-        async for part in _stream_text(response):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id,
-                    "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
-        return
-
-    elif intent == "severity":
-        sev = _safe(row.get("severity", ""))
-        sev_label = _get_provider().kb.vocab.severity_map.get(str(sev), sev)
-        response = (f"Rule **{rule_id}** has a severity of **{sev_label}**."
-                    if sev else f"No severity information available for rule {rule_id}.")
-        async for part in _stream_text(response):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id,
-                    "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
-        return
-
-    elif intent == "fields":
-        response = _format_fields_answer(rule_id, logic)
-        async for part in _stream_text(response):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id,
-                    "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
-        return
-
-    elif intent in ("lineage", "workflow"):
-        # lineage_service was removed with the impact/lineage graph; the
-        # formatter's own "no lineage information" fallback covers this now.
-        response = _format_lineage_answer(rule_id, {})
-        async for part in _stream_text(response):
-            yield part
-        yield _sse({"type": "done", "rule_id": rule_id,
-                    "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
-        return
-
-    # ── LLM streaming: explain / show ─────────────────────────────────────────
-    ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
-
-    user_msg = f"{_instructions_block(extra_context)}Rule logic:\n{logic}"
-    if ctx:
-        user_msg += f"\n\nField reference (do not use these names in the explanation):\n{ctx}"
-
-    accumulated = ""
+    provider_token = _provider_override.set(provider)
+    prompt_token = _custom_prompt_override.set(custom_prompt)
     try:
-        async for chunk_text in call_openai_stream(
-            _get_system_prompt(),
-            user_msg,
-            max_tokens=1000,
-        ):
-            accumulated += chunk_text
-            yield _sse({"type": "chunk", "text": chunk_text})
-    except Exception as e:
-        log.error("[ERROR] stream_message LLM streaming failed: %s", type(e).__name__)
-        fallback = "Unable to generate a business explanation for this rule at this time."
-        yield _sse({"type": "chunk", "text": fallback})
-        accumulated = fallback
+        def _sse(obj: dict) -> str:
+            return f"data: {json.dumps(obj)}\n\n"
 
-    # Append cross-rule reference notice
-    active_refs = [r for r in ref_rules if r.get("active")]
-    if active_refs:
-        note_lines = ["\n\n---\n**This rule references or depends on other rules:**"]
-        for ref in active_refs:
-            via = "dependency" if ref["source"] == "dependent_on" else "referenced in logic"
-            desc = ref.get("rule_description", "")
-            desc_snip = f" — {desc[:90]}" if desc else ""
-            note_lines.append(f"- **{ref['rule_id']}**{desc_snip} *({via})*")
-        note_text = "\n".join(note_lines)
-        accumulated += note_text
-        async for part in _stream_text(note_text):
-            yield part
+        rule_id = _extract_rule_id(message)
 
-    available["has_yaml"] = yaml_match is not None
-    followups = _generate_followups(rule_id, message, accumulated[:200], available)
-    yield _sse({"type": "done", "rule_id": rule_id, "suggested_followups": followups})
+        # ── No rule ID in message ─────────────────────────────────────────────
+        if not rule_id:
+            result = _handle_no_rule_id(
+                message, context_rule_id, history=history, allow_general=allow_general,
+                extra_context=extra_context,
+            )
+            text = result.get("response", "")
+            rid = result.get("rule_id")
+            async for part in _stream_text(text):
+                yield part
+            followups = result.get("suggested_followups", [])
+            yield _sse({"type": "done", "rule_id": rid, "suggested_followups": followups})
+            return
 
+        # ── Rule ID found ─────────────────────────────────────────────────────
+        from data_loader import get_rules
 
-def handle_message(
-    message: str,
-    context_rule_id: str | None = None,
-    history: list[dict] | None = None,
-    allow_general: bool = False,
-    extra_context: str | None = None,
-) -> dict[str, Any]:
-    message = message.strip()
-    if len(message) > 2000:
-        raise ValueError("Message exceeds maximum length of 2000 characters.")
-    if history:
-        history = history[-_MAX_HISTORY:]
-    rule_id = _extract_rule_id(message)
-    if not rule_id:
-        return _handle_no_rule_id(
-            message, context_rule_id, history=history, allow_general=allow_general,
-            extra_context=extra_context,
-        )
+        rules = get_rules()
+        match = rules[rules["rule_id"].str.upper() == rule_id]
 
-    from data_loader import get_rules
-    from explanation_engine import explain_rule
+        if match.empty:
+            async for part in _stream_text(f"Rule {rule_id} was not found in the active Customer rules."):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id, "suggested_followups": []})
+            return
 
-    rules = get_rules()
-    match = rules[rules["rule_id"].str.upper() == rule_id]
+        row = match.iloc[0]
+        logic = str(row.get("rule_logic", "") or "")
+        intent = _classify_intent_llm(message, rule_id)
 
-    if match.empty:
-        return {
-            "response": f"Rule {rule_id} was not found in the active Customer rules.",
-            "rule_id": rule_id,
-            "suggested_followups": [],
+        available = {
+            "has_severity": bool(_safe(row.get("severity", ""))),
+            "has_lineage": True,
+            "has_yaml": bool(logic),
+            "has_sap_fields": bool(_safe(row.get("column_name_checked", ""))),
         }
 
-    row = match.iloc[0]
-    logic = str(row.get("rule_logic", "") or "")
-    intent = _classify_intent_llm(message, rule_id)
+        # ── Data-lookup intents (instant, no LLM streaming needed) ───────────
+        if intent == "description":
+            desc = _safe(row.get("rule_description", ""))
+            response = (f"**Description for {rule_id}:**\n\n{desc}"
+                        if desc else f"No description available for rule {rule_id}.")
+            async for part in _stream_text(response):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id,
+                        "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
+            return
 
-    if intent == "description":
-        desc = _safe(row.get("rule_description", ""))
-        response = (
-            f"**Description for {rule_id}:**\n\n{desc}"
-            if desc else f"No description available for rule {rule_id}."
-        )
+        elif intent == "sap_table":
+            response = _format_sap_table_answer(rule_id, _safe(row.get("table_name_checked", "")))
+            async for part in _stream_text(response):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id,
+                        "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
+            return
 
-    elif intent == "sap_table":
-        response = _format_sap_table_answer(rule_id, _safe(row.get("table_name_checked", "")))
+        elif intent == "sap_column":
+            response = _format_sap_column_answer(
+                rule_id,
+                _safe(row.get("table_name_checked", "")),
+                _safe(row.get("column_name_checked", "")),
+            )
+            async for part in _stream_text(response):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id,
+                        "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
+            return
 
-    elif intent == "sap_column":
-        response = _format_sap_column_answer(
-            rule_id,
-            _safe(row.get("table_name_checked", "")),
-            _safe(row.get("column_name_checked", "")),
-        )
+        elif intent == "severity":
+            sev = _safe(row.get("severity", ""))
+            sev_label = _get_provider().kb.vocab.severity_map.get(str(sev), sev)
+            response = (f"Rule **{rule_id}** has a severity of **{sev_label}**."
+                        if sev else f"No severity information available for rule {rule_id}.")
+            async for part in _stream_text(response):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id,
+                        "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
+            return
 
-    elif intent == "severity":
-        sev = _safe(row.get("severity", ""))
-        sev_label = _get_provider().kb.vocab.severity_map.get(str(sev), sev)
-        response = (
-            f"Rule **{rule_id}** has a severity of **{sev_label}**."
-            if sev else f"No severity information available for rule {rule_id}."
-        )
+        elif intent == "fields":
+            response = _format_fields_answer(rule_id, logic)
+            async for part in _stream_text(response):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id,
+                        "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
+            return
 
-    elif intent == "fields":
-        response = _format_fields_answer(rule_id, logic)
+        elif intent in ("lineage", "workflow"):
+            # lineage_service was removed with the impact/lineage graph; the
+            # formatter's own "no lineage information" fallback covers this now.
+            response = _format_lineage_answer(rule_id, {})
+            async for part in _stream_text(response):
+                yield part
+            yield _sse({"type": "done", "rule_id": rule_id,
+                        "suggested_followups": _generate_followups(rule_id, message, response[:200], available)})
+            return
 
-    elif intent in ("lineage", "workflow"):
-        # lineage_service was removed with the impact/lineage graph; the
-        # formatter's own "no lineage information" fallback covers this now.
-        response = _format_lineage_answer(rule_id, {})
-
-    else:  # explain or show
+        # ── LLM streaming: explain / show ─────────────────────────────────────
         ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
-        instr = _instructions_block(extra_context)
-        response = explain_rule(
-            logic, (instr + ctx) if instr else ctx, system_prompt=_get_system_prompt(),
-        )
 
-        # Append a clear notice when the rule references other rules
+        user_msg = f"{_instructions_block(extra_context)}Rule logic:\n{logic}"
+        if ctx:
+            user_msg += f"\n\nField reference (do not use these names in the explanation):\n{ctx}"
+
+        accumulated = ""
+        try:
+            async for chunk_text in call_openai_stream(
+                _get_system_prompt(),
+                user_msg,
+                max_tokens=1000,
+            ):
+                accumulated += chunk_text
+                yield _sse({"type": "chunk", "text": chunk_text})
+        except Exception as e:
+            log.error("[ERROR] stream_message LLM streaming failed: %s", type(e).__name__)
+            fallback = "Unable to generate a business explanation for this rule at this time."
+            yield _sse({"type": "chunk", "text": fallback})
+            accumulated = fallback
+
+        # Append cross-rule reference notice
         active_refs = [r for r in ref_rules if r.get("active")]
         if active_refs:
             note_lines = ["\n\n---\n**This rule references or depends on other rules:**"]
@@ -986,12 +927,127 @@ def handle_message(
                 desc = ref.get("rule_description", "")
                 desc_snip = f" — {desc[:90]}" if desc else ""
                 note_lines.append(f"- **{ref['rule_id']}**{desc_snip} *({via})*")
-            response += "\n".join(note_lines)
+            note_text = "\n".join(note_lines)
+            accumulated += note_text
+            async for part in _stream_text(note_text):
+                yield part
 
-    followups = _generate_followups(rule_id, message, response[:200], {
-        "has_severity": bool(_safe(row.get("severity", ""))),
-        "has_lineage": True,
-        "has_yaml": bool(_safe(row.get("rule_logic", ""))),
-        "has_sap_fields": bool(_safe(row.get("column_name_checked", ""))),
-    })
-    return {"response": response, "rule_id": rule_id, "suggested_followups": followups}
+        available["has_yaml"] = yaml_match is not None
+        followups = _generate_followups(rule_id, message, accumulated[:200], available)
+        yield _sse({"type": "done", "rule_id": rule_id, "suggested_followups": followups})
+    finally:
+        _provider_override.reset(provider_token)
+        _custom_prompt_override.reset(prompt_token)
+
+
+def handle_message(
+    message: str,
+    context_rule_id: str | None = None,
+    history: list[dict] | None = None,
+    allow_general: bool = False,
+    extra_context: str | None = None,
+    provider: Any = None,
+    custom_prompt: str | None = None,
+) -> dict[str, Any]:
+    """Non-streaming analyst chat entry point.
+
+    `provider`/`custom_prompt` (Phase 5): the caller's resolved KB provider
+    and that KB's stored enhanced_prompt. Both default to None, which
+    reproduces the pre-Phase-5 default-KB (customer_sap) behavior exactly —
+    see _get_provider()/_get_system_prompt() and the module-level contextvars
+    they read.
+    """
+    message = message.strip()
+    if len(message) > 2000:
+        raise ValueError("Message exceeds maximum length of 2000 characters.")
+    if history:
+        history = history[-_MAX_HISTORY:]
+
+    provider_token = _provider_override.set(provider)
+    prompt_token = _custom_prompt_override.set(custom_prompt)
+    try:
+        rule_id = _extract_rule_id(message)
+        if not rule_id:
+            return _handle_no_rule_id(
+                message, context_rule_id, history=history, allow_general=allow_general,
+                extra_context=extra_context,
+            )
+
+        from data_loader import get_rules
+        from explanation_engine import explain_rule
+
+        rules = get_rules()
+        match = rules[rules["rule_id"].str.upper() == rule_id]
+
+        if match.empty:
+            return {
+                "response": f"Rule {rule_id} was not found in the active Customer rules.",
+                "rule_id": rule_id,
+                "suggested_followups": [],
+            }
+
+        row = match.iloc[0]
+        logic = str(row.get("rule_logic", "") or "")
+        intent = _classify_intent_llm(message, rule_id)
+
+        if intent == "description":
+            desc = _safe(row.get("rule_description", ""))
+            response = (
+                f"**Description for {rule_id}:**\n\n{desc}"
+                if desc else f"No description available for rule {rule_id}."
+            )
+
+        elif intent == "sap_table":
+            response = _format_sap_table_answer(rule_id, _safe(row.get("table_name_checked", "")))
+
+        elif intent == "sap_column":
+            response = _format_sap_column_answer(
+                rule_id,
+                _safe(row.get("table_name_checked", "")),
+                _safe(row.get("column_name_checked", "")),
+            )
+
+        elif intent == "severity":
+            sev = _safe(row.get("severity", ""))
+            sev_label = _get_provider().kb.vocab.severity_map.get(str(sev), sev)
+            response = (
+                f"Rule **{rule_id}** has a severity of **{sev_label}**."
+                if sev else f"No severity information available for rule {rule_id}."
+            )
+
+        elif intent == "fields":
+            response = _format_fields_answer(rule_id, logic)
+
+        elif intent in ("lineage", "workflow"):
+            # lineage_service was removed with the impact/lineage graph; the
+            # formatter's own "no lineage information" fallback covers this now.
+            response = _format_lineage_answer(rule_id, {})
+
+        else:  # explain or show
+            ctx, ref_rules, yaml_match = _build_rule_context(rule_id, row, logic, rules)
+            instr = _instructions_block(extra_context)
+            response = explain_rule(
+                logic, (instr + ctx) if instr else ctx, system_prompt=_get_system_prompt(),
+            )
+
+            # Append a clear notice when the rule references other rules
+            active_refs = [r for r in ref_rules if r.get("active")]
+            if active_refs:
+                note_lines = ["\n\n---\n**This rule references or depends on other rules:**"]
+                for ref in active_refs:
+                    via = "dependency" if ref["source"] == "dependent_on" else "referenced in logic"
+                    desc = ref.get("rule_description", "")
+                    desc_snip = f" — {desc[:90]}" if desc else ""
+                    note_lines.append(f"- **{ref['rule_id']}**{desc_snip} *({via})*")
+                response += "\n".join(note_lines)
+
+        followups = _generate_followups(rule_id, message, response[:200], {
+            "has_severity": bool(_safe(row.get("severity", ""))),
+            "has_lineage": True,
+            "has_yaml": bool(_safe(row.get("rule_logic", ""))),
+            "has_sap_fields": bool(_safe(row.get("column_name_checked", ""))),
+        })
+        return {"response": response, "rule_id": rule_id, "suggested_followups": followups}
+    finally:
+        _provider_override.reset(provider_token)
+        _custom_prompt_override.reset(prompt_token)
