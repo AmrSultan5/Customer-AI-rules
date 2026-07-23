@@ -43,7 +43,9 @@ from analytics import track_chat_event, track_feedback
 
 import db
 import conversation_service as cs
+import explanation_engine
 import openai_client
+import prompts
 from config import settings
 from db import get_session
 from models import KnowledgeBase
@@ -76,6 +78,9 @@ _MAX_MESSAGE_LEN = int(os.environ.get("MAX_MESSAGE_LENGTH", "2000"))
 _MAX_MESSAGE_SCHEMA_LEN = int(os.environ.get("MAX_PERSONA_MESSAGE_LENGTH", "12000"))
 _MAX_HISTORY = 20
 _MAX_HISTORY_ITEM_LEN = 8000  # server-side truncation before passing to the agent
+# Phase 6 — prompt-enhance/save. Matches the ProjectCreateRequest.instructions
+# cap; a per-KB custom prompt is a similar-purpose short standing directive.
+_MAX_PROMPT_LEN = int(os.environ.get("MAX_KB_PROMPT_LENGTH", "8000"))
 
 # Admin credentials — username/password used by the /admin/login endpoint.
 # RULE_AGENT_ADMIN_TOKEN is still accepted as a Bearer token fallback.
@@ -272,6 +277,20 @@ class ConversationUpdateRequest(BaseModel):
     project_id: int | None = None
 
 
+# ── Prompt enhance / save request models (Phase 6) ──────────────────────────
+
+
+class PromptEnhanceRequest(BaseModel):
+    # No min_length here: an empty/whitespace-only draft is rejected with a
+    # 400 in the handler (not a 422) per the Phase 6 spec.
+    draft: Annotated[str, Field(max_length=_MAX_PROMPT_LEN)]
+
+
+class PromptSaveRequest(BaseModel):
+    custom_prompt: Annotated[str | None, Field(max_length=_MAX_PROMPT_LEN)] = None
+    enhanced_prompt: Annotated[str | None, Field(max_length=_MAX_PROMPT_LEN)] = None
+
+
 # ── Lifespan ───────────────────────────────────────────────────────────────────
 
 
@@ -426,6 +445,79 @@ async def get_kb_detail(kb_id: str, session: AsyncSession = Depends(get_session)
         "capabilities": sorted(provider.capabilities()) if provider else [],
         "custom_prompt": row.custom_prompt if row else None,
         "enhanced_prompt": row.enhanced_prompt if row else None,
+    }
+
+
+# ── Prompt enhance / save (Phase 6) ─────────────────────────────────────────
+
+
+@router.post("/kb/{kb_id}/prompt/enhance")
+async def enhance_kb_prompt(kb_id: str, body: PromptEnhanceRequest):
+    """AI-rewrite a user's rough draft into a reviewable system-prompt
+    fragment for this KB (Settings → custom prompt → "Enhance with AI").
+
+    Non-streaming, standard tier. This is a *preview* only — it persists
+    nothing; the caller reviews/edits the result and saves it separately via
+    PUT /kb/{kb_id}/prompt, which is what actually makes it take effect.
+    """
+    descriptor = _kb_registry.get_descriptor(kb_id)
+    if descriptor is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown knowledge base: {kb_id!r}"})
+
+    draft = body.draft.strip()
+    if not draft:
+        raise HTTPException(status_code=400, detail={"error": "draft must not be blank."})
+
+    system_prompt = prompts.build_enhance_system_prompt(descriptor)
+    try:
+        enhanced = await explanation_engine.call_openai_async(
+            system_prompt,
+            draft,
+            max_tokens=800,
+            tier="standard",
+            call_type="prompt_enhance",
+            knowledge_base_id=descriptor.id,
+        )
+    except Exception as exc:
+        # Token tracking inside call_openai_async is already fire-and-forget
+        # (best-effort); this only guards the generation call itself.
+        log.error("[ERROR] /kb/%s/prompt/enhance failed: %s", kb_id, type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "The AI service is temporarily unavailable. Please try again."},
+        )
+
+    return {
+        "draft": body.draft,
+        "enhanced": enhanced,
+        "model": explanation_engine.model_for_tier("standard"),
+    }
+
+
+@router.put("/kb/{kb_id}/prompt")
+async def save_kb_prompt(
+    kb_id: str, body: PromptSaveRequest, session: AsyncSession = Depends(get_session),
+):
+    """Persist the reviewed custom/enhanced prompt for a KB (Settings → Save).
+
+    Upserts the `knowledge_bases` row. No cache to clear: chat handlers read
+    the saved enhanced_prompt fresh on every request via cs.get_kb_prompt()
+    and inject it through prompts.build_system_prompt (Phase 5), so this
+    takes effect on the very next chat call for this KB — no invalidation
+    step needed.
+    """
+    descriptor = _kb_registry.get_descriptor(kb_id)
+    if descriptor is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown knowledge base: {kb_id!r}"})
+
+    row = await cs.save_kb_prompt(
+        session, kb_id, body.custom_prompt, body.enhanced_prompt, name=descriptor.name,
+    )
+    return {
+        "id": row.id,
+        "custom_prompt": row.custom_prompt,
+        "enhanced_prompt": row.enhanced_prompt,
+        "prompt_updated_at": row.prompt_updated_at.isoformat() if row.prompt_updated_at else None,
     }
 
 

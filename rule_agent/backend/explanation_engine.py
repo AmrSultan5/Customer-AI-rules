@@ -243,11 +243,18 @@ async def call_openai_async(
     history: list[dict] | None = None,
     json_mode: bool = False,
     tier: str = "standard",
+    call_type: str = "chat",
+    knowledge_base_id: str | None = None,
 ) -> str:
     """Async variant of call_openai — never blocks the event loop.
 
     json_mode=True constrains the response to the Stage-1 selector JSON schema
     via structured outputs.
+
+    call_type/knowledge_base_id are forwarded to the internal token-usage
+    write (default "chat"/None reproduce the original behavior for existing
+    callers) so a caller like the Phase 6 prompt-enhance endpoint can tag its
+    usage distinctly (call_type="prompt_enhance") without a second API call.
     """
     model = _model(tier)
     # WARNING: user_msg may contain prompt-injection attempts via rule content or chat
@@ -271,13 +278,24 @@ async def call_openai_async(
                 response.usage.input_tokens,
                 response.usage.output_tokens,
                 response.usage.input_tokens + response.usage.output_tokens,
-                model, "chat",
+                model, call_type, knowledge_base_id,
             ))
         return _text(response)
     except Exception as e:
         # Log type only — avoid logging message content that may contain sensitive data.
         log.error("[ERROR] Claude async call failed: %s", type(e).__name__)
         raise
+
+
+def model_for_tier(tier: str = "standard") -> str:
+    """Public accessor for the concrete model id a tier resolves to right now.
+
+    Thin wrapper over the private _model() so callers that need to report
+    which model backed a call (e.g. the Phase 6 prompt-enhance endpoint's
+    response `model` field) don't reach into a private helper. Same live
+    env-var resolution as every other call site — no caching.
+    """
+    return _model(tier)
 
 
 async def call_openai_stream(

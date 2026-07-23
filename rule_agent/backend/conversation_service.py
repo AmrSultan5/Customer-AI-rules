@@ -301,6 +301,38 @@ async def get_kb_prompt(session: AsyncSession, kb_id: str) -> str | None:
     )
 
 
+async def save_kb_prompt(
+    session: AsyncSession,
+    kb_id: str,
+    custom_prompt: str | None,
+    enhanced_prompt: str | None,
+    name: str | None = None,
+) -> KnowledgeBase:
+    """Upsert kb_id's custom/enhanced system-prompt fields (Settings → Save,
+    Phase 6). Creates the KnowledgeBase row if it doesn't exist yet — startup
+    seeding (db.seed_knowledge_bases) normally creates one row per registered
+    descriptor first, but tests and other callers that reset the schema
+    without running the app lifespan won't have it. `name` is only used when
+    creating a new row (falls back to kb_id); an existing row's name is left
+    untouched.
+
+    No cache to clear: chat handlers call get_kb_prompt() fresh on every
+    request and inject the result via prompts.build_system_prompt (Phase 5),
+    and explanation_engine.explain_rule's lru_cache is keyed on the assembled
+    system_prompt string — so a changed prompt takes effect on the very next
+    call with no invalidation step needed.
+    """
+    row = await session.get(KnowledgeBase, kb_id)
+    if row is None:
+        row = KnowledgeBase(id=kb_id, name=name or kb_id)
+        session.add(row)
+    row.custom_prompt = custom_prompt
+    row.enhanced_prompt = enhanced_prompt
+    row.prompt_updated_at = _utcnow()
+    await session.commit()
+    return row
+
+
 # ── Serializers ──────────────────────────────────────────────────────────────
 
 
