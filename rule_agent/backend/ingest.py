@@ -23,6 +23,15 @@ if str(_BACKEND_DIR) not in sys.path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Load backend/.env so a standalone CLI run picks up OPENAI_API_KEY (for
+    # embeddings) and any DATABASE_URL, same as the app does at startup.
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(_BACKEND_DIR / ".env")
+    except ImportError:
+        pass
+
     from ingestion import ingest_kb
     from providers.registry import KnowledgeBaseRegistry
 
