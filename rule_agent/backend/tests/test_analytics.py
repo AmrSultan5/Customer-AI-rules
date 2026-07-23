@@ -1,17 +1,23 @@
 """
 Analytics unit tests — exercise the SQLAlchemy tracker and dashboard aggregation
 against a fresh database (no app server, no LLM calls).
+
+RuleView / track_rule_view (and the view-count dashboard stats they fed —
+total/unique/daily views, top/trending rules) were removed in Phase 4; the
+rule card that drove them was already gone since Phase 1.
 """
 import asyncio
 
 import pytest
+from sqlalchemy import select
 
 import analytics
 import db
+from config import settings
+from models import ChatEvent, FeedbackEvent, TokenEvent
 
 EXPECTED_TOP_LEVEL_KEYS = {
-    "overview", "top_rules", "daily_activity", "recent_views",
-    "intent_distribution", "trending_rules", "downvoted_rules",
+    "overview", "intent_distribution", "downvoted_rules",
     "tokens_by_call_type", "feedback",
 }
 
@@ -36,30 +42,22 @@ def test_empty_dashboard_shape(fresh_db, monkeypatch):
     assert set(data.keys()) == EXPECTED_TOP_LEVEL_KEYS
     ov = data["overview"]
     assert ov["total_rules"] == 2
-    assert ov["total_views"] == 0
+    assert ov["chat_queries_with_rule"] == 0
     assert ov["estimated_cost_usd"] is None  # cost rates not configured
     assert data["downvoted_rules"] == []
     assert data["tokens_by_call_type"] == []
 
 
-def test_rule_views_aggregation(fresh_db):
+def test_chat_events_counted_in_overview(fresh_db):
     async def run():
-        await analytics.track_rule_view("rule_a")
-        await analytics.track_rule_view("rule_a")
-        await analytics.track_rule_view("rule_b")
+        await analytics.track_chat_event("rule_a", "explain")
+        await analytics.track_chat_event(None, "general")
         return await analytics.get_dashboard_data(2)
 
     data = asyncio.run(run())
-    ov = data["overview"]
-    assert ov["total_views"] == 3
-    assert ov["unique_rules_accessed"] == 2
-    assert ov["coverage_pct"] == 100.0
-    assert data["top_rules"][0] == {"rule_id": "RULE_A", "views": 2}
-    assert len(data["daily_activity"]) == 1
-    assert len(data["recent_views"]) == 3
-    # Both rules were viewed today → 1 active day each
-    assert {r["rule_id"]: r["active_days"] for r in data["trending_rules"]} == {
-        "RULE_A": 1, "RULE_B": 1,
+    assert data["overview"]["chat_queries_with_rule"] == 1
+    assert {r["intent"]: r["count"] for r in data["intent_distribution"]} == {
+        "explain": 1, "general": 1,
     }
 
 
@@ -107,6 +105,53 @@ def test_tokens_by_call_type(fresh_db):
     totals = [r["total_tokens"] for r in data["tokens_by_call_type"]]
     assert totals == sorted(totals, reverse=True)
     assert data["overview"]["total_tokens_used"] == 1865
+
+
+# ── Multi-KB (Phase 4): knowledge_base_id defaults + override ────────────────
+
+
+def test_tracking_calls_default_knowledge_base_id_to_active_kb(fresh_db):
+    async def run():
+        await analytics.track_chat_event("rule_a", "explain")
+        await analytics.track_feedback("up", "analyst", "rule_a")
+        await analytics.track_token_usage(10, 5, 15, "claude-sonnet-4-6", "chat")
+
+    asyncio.run(run())
+
+    async def fetch():
+        async with db.AsyncSessionLocal() as session:
+            chat_kb = await session.scalar(select(ChatEvent.knowledge_base_id))
+            feedback_kb = await session.scalar(select(FeedbackEvent.knowledge_base_id))
+            token_kb = await session.scalar(select(TokenEvent.knowledge_base_id))
+            return chat_kb, feedback_kb, token_kb
+
+    chat_kb, feedback_kb, token_kb = asyncio.run(fetch())
+    assert (chat_kb, feedback_kb, token_kb) == (settings.active_kb,) * 3
+
+
+def test_tracking_calls_honor_explicit_knowledge_base_id(fresh_db):
+    async def run():
+        await analytics.track_chat_event("rule_a", "explain", knowledge_base_id="other_kb")
+        await analytics.track_feedback("up", "analyst", "rule_a", knowledge_base_id="other_kb")
+        await analytics.track_token_usage(10, 5, 15, "m", "chat", knowledge_base_id="other_kb")
+
+    asyncio.run(run())
+
+    async def fetch():
+        async with db.AsyncSessionLocal() as session:
+            chat_kb = await session.scalar(select(ChatEvent.knowledge_base_id))
+            feedback_kb = await session.scalar(select(FeedbackEvent.knowledge_base_id))
+            token_kb = await session.scalar(select(TokenEvent.knowledge_base_id))
+            return chat_kb, feedback_kb, token_kb
+
+    assert asyncio.run(fetch()) == ("other_kb", "other_kb", "other_kb")
+
+
+def test_track_token_usage_sync_defaults_knowledge_base_id(fresh_db):
+    analytics.track_token_usage_sync(10, 5, 15, "m", "chat")
+    with db.SyncSessionLocal() as session:
+        kb = session.scalar(select(TokenEvent.knowledge_base_id))
+    assert kb == settings.active_kb
 
 
 # ── Cost estimate ─────────────────────────────────────────────────────────────

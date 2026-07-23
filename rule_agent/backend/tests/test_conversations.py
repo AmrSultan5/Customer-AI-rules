@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 import conversation_service as cs
 import db
 import openai_client
+from config import settings
 from main import app
+from models import Conversation, KnowledgeBase, Message
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -140,6 +142,64 @@ def test_append_and_recent_history_ordering_and_cap():
     assert hist[0]["content"] == "m5"   # oldest of the last 20, in chronological order
     assert hist[-1]["content"] == "m24"
     assert first == "m0"
+
+
+# ── Multi-KB (Phase 4): knowledge_base_id defaults, not yet API-exposed ───────
+
+
+def test_create_conversation_defaults_knowledge_base_id_to_active_kb():
+    async def run():
+        async with db.AsyncSessionLocal() as s:
+            user = await cs.get_or_create_user(s, "kb-default")
+            await s.commit()
+            conv = await cs.create_conversation(s, user.id, persona="analyst")
+            stored = await s.get(Conversation, conv["id"])
+            return stored.knowledge_base_id
+
+    assert asyncio.run(run()) == settings.active_kb
+
+
+def test_create_conversation_honors_explicit_knowledge_base_id():
+    async def run():
+        async with db.AsyncSessionLocal() as s:
+            user = await cs.get_or_create_user(s, "kb-explicit")
+            await s.commit()
+            conv = await cs.create_conversation(
+                s, user.id, persona="analyst", knowledge_base_id="other_kb",
+            )
+            stored = await s.get(Conversation, conv["id"])
+            return stored.knowledge_base_id
+
+    assert asyncio.run(run()) == "other_kb"
+
+
+def test_append_message_inherits_conversation_knowledge_base_id():
+    async def run():
+        async with db.AsyncSessionLocal() as s:
+            user = await cs.get_or_create_user(s, "kb-inherit")
+            await s.commit()
+            conv = await cs.create_conversation(
+                s, user.id, persona="analyst", knowledge_base_id="other_kb",
+            )
+            msg = await cs.append_message(s, conv["id"], "user", "hi")
+            stored = await s.get(Message, msg["id"])
+            return stored.knowledge_base_id
+
+    assert asyncio.run(run()) == "other_kb"
+
+
+def test_get_kb_prompt_returns_none_when_unset_and_value_when_saved():
+    async def run():
+        async with db.AsyncSessionLocal() as s:
+            missing = await cs.get_kb_prompt(s, "no_such_kb")
+            s.add(KnowledgeBase(id="kb_with_prompt", name="Test KB", enhanced_prompt="Be terse."))
+            await s.commit()
+            found = await cs.get_kb_prompt(s, "kb_with_prompt")
+            return missing, found
+
+    missing, found = asyncio.run(run())
+    assert missing is None
+    assert found == "Be terse."
 
 
 # ── /chat/stream persistence + instruction injection + auto-title ─────────────

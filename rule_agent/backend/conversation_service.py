@@ -4,6 +4,11 @@ CRUD helpers for the chat workspace (users, projects, conversations, messages).
 All functions take an AsyncSession and operate on the ORM models. Route handlers
 in `main.py` are thin wrappers over these. Ownership is always enforced by
 filtering on user_id so one user can never read or mutate another's data.
+
+Multi-KB (Phase 4): conversations/messages carry a `knowledge_base_id`, not
+yet exposed through the HTTP request/response schemas (Phase 5) — every
+function here defaults it to `config.settings.active_kb` so current callers
+keep working unchanged.
 """
 
 from datetime import datetime, timezone
@@ -11,7 +16,8 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Conversation, Message, Project, User
+from config import settings
+from models import Conversation, KnowledgeBase, Message, Project, User
 
 _VALID_PERSONAS = {"analyst", "engineer", "pm"}
 _HISTORY_LIMIT = 20
@@ -129,6 +135,7 @@ async def create_conversation(
     project_id: int | None = None,
     title: str | None = None,
     context_rule_id: str | None = None,
+    knowledge_base_id: str | None = None,
 ) -> dict:
     if persona not in _VALID_PERSONAS:
         persona = "analyst"
@@ -138,6 +145,7 @@ async def create_conversation(
         project_id=project_id,
         title=title,
         context_rule_id=context_rule_id,
+        knowledge_base_id=knowledge_base_id or settings.active_kb,
     )
     session.add(conv)
     await session.commit()
@@ -230,13 +238,21 @@ async def append_message(
     content: str,
     rule_id: str | None = None,
     followups: list | None = None,
+    knowledge_base_id: str | None = None,
 ) -> dict:
+    # A message inherits its conversation's KB unless the caller overrides it
+    # explicitly; falls back to the configured active KB if the conversation
+    # cannot be found (should not normally happen — conversation_id is a FK).
+    if knowledge_base_id is None:
+        conv = await session.get(Conversation, conversation_id)
+        knowledge_base_id = conv.knowledge_base_id if conv is not None else settings.active_kb
     msg = Message(
         conversation_id=conversation_id,
         role=role,
         content=content,
         rule_id=rule_id,
         suggested_followups=followups,
+        knowledge_base_id=knowledge_base_id,
     )
     session.add(msg)
     await session.commit()
@@ -267,6 +283,22 @@ async def message_count(session: AsyncSession, conversation_id: int) -> int:
     return int(await session.scalar(
         select(func.count()).select_from(Message).where(Message.conversation_id == conversation_id)
     ) or 0)
+
+
+# ── Knowledge bases ──────────────────────────────────────────────────────────
+
+
+async def get_kb_prompt(session: AsyncSession, kb_id: str) -> str | None:
+    """Return kb_id's stored *reviewed* system-prompt fragment, if any.
+
+    This is the `enhanced_prompt` a user saved via Settings (draft → AI-enhance
+    → review/edit → save, Phase 6) — the text `prompts.build_system_prompt`
+    injects into the assembled analyst system prompt. None if the KB has no
+    row yet or no prompt has been saved.
+    """
+    return await session.scalar(
+        select(KnowledgeBase.enhanced_prompt).where(KnowledgeBase.id == kb_id)
+    )
 
 
 # ── Serializers ──────────────────────────────────────────────────────────────

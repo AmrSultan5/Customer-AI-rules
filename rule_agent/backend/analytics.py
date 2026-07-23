@@ -1,39 +1,41 @@
 """
-Analytics tracker — persists rule views, chat events, feedback, and token usage.
+Analytics tracker — persists chat events, feedback, and token usage.
 
 Backed by the shared SQLAlchemy database (Postgres in production, SQLite in dev/
 tests) via the engines in `db`. All writes are fire-and-forget; failures are
 silently absorbed so analytics never disrupts the main request path.
 
-Public API (signatures unchanged from the previous SQLite implementation):
-  async track_rule_view / track_chat_event / track_feedback / track_token_usage
+Public API (signatures back-compat — new params are optional/defaulted):
+  async track_chat_event / track_feedback / track_token_usage
   sync  track_token_usage_sync
   async get_dashboard_data
   estimate_cost_usd / _cost_rate
+
+Multi-KB (Phase 4): every write accepts an optional `knowledge_base_id`,
+defaulting to `config.settings.active_kb`, and persists it on the row. Not
+yet threaded from the HTTP layer (Phase 5) — callers that don't pass it get
+the active KB.
+
+`track_rule_view` and the RuleView-backed dashboard stats (total/unique/daily
+views, top/trending rules) are removed as of Phase 4 — rule-view tracking had
+already been dead since the rule card was dropped in Phase 1. The
+`rule_views` table itself is left in place (unused) rather than dropped.
 """
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select
 
 import db
-from models import ChatEvent, FeedbackEvent, RuleView, TokenEvent
+from config import settings
+from models import ChatEvent, FeedbackEvent, TokenEvent
 
 log = logging.getLogger(__name__)
 
 
 # ── Writes ───────────────────────────────────────────────────────────────────
-
-
-async def track_rule_view(rule_id: str) -> None:
-    try:
-        async with db.AsyncSessionLocal() as session:
-            session.add(RuleView(rule_id=rule_id.upper(), viewed_at=_now()))
-            await session.commit()
-    except Exception as exc:
-        log.debug("[analytics] track_rule_view suppressed: %s", exc)
 
 
 def track_token_usage_sync(
@@ -42,6 +44,7 @@ def track_token_usage_sync(
     total_tokens: int,
     model: str = "",
     call_type: str = "",
+    knowledge_base_id: str | None = None,
 ) -> None:
     """Synchronous token write — safe to call from non-async code."""
     try:
@@ -53,6 +56,7 @@ def track_token_usage_sync(
                     total_tokens=total_tokens,
                     model=model,
                     call_type=call_type,
+                    knowledge_base_id=knowledge_base_id or settings.active_kb,
                     occurred_at=_now(),
                 )
             )
@@ -67,6 +71,7 @@ async def track_token_usage(
     total_tokens: int,
     model: str = "",
     call_type: str = "",
+    knowledge_base_id: str | None = None,
 ) -> None:
     """Async token write — safe to call from async code."""
     try:
@@ -78,6 +83,7 @@ async def track_token_usage(
                     total_tokens=total_tokens,
                     model=model,
                     call_type=call_type,
+                    knowledge_base_id=knowledge_base_id or settings.active_kb,
                     occurred_at=_now(),
                 )
             )
@@ -87,7 +93,10 @@ async def track_token_usage(
 
 
 async def track_chat_event(
-    rule_id: str | None, intent: str | None, user_id: int | None = None
+    rule_id: str | None,
+    intent: str | None,
+    user_id: int | None = None,
+    knowledge_base_id: str | None = None,
 ) -> None:
     try:
         async with db.AsyncSessionLocal() as session:
@@ -96,6 +105,7 @@ async def track_chat_event(
                     rule_id=rule_id.upper() if rule_id else None,
                     intent=intent,
                     user_id=user_id,
+                    knowledge_base_id=knowledge_base_id or settings.active_kb,
                     occurred_at=_now(),
                 )
             )
@@ -105,7 +115,11 @@ async def track_chat_event(
 
 
 async def track_feedback(
-    rating: str, mode: str | None, rule_id: str | None, user_id: int | None = None
+    rating: str,
+    mode: str | None,
+    rule_id: str | None,
+    user_id: int | None = None,
+    knowledge_base_id: str | None = None,
 ) -> None:
     try:
         async with db.AsyncSessionLocal() as session:
@@ -115,6 +129,7 @@ async def track_feedback(
                     mode=mode,
                     rule_id=rule_id.upper() if rule_id else None,
                     user_id=user_id,
+                    knowledge_base_id=knowledge_base_id or settings.active_kb,
                     occurred_at=_now(),
                 )
             )
@@ -163,29 +178,21 @@ def estimate_cost_usd(prompt_tokens: int, completion_tokens: int) -> float | Non
 
 
 async def get_dashboard_data(total_rules: int) -> dict:
-    try:
-        now = _now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_ago = now - timedelta(days=7)
-        thirty_ago = now - timedelta(days=30)
-        day_expr = func.date(RuleView.viewed_at)
+    """Aggregate ChatEvent/FeedbackEvent/TokenEvent stats.
 
+    The RuleView-backed stats (total/unique/daily views, top/trending rules,
+    recent views, coverage_pct) were dropped in Phase 4 along with the
+    RuleView model — rule-view tracking died with the rule card in Phase 1.
+    No route currently calls this (the admin dashboard route was removed in
+    Phase 1 too); kept for its aggregation logic and test coverage.
+    """
+    try:
         async with db.AsyncSessionLocal() as session:
 
             async def scalar(stmt) -> int:
                 val = await session.scalar(stmt)
                 return int(val or 0)
 
-            total_views = await scalar(select(func.count()).select_from(RuleView))
-            views_today = await scalar(
-                select(func.count()).select_from(RuleView).where(RuleView.viewed_at >= today_start)
-            )
-            views_week = await scalar(
-                select(func.count()).select_from(RuleView).where(RuleView.viewed_at >= week_ago)
-            )
-            unique_accessed = await scalar(
-                select(func.count(func.distinct(RuleView.rule_id)))
-            )
             chat_with_rule = await scalar(
                 select(func.count()).select_from(ChatEvent).where(ChatEvent.rule_id.isnot(None))
             )
@@ -193,29 +200,6 @@ async def get_dashboard_data(total_rules: int) -> dict:
             total_tokens_used = await scalar(select(func.coalesce(func.sum(TokenEvent.total_tokens), 0)))
             total_prompt_tokens = await scalar(select(func.coalesce(func.sum(TokenEvent.prompt_tokens), 0)))
             total_completion_tokens = await scalar(select(func.coalesce(func.sum(TokenEvent.completion_tokens), 0)))
-
-            # Top 15 most viewed rules
-            top_rows = (await session.execute(
-                select(RuleView.rule_id, func.count().label("views"))
-                .group_by(RuleView.rule_id)
-                .order_by(func.count().desc())
-                .limit(15)
-            )).all()
-
-            # Daily activity — last 30 days
-            daily_rows = (await session.execute(
-                select(day_expr.label("day"), func.count().label("views"))
-                .where(RuleView.viewed_at >= thirty_ago)
-                .group_by(day_expr)
-                .order_by(day_expr.asc())
-            )).all()
-
-            # Recent 10 views
-            recent_rows = (await session.execute(
-                select(RuleView.rule_id, RuleView.viewed_at)
-                .order_by(RuleView.viewed_at.desc())
-                .limit(10)
-            )).all()
 
             # Intent distribution
             intent_rows = (await session.execute(
@@ -237,16 +221,6 @@ async def get_dashboard_data(total_rules: int) -> dict:
                 select(FeedbackEvent.mode, FeedbackEvent.rating, func.count().label("cnt"))
                 .where(FeedbackEvent.mode.isnot(None))
                 .group_by(FeedbackEvent.mode, FeedbackEvent.rating)
-            )).all()
-
-            # Top rules by unique-day engagement (breadth over last 30d)
-            active_days_expr = func.count(func.distinct(day_expr))
-            trending_rows = (await session.execute(
-                select(RuleView.rule_id, active_days_expr.label("active_days"))
-                .where(RuleView.viewed_at >= thirty_ago)
-                .group_by(RuleView.rule_id)
-                .order_by(active_days_expr.desc())
-                .limit(5)
             )).all()
 
             # Rules generating the most negative feedback
@@ -276,29 +250,16 @@ async def get_dashboard_data(total_rules: int) -> dict:
                 .order_by(total_tokens_sum.desc())
             )).all()
 
-        coverage_pct = round(unique_accessed / total_rules * 100, 1) if total_rules > 0 else 0
-
         return {
             "overview": {
-                "total_rules":           total_rules,
-                "total_views":           total_views,
-                "unique_rules_accessed": unique_accessed,
-                "coverage_pct":          coverage_pct,
-                "views_today":           views_today,
-                "views_this_week":       views_week,
+                "total_rules":             total_rules,
                 "chat_queries_with_rule":  chat_with_rule,
                 "total_tokens_used":       total_tokens_used,
                 "total_prompt_tokens":     total_prompt_tokens,
                 "total_completion_tokens": total_completion_tokens,
                 "estimated_cost_usd":      estimate_cost_usd(total_prompt_tokens, total_completion_tokens),
             },
-            "top_rules":          [{"rule_id": r.rule_id, "views": int(r.views)} for r in top_rows],
-            "daily_activity":     [{"date": str(r.day), "views": int(r.views)} for r in daily_rows],
-            "recent_views":       [
-                {"rule_id": r.rule_id, "viewed_at": _iso(r.viewed_at)} for r in recent_rows
-            ],
             "intent_distribution":[{"intent": r.intent, "count": int(r.cnt)} for r in intent_rows],
-            "trending_rules":     [{"rule_id": r.rule_id, "active_days": int(r.active_days)} for r in trending_rows],
             "downvoted_rules":    [
                 {"rule_id": r.rule_id, "down": int(r.down or 0), "up": int(r.up or 0)} for r in downvoted_rows
             ],
@@ -327,18 +288,11 @@ async def get_dashboard_data(total_rules: int) -> dict:
         return {
             "overview": {
                 "total_rules": total_rules,
-                "total_views": 0, "unique_rules_accessed": 0, "coverage_pct": 0,
-                "views_today": 0, "views_this_week": 0, "chat_queries_with_rule": 0,
+                "chat_queries_with_rule": 0,
                 "total_tokens_used": 0, "total_prompt_tokens": 0, "total_completion_tokens": 0,
                 "estimated_cost_usd": None,
             },
-            "top_rules": [], "daily_activity": [], "recent_views": [],
-            "intent_distribution": [], "trending_rules": [],
+            "intent_distribution": [],
             "downvoted_rules": [], "tokens_by_call_type": [],
             "feedback": {"up": 0, "down": 0, "by_mode": []},
         }
-
-
-def _iso(val) -> str:
-    """Render a datetime (or already-string) timestamp as an ISO string."""
-    return val.isoformat() if hasattr(val, "isoformat") else str(val)

@@ -103,6 +103,31 @@ async def reset_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
+async def seed_knowledge_bases() -> None:
+    """Upsert one `knowledge_bases` row per registered KB descriptor.
+
+    Called once at startup, after init_db() creates the schema, so a fresh
+    database always has a row for every backend/kb/*.yaml descriptor (in
+    particular `customer_sap`) even before anyone saves a custom prompt for
+    it. Idempotent and safe to call repeatedly: an existing row's id/name is
+    kept in sync with the descriptor, but its custom_prompt/enhanced_prompt
+    (user-saved via Settings, Phase 6) is never touched here.
+    """
+    import models
+    from providers.registry import KnowledgeBaseRegistry
+
+    descriptors = KnowledgeBaseRegistry().list_descriptors()
+
+    async with AsyncSessionLocal() as session:
+        for descriptor in descriptors:
+            existing = await session.get(models.KnowledgeBase, descriptor.id)
+            if existing is None:
+                session.add(models.KnowledgeBase(id=descriptor.id, name=descriptor.name))
+            elif existing.name != descriptor.name:
+                existing.name = descriptor.name
+        await session.commit()
+
+
 async def get_session() -> AsyncSession:
     """FastAPI dependency yielding a request-scoped async session."""
     async with AsyncSessionLocal() as session:

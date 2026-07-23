@@ -20,7 +20,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 import db
-from models import ChatEvent, FeedbackEvent, RuleView, TokenEvent
+from models import ChatEvent, FeedbackEvent, TokenEvent
 
 LEGACY_DB = Path(__file__).parent / "data" / "analytics.db"
 
@@ -55,8 +55,10 @@ async def migrate(force: bool) -> None:
 
     await db.init_db()
 
+    # rule_views is intentionally omitted — RuleView (and rule-view tracking)
+    # was removed in Phase 4; the legacy rule_views table in analytics.db, if
+    # any, is no longer migrated.
     plan = [
-        ("rule_views", RuleView, lambda r: RuleView(rule_id=r["rule_id"], viewed_at=_parse_ts(r["viewed_at"]))),
         ("chat_events", ChatEvent, lambda r: ChatEvent(rule_id=r.get("rule_id"), intent=r.get("intent"), occurred_at=_parse_ts(r["occurred_at"]))),
         ("feedback_events", FeedbackEvent, lambda r: FeedbackEvent(rating=r["rating"], mode=r.get("mode"), rule_id=r.get("rule_id"), occurred_at=_parse_ts(r["occurred_at"]))),
         ("token_events", TokenEvent, lambda r: TokenEvent(

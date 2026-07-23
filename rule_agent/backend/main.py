@@ -243,6 +243,8 @@ async def lifespan(app: FastAPI):
         log.info("[INFO] Data loaded. %d active Customer rules ready.", len(rules))
         await db.init_db()
         log.info("[INFO] Database schema ready.")
+        await db.seed_knowledge_bases()
+        log.info("[INFO] Knowledge base registry seeded.")
     except Exception as exc:
         log.critical(
             "[CRITICAL] Startup data load failed: %s — %s",

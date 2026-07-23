@@ -4,10 +4,19 @@ SQLAlchemy ORM models.
 Chat workspace:
   User → Project → Conversation → Message
 
-A conversation is bound to one persona (analyst / engineer / pm) and optionally
-to a project; a project carries a short standing-instructions string injected
-into every chat under it. Analytics tables (rule views, chat events, feedback,
-token usage) live in the same database so there is a single store.
+A conversation is bound to one persona (analyst / engineer / pm, defaulting to
+"analyst") and optionally to a project; a project carries a short
+standing-instructions string injected into every chat under it. Analytics
+tables (chat events, feedback, token usage) live in the same database so
+there is a single store.
+
+Multi-KB: every Conversation/Project/Message/ChatEvent/FeedbackEvent/
+TokenEvent row carries a `knowledge_base_id` (Phase 4) pointing at a row in
+`KnowledgeBase`, so the same store can serve more than one registered KB
+(backend/kb/*.yaml). `config.settings.active_kb` ("customer_sap") is the
+Python-side default; a matching `server_default` keeps rows written directly
+via SQL (e.g. the migration backfill) consistent. The HTTP API does not yet
+accept/return this field — that lands in Phase 5.
 """
 
 from datetime import datetime, timezone
@@ -22,7 +31,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from config import settings
 from db import Base
+
+# Python-side default for every knowledge_base_id column below. Kept as a
+# plain reference to config.settings so a non-default ACTIVE_KB is honored
+# for rows created by the running app; the DDL-level server_default is a
+# fixed literal ("customer_sap") since server-side defaults cannot reference
+# runtime config.
+_DEFAULT_KB_ID = settings.active_kb
 
 
 def _utcnow() -> datetime:
@@ -59,6 +76,11 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200))
     # Short standing directive prepended to every chat in this project.
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Nullable — unlike Conversation/Message, a project may span KBs (its
+    # conversations each carry their own knowledge_base_id).
+    knowledge_base_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, default=_DEFAULT_KB_ID, server_default="customer_sap"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
@@ -86,6 +108,9 @@ class Conversation(Base):
     persona: Mapped[str] = mapped_column(String(16), default="analyst")
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     context_rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(64), default=_DEFAULT_KB_ID, server_default="customer_sap"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
@@ -113,6 +138,9 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     suggested_followups: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(64), default=_DEFAULT_KB_ID, server_default="customer_sap"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
@@ -120,17 +148,32 @@ class Message(Base):
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
 
-# ── Analytics (migrated from the old SQLite analytics.db) ────────────────────
+# ── Knowledge bases ──────────────────────────────────────────────────────────
 
 
-class RuleView(Base):
-    __tablename__ = "rule_views"
+class KnowledgeBase(Base):
+    """One row per registered KB descriptor (backend/kb/*.yaml), keyed by the
+    descriptor's slug. Holds the user-editable custom/enhanced system-prompt
+    text (Settings → custom prompt, Phase 6) — seeded at startup from the
+    descriptor's id/name (see db.seed_knowledge_bases) without ever
+    overwriting an already-saved prompt.
+    """
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    rule_id: Mapped[str] = mapped_column(String(64), index=True)
-    viewed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), index=True, default=_utcnow
+    __tablename__ = "knowledge_bases"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enhanced_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+
+# ── Analytics (migrated from the old SQLite analytics.db) ────────────────────
 
 
 class ChatEvent(Base):
@@ -140,6 +183,9 @@ class ChatEvent(Base):
     rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     intent: Mapped[str | None] = mapped_column(String(32), nullable=True)
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(64), default=_DEFAULT_KB_ID, server_default="customer_sap"
+    )
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), index=True, default=_utcnow
     )
@@ -153,6 +199,9 @@ class FeedbackEvent(Base):
     mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(64), default=_DEFAULT_KB_ID, server_default="customer_sap"
+    )
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), index=True, default=_utcnow
     )
@@ -167,6 +216,9 @@ class TokenEvent(Base):
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     call_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        String(64), default=_DEFAULT_KB_ID, server_default="customer_sap"
+    )
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), index=True, default=_utcnow
     )
