@@ -30,7 +30,7 @@ export default function ProjectInstructions({ project, onClose, onSaved }) {
         <p className="modal-hint">
           These instructions are added to <strong>every chat</strong> in
           “{project.name}”. Keep them short and directive — e.g.
-          “Scope answers to the DCC module” or “Always include a Databricks notebook cell”.
+          “Scope answers to the Q4 dataset” or “Always cite the source document”.
         </p>
         <textarea
           className="instructions-textarea"

@@ -1,104 +1,42 @@
-﻿import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Tooltip from './Tooltip.jsx'
-import YamlValidator from './YamlValidator.jsx'
 import RichInput from './RichInput.jsx'
-import { apiGet, apiPost, apiPostStream, getConversation, createConversation } from '../api.js'
-import { copyText, buildDatabricksNotebook, downloadFile, markdownToJira } from '../utils/exporters.js'
+import { apiPost, apiPostStream, getConversation, createConversation } from '../api.js'
+import { copyText } from '../utils/exporters.js'
 
-const MODE_STORAGE_KEY = 'rule_agent_chat_mode'
 const GENERAL_STORAGE_KEY = 'rule_agent_general_mode'
 
-const WELCOME_MESSAGES = {
-  analyst:
-    'Hello! I can explain any of the 228 Customer data quality rules in detail.\n\nAsk about a specific rule ID, describe what a rule does, or explore by category.',
-  engineer:
-    'Hello! You are in **Data Engineer** mode.\n\nPaste a user story or describe a rule change, and I will list the pipeline files to modify, the YAML to write, and how to test it. Answers can be downloaded as a Databricks notebook, and you can check edited pipeline YAML with the **Validate YAML** button above.',
-  pm:
-    'Hello! You are in **Project Manager** mode.\n\nDescribe a data quality issue or business need in plain language, and I will draft a user story for the engineering backlog — linked to any existing rules that already cover it. Finished drafts can be copied as Jira wiki markup.',
-}
+const WELCOME_MESSAGE =
+  'Hello! Ask me anything about this knowledge base — describe what you\'re looking for, ' +
+  'or ask a specific question, and I\'ll ground my answer in the underlying data.'
 
 // `ts: null` doubles as the welcome marker for histories persisted before
 // the isWelcome flag existed.
-const initialMessagesFor = (mode) => [
-  {
-    role: 'agent',
-    text: WELCOME_MESSAGES[mode] ?? WELCOME_MESSAGES.analyst,
-    ts: null,
-    isWelcome: true,
-  },
+const initialMessages = () => [
+  { role: 'agent', text: WELCOME_MESSAGE, ts: null, isWelcome: true },
 ]
 
 // Map a server conversation (with messages) to the internal message shape.
 function mapConversationMessages(detail) {
   const msgs = detail?.messages ?? []
-  if (msgs.length === 0) return initialMessagesFor(detail?.persona ?? 'analyst')
+  if (msgs.length === 0) return initialMessages()
   return msgs.map(m => ({
     role: m.role === 'assistant' ? 'agent' : 'user',
     text: m.content,
     ts: m.created_at ? Date.parse(m.created_at) : Date.now(),
     followups: m.suggested_followups ?? [],
-    mode: m.role === 'assistant' ? (detail.persona ?? 'analyst') : undefined,
     ruleId: m.rule_id ?? null,
   }))
 }
 
-const MODES = [
-  { id: 'analyst', label: 'Analyst' },
-  { id: 'engineer', label: 'Data Engineer' },
-  { id: 'pm', label: 'Project Manager' },
+const SUGGESTIONS = [
+  'What can you help me with?',
+  'Summarize what this knowledge base covers',
+  'What are the most important things to know?',
+  'Explain a specific topic in detail',
 ]
-
-function getStoredMode() {
-  try {
-    const stored = localStorage.getItem(MODE_STORAGE_KEY)
-    if (stored && MODES.some(m => m.id === stored)) return stored
-  } catch {}
-  return 'analyst'
-}
-
-const MODE_SUGGESTIONS = {
-  analyst: [
-    'Find a rule that checks customer email is not empty',
-    'Explain rule RCCOMP_103.1',
-    'List all completeness rules',
-    'Which rules check KNA1?',
-  ],
-  engineer: [
-    'Paste a user story to see which files to change',
-    'How do I change the threshold in rule RCACCU_383.6?',
-    'Which pipeline files implement postal code checks?',
-    'Which other rules does RCCOMP_149.2 impact?',
-  ],
-  pm: [
-    'Customers are being created with invalid postal codes',
-    'We need a check that customer emails are unique',
-    'Help me write a story for tightening address validation',
-    'Duplicate customer records are reaching reporting',
-  ],
-}
-
-const MODE_PLACEHOLDERS = {
-  analyst: 'Ask about a rule, describe what it does, or follow up on a rule…',
-  engineer: 'Paste a user story or describe a rule change…',
-  pm: 'Describe the issue or need in plain language…',
-}
-
-const MODE_HERO = {
-  analyst: {
-    title: 'How can I help you today?',
-    sub: 'Ask about any Customer data quality rule — by ID, by what it checks, or by category. I will explain it in plain business language.',
-  },
-  engineer: {
-    title: 'Data Engineer mode',
-    sub: 'Paste a user story or describe a rule change. I will list the pipeline files to modify, the YAML to write, and how to test it — downloadable as a Databricks notebook.',
-  },
-  pm: {
-    title: 'Project Manager mode',
-    sub: 'Describe a data quality issue or business need in plain language. I will draft a user story for the engineering backlog, linked to any rules that already cover it.',
-  },
-}
 
 const HeroMark = () => (
   <div className="hero-mark" aria-hidden="true">
@@ -111,15 +49,16 @@ const HeroMark = () => (
   </div>
 )
 
-function ChatHero({ mode, onAsk }) {
-  const { title, sub } = MODE_HERO[mode] ?? MODE_HERO.analyst
+function ChatHero({ kbName, onAsk }) {
   return (
     <div className="chat-hero">
       <HeroMark />
-      <h1 className="hero-title">{title}</h1>
-      <p className="hero-sub">{sub}</p>
+      <h1 className="hero-title">How can I help you today?</h1>
+      <p className="hero-sub">
+        {kbName ? `Ask me anything about ${kbName}.` : 'Ask me anything about this knowledge base.'}
+      </p>
       <div className="hero-cards">
-        {MODE_SUGGESTIONS[mode].map((s, i) => (
+        {SUGGESTIONS.map((s, i) => (
           <button key={i} className="hero-card" onClick={() => onAsk(s)}>
             <span className="hero-card-text">{s}</span>
             <span className="hero-card-arrow" aria-hidden="true">
@@ -132,19 +71,6 @@ function ChatHero({ mode, onAsk }) {
       </div>
     </div>
   )
-}
-
-const RULE_ID_RE = /\b([A-Z]{2,8}_\d+(?:\.\d+)?)\b/g
-
-function addRuleLinks(text) {
-  // Rule IDs inside fenced blocks or inline code must stay literal — link
-  // syntax injected there renders as raw [ID](#rule:ID) text in the code.
-  return text
-    .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/)
-    .map(seg =>
-      seg.startsWith('`') ? seg : seg.replace(RULE_ID_RE, (match) => `[${match}](#rule:${match})`)
-    )
-    .join('')
 }
 
 function CodeBlockPre({ children }) {
@@ -169,27 +95,11 @@ function CodeBlockPre({ children }) {
   )
 }
 
-function makeMarkdownComponents(onRuleClick) {
-  return {
-    pre: CodeBlockPre,
-    a: ({ href, children }) => {
-      if (href?.startsWith('#rule:')) {
-        const ruleId = href.slice(6)
-        return (
-          <span
-            className="rule-link"
-            onClick={() => onRuleClick(ruleId)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && onRuleClick(ruleId)}
-          >
-            {children}
-          </span>
-        )
-      }
-      return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-    },
-  }
+const mdComponents = {
+  pre: CodeBlockPre,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  ),
 }
 
 const AgentIcon = () => (
@@ -227,12 +137,6 @@ const ThumbIcon = ({ down, filled }) => (
   </svg>
 )
 
-const DownloadIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-    <path d="M6 1.5v6M3.5 5L6 7.5 8.5 5M1.5 9.5v1h9v-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-)
-
 const CopyIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
     <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" stroke="currentColor" strokeWidth="1.2"/>
@@ -241,27 +145,13 @@ const CopyIcon = () => (
 )
 
 function MessageActions({ msg, onFeedback }) {
-  const [jiraCopied, setJiraCopied] = useState(false)
-  const [mdCopied, setMdCopied]     = useState(false)
-  const notebook = msg.mode === 'engineer' ? buildDatabricksNotebook(msg.text) : null
-
-  async function copyJira() {
-    if (await copyText(markdownToJira(msg.text))) {
-      setJiraCopied(true)
-      setTimeout(() => setJiraCopied(false), 1600)
-    }
-  }
+  const [mdCopied, setMdCopied] = useState(false)
 
   async function copyMarkdown() {
     if (await copyText(msg.text)) {
       setMdCopied(true)
       setTimeout(() => setMdCopied(false), 1600)
     }
-  }
-
-  function downloadNotebook() {
-    const name = msg.ruleId ?? new Date().toISOString().slice(0, 10)
-    downloadFile(`validation_${name}.py`, notebook, 'text/x-python')
   }
 
   return (
@@ -286,27 +176,11 @@ function MessageActions({ msg, onFeedback }) {
           <ThumbIcon down filled={msg.feedback === 'down'} />
         </button>
       </Tooltip>
-      {notebook && (
-        <Tooltip content="Download the SQL + PySpark validation cells as a Databricks notebook">
-          <button className="msg-action-btn" onClick={downloadNotebook}>
-            <DownloadIcon /> Databricks notebook
-          </button>
-        </Tooltip>
-      )}
-      {msg.mode === 'pm' && (
-        <>
-          <Tooltip content="Copy as Jira wiki markup">
-            <button className="msg-action-btn" onClick={copyJira}>
-              <CopyIcon /> {jiraCopied ? 'Copied ✓' : 'Copy for Jira'}
-            </button>
-          </Tooltip>
-          <Tooltip content="Copy the raw markdown">
-            <button className="msg-action-btn" onClick={copyMarkdown}>
-              <CopyIcon /> {mdCopied ? 'Copied ✓' : 'Copy markdown'}
-            </button>
-          </Tooltip>
-        </>
-      )}
+      <Tooltip content="Copy the raw markdown">
+        <button className="msg-action-btn" onClick={copyMarkdown}>
+          <CopyIcon /> {mdCopied ? 'Copied ✓' : 'Copy'}
+        </button>
+      </Tooltip>
     </div>
   )
 }
@@ -321,21 +195,19 @@ function formatTime(ts) {
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-const NBSP = ' '
+const NBSP = ' '
 
 export default function ChatBox({
-  onRuleLoaded, prefill, onPrefillConsumed, activeRuleId,
   conversationId = null,
-  conversationPersona = null,
   projectId = null,
+  activeKbId = null,
+  activeKb = null,
   onConversationCreated,
   onConversationUpdated,
   onStartNewChat,
 }) {
-  const [messages, setMessages] = useState(() => initialMessagesFor(getStoredMode()))
-  const [loading, setLoading]       = useState(false)
-  const [showValidator, setShowValidator] = useState(false)
-  const [mode, setMode] = useState(conversationPersona ?? getStoredMode)
+  const [messages, setMessages] = useState(() => initialMessages())
+  const [loading, setLoading] = useState(false)
   const [generalMode, setGeneralMode] = useState(() => {
     try { return localStorage.getItem(GENERAL_STORAGE_KEY) === '1' } catch {}
     return false
@@ -344,16 +216,6 @@ export default function ChatBox({
   const bottomRef        = useRef(null)
   const richInputRef     = useRef(null)
   const loadedConvRef    = useRef(null)   // conversation id whose messages are in state
-  const modeRef          = useRef(mode)
-  const sliderRef        = useRef(null)
-  const modeBtnRefs      = useRef({})
-
-  useEffect(() => { modeRef.current = mode }, [mode])
-
-  // Sync the persona toggle to the active conversation's persona.
-  useEffect(() => {
-    if (conversationId != null && conversationPersona) setMode(conversationPersona)
-  }, [conversationId, conversationPersona])
 
   // Load messages when the active conversation changes (skip if ChatBox just
   // created it during send — loadedConvRef already points at it).
@@ -361,7 +223,7 @@ export default function ChatBox({
     let cancelled = false
     if (conversationId == null) {
       loadedConvRef.current = null
-      setMessages(initialMessagesFor(modeRef.current))
+      setMessages(initialMessages())
       return
     }
     if (conversationId === loadedConvRef.current) return
@@ -374,7 +236,7 @@ export default function ChatBox({
       } catch {}
     })()
     return () => { cancelled = true }
-  }, [conversationId, conversationPersona])
+  }, [conversationId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -388,45 +250,6 @@ export default function ChatBox({
     if (!loading) richInputRef.current?.focus()
   }, [loading])
 
-  // Position slider before first paint (no animation)
-  useLayoutEffect(() => {
-    const slider = sliderRef.current
-    const btn = modeBtnRefs.current[mode]
-    if (!slider || !btn) return
-    slider.style.transitionDuration = '0s'
-    slider.style.left  = `${btn.offsetLeft}px`
-    slider.style.width = `${btn.offsetWidth}px`
-    void slider.offsetWidth   // force reflow before re-enabling
-    slider.style.transitionDuration = ''
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Slide to new position on mode change (after paint so CSS transition fires)
-  useEffect(() => {
-    const slider = sliderRef.current
-    const btn = modeBtnRefs.current[mode]
-    if (!slider || !btn) return
-    slider.style.left  = `${btn.offsetLeft}px`
-    slider.style.width = `${btn.offsetWidth}px`
-  }, [mode])
-
-  useEffect(() => {
-    if (prefill) {
-      richInputRef.current?.setContent(prefill)
-      onPrefillConsumed?.()
-    }
-  }, [prefill]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Switching persona starts a separate thread (a conversation is bound to one
-  // persona). Deselect the current conversation and reset to a fresh draft.
-  function switchMode(nextMode) {
-    if (nextMode === mode || loading) return
-    setMode(nextMode)
-    try { localStorage.setItem(MODE_STORAGE_KEY, nextMode) } catch {}
-    loadedConvRef.current = null
-    setMessages(initialMessagesFor(nextMode))
-    onStartNewChat?.(nextMode)
-  }
-
   function toggleGeneralMode() {
     if (loading) return
     setGeneralMode(prev => {
@@ -436,12 +259,12 @@ export default function ChatBox({
     })
   }
 
-  // "New chat" — drop the active conversation and start a fresh draft (same persona).
+  // "New chat" — drop the active conversation and start a fresh draft.
   function newChat() {
     if (loading) return
     loadedConvRef.current = null
-    setMessages(initialMessagesFor(mode))
-    onStartNewChat?.(mode)
+    setMessages(initialMessages())
+    onStartNewChat?.()
   }
 
   async function send(overrideText) {
@@ -460,7 +283,10 @@ export default function ChatBox({
     let createdConv = null
     if (cid == null) {
       try {
-        createdConv = await createConversation({ persona: mode, project_id: projectId ?? null })
+        createdConv = await createConversation({
+          project_id: projectId ?? null,
+          knowledge_base_id: activeKbId ?? null,
+        })
         cid = createdConv.id
         loadedConvRef.current = cid
       } catch {
@@ -472,18 +298,20 @@ export default function ChatBox({
     setMessages(prev => [
       ...prev,
       { role: 'user', text, ts: Date.now() },
-      { role: 'agent', text: NBSP, ts: Date.now(), isStreaming: true, followups: [], mode },
+      { role: 'agent', text: NBSP, ts: Date.now(), isStreaming: true, followups: [] },
     ])
     setLoading(true)
     if (createdConv) onConversationCreated?.(createdConv)
 
+    // KB-scoped route (falls back to the pinned/active KB server-side when
+    // the switcher is disabled, so it's always safe to pass through).
+    const streamPath = activeKbId ? `/kb/${activeKbId}/chat/stream` : '/chat/stream'
+
     try {
-      const reader = await apiPostStream('/chat/stream', {
+      const reader = await apiPostStream(streamPath, {
         message: text,
-        context_rule_id: activeRuleId ?? null,
-        mode,
+        general: generalMode,
         history: [],
-        general: mode === 'analyst' && generalMode,
         conversation_id: cid,
       })
 
@@ -512,7 +340,7 @@ export default function ChatBox({
           }
 
           if (parsed.type === 'status') {
-            // Transient progress text (persona retrieval) — replaced by the first real chunk
+            // Transient progress text — replaced by the first real chunk
             setMessages(prev => {
               const updated = [...prev]
               const last = updated[updated.length - 1]
@@ -556,10 +384,6 @@ export default function ChatBox({
               }
               return updated
             })
-            if (parsed.rule_id) {
-              const ruleRes = await apiGet(`/rule/${parsed.rule_id}`)
-              if (ruleRes.ok) onRuleLoaded(await ruleRes.json())
-            }
           }
         }
       }
@@ -606,31 +430,19 @@ export default function ChatBox({
   function sendFeedback(index, msg, rating) {
     if (msg.feedback === rating) return
     setMessages(prev => prev.map((m, i) => (i === index ? { ...m, feedback: rating } : m)))
-    apiPost('/feedback', {
+    const feedbackPath = activeKbId ? `/kb/${activeKbId}/feedback` : '/feedback'
+    apiPost(feedbackPath, {
       rating,
-      mode: msg.mode ?? mode,
-      rule_id: msg.ruleId ?? activeRuleId ?? null,
+      rule_id: msg.ruleId ?? null,
     }).catch(() => {})
   }
 
-  async function handleRuleLinkClick(ruleId) {
-    try {
-      const res = await apiGet(`/rule/${ruleId}`)
-      if (res.ok) onRuleLoaded(await res.json())
-    } catch {}
-  }
-
-  const mdComponents = makeMarkdownComponents(handleRuleLinkClick)
   const userMsgCount  = messages.filter(m => m.role === 'user').length
   const hasHistory    = messages.length > 1
   const isFreshChat   =
     messages.length === 1 &&
     messages[0].role === 'agent' &&
     (messages[0].isWelcome || messages[0].ts === null)
-  const currentPlaceholder =
-    mode === 'analyst' && generalMode
-      ? 'Ask anything — rules, data quality concepts, tools, process…'
-      : MODE_PLACEHOLDERS[mode]
 
   return (
     <div className="chat-container">
@@ -641,34 +453,9 @@ export default function ChatBox({
             <span className="chat-panel-live-dot" />
             <span className="chat-panel-live-label">Live</span>
           </div>
-          {activeRuleId && (
-            <span className="active-rule-chip" title={`Rule ${activeRuleId} is in context`}>
-              <span className="active-rule-chip-dot" aria-hidden="true" />
-              {activeRuleId}
-            </span>
-          )}
           {userMsgCount > 0 && (
             <span className="chat-msg-count">{userMsgCount}</span>
           )}
-        </div>
-
-        <div className="chat-header-center">
-          <div className="mode-toggle" data-tour="modes" role="tablist" aria-label="Assistant mode">
-            <div className="mode-toggle-slider" ref={sliderRef} aria-hidden="true" />
-            {MODES.map(m => (
-              <button
-                key={m.id}
-                ref={el => { modeBtnRefs.current[m.id] = el }}
-                role="tab"
-                aria-selected={mode === m.id}
-                className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}
-                onClick={() => switchMode(m.id)}
-                disabled={loading}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="chat-header-right">
@@ -685,39 +472,30 @@ export default function ChatBox({
               <TrashIcon />New chat
             </button>
           )}
-          {mode === 'analyst' && (
-            <Tooltip
-              content={
-                generalMode
-                  ? 'General Q&A is ON — I can also answer questions beyond the rule catalog (git, Databricks, data quality concepts…). Click to return to rules only.'
-                  : 'Rules only — click to also allow general questions beyond the rule catalog'
-              }
+          <Tooltip
+            content={
+              generalMode
+                ? 'General Q&A is ON — I can also answer questions beyond this knowledge base. Click to scope answers back to it.'
+                : 'Scoped to this knowledge base — click to also allow general questions'
+            }
+          >
+            <button
+              className={`header-action-btn${generalMode ? ' active' : ''}`}
+              onClick={toggleGeneralMode}
+              disabled={loading}
+              aria-pressed={generalMode}
             >
-              <button
-                className={`header-action-btn${generalMode ? ' active' : ''}`}
-                onClick={toggleGeneralMode}
-                disabled={loading}
-                aria-pressed={generalMode}
-              >
-                <span className={`action-dot${generalMode ? ' on' : ''}`} aria-hidden="true" />
-                General Q&A
-              </button>
-            </Tooltip>
-          )}
-          {mode === 'engineer' && (
-            <Tooltip content="Check an edited pipeline YAML against the repository before committing">
-              <button className="header-action-btn" onClick={() => setShowValidator(true)}>
-                Validate YAML
-              </button>
-            </Tooltip>
-          )}
+              <span className={`action-dot${generalMode ? ' on' : ''}`} aria-hidden="true" />
+              General Q&A
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       <div className="chat-history">
         <div className="chat-history-inner">
           {isFreshChat ? (
-            <ChatHero mode={mode} onAsk={s => send(s)} />
+            <ChatHero kbName={activeKb?.name} onAsk={s => send(s)} />
           ) : (
           messages.map((msg, i) =>
             (msg.isWelcome || (msg.role === 'agent' && msg.ts === null)) ? null : (
@@ -747,13 +525,13 @@ export default function ChatBox({
                         // Answer text: render markdown live so it's formatted as it streams
                         <>
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                            {addRuleLinks(msg.text)}
+                            {msg.text}
                           </ReactMarkdown>
                           <span className="streaming-cursor" aria-hidden="true" />
                         </>
                       ) : (
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                          {addRuleLinks(msg.text)}
+                          {msg.text}
                         </ReactMarkdown>
                       )}
                     </div>
@@ -764,7 +542,7 @@ export default function ChatBox({
                   )}
                 </div>
                 )}
-                {msg.role === 'agent' && !msg.isError && !msg.isStreaming && msg.mode && msg.text && (
+                {msg.role === 'agent' && !msg.isError && !msg.isStreaming && msg.text && (
                   <MessageActions msg={msg} onFeedback={rating => sendFeedback(i, msg, rating)} />
                 )}
                 {!msg.isStreaming && msg.followups?.length > 0 && (
@@ -789,15 +567,13 @@ export default function ChatBox({
         </div>
       </div>
 
-      {showValidator && <YamlValidator onClose={() => setShowValidator(false)} />}
-
       <div className="chat-input-row">
         <div className="chat-input-inner">
           <div className="input-wrap" data-tour="chat-input" onClick={() => richInputRef.current?.focus()}>
             <RichInput
               ref={richInputRef}
               onSend={() => send()}
-              placeholder={currentPlaceholder}
+              placeholder="Ask a question about the knowledge base…"
               disabled={loading}
               onIsEmptyChange={(empty) => setEditorHasContent(!empty)}
             />

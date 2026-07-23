@@ -8,31 +8,9 @@ import {
   moveConversation, deleteConversation,
 } from '../api.js'
 
-const PERSONAS = [
-  { id: 'analyst', label: 'Analyst', short: 'A' },
-  { id: 'engineer', label: 'Engineer', short: 'E' },
-  { id: 'pm', label: 'PM', short: 'PM' },
-]
-
-const personaLabel = (id) => PERSONAS.find(p => p.id === id)?.label ?? id
-
 // Titles are plain text in the sidebar; strip markdown formatting the title
 // generator sometimes emits (and that older stored titles still contain).
-// Underscores stay — rule IDs like RCCOMP_103.1 legitimately contain them.
 const cleanTitle = (t) => (t ?? '').replace(/[*`#]+/g, '').trim() || 'New chat'
-
-function PersonaPicker({ onPick, onCancel }) {
-  return (
-    <div className="persona-picker">
-      {PERSONAS.map(p => (
-        <button key={p.id} className="persona-pick-btn" onClick={() => onPick(p.id)}>
-          {p.label}
-        </button>
-      ))}
-      <button className="persona-pick-cancel" onClick={onCancel} aria-label="Cancel">×</button>
-    </div>
-  )
-}
 
 const ChevronRightIcon = () => (
   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
@@ -111,7 +89,6 @@ function ConversationRow({ conv, active, projects, onSelect, onChanged }) {
       <div className={`conv-row${active ? ' active' : ''}`}>
         <Tooltip content={cleanTitle(conv.title)}>
           <button className="conv-main" onClick={() => onSelect(conv)}>
-            <span className={`conv-persona-badge persona-${conv.persona}`}>{personaLabel(conv.persona)}</span>
             <span className="conv-title">{cleanTitle(conv.title)}</span>
           </button>
         </Tooltip>
@@ -168,13 +145,13 @@ export default function ConversationSidebar({
   onSelectConversation,
   reloadSignal,
   open = true,
+  activeKbId = null,
 }) {
   const [projects, setProjects] = useState([])
   const [conversations, setConversations] = useState([])
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [collapsed, setCollapsed] = useState({})       // projectId → bool
-  const [pickerFor, setPickerFor] = useState(undefined) // 'loose' | projectId | undefined
   const [instructionsProject, setInstructionsProject] = useState(null)
   const [deleteProjectTarget, setDeleteProjectTarget] = useState(null) // project | null
 
@@ -206,9 +183,8 @@ export default function ConversationSidebar({
     reload()
   }
 
-  async function startChat(persona, projectId = null) {
-    setPickerFor(undefined)
-    const conv = await createConversation({ persona, project_id: projectId })
+  async function startChat(projectId = null) {
+    const conv = await createConversation({ project_id: projectId, knowledge_base_id: activeKbId ?? null })
     await reload()
     onSelectConversation(conv)
   }
@@ -230,11 +206,7 @@ export default function ConversationSidebar({
       </div>
 
       <div className="conv-sidebar-actions">
-        {pickerFor === 'loose' ? (
-          <PersonaPicker onPick={(p) => startChat(p, null)} onCancel={() => setPickerFor(undefined)} />
-        ) : (
-          <button className="conv-new-btn" onClick={() => setPickerFor('loose')}>+ New chat</button>
-        )}
+        <button className="conv-new-btn" onClick={() => startChat(null)}>+ New chat</button>
         {newProjectOpen ? (
           <div className="conv-new-project">
             <input
@@ -293,11 +265,7 @@ export default function ConversationSidebar({
                       onChanged={reload}
                     />
                   ))}
-                  {pickerFor === p.id ? (
-                    <PersonaPicker onPick={(persona) => startChat(persona, p.id)} onCancel={() => setPickerFor(undefined)} />
-                  ) : (
-                    <button className="conv-add-in-project" onClick={() => setPickerFor(p.id)}>+ chat</button>
-                  )}
+                  <button className="conv-add-in-project" onClick={() => startChat(p.id)}>+ chat</button>
                 </div>
               )}
             </div>

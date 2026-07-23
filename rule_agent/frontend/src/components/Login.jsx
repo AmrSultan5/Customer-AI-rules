@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { login, setUsername } from '../api.js'
+import { branding } from '../config/branding.js'
 
 /**
  * Lightweight username login — no password. Claims (or creates) a workspace by
@@ -31,7 +32,7 @@ export default function Login({ initial = '', onDone }) {
   return (
     <div className="modal-overlay login-overlay">
       <form className="modal-card login-card" onSubmit={submit}>
-        <h2 className="login-title">Welcome to Rule Intelligence</h2>
+        <h2 className="login-title">Welcome to {branding.productName}</h2>
         <p className="login-sub">Enter a username to open your workspace. Your chats and projects are saved under this name.</p>
         <input
           className="login-input"

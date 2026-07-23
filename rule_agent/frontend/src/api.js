@@ -108,6 +108,19 @@ async function _json(path, { method = 'GET', body } = {}) {
 
 export const login = (username) => _json('/users/login', { method: 'POST', body: { username } })
 
+// ── Knowledge bases (multi-KB registry) ───────────────────────────────────────
+
+/** { knowledge_bases: [{id,name,description,adapter,retrieval_mode,capabilities}], active_kb, switcher_enabled } */
+export const listKBs = () => _json('/kbs')
+/** Descriptor detail for one KB, plus its stored custom_prompt/enhanced_prompt. */
+export const getKB = (kbId) => _json(`/kbs/${kbId}`)
+/** AI-rewrite a rough draft into a reviewable system-prompt fragment. Preview only — does not save. */
+export const enhancePrompt = (kbId, draft) =>
+  _json(`/kb/${kbId}/prompt/enhance`, { method: 'POST', body: { draft } })
+/** Persist the reviewed custom/enhanced prompt for a KB. */
+export const saveKBPrompt = (kbId, { custom_prompt, enhanced_prompt }) =>
+  _json(`/kb/${kbId}/prompt`, { method: 'PUT', body: { custom_prompt, enhanced_prompt } })
+
 export const listProjects = () => _json('/projects')
 export const createProject = (name, instructions = null) =>
   _json('/projects', { method: 'POST', body: { name, instructions } })
