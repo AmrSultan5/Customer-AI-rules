@@ -32,6 +32,8 @@ if str(_BACKEND_DIR) not in sys.path:
 
 from kb._schema import KBDescriptor, load_descriptor  # noqa: E402
 from providers.base import Entity  # noqa: E402
+from providers.hybrid import HybridProvider  # noqa: E402
+from providers.rag import RagProvider  # noqa: E402
 from providers.registry import build_provider  # noqa: E402
 from providers.structured import StructuredTabularProvider  # noqa: E402
 
@@ -53,20 +55,25 @@ def descriptor():
 # ── build_provider / registry wiring ───────────────────────────────────────────
 
 
-def test_build_provider_returns_structured_tabular_provider(descriptor):
+def test_build_provider_returns_hybrid_provider_for_customer_sap(descriptor):
+    """customer_sap's descriptor is adapter: hybrid (Phase 8a) — build_provider
+    now returns a HybridProvider, not a bare StructuredTabularProvider."""
     provider = build_provider(descriptor)
-    assert isinstance(provider, StructuredTabularProvider)
+    assert isinstance(provider, HybridProvider)
     assert provider.kb is descriptor
+    assert isinstance(provider.structured, StructuredTabularProvider)
+    # customer_sap.yaml's source.rag is null in this phase — no RagProvider is
+    # built, so capabilities/behavior stay byte-identical to the plain
+    # structured provider (Phase 8a hard gate: customer_sap unchanged).
+    assert provider.rag is None
     assert provider.capabilities() == {"entity", "search", "context"}
 
 
-def test_build_provider_rejects_rag_only_for_now():
-    """rag-only providers are Phase 8 work; build_provider must not silently
-    return something structured for an adapter it can't serve."""
+def test_build_provider_returns_rag_provider_for_rag_adapter():
     rag_descriptor = KBDescriptor(
         id="docs_only",
         name="Docs KB",
-        description="A rag-only KB for testing build_provider's NotImplementedError path.",
+        description="A rag-only KB for testing build_provider's rag path.",
         adapter="rag",
         retrieval_mode="rag",
         source={"kind": "rag", "roots": ["data"]},
@@ -74,8 +81,58 @@ def test_build_provider_rejects_rag_only_for_now():
         vocab={"entity_singular": "doc", "entity_plural": "docs"},
         prompts={"repository_label": "Docs"},
     )
-    with pytest.raises(NotImplementedError):
-        build_provider(rag_descriptor)
+    provider = build_provider(rag_descriptor)
+    assert isinstance(provider, RagProvider)
+    assert provider.kb is rag_descriptor
+    assert provider.capabilities() == {"search", "context", "rag"}
+
+
+# ── HybridProvider parity with StructuredTabularProvider (no rag configured) ──
+
+
+def test_hybrid_provider_delegates_structured_lookup_methods(descriptor):
+    provider = build_provider(descriptor)
+    structured = StructuredTabularProvider(descriptor)
+
+    sample = "Can you explain rule RCCOMP_12.1 for me?"
+    assert provider.extract_entity_id(sample) == structured.extract_entity_id(sample)
+
+    entity = provider.get_entity("test_1")
+    expected = structured.get_entity("test_1")
+    assert entity is not None and expected is not None
+    assert entity.raw == expected.raw
+
+
+def test_hybrid_provider_build_context_matches_structured(descriptor):
+    import data_loader
+
+    provider = build_provider(descriptor)
+    structured = StructuredTabularProvider(descriptor)
+
+    rules = data_loader.get_rules()
+    row = rules[rules["rule_id"].str.upper() == "TEST_1"].iloc[0]
+    logic = str(row.get("rule_logic", "") or "")
+
+    assert provider.build_context("TEST_1", row, logic, rules) == structured.build_context(
+        "TEST_1", row, logic, rules
+    )
+
+
+def test_hybrid_provider_retrieve_context_matches_structured_with_no_rag_source(descriptor):
+    provider = build_provider(descriptor)
+    structured = StructuredTabularProvider(descriptor)
+
+    hybrid_ctx = asyncio.run(provider.retrieve_context_for_query("q", entity_id="TEST_1"))
+    structured_ctx = asyncio.run(structured.retrieve_context_for_query("q", entity_id="TEST_1"))
+    assert hybrid_ctx == structured_ctx
+
+
+def test_hybrid_provider_reload_matches_structured(descriptor, monkeypatch):
+    import data_loader
+
+    monkeypatch.setattr(data_loader, "reload_all", lambda descriptor=None: {"rules_loaded": 2})
+    provider = build_provider(descriptor)
+    assert provider.reload() == {"rules_loaded": 2}
 
 
 # ── extract_entity_id parity with the old chat_agent._RULE_ID_RE ──────────────

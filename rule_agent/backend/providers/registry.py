@@ -15,17 +15,25 @@ from providers.base import KnowledgeProvider
 def build_provider(descriptor: KBDescriptor) -> KnowledgeProvider:
     """Construct the KnowledgeProvider for one descriptor.
 
-    structured/hybrid KBs are served by StructuredTabularProvider (the
-    deterministic lookup wrapping the existing data_loader). rag-only KBs
-    have no provider yet — RagProvider/HybridProvider land in Phase 8.
+    structured -> StructuredTabularProvider (deterministic lookup wrapping
+    the existing data_loader). hybrid -> HybridProvider (composes structured
+    + an optional RagProvider, per the descriptor's source.rag — see
+    providers/hybrid.py). rag -> RagProvider (Phase 8a).
     """
-    if descriptor.adapter in ("structured", "hybrid"):
+    if descriptor.adapter == "structured":
         from providers.structured import StructuredTabularProvider
 
         return StructuredTabularProvider(descriptor)
+    if descriptor.adapter == "hybrid":
+        from providers.hybrid import HybridProvider
+
+        return HybridProvider(descriptor)
+    if descriptor.adapter == "rag":
+        from providers.rag import RagProvider
+
+        return RagProvider(descriptor)
     raise NotImplementedError(
-        f"KBDescriptor {descriptor.id!r}: adapter={descriptor.adapter!r} has no "
-        "provider yet — RAG-only KBs are implemented in Phase 8."
+        f"KBDescriptor {descriptor.id!r}: adapter={descriptor.adapter!r} has no provider implementation."
     )
 
 

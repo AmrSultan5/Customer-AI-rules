@@ -173,6 +173,60 @@ class KnowledgeBase(Base):
     )
 
 
+# ── RAG storage (Phase 8a) ───────────────────────────────────────────────────
+#
+# One row per ingested source file (kb_documents) and one row per chunk of
+# that file (kb_chunks), both scoped by kb_id so the same tables serve every
+# registered KB. `embedding_json` stores the embedding vector as a JSON list
+# of floats — portable across SQLite and Postgres and read directly by
+# NumpyVectorStore (vector_store.py). On Postgres, migrations/m0002_rag.py
+# additionally adds a native pgvector `embedding_vector` column (unmapped
+# here — PgVectorStore talks to it via raw SQL) plus a cosine index; the two
+# representations are populated together by ingestion.py so either backend
+# can serve queries. Additive-only: no existing table/column changes.
+
+
+class KbDocument(Base):
+    """One row per source file ingested for a KB's RAG index. `sha256` of the
+    file's raw bytes lets ingestion.ingest_kb skip re-embedding unchanged
+    files on re-ingest (idempotent by content, not just by path/mtime)."""
+
+    __tablename__ = "kb_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kb_id: Mapped[str] = mapped_column(String(64), index=True)
+    path: Mapped[str] = mapped_column(String(1024))
+    sha256: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+    chunks: Mapped[list["KbChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+class KbChunk(Base):
+    """One retrievable chunk of a KbDocument, with its embedding. Queried via
+    vector_store.VectorStore (NumpyVectorStore reads embedding_json directly;
+    PgVectorStore reads the parallel native `embedding_vector` column added
+    by migrations/m0002_rag.py on Postgres)."""
+
+    __tablename__ = "kb_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kb_id: Mapped[str] = mapped_column(String(64), index=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("kb_documents.id", ondelete="CASCADE"), index=True
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0)
+    text: Mapped[str] = mapped_column(Text)
+    source_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    document: Mapped["KbDocument"] = relationship(back_populates="chunks")
+
+
 # ── Analytics (migrated from the old SQLite analytics.db) ────────────────────
 
 
