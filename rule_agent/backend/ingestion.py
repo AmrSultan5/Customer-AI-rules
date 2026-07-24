@@ -1,10 +1,13 @@
 """
 ingestion.py — walk a KB's RAG source, chunk + embed changed files, and
-upsert them into the vector store (Phase 8a).
+upsert them into the vector store (Phase 8a). Also the text-extraction +
+chunk/embed/upsert engine behind the file-upload path (Phase 10, see
+`extract_text` / `ingest_text_document` below and main.py's
+POST /kb-repos/{id}/files).
 
-`ingest_kb(descriptor)` is the single entry point (also reachable via
-`python -m ingest --kb <id>` and per-KB `/admin/reload`, providers/rag.py's
-RagProvider.reload). It:
+`ingest_kb(descriptor)` is the single entry point for repo ingestion (also
+reachable via `python -m ingest --kb <id>` and per-KB `/admin/reload`,
+providers/rag.py's RagProvider.reload). It:
 
   1. Resolves the descriptor's rag source (RagSource directly for a rag-only
      KB, or HybridSource.rag for a hybrid one). Returns a zero-count no-op if
@@ -23,10 +26,20 @@ RagProvider.reload). It:
      changed since the last successful ingest (tracked in `kb_documents`).
   4. Chunks changed files into ~800-word overlapping windows, batch-embeds
      via `embeddings.embed_texts`, and upserts into the configured
-     `VectorStore` (replacing that document's previous chunks, if any).
+     `VectorStore` (replacing that document's previous chunks, if any) — the
+     chunk/embed/upsert/replace step is `ingest_text_document`, shared with
+     the upload path so both write `kb_documents`/`kb_chunks` identically.
+  5. Prunes vanished files: after the walk, every `kb_documents` row for this
+     kb_id whose path was NOT encountered — a file deleted from the repo, or
+     excluded by a narrowed `include_globs`/`exclude_globs` — is deleted
+     along with its `kb_chunks`, EXCEPT any document whose path starts with
+     `uploads/` (user-uploaded files, populated by main.py's
+     POST /kb-repos/{id}/files, never touched by this walk). Only runs after
+     a successful walk — a failed clone raises before this point, leaving
+     prior data untouched.
 
 Returns `{"documents": <new/changed>, "chunks": <embedded+upserted>,
-"skipped": <unchanged>}`.
+"skipped": <unchanged>, "removed": <pruned vanished/excluded documents>}`.
 """
 
 from __future__ import annotations
@@ -34,6 +47,7 @@ from __future__ import annotations
 import base64
 import fnmatch
 import hashlib
+import io
 import logging
 import os
 import shutil
@@ -101,8 +115,20 @@ CLONE_ERROR_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
         ("repository not found", "not found", "does not exist", "404"),
         "Repository not found — check the Git URL and branch.",
     ),
+    # Checked BEFORE the network bucket: git reports these as
+    # "warning: unable to access '<path>': Filename too long", so the network
+    # bucket must NOT key on the (far too broad) "unable to access" — git
+    # prefixes it to path, TLS, and network failures alike.
     (
-        ("could not resolve host", "unable to access", "connection", "timed out"),
+        ("filename too long", "cannot create directory", "unable to create file", "checkout failed"),
+        "The repository downloaded, but its files couldn't be unpacked here — usually a path that's too long for this system (a deeply-nested folder). Try a repo with shorter paths.",
+    ),
+    (
+        ("ssl certificate", "certificate verify failed", "self-signed certificate", "unable to get local issuer"),
+        "Couldn't verify the repository's security certificate — usually a corporate network/proxy. Ask IT to trust the proxy's certificate for git.",
+    ),
+    (
+        ("could not resolve host", "connection", "timed out", "network is unreachable"),
         "Couldn't reach the repository host — check the URL and your network.",
     ),
 )
@@ -151,7 +177,10 @@ def _clone_git_repo(rag_source: RagSource, dest_dir: Path) -> None:
         token_b64 = base64.b64encode(f":{pat}".encode("utf-8")).decode("ascii")
         config_args = ["-c", f"http.extraHeader=Authorization: Basic {token_b64}"]
 
-    cmd = ["git"] + config_args + ["clone", "--depth", "1"]
+    # core.longpaths lets git check out paths longer than Windows' 260-char
+    # MAX_PATH (a deeply-nested repo otherwise fails checkout with "Filename
+    # too long"); it's a no-op/harmless on other platforms.
+    cmd = ["git", "-c", "core.longpaths=true"] + config_args + ["clone", "--depth", "1"]
     if rag_source.git_ref:
         cmd += ["--branch", rag_source.git_ref]
     cmd += [rag_source.git_url, str(dest_dir)]
@@ -232,6 +261,108 @@ def _sha256_of_file(path: Path) -> str:
     return h.hexdigest()
 
 
+# ── Upload text extraction (Phase 10) ───────────────────────────────────────
+#
+# extract_text(filename, data) is the in-memory counterpart to _load_text
+# above — used by main.py's POST /kb-repos/{id}/files, which never writes an
+# uploaded file to disk. Every parser here reads from an io.BytesIO wrapping
+# the raw upload bytes, no temp files. SUPPORTED_UPLOAD_SUFFIXES is the
+# allowlist the endpoint rejects against *before* calling extract_text —
+# anything else (images, audio, video, archives, other binaries) is refused
+# rather than silently producing empty/garbage text.
+
+# Plain-text / markup / code — decoded as UTF-8 (errors="ignore" so a stray
+# non-UTF-8 byte never fails the whole upload).
+_UPLOAD_TEXT_SUFFIXES = {
+    ".md", ".txt", ".rst", ".csv", ".json", ".yaml", ".yml", ".html", ".xml",
+    ".log", ".py", ".ts", ".tsx", ".js", ".jsx", ".css", ".sql", ".ini",
+    ".toml", ".cfg", ".sh", ".java", ".go", ".rb", ".php", ".c", ".cpp", ".h",
+}
+_UPLOAD_EXCEL_SUFFIXES = {".xlsx", ".xls"}
+_UPLOAD_DOCX_SUFFIX = ".docx"
+_UPLOAD_PPTX_SUFFIX = ".pptx"
+
+SUPPORTED_UPLOAD_SUFFIXES: set[str] = (
+    _UPLOAD_TEXT_SUFFIXES
+    | _UPLOAD_EXCEL_SUFFIXES
+    | {_PDF_SUFFIX, _UPLOAD_DOCX_SUFFIX, _UPLOAD_PPTX_SUFFIX}
+)
+
+
+def _extract_pdf_bytes(data: bytes) -> str:
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:
+        log.warning("[ingestion] failed reading uploaded PDF: %s", type(exc).__name__)
+        return ""
+
+
+def _extract_excel_bytes(data: bytes) -> str:
+    import pandas as pd
+
+    try:
+        sheets = pd.read_excel(io.BytesIO(data), sheet_name=None)
+    except Exception as exc:
+        log.warning("[ingestion] failed reading uploaded spreadsheet: %s", type(exc).__name__)
+        return ""
+    parts = [f"# {name}\n{df.to_csv(index=False)}" for name, df in sheets.items()]
+    return "\n\n".join(parts)
+
+
+def _extract_docx_bytes(data: bytes) -> str:
+    from docx import Document
+
+    try:
+        doc = Document(io.BytesIO(data))
+        return "\n".join(p.text for p in doc.paragraphs)
+    except Exception as exc:
+        log.warning("[ingestion] failed reading uploaded docx: %s", type(exc).__name__)
+        return ""
+
+
+def _extract_pptx_bytes(data: bytes) -> str:
+    from pptx import Presentation
+
+    try:
+        prs = Presentation(io.BytesIO(data))
+        slide_texts = []
+        for slide in prs.slides:
+            shape_texts = [
+                shape.text_frame.text
+                for shape in slide.shapes
+                if shape.has_text_frame
+            ]
+            slide_texts.append("\n".join(shape_texts))
+        return "\n\n".join(slide_texts)
+    except Exception as exc:
+        log.warning("[ingestion] failed reading uploaded pptx: %s", type(exc).__name__)
+        return ""
+
+
+def extract_text(filename: str, data: bytes) -> str:
+    """Extract plain text from an in-memory uploaded file's bytes, dispatched
+    by `filename`'s (lowercased) suffix. Raises ValueError for any suffix not
+    in SUPPORTED_UPLOAD_SUFFIXES — callers (main.py's upload endpoint) are
+    expected to check membership themselves first so they can report a
+    friendly per-file rejection reason instead of relying on this exception,
+    but it is raised regardless as a defensive backstop."""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_UPLOAD_SUFFIXES:
+        raise ValueError(f"Unsupported file type: {suffix or filename!r}")
+    if suffix == _PDF_SUFFIX:
+        return _extract_pdf_bytes(data)
+    if suffix in _UPLOAD_EXCEL_SUFFIXES:
+        return _extract_excel_bytes(data)
+    if suffix == _UPLOAD_DOCX_SUFFIX:
+        return _extract_docx_bytes(data)
+    if suffix == _UPLOAD_PPTX_SUFFIX:
+        return _extract_pptx_bytes(data)
+    return data.decode("utf-8", errors="ignore")
+
+
 # ── Chunking ─────────────────────────────────────────────────────────────────
 
 
@@ -254,15 +385,19 @@ def _chunk_text(text: str) -> list[str]:
 # ── Ingestion ────────────────────────────────────────────────────────────────
 
 
-def ingest_kb(descriptor: KBDescriptor) -> dict:
-    """Ingest `descriptor`'s rag source into the vector store. See module
-    docstring for the full flow. Returns {"documents", "chunks", "skipped"}."""
-    rag_source = _resolve_rag_source(descriptor)
-    counts = {"documents": 0, "chunks": 0, "skipped": 0}
-    if rag_source is None:
-        log.debug("[ingestion] kb=%s has no rag source configured — nothing to ingest", descriptor.id)
-        return counts
+def ingest_text_document(kb_id: str, path_label: str, text: str, *, sha256: str | None = None) -> int:
+    """Chunk `text` (via `_chunk_text`), batch-embed it (`embeddings.
+    embed_texts`), and upsert into the configured VectorStore as the
+    `kb_documents` row at `path_label` within `kb_id` — creating that row if
+    it's new, or replacing its prior chunks in place if it already exists
+    (upsert_chunks only inserts; this deletes the stale chunks first). Shared
+    by ingest_kb (one call per changed repo file, sha256 = the file's own
+    content hash so a later re-ingest can skip it if unchanged) and main.py's
+    upload endpoint (sha256 omitted — every upload always re-chunks/re-embeds
+    in full; there is no byte-identical-skip concept for a one-shot upload).
 
+    Returns the number of chunks written (0 for an empty document — the
+    kb_documents row is still recorded)."""
     import db
     from models import KbChunk, KbDocument
     from sqlalchemy import select
@@ -270,7 +405,60 @@ def ingest_kb(descriptor: KBDescriptor) -> dict:
 
     import embeddings
 
-    store = get_vector_store()
+    sha = sha256 if sha256 is not None else hashlib.sha256(text.encode("utf-8")).hexdigest()
+    chunk_texts = _chunk_text(text)
+
+    with db.SyncSessionLocal() as session:
+        existing_doc = session.execute(
+            select(KbDocument).where(KbDocument.kb_id == kb_id, KbDocument.path == path_label)
+        ).scalar_one_or_none()
+
+        if existing_doc is None:
+            existing_doc = KbDocument(kb_id=kb_id, path=path_label, sha256=sha)
+            session.add(existing_doc)
+            session.flush()  # assign existing_doc.id
+        else:
+            existing_doc.sha256 = sha
+            existing_doc.updated_at = _utcnow()
+            # Drop this document's stale chunks before re-embedding —
+            # upsert_chunks only inserts, it doesn't replace.
+            session.query(KbChunk).filter(KbChunk.document_id == existing_doc.id).delete()
+        session.commit()
+
+        if not chunk_texts:
+            return 0  # e.g. an empty file — document recorded, no chunks
+
+        vectors = embeddings.embed_texts(chunk_texts)
+        chunk_dicts = [
+            {
+                "document_id": existing_doc.id,
+                "chunk_index": i,
+                "text": t,
+                "source_ref": f"{path_label}#{i}",
+                "embedding": vec,
+            }
+            for i, (t, vec) in enumerate(zip(chunk_texts, vectors))
+        ]
+        get_vector_store().upsert_chunks(kb_id, chunk_dicts)
+        return len(chunk_dicts)
+
+
+_UPLOADS_PATH_PREFIX = "uploads/"
+
+
+def ingest_kb(descriptor: KBDescriptor) -> dict:
+    """Ingest `descriptor`'s rag source into the vector store. See module
+    docstring for the full flow. Returns {"documents", "chunks", "skipped",
+    "removed"}."""
+    rag_source = _resolve_rag_source(descriptor)
+    counts = {"documents": 0, "chunks": 0, "skipped": 0, "removed": 0}
+    if rag_source is None:
+        log.debug("[ingestion] kb=%s has no rag source configured — nothing to ingest", descriptor.id)
+        return counts
+
+    import db
+    from models import KbChunk, KbDocument
+    from sqlalchemy import select
 
     tmp_dir: Path | None = None
     try:
@@ -284,8 +472,10 @@ def ingest_kb(descriptor: KBDescriptor) -> dict:
         include_globs = rag_source.include_globs or ["**/*"]
         exclude_globs = rag_source.exclude_globs or []
 
+        matched_paths: set[str] = set()
         with db.SyncSessionLocal() as session:
             for _root, path, rel_label in _iter_files(root_dirs, include_globs, exclude_globs):
+                matched_paths.add(rel_label)
                 sha = _sha256_of_file(path)
 
                 existing_doc = session.execute(
@@ -299,38 +489,21 @@ def ingest_kb(descriptor: KBDescriptor) -> dict:
                     continue
 
                 text = _load_text(path)
-                chunk_texts = _chunk_text(text)
-
-                if existing_doc is None:
-                    existing_doc = KbDocument(kb_id=descriptor.id, path=rel_label, sha256=sha)
-                    session.add(existing_doc)
-                    session.flush()  # assign existing_doc.id
-                else:
-                    existing_doc.sha256 = sha
-                    existing_doc.updated_at = _utcnow()
-                    # Drop this document's stale chunks before re-embedding —
-                    # upsert_chunks only inserts, it doesn't replace.
-                    session.query(KbChunk).filter(KbChunk.document_id == existing_doc.id).delete()
-                session.commit()
-
                 counts["documents"] += 1
+                counts["chunks"] += ingest_text_document(descriptor.id, rel_label, text, sha256=sha)
 
-                if not chunk_texts:
-                    continue  # e.g. an empty file — document recorded, no chunks
-
-                vectors = embeddings.embed_texts(chunk_texts)
-                chunk_dicts = [
-                    {
-                        "document_id": existing_doc.id,
-                        "chunk_index": i,
-                        "text": t,
-                        "source_ref": f"{rel_label}#{i}",
-                        "embedding": vec,
-                    }
-                    for i, (t, vec) in enumerate(zip(chunk_texts, vectors))
-                ]
-                store.upsert_chunks(descriptor.id, chunk_dicts)
-                counts["chunks"] += len(chunk_dicts)
+            # Prune vanished files — see module docstring point 5. Only a
+            # successful walk reaches here (a failed clone raises earlier).
+            stale_docs = session.execute(
+                select(KbDocument).where(KbDocument.kb_id == descriptor.id)
+            ).scalars().all()
+            for doc in stale_docs:
+                if doc.path in matched_paths or doc.path.startswith(_UPLOADS_PATH_PREFIX):
+                    continue
+                session.query(KbChunk).filter(KbChunk.document_id == doc.id).delete()
+                session.delete(doc)
+                counts["removed"] += 1
+            session.commit()
 
         return counts
     finally:

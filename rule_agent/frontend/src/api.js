@@ -133,11 +133,47 @@ export const getRelatedRules = (kbId, entityId) => _json(`/kb/${kbId}/entities/r
 
 /** { repos: [repo, ...] } */
 export const listKbRepos = () => _json('/kb-repos')
-/** payload: { name, git_url, git_ref?, include_globs?, visibility, auth_token? } */
+/**
+ * payload: { name, git_url?, git_ref?, include_globs?, visibility?, auth_token? }
+ * git_url is optional — omit it to create a files-only KB (status "ready",
+ * documents:0, chunks:0) that documents can be uploaded into afterwards.
+ */
 export const createKbRepo = (payload) => _json('/kb-repos', { method: 'POST', body: payload })
 export const getKbRepo = (id) => _json(`/kb-repos/${id}`)
 export const resyncKbRepo = (id) => _json(`/kb-repos/${id}/resync`, { method: 'POST' })
 export const deleteKbRepo = (id) => _json(`/kb-repos/${id}`, { method: 'DELETE' })
+/**
+ * Update a repo KB's include-globs and re-ingest. Re-clones, re-embeds files
+ * matching the new globs, and REMOVES files that no longer match — uploaded
+ * files are untouched. Returns the repo object with status:"queued".
+ * 400 for a files-only KB (no repo to filter); 404 unknown id.
+ */
+export const updateKbRepoGlobs = (id, includeGlobs) =>
+  _json(`/kb-repos/${id}`, { method: 'PATCH', body: { include_globs: includeGlobs } })
+
+/**
+ * Upload one or more files into a KB repo (multipart/form-data, field name
+ * "files"). Returns { repo, results: [{ filename, accepted, chunks, reason }] }.
+ * Rejected files (unsupported type / too large / empty) come back accepted:false
+ * with a reason — this never throws just because some files were rejected.
+ * Deliberately bypasses `_json`: the browser must set its own multipart
+ * boundary, so Content-Type must NOT be set manually here.
+ */
+export async function uploadKbFiles(id, fileList) {
+  const form = new FormData()
+  Array.from(fileList).forEach(file => form.append('files', file))
+  const headers = _headers('POST')
+  delete headers['Content-Type']
+  const res = await fetch(`${API_BASE}/api/kb-repos/${id}/files`, {
+    method: 'POST',
+    headers,
+    body: form,
+  })
+  if (!res.ok) {
+    throw new Error(`API POST /kb-repos/${id}/files → ${res.status}`)
+  }
+  return res.json()
+}
 
 export const listProjects = () => _json('/projects')
 export const createProject = (name, instructions = null) =>

@@ -243,27 +243,168 @@ html::before {
   color: var(--accent);
 }
 
-/* ─── Topbar KB Selector ─────────────────────────────────────────────────── */
-.topbar-kb-select {
+/* ─── KB Dropdown (custom KB switcher — replaces the native <select>) ────── */
+/* Two contexts reuse this component: a pill trigger docked in the topbar
+   (.kb-dropdown--topbar, popover right-aligned) and a full-width block used
+   inside the Settings modal (.kb-dropdown--block, popover spans the trigger). */
+.kb-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.kb-dropdown--block { display: block; width: 100%; }
+
+.kb-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
   height: 30px;
+  max-width: 190px;
   background: var(--bg-base);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 9999px;
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 600;
-  padding: 0 10px;
+  padding: 0 8px 0 14px;
   cursor: pointer;
-  max-width: 180px;
-  transition: border-color var(--ease), color var(--ease);
+  transition: border-color var(--ease), color var(--ease), background var(--ease);
 }
 
-.topbar-kb-select:hover,
-.topbar-kb-select:focus {
+.kb-dropdown--block .kb-dropdown-trigger {
+  max-width: none;
+  height: 38px;
+  border-radius: var(--radius-md);
+  padding: 0 12px 0 14px;
+  font-size: 13px;
+}
+
+.kb-dropdown-trigger:hover,
+.kb-dropdown-trigger[aria-expanded="true"] {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.kb-dropdown-trigger:focus-visible {
   outline: none;
+  box-shadow: var(--shadow-glow);
+}
+
+.kb-dropdown-trigger-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-dropdown-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform var(--spring), color var(--ease);
+}
+
+.kb-dropdown-trigger:hover .kb-dropdown-chevron,
+.kb-dropdown-trigger[aria-expanded="true"] .kb-dropdown-chevron {
+  color: var(--accent);
+}
+
+.kb-dropdown-chevron.open { transform: rotate(180deg); }
+
+.kb-dropdown-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 230px;
+  max-width: 340px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  z-index: 210;
+  animation: kbDropdownIn 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.kb-dropdown-list:focus { outline: none; }
+
+.kb-dropdown--topbar .kb-dropdown-list { left: auto; right: 0; }
+
+.kb-dropdown--block .kb-dropdown-list { left: 0; right: 0; width: auto; min-width: 0; max-width: none; }
+
+@keyframes kbDropdownIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.kb-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+
+.kb-dropdown-item.active:not(.disabled) { background: var(--bg-hover); }
+
+.kb-dropdown-item.selected { color: var(--accent); font-weight: 600; }
+
+.kb-dropdown-item.disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.kb-dropdown-item-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.kb-dropdown-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-dropdown-item-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--warning);
+}
+
+.kb-dropdown-spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.6px solid var(--border);
+  border-top-color: var(--warning);
+  border-radius: 50%;
+  animation: btn-spinner-spin 0.7s linear infinite;
 }
 
 .topbar-center { justify-self: center; }
@@ -5221,18 +5362,6 @@ textarea:focus-visible {
   margin: 0 0 8px;
   letter-spacing: 0.1px;
 }
-.settings-select {
-  width: 100%;
-  padding: 9px 12px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 13px;
-  cursor: pointer;
-}
-.settings-select:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-glow); }
 .settings-label {
   display: block;
   font-size: 11px;
@@ -5739,6 +5868,70 @@ textarea:focus-visible {
   color: var(--text-secondary);
 }
 
+.repo-row-globs {
+  font-size: 12px;
+}
+
+.repo-globs-display {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.repo-globs-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.repo-globs-value {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.repo-globs-edit-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.repo-globs-edit-btn:hover:not(:disabled) { text-decoration: underline; }
+.repo-globs-edit-btn:disabled { color: var(--text-muted); cursor: not-allowed; }
+
+.repo-globs-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.repo-globs-input {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.repo-globs-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.repo-globs-edit-actions .btn-secondary {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.repo-globs-error {
+  margin-top: 0;
+}
+
 .repo-row-actions {
   display: flex;
   align-items: center;
@@ -5837,11 +6030,124 @@ textarea:focus-visible {
   margin-top: 10px;
 }
 
-/* ─── Disabled / pending KB & repo states ────────────────────────────────── */
-.topbar-kb-select option:disabled,
-.settings-select option:disabled {
+/* ─── KB file upload (drop zone + file chips) ────────────────────────────── */
+.repo-form-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px;
   color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
+
+.repo-form-divider::before,
+.repo-form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle, var(--border));
+}
+
+.repo-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 20px 14px;
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--ease), background var(--ease), color var(--ease);
+}
+
+.repo-dropzone:hover,
+.repo-dropzone:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.repo-dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.repo-dropzone-icon { color: var(--text-muted); }
+.repo-dropzone:hover .repo-dropzone-icon,
+.repo-dropzone.dragover .repo-dropzone-icon { color: var(--accent); }
+
+.repo-dropzone-title { font-size: 13px; font-weight: 600; }
+.repo-dropzone-hint { font-size: 11.5px; color: var(--text-muted); }
+
+.repo-file-chip-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.repo-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.repo-file-chip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.repo-file-chip-size { color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
+
+.repo-file-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+
+.repo-file-chip-remove:hover {
+  background: rgba(252, 129, 129, 0.12);
+  color: var(--danger);
+}
+
+.repo-row-add-files {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─── Disabled / pending KB & repo states ────────────────────────────────── */
+/* (KB dropdown's own disabled-row styling lives in the KB Dropdown section
+   above — .kb-dropdown-item.disabled / .kb-dropdown-item-status.) */
 
 .repo-row-pending {
   opacity: 0.85;

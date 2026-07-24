@@ -154,11 +154,23 @@ def descriptor_from_repo(row: Any, token: str | None = None) -> KBDescriptor:
     token) — the caller (main.py) is responsible for decrypt_token(row.
     auth_token_encrypted) first. Threaded onto RagSource.auth_token, which is
     in-memory-only (never serialized, never logged) — see kb._schema.RagSource.
+
+    `row.git_url` may be None (Phase 10, a files-only KB created with no
+    git_url — see main.py's create_kb_repo): the resulting RagSource then has
+    no git_url and no roots, so ingestion.ingest_kb (a plain reload/resync)
+    finds nothing to clone or walk and is a clean no-op — it neither adds nor
+    deletes anything, leaving whatever POST /kb-repos/{id}/files has uploaded
+    completely untouched.
     """
+    description = (
+        f"A Git-repo knowledge base ingested from {row.git_url}."
+        if row.git_url
+        else "A files-only knowledge base populated by uploaded documents."
+    )
     return KBDescriptor(
         id=row.id,
         name=row.name,
-        description=f"A Git-repo knowledge base ingested from {row.git_url}.",
+        description=description,
         adapter="rag",
         retrieval_mode="rag",
         source=RagSource(

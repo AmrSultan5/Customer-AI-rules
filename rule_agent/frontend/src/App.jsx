@@ -6,11 +6,12 @@ import Settings from './components/Settings.jsx'
 import RuleCard from './components/RuleCard.jsx'
 import RuleCardSkeleton from './components/RuleCardSkeleton.jsx'
 import ToastHost from './components/Toast.jsx'
+import KbDropdown from './components/KbDropdown.jsx'
 import { subscribeToasts, notifyError } from './utils/toast.js'
 import { branding } from './config/branding.js'
 import {
   getUsername, setUsername, listKBs, getRuleCard,
-  listKbRepos, createKbRepo, resyncKbRepo, deleteKbRepo,
+  listKbRepos, createKbRepo, resyncKbRepo, deleteKbRepo, uploadKbFiles, updateKbRepoGlobs,
 } from './api.js'
 
 const THEME_KEY = 'rule_agent_theme'
@@ -204,9 +205,27 @@ export default function App() {
   }, [loadRepos, refreshKbs])
 
   const addRepo = useCallback(async (payload) => {
-    await createKbRepo(payload)
+    // payload.git_url is optional — omitting it creates a files-only KB.
+    // Return the created repo so callers (e.g. an add-form that also has
+    // files to upload) can chain an upload onto its freshly-minted id.
+    const repo = await createKbRepo(payload)
     await loadRepos({ silent: true })
     refreshKbs()
+    return repo
+  }, [loadRepos, refreshKbs])
+
+  const uploadFiles = useCallback(async (id, fileList) => {
+    const result = await uploadKbFiles(id, fileList)
+    await loadRepos({ silent: true })
+    refreshKbs()
+    return result
+  }, [loadRepos, refreshKbs])
+
+  const updateGlobs = useCallback(async (id, includeGlobs) => {
+    const repo = await updateKbRepoGlobs(id, includeGlobs)
+    await loadRepos({ silent: true })
+    refreshKbs()
+    return repo
   }, [loadRepos, refreshKbs])
 
   function handleSelectConversation(conv) {
@@ -271,23 +290,16 @@ export default function App() {
 
         <div className="topbar-actions">
           {showKbSelector && (
-            <select
-              className="topbar-kb-select"
-              value={activeKbId ?? ''}
-              onChange={e => {
-                const kb = knowledgeBases.find(k => k.id === e.target.value)
-                if (kb && !kb.selectable) return // guard: shouldn't fire for a disabled option
-                setActiveKbId(e.target.value)
+            <KbDropdown
+              className="kb-dropdown--topbar"
+              knowledgeBases={knowledgeBases}
+              value={activeKbId}
+              onChange={kbId => {
+                setActiveKbId(kbId)
                 setActiveConversation(null)
               }}
-              aria-label="Active knowledge base"
-            >
-              {knowledgeBases.map(kb => (
-                <option key={kb.id} value={kb.id} disabled={!kb.selectable}>
-                  {kb.selectable ? kb.name : `${kb.name} (updating…)`}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Active knowledge base"
+            />
           )}
           <button className="header-action-btn" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon /> Settings
@@ -368,6 +380,8 @@ export default function App() {
           onReloadRepo={reloadRepo}
           onDeleteRepo={deleteRepo}
           onAddRepo={addRepo}
+          onUploadFiles={uploadFiles}
+          onUpdateGlobs={updateGlobs}
         />
       )}
 

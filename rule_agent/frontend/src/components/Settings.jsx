@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getKB, enhancePrompt, saveKBPrompt } from '../api.js'
+import { notify } from '../utils/toast.js'
+import KbDropdown from './KbDropdown.jsx'
+import { ConfirmDialog } from './Dialog.jsx'
 
 const SunIcon = () => (
   <svg width="13" height="13" viewBox="0 0 15 15" fill="none" aria-hidden="true">
@@ -24,6 +27,58 @@ const WarningIcon = () => (
     <circle cx="7.5" cy="11" r="0.85" fill="currentColor"/>
   </svg>
 )
+
+const UploadCloudIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+    <path d="M6.7 15.6a3.6 3.6 0 0 1-.6-7.15A4.6 4.6 0 0 1 15 6.5a3.85 3.85 0 0 1 .5 9.1H6.7Z"
+      stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M11 9.3v6.1M8.5 11.6 11 9.1l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
+const AttachIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+    <path d="M10.7 4.1 5.6 9.2a2 2 0 1 0 2.8 2.8l4.6-4.6a3.3 3.3 0 1 0-4.7-4.7L3.6 7.4"
+      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
+const XIcon = () => (
+  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+    <path d="M1.3 1.3 8.7 8.7M8.7 1.3 1.3 8.7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+)
+
+// Kept in sync with the backend's accepted-upload set: documents/text/code +
+// office formats. Images/audio/video/archives are rejected server-side.
+const KB_FILE_ACCEPT =
+  '.md,.txt,.rst,.csv,.json,.yaml,.yml,.html,.xml,.log,.pdf,.xlsx,.xls,.docx,.pptx,.py,.ts,.tsx,.js,.jsx,.css,.sql'
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Push a toast summarizing an upload — surfaces accepted/rejected counts and reasons. */
+function summarizeUpload(kbName, results) {
+  const label = kbName ? `‘${kbName}’` : 'the knowledge base'
+  const accepted = results.filter(r => r.accepted)
+  const rejected = results.filter(r => !r.accepted)
+  if (!accepted.length && !rejected.length) return
+
+  const reasonList = rejected.map(r => `${r.filename}${r.reason ? ` (${r.reason})` : ''}`).join(', ')
+  let message
+  if (accepted.length && !rejected.length) {
+    message = `Added ${accepted.length} file${accepted.length === 1 ? '' : 's'} to ${label}.`
+  } else if (accepted.length && rejected.length) {
+    message = `Added ${accepted.length} file${accepted.length === 1 ? '' : 's'} to ${label} ` +
+      `(${rejected.length} rejected: ${reasonList}).`
+  } else {
+    message = `Couldn’t add any files to ${label} — ${rejected.length} rejected: ${reasonList}.`
+  }
+  notify({ type: accepted.length ? 'success' : 'error', message })
+}
 
 /**
  * Settings modal: active-KB chooser (only when the switcher is enabled),
@@ -57,6 +112,8 @@ export default function Settings({
   onReloadRepo,
   onDeleteRepo,
   onAddRepo,
+  onUploadFiles,
+  onUpdateGlobs,
 }) {
   const [draft, setDraft] = useState('')
   const [enhanced, setEnhanced] = useState('')
@@ -83,27 +140,110 @@ export default function Settings({
   const [rowBusy, setRowBusy] = useState({})
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
+  // ── Per-row include-globs editor ────────────────────────────────────────
+  const [editingGlobsId, setEditingGlobsId] = useState(null)
+  const [globsDraft, setGlobsDraft] = useState('')
+  const [globsSubmittingId, setGlobsSubmittingId] = useState(null)
+  const [globsError, setGlobsError] = useState('')
+  const [confirmGlobs, setConfirmGlobs] = useState(null) // { id, value, name }
+
+  // ── Add-form file picker (files-only or files-alongside-a-repo KB) ────────
+  const [formFiles, setFormFiles] = useState([])
+  const [dragOver, setDragOver] = useState(false)
+  const formFileInputRef = useRef(null)
+
+  function addFormFiles(newFiles) {
+    if (!newFiles.length) return
+    setFormFiles(prev => {
+      const seen = new Set(prev.map(f => `${f.name}:${f.size}`))
+      const merged = [...prev]
+      newFiles.forEach(f => {
+        const key = `${f.name}:${f.size}`
+        if (!seen.has(key)) { merged.push(f); seen.add(key) }
+      })
+      return merged
+    })
+  }
+
+  function handleFormFileInput(e) {
+    addFormFiles(Array.from(e.target.files || []))
+    e.target.value = ''
+  }
+
+  function handleFormDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    addFormFiles(Array.from(e.dataTransfer?.files || []))
+  }
+
+  function removeFormFile(idx) {
+    setFormFiles(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // ── Per-row "Add files" (upload into an existing KB) ───────────────────────
+  const rowFileInputRef = useRef(null)
+  const [uploadTargetId, setUploadTargetId] = useState(null)
+  const [rowUploading, setRowUploading] = useState({})
+
+  function triggerRowUpload(id) {
+    setUploadTargetId(id)
+    rowFileInputRef.current?.click()
+  }
+
+  async function handleRowFilesSelected(e) {
+    const files = Array.from(e.target.files || [])
+    const id = uploadTargetId
+    e.target.value = ''
+    if (!files.length || !id) return
+    setRowUploading(u => ({ ...u, [id]: true }))
+    setReposError('')
+    try {
+      const res = await onUploadFiles(id, files)
+      const kbName = res.repo?.name ?? repos.find(r => r.id === id)?.name ?? ''
+      summarizeUpload(kbName, res.results ?? [])
+    } catch {
+      setReposError('Could not upload files. Please try again.')
+    } finally {
+      setRowUploading(u => { const n = { ...u }; delete n[id]; return n })
+    }
+  }
+
   async function handleAddRepo(e) {
     e.preventDefault()
     setFormError('')
-    if (!formName.trim() || !formGitUrl.trim()) {
-      setFormError('Name and Git URL are required.')
+    const name = formName.trim()
+    const gitUrl = formGitUrl.trim()
+    if (!name) {
+      setFormError('Name is required.')
       return
     }
-    if (formVisibility === 'private' && !formToken.trim()) {
+    if (!gitUrl && formFiles.length === 0) {
+      setFormError('Provide a Git URL, add files, or both.')
+      return
+    }
+    if (gitUrl && formVisibility === 'private' && !formToken.trim()) {
       setFormError('A personal access token is required for private repositories.')
       return
     }
     setSubmitting(true)
     try {
-      await onAddRepo({
-        name: formName.trim(),
-        git_url: formGitUrl.trim(),
-        git_ref: formGitRef.trim() || undefined,
-        include_globs: formGlobs.trim() || undefined,
-        visibility: formVisibility,
-        auth_token: formVisibility === 'private' ? formToken.trim() : undefined,
+      const repo = await onAddRepo({
+        name,
+        ...(gitUrl ? {
+          git_url: gitUrl,
+          git_ref: formGitRef.trim() || undefined,
+          include_globs: formGlobs.trim() || undefined,
+          visibility: formVisibility,
+          auth_token: formVisibility === 'private' ? formToken.trim() : undefined,
+        } : {}),
       })
+      if (formFiles.length > 0) {
+        const targetId = repo?.id ?? repo?.repo?.id
+        if (targetId) {
+          const res = await onUploadFiles(targetId, formFiles)
+          summarizeUpload(res.repo?.name ?? name, res.results ?? [])
+        }
+      }
       setFormName('')
       setFormGitUrl('')
       setFormGitRef('')
@@ -111,8 +251,9 @@ export default function Settings({
       setFormVisibility('public')
       setFormGlobs('')
       setAdvancedOpen(false)
+      setFormFiles([])
     } catch {
-      setFormError('Could not add the repository. Please check the details and try again.')
+      setFormError('Could not add the knowledge base. Please check the details and try again.')
     } finally {
       setSubmitting(false)
     }
@@ -140,6 +281,40 @@ export default function Settings({
       setReposError('Could not delete that repository. Please try again.')
     } finally {
       setRowBusy(b => { const n = { ...b }; delete n[id]; return n })
+    }
+  }
+
+  function startEditGlobs(repo) {
+    setEditingGlobsId(repo.id)
+    setGlobsDraft(repo.include_globs || '')
+    setGlobsError('')
+  }
+
+  function cancelEditGlobs() {
+    setEditingGlobsId(null)
+    setGlobsDraft('')
+    setGlobsError('')
+  }
+
+  function requestSaveGlobs(repo) {
+    setGlobsError('')
+    setConfirmGlobs({ id: repo.id, value: globsDraft.trim(), name: repo.name })
+  }
+
+  async function confirmSaveGlobs() {
+    if (!confirmGlobs) return
+    const { id, value } = confirmGlobs
+    setConfirmGlobs(null)
+    setGlobsSubmittingId(id)
+    setGlobsError('')
+    try {
+      await onUpdateGlobs(id, value || null)
+      setEditingGlobsId(null)
+      setGlobsDraft('')
+    } catch {
+      setGlobsError('Could not update the file filters. Please try again.')
+    } finally {
+      setGlobsSubmittingId(null)
     }
   }
 
@@ -195,6 +370,7 @@ export default function Settings({
   }
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card settings-card" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
@@ -205,21 +381,13 @@ export default function Settings({
         {showKbChooser && (
           <section className="settings-section">
             <h4 className="settings-section-title">Active knowledge base</h4>
-            <select
-              className="settings-select"
-              value={activeKbId ?? ''}
-              onChange={e => {
-                const kb = knowledgeBases.find(k => k.id === e.target.value)
-                if (kb && !kb.selectable) return // guard: shouldn't fire for a disabled option
-                onSelectKb(e.target.value)
-              }}
-            >
-              {knowledgeBases.map(kb => (
-                <option key={kb.id} value={kb.id} disabled={!kb.selectable}>
-                  {kb.selectable ? kb.name : `${kb.name} (updating…)`}
-                </option>
-              ))}
-            </select>
+            <KbDropdown
+              className="kb-dropdown--block"
+              knowledgeBases={knowledgeBases}
+              value={activeKbId}
+              onChange={onSelectKb}
+              ariaLabel="Active knowledge base"
+            />
             {activeKb?.description && <p className="modal-hint">{activeKb.description}</p>}
           </section>
         )}
@@ -271,9 +439,9 @@ export default function Settings({
         <section className="settings-section">
           <h4 className="settings-section-title">Knowledge repositories</h4>
           <p className="modal-hint">
-            Point the assistant at a Git repository to ingest its documents into a new
-            knowledge base. Ingestion runs in the background — this list refreshes on its own
-            while a repo is queued or ingesting.
+            Point the assistant at a Git repository, upload files directly, or both — either
+            creates a new knowledge base. Ingestion runs in the background — this list refreshes
+            on its own while a KB is queued or ingesting.
           </p>
 
           {reposLoading && repos.length === 0 && (
@@ -282,18 +450,30 @@ export default function Settings({
           {reposLoadError && <p className="settings-error">{reposLoadError}</p>}
           {reposError && <p className="settings-error">{reposError}</p>}
 
+          {/* Hidden input shared by every row's "Add files" button — the target
+              KB id is tracked in state (set right before the click it triggers). */}
+          <input
+            ref={rowFileInputRef}
+            type="file"
+            multiple
+            accept={KB_FILE_ACCEPT}
+            style={{ display: 'none' }}
+            onChange={handleRowFilesSelected}
+          />
+
           {repos.length > 0 && (
             <ul className="repo-list">
               {repos.map(repo => {
                 const isPending = repo.status === 'queued' || repo.status === 'ingesting'
                 const busy = rowBusy[repo.id]
-                const actionsDisabled = !!busy || isPending
+                const uploading = !!rowUploading[repo.id]
+                const actionsDisabled = !!busy || isPending || uploading
                 return (
                 <li className={`repo-row${isPending ? ' repo-row-pending' : ''}`} key={repo.id}>
                   <div className="repo-row-main">
                     <div className="repo-row-info">
                       <span className="repo-row-name">{repo.name}</span>
-                      <span className="repo-row-url">{repo.git_url}</span>
+                      <span className="repo-row-url">{repo.git_url || 'Files only — no Git source'}</span>
                     </div>
                     <RepoStatusPill status={repo.status} />
                   </div>
@@ -310,6 +490,58 @@ export default function Settings({
                       <span className="repo-row-ready-note">Ready — pick it in the KB switcher.</span>
                     )}
                   </div>
+
+                  {repo.git_url && (
+                    <div className="repo-row-globs">
+                      {editingGlobsId === repo.id ? (
+                        <div className="repo-globs-edit">
+                          <input
+                            className="settings-input repo-globs-input"
+                            value={globsDraft}
+                            onChange={e => setGlobsDraft(e.target.value)}
+                            placeholder="Markdown only (**/*.md)"
+                            disabled={globsSubmittingId === repo.id}
+                          />
+                          <div className="repo-globs-edit-actions">
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => requestSaveGlobs(repo)}
+                              disabled={globsSubmittingId === repo.id}
+                            >
+                              {globsSubmittingId === repo.id && <span className="btn-spinner" aria-hidden="true" />}
+                              {globsSubmittingId === repo.id ? 'Saving…' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={cancelEditGlobs}
+                              disabled={globsSubmittingId === repo.id}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          {globsError && <p className="settings-error repo-globs-error">{globsError}</p>}
+                        </div>
+                      ) : (
+                        <div className="repo-globs-display">
+                          <span className="repo-globs-label">Include globs</span>
+                          <span className="repo-globs-value">
+                            {repo.include_globs || 'Markdown only (**/*.md)'}
+                          </span>
+                          <button
+                            type="button"
+                            className="repo-globs-edit-btn"
+                            onClick={() => startEditGlobs(repo)}
+                            disabled={actionsDisabled}
+                            title="Edit include-globs for this repository"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {repo.status === 'error' && (
                     <div className="repo-row-error" role="alert">
@@ -328,6 +560,15 @@ export default function Settings({
                   )}
 
                   <div className="repo-row-actions">
+                    <button
+                      className="btn-secondary repo-row-add-files"
+                      onClick={() => triggerRowUpload(repo.id)}
+                      disabled={actionsDisabled}
+                      title="Upload files into this knowledge base"
+                    >
+                      {uploading ? <span className="btn-spinner" aria-hidden="true" /> : <AttachIcon />}
+                      {uploading ? 'Uploading…' : 'Add files'}
+                    </button>
                     <button
                       className="btn-secondary"
                       onClick={() => handleReload(repo.id)}
@@ -379,12 +620,12 @@ export default function Settings({
               disabled={submitting}
             />
 
-            <label className="settings-label">Git URL</label>
+            <label className="settings-label">Git URL (optional)</label>
             <input
               className="settings-input"
               value={formGitUrl}
               onChange={e => setFormGitUrl(e.target.value)}
-              placeholder="https://github.com/org/repo.git"
+              placeholder="https://github.com/org/repo.git — leave blank for a files-only KB"
               disabled={submitting}
             />
 
@@ -452,11 +693,62 @@ export default function Settings({
               </>
             )}
 
+            <div className="repo-form-divider">or add files</div>
+
+            <div
+              className={`repo-dropzone${dragOver ? ' dragover' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => !submitting && formFileInputRef.current?.click()}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  if (!submitting) formFileInputRef.current?.click()
+                }
+              }}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleFormDrop}
+            >
+              <span className="repo-dropzone-icon"><UploadCloudIcon /></span>
+              <span className="repo-dropzone-title">Drop files here, or click to browse</span>
+              <span className="repo-dropzone-hint">Docs, text, code, PDF, Excel, Word, PowerPoint</span>
+              <input
+                ref={formFileInputRef}
+                type="file"
+                multiple
+                accept={KB_FILE_ACCEPT}
+                style={{ display: 'none' }}
+                onChange={handleFormFileInput}
+                disabled={submitting}
+              />
+            </div>
+
+            {formFiles.length > 0 && (
+              <ul className="repo-file-chip-list">
+                {formFiles.map((f, idx) => (
+                  <li className="repo-file-chip" key={`${f.name}-${f.size}-${idx}`}>
+                    <span className="repo-file-chip-name">{f.name}</span>
+                    <span className="repo-file-chip-size">{formatBytes(f.size)}</span>
+                    <button
+                      type="button"
+                      className="repo-file-chip-remove"
+                      onClick={() => removeFormFile(idx)}
+                      disabled={submitting}
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <XIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             {formError && <p className="settings-error">{formError}</p>}
 
             <div className="repo-add-actions">
               <button className="btn-primary" type="submit" disabled={submitting}>
-                {submitting ? 'Adding…' : 'Add repository'}
+                {submitting ? 'Adding…' : 'Add knowledge base'}
               </button>
             </div>
           </form>
@@ -488,5 +780,20 @@ export default function Settings({
         </div>
       </div>
     </div>
+    {confirmGlobs && (
+      <ConfirmDialog
+        title="Update file filters?"
+        message={
+          <>
+            This re-scans the repository, re-embeds files that match the new patterns, and{' '}
+            <strong>removes files that no longer match</strong>. Your uploaded files are not affected.
+          </>
+        }
+        confirmLabel="Update & re-ingest"
+        onConfirm={confirmSaveGlobs}
+        onCancel={() => setConfirmGlobs(null)}
+      />
+    )}
+    </>
   )
 }

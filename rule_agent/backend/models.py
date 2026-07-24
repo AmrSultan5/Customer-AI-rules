@@ -242,7 +242,12 @@ class KbRepo(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    git_url: Mapped[str] = mapped_column(String(2048))
+    # Nullable (Phase 10): a files-only KB (created via POST /kb-repos with no
+    # git_url, populated purely by POST /kb-repos/{id}/files uploads) has no
+    # repo to clone/resync — kb_repo_service.descriptor_from_repo's RagSource
+    # then simply has nothing to clone/walk, so ingestion.ingest_kb /resync
+    # is a no-op for it (uploaded chunks are untouched by a reload).
+    git_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     git_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Comma-separated glob list as submitted by the caller; kb_repo_service
     # parses it into RagSource.include_globs. None/blank => a generic default.

@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -341,7 +341,9 @@ class PromptSaveRequest(BaseModel):
 
 class KbRepoCreateRequest(BaseModel):
     name: Annotated[str, Field(min_length=1, max_length=200)]
-    git_url: Annotated[str, Field(min_length=1, max_length=2048)]
+    # Optional (Phase 10): omitting git_url creates a files-only KB — see
+    # create_kb_repo — populated entirely via POST /kb-repos/{id}/files.
+    git_url: Annotated[str | None, Field(min_length=1, max_length=2048)] = None
     git_ref: Annotated[str | None, Field(max_length=200)] = None
     include_globs: Annotated[str | None, Field(max_length=2000)] = None
     visibility: Literal["public", "private"] = "public"
@@ -349,9 +351,20 @@ class KbRepoCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def _private_requires_token(self) -> "KbRepoCreateRequest":
-        if self.visibility == "private" and not (self.auth_token and self.auth_token.strip()):
+        # Only meaningful for a Git-backed KB — a files-only KB (no git_url)
+        # has nothing to clone, so "private" carries no auth requirement.
+        if self.git_url and self.visibility == "private" and not (self.auth_token and self.auth_token.strip()):
             raise ValueError("auth_token is required when visibility is 'private'.")
         return self
+
+
+class KbRepoUpdateRequest(BaseModel):
+    """PATCH /kb-repos/{repo_id} body — edit a repo KB's include-globs.
+    Comma-separated patterns, same format as KbRepoCreateRequest.include_globs;
+    None/blank resets to the service default (see kb_repo_service.
+    _parse_include_globs)."""
+
+    include_globs: Annotated[str | None, Field(max_length=2000)] = None
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────────────
@@ -694,11 +707,22 @@ def _spawn_repo_ingest(repo_id: str) -> None:
 
 @router.post("/kb-repos")
 async def create_kb_repo(body: KbRepoCreateRequest, session: AsyncSession = Depends(get_session)):
-    """Register a new Git-repo KB and kick off background ingestion."""
+    """Register a new self-service KB.
+
+    With a `git_url`: unchanged Phase 9 behavior — queued, then background
+    ingestion (clone + chunk + embed) via _spawn_repo_ingest.
+
+    Without one (Phase 10): a files-only KB. There is nothing to clone, so it
+    starts immediately usable — status 'ready' with zero documents/chunks —
+    and no background task is spawned; content only arrives via
+    POST /kb-repos/{id}/files, which ingests synchronously within the
+    request and updates this row's counts/status itself.
+    """
     from kb_repo_service import descriptor_from_repo, encrypt_token, make_repo_id
 
     is_private = body.visibility == "private"
     token = body.auth_token.strip() if is_private and body.auth_token else None
+    is_files_only = not body.git_url
 
     row = KbRepo(
         id=make_repo_id(body.name),
@@ -707,14 +731,17 @@ async def create_kb_repo(body: KbRepoCreateRequest, session: AsyncSession = Depe
         git_ref=body.git_ref,
         include_globs=body.include_globs,
         auth_token_encrypted=encrypt_token(token) if token else None,
-        status="queued",
+        status="ready" if is_files_only else "queued",
+        documents=0 if is_files_only else None,
+        chunks=0 if is_files_only else None,
     )
     session.add(row)
     await session.commit()
     await session.refresh(row)
 
     _kb_registry.register_descriptor(descriptor_from_repo(row, token=token))
-    _spawn_repo_ingest(row.id)
+    if not is_files_only:
+        _spawn_repo_ingest(row.id)
 
     return _serialize_kb_repo(row)
 
@@ -745,6 +772,131 @@ async def resync_kb_repo(repo_id: str, session: AsyncSession = Depends(get_sessi
 
     _spawn_repo_ingest(repo_id)
     return _serialize_kb_repo(row)
+
+
+@router.patch("/kb-repos/{repo_id}")
+async def update_kb_repo(repo_id: str, body: KbRepoUpdateRequest, session: AsyncSession = Depends(get_session)):
+    """Edit a repo KB's include-globs and re-ingest with them.
+
+    Repo KBs only (row.git_url set) — a files-only KB has nothing to clone or
+    glob, so it's a 400, not a no-op. Re-registers the descriptor (built via
+    kb_repo_service.descriptor_from_repo with the decrypted token, so the new
+    globs take effect on the *next* ingest) and re-spawns background
+    ingestion, which re-clones, re-ingests, and — per ingestion.ingest_kb's
+    pruning — drops any document now excluded by the narrowed glob. Uploaded
+    files (path starting `uploads/`) are never touched.
+    """
+    from kb_repo_service import decrypt_token, descriptor_from_repo
+
+    row = await session.get(KbRepo, repo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown repo: {repo_id!r}"})
+    if not row.git_url:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "This knowledge base has no repository to filter."},
+        )
+
+    row.include_globs = body.include_globs
+    row.status = "queued"
+    row.status_detail = None
+    await session.commit()
+    await session.refresh(row)
+
+    token = decrypt_token(row.auth_token_encrypted) if row.auth_token_encrypted else None
+    _kb_registry.register_descriptor(descriptor_from_repo(row, token=token))
+
+    _spawn_repo_ingest(repo_id)
+    return _serialize_kb_repo(row)
+
+
+# ── File uploads into a KB (Phase 10) ───────────────────────────────────────
+#
+# Upload documents directly into a kb_repos-backed KB — a files-only KB
+# (created above with no git_url) or files added alongside/into an existing
+# repo KB. Extract text -> chunk -> embed -> persist chunks (ingestion.
+# ingest_text_document, the same engine ingest_kb uses); the raw file is
+# never written to disk or logged, only ever held in memory for this request.
+
+_MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB cap per file
+
+_UPLOAD_REASON_UNSUPPORTED = (
+    "Unsupported file type — upload documents, spreadsheets, PDFs, or text/code files."
+)
+_UPLOAD_REASON_TOO_LARGE = "File is too large (max 25 MB)."
+_UPLOAD_REASON_EMPTY = "No readable text found in this file."
+
+
+def _safe_upload_name(filename: str) -> str:
+    """Basename only (drop any client-supplied directory components) — used
+    to build the kb_documents.path label so an upload can never write outside
+    the uploads/ prefix via path traversal (e.g. "../../etc/passwd")."""
+    return Path(filename).name or "upload"
+
+
+@router.post("/kb-repos/{repo_id}/files")
+async def upload_kb_repo_files(
+    repo_id: str,
+    files: Annotated[list[UploadFile], File(...)],
+    session: AsyncSession = Depends(get_session),
+):
+    """Digest 1..N uploaded files into `repo_id`'s KB. Per file: reject if its
+    suffix isn't in ingestion.SUPPORTED_UPLOAD_SUFFIXES or it exceeds the 25 MB
+    cap; otherwise extract_text() it and, if that yields any text,
+    ingest_text_document() it at path "uploads/<basename>" (chunk + embed +
+    upsert, replacing any prior chunks at that same path — so re-uploading a
+    file with the same name updates it in place). Runs synchronously in the
+    request (extraction/embedding are blocking, so each is offloaded to a
+    thread — this event loop is not blocked, but the HTTP response only
+    returns once every file is fully processed). After all files are
+    processed, the row's documents/chunks are recomputed from the DB (the
+    KB's true total, not just this batch) and status is set to 'ready'.
+    """
+    from ingestion import SUPPORTED_UPLOAD_SUFFIXES, extract_text, ingest_text_document
+    from models import KbChunk, KbDocument
+    from sqlalchemy import func
+
+    row = await session.get(KbRepo, repo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown repo: {repo_id!r}"})
+
+    results: list[dict] = []
+    for upload in files:
+        filename = upload.filename or "upload"
+        suffix = Path(filename).suffix.lower()
+        data = await upload.read()
+
+        if suffix not in SUPPORTED_UPLOAD_SUFFIXES:
+            results.append({"filename": filename, "accepted": False, "chunks": 0, "reason": _UPLOAD_REASON_UNSUPPORTED})
+            continue
+        if len(data) > _MAX_UPLOAD_BYTES:
+            results.append({"filename": filename, "accepted": False, "chunks": 0, "reason": _UPLOAD_REASON_TOO_LARGE})
+            continue
+
+        text = await asyncio.to_thread(extract_text, filename, data)
+        if not text or not text.strip():
+            results.append({"filename": filename, "accepted": False, "chunks": 0, "reason": _UPLOAD_REASON_EMPTY})
+            continue
+
+        path_label = f"uploads/{_safe_upload_name(filename)}"
+        chunk_count = await asyncio.to_thread(ingest_text_document, repo_id, path_label, text)
+        results.append({"filename": filename, "accepted": True, "chunks": chunk_count, "reason": None})
+
+    total_documents = (await session.execute(
+        select(func.count()).select_from(KbDocument).where(KbDocument.kb_id == repo_id)
+    )).scalar() or 0
+    total_chunks = (await session.execute(
+        select(func.count()).select_from(KbChunk).where(KbChunk.kb_id == repo_id)
+    )).scalar() or 0
+
+    row.documents = total_documents
+    row.chunks = total_chunks
+    row.status = "ready"
+    row.status_detail = None
+    await session.commit()
+    await session.refresh(row)
+
+    return {"repo": _serialize_kb_repo(row), "results": results}
 
 
 @router.delete("/kb-repos/{repo_id}")

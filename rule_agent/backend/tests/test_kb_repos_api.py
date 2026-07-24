@@ -204,6 +204,83 @@ def test_resync_unknown_kb_repo_404s():
     assert r.status_code == 404
 
 
+# ── PATCH /kb-repos/{id} ─────────────────────────────────────────────────────
+
+
+def test_patch_repo_kb_updates_globs_and_requeues():
+    r = client.post(
+        "/kb-repos", headers=AUTH,
+        json={"name": "Globbable", "git_url": "https://example.com/globbable.git"},
+    )
+    repo_id = r.json()["id"]
+    try:
+        asyncio.run(_set_status(repo_id, "ready", documents=3, chunks=9))
+
+        patched = client.patch(
+            f"/kb-repos/{repo_id}", headers=AUTH, json={"include_globs": "**/*.md,**/*.rst"},
+        )
+        assert patched.status_code == 200
+        body = patched.json()
+        assert body["include_globs"] == "**/*.md,**/*.rst"
+        assert body["status"] == "queued"
+        assert body["status_detail"] is None
+
+        row = asyncio.run(_get_row(repo_id))
+        assert row.include_globs == "**/*.md,**/*.rst"
+        assert row.status == "queued"
+
+        # The re-registered descriptor picks up the new globs immediately.
+        descriptor = main._kb_registry.get_descriptor(repo_id)
+        assert descriptor.source.include_globs == ["**/*.md", "**/*.rst"]
+    finally:
+        _cleanup(repo_id)
+
+
+def test_patch_repo_kb_null_include_globs_resets_to_default():
+    r = client.post(
+        "/kb-repos", headers=AUTH,
+        json={"name": "Reset Globs", "git_url": "https://example.com/reset.git", "include_globs": "**/*.py"},
+    )
+    repo_id = r.json()["id"]
+    try:
+        patched = client.patch(f"/kb-repos/{repo_id}", headers=AUTH, json={"include_globs": None})
+        assert patched.status_code == 200
+        assert patched.json()["include_globs"] is None
+
+        row = asyncio.run(_get_row(repo_id))
+        assert row.include_globs is None
+    finally:
+        _cleanup(repo_id)
+
+
+def test_patch_files_only_kb_is_rejected():
+    r = client.post("/kb-repos", headers=AUTH, json={"name": "Files Only KB"})
+    repo_id = r.json()["id"]
+    try:
+        assert r.json()["git_url"] is None
+
+        patched = client.patch(f"/kb-repos/{repo_id}", headers=AUTH, json={"include_globs": "**/*.md"})
+        assert patched.status_code == 400
+        assert "no repository to filter" in patched.json()["detail"]["error"].lower()
+
+        # Untouched — no requeue for a KB with nothing to clone.
+        row = asyncio.run(_get_row(repo_id))
+        assert row.status == "ready"
+        assert row.include_globs is None
+    finally:
+        _cleanup(repo_id)
+
+
+def test_patch_unknown_kb_repo_404s():
+    r = client.patch("/kb-repos/does-not-exist", headers=AUTH, json={"include_globs": "**/*.md"})
+    assert r.status_code == 404
+
+
+def test_patch_kb_repo_requires_auth():
+    r = client.patch("/kb-repos/some-id", json={"include_globs": "**/*.md"})
+    assert r.status_code == 401
+
+
 # ── DELETE /kb-repos/{id} ─────────────────────────────────────────────────────
 
 
