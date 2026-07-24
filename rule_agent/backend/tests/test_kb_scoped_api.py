@@ -48,6 +48,8 @@ def test_list_kbs_returns_customer_sap_with_capabilities():
     assert set(entry["capabilities"]) == {"entity", "search", "context"}
     assert entry["name"]
     assert entry["description"]
+    assert entry["status"] == "ready"
+    assert entry["selectable"] is True
 
 
 def test_list_kbs_api_prefix_parity():
@@ -287,3 +289,195 @@ def test_entity_route_404_for_unknown_kb():
 def test_related_entities_route_404_for_rag_only_kb():
     r = client.get("/kb/docs_demo/entities/related/RCCOMP_103.1", headers=AUTH)
     assert r.status_code == 404
+
+
+# ── 409 on a not-yet-ready repo KB (chat + entity), defense in depth ────────
+#
+# The frontend already disables selecting a loading repo KB in the switcher;
+# these tests cover the server-side guard for a direct/stale request that
+# names one anyway (main._repo_not_ready_status, applied in the chat and
+# entity handlers).
+
+
+def _make_repo_row(repo_id: str, status: str) -> None:
+    import asyncio
+
+    import db
+    import main as main_module
+    from kb_repo_service import descriptor_from_repo
+    from models import KbRepo
+
+    async def _create():
+        async with db.AsyncSessionLocal() as session:
+            row = KbRepo(id=repo_id, name="Loading Repo", git_url="https://example.com/loading.git", status=status)
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return row
+
+    row = asyncio.run(_create())
+    main_module._kb_registry.register_descriptor(descriptor_from_repo(row))
+
+
+def _cleanup_repo_row(repo_id: str) -> None:
+    import asyncio
+
+    import db
+    import main as main_module
+    from models import KbRepo
+
+    main_module._kb_registry.unregister_descriptor(repo_id)
+
+    async def _delete():
+        async with db.AsyncSessionLocal() as session:
+            row = await session.get(KbRepo, repo_id)
+            if row is not None:
+                await session.delete(row)
+                await session.commit()
+
+    asyncio.run(_delete())
+
+
+def test_kb_scoped_chat_409_for_ingesting_repo():
+    _make_repo_row("test-loading-repo-chat", "ingesting")
+    try:
+        r = client.post(
+            "/kb/test-loading-repo-chat/chat", headers=AUTH,
+            json={"message": "Hello", "history": []},
+        )
+        assert r.status_code == 409
+        assert "still being prepared" in r.json()["detail"]["error"]
+    finally:
+        _cleanup_repo_row("test-loading-repo-chat")
+
+
+def test_kb_scoped_chat_stream_409_for_queued_repo():
+    _make_repo_row("test-loading-repo-stream", "queued")
+    try:
+        r = client.post(
+            "/kb/test-loading-repo-stream/chat/stream", headers=AUTH,
+            json={"message": "Hello", "history": []},
+        )
+        assert r.status_code == 409
+        assert "still being prepared" in r.json()["detail"]["error"]
+    finally:
+        _cleanup_repo_row("test-loading-repo-stream")
+
+
+def test_chat_body_knowledge_base_id_409_for_ingesting_repo():
+    _make_repo_row("test-loading-repo-body", "ingesting")
+    try:
+        r = client.post(
+            "/chat", headers=AUTH,
+            json={"message": "Hello", "history": [], "knowledge_base_id": "test-loading-repo-body"},
+        )
+        assert r.status_code == 409
+    finally:
+        _cleanup_repo_row("test-loading-repo-body")
+
+
+def test_kb_entity_409_for_ingesting_repo():
+    _make_repo_row("test-loading-repo-entity", "ingesting")
+    try:
+        r = client.get("/kb/test-loading-repo-entity/entity/RCCOMP_103.1", headers=AUTH)
+        assert r.status_code == 409
+        assert "still being prepared" in r.json()["detail"]["error"]
+    finally:
+        _cleanup_repo_row("test-loading-repo-entity")
+
+
+def test_kb_related_entities_409_for_ingesting_repo():
+    _make_repo_row("test-loading-repo-related", "ingesting")
+    try:
+        r = client.get("/kb/test-loading-repo-related/entities/related/RCCOMP_103.1", headers=AUTH)
+        assert r.status_code == 409
+    finally:
+        _cleanup_repo_row("test-loading-repo-related")
+
+
+def test_kb_scoped_chat_still_succeeds_for_ready_repo():
+    _make_repo_row("test-ready-repo-chat", "ready")
+    try:
+        r = client.post(
+            "/kb/test-ready-repo-chat/chat", headers=AUTH,
+            json={"message": "Hello", "history": []},
+        )
+        assert r.status_code == 200
+        assert "response" in r.json()
+    finally:
+        _cleanup_repo_row("test-ready-repo-chat")
+
+
+# ── error-repo guard: content keeps serving, no content is blocked ─────────
+#
+# A repo that failed a reload but still has content from its last good
+# ingest must keep serving (the old version); one that never successfully
+# ingested (no content) must be blocked, with its status_detail as the 409
+# message.
+
+
+def _make_error_repo_row(repo_id: str, status_detail: str, chunks: int | None, documents: int | None = None) -> None:
+    import asyncio
+
+    import db
+    import main as main_module
+    from kb_repo_service import descriptor_from_repo
+    from models import KbRepo
+
+    async def _create():
+        async with db.AsyncSessionLocal() as session:
+            row = KbRepo(
+                id=repo_id, name="Error Repo", git_url="https://example.com/error.git",
+                status="error", status_detail=status_detail, chunks=chunks, documents=documents,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return row
+
+    row = asyncio.run(_create())
+    main_module._kb_registry.register_descriptor(descriptor_from_repo(row))
+
+
+def test_kb_scoped_chat_succeeds_for_error_repo_with_prior_content():
+    _make_error_repo_row(
+        "test-error-repo-with-content", "Couldn't reach the repository host — check the URL and your network.",
+        chunks=9, documents=3,
+    )
+    try:
+        r = client.post(
+            "/kb/test-error-repo-with-content/chat", headers=AUTH,
+            json={"message": "Hello", "history": []},
+        )
+        assert r.status_code == 200
+        assert "response" in r.json()
+    finally:
+        _cleanup_repo_row("test-error-repo-with-content")
+
+
+def test_kb_scoped_chat_409_for_error_repo_without_content():
+    detail = "Repository not found — check the Git URL and branch."
+    _make_error_repo_row("test-error-repo-no-content", detail, chunks=0)
+    try:
+        r = client.post(
+            "/kb/test-error-repo-no-content/chat", headers=AUTH,
+            json={"message": "Hello", "history": []},
+        )
+        assert r.status_code == 409
+        assert r.json()["detail"]["error"] == detail
+    finally:
+        _cleanup_repo_row("test-error-repo-no-content")
+
+
+def test_kb_scoped_chat_409_for_error_repo_with_null_chunks():
+    detail = "Update failed (RuntimeError)."
+    _make_error_repo_row("test-error-repo-null-chunks", detail, chunks=None)
+    try:
+        r = client.post(
+            "/kb/test-error-repo-null-chunks/chat", headers=AUTH,
+            json={"message": "Hello", "history": []},
+        )
+        assert r.status_code == 409
+        assert r.json()["detail"]["error"] == detail
+    finally:
+        _cleanup_repo_row("test-error-repo-null-chunks")

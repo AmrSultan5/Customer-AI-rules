@@ -1,0 +1,42 @@
+# Build context is rule_agent/ (see Dockerfile / docker-compose.yml).
+# Keep the image lean and keep sensitive/runtime-only data out of it.
+
+# Data: mounted read-only at runtime via ./backend/data:/app/data:ro.
+# Includes large Excel sources and any locally-cloned RAG source repos —
+# must never be baked into the image.
+backend/data/
+
+# Local env files (secrets) — supplied at runtime via env_file / -e, not baked in.
+**/.env
+**/.env.*
+!backend/.env.example
+
+# Python bytecode / caches
+**/__pycache__/
+*.pyc
+*.pyo
+**/.pytest_cache/
+**/*.egg-info/
+
+# Databases (dev artifacts; real data lives under the mounted volume)
+*.db
+*.sqlite
+*.sqlite3
+
+# VCS
+**/.git/
+**/.gitignore
+.git/
+.gitignore
+
+# Tests (not needed at runtime)
+backend/tests/
+
+# Editor/OS cruft
+.DS_Store
+Thumbs.db
+
+# Frontend (not part of the backend image; served separately)
+frontend/node_modules/
+frontend/dist/
+frontend/build/

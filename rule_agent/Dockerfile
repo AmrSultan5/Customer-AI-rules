@@ -7,13 +7,23 @@ FROM python:3.11.9-slim
 
 WORKDIR /app
 
+# System deps: git is required at runtime by the "add a Git repo" RAG ingestion
+# feature, which shells out to `git clone` (see backend/ingestion.py::_clone_git_repo).
+# python:3.11-slim has no git by default.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first (layer cache)
 COPY backend/requirements.txt ./requirements.txt
 COPY backend/requirements-lock.txt ./requirements-lock.txt
 RUN pip install --no-cache-dir -r requirements-lock.txt
 
-# Copy application source (exclude data files — mount via volume in production)
-COPY backend/*.py ./
+# Copy the full backend package tree (main.py imports kb/, providers/, and
+# migrations/ as packages, plus kb/*.yaml descriptors and kb/sample_docs/).
+# backend/data, caches, tests, and .env are excluded via .dockerignore —
+# data is mounted read-only via volume in production.
+COPY backend/ ./
 
 # Data files are expected at /app/data at runtime.
 # Mount your data volume: -v ./backend/data:/app/data:ro

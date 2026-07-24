@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Usage:
 #   1. Copy backend/.env.example → backend/.env and fill in real values.
 #   2. docker compose up --build
@@ -16,6 +14,10 @@ services:
     ports:
       - "8000:8000"
     env_file:
+      # RAG / "add a repository" features read additional keys from this file:
+      #   OPENAI_API_KEY      — required for embeddings (RAG ingestion + retrieval)
+      #   KB_REPO_SECRET_KEY  — required in production to encrypt private-repo
+      #                         access tokens at rest (see backend/kb_repo_service.py)
       - ./backend/.env
     volumes:
       # Mount data directory read-only — keep sensitive Excel files off the image
@@ -27,3 +29,25 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Opt-in pgvector-enabled Postgres for the production RAG path. Plain
+  # `docker compose up` still uses the app's default SQLite; run this with
+  # `docker compose --profile postgres up` to bring Postgres up alongside it.
+  # See README for the full Postgres/pgvector setup and migration notes.
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: rule_agent
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: rule_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    # Point the backend at this Postgres by setting in backend/.env, e.g.:
+    #   DATABASE_URL=postgresql+asyncpg://rule_agent:change-me@postgres:5432/rule_agent
+
+volumes:
+  pgdata:

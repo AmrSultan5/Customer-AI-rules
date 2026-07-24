@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     enable_kb_switcher: bool = True
     embeddings_model: str = "text-embedding-3-small"
 
+    # Self-service Git-repo KBs (Phase 9) — Fernet key material for
+    # encrypting a private repo's PAT at rest (kb_repos.auth_token_encrypted).
+    # See kb_repo_service.py: unset means tokens are stored in plaintext
+    # (a one-time warning is logged, never the token itself).
+    kb_repo_secret_key: str = ""
+
     @model_validator(mode="after")
     def _derive_dependent_defaults(self) -> "Settings":
         if self.database_url_sync is None:

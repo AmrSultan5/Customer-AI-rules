@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Tooltip from './Tooltip.jsx'
+import { notifyError } from '../utils/toast.js'
 import ProjectInstructions from './ProjectInstructions.jsx'
 import { ConfirmDialog, RenameDialog } from './Dialog.jsx'
 import {
@@ -66,22 +67,34 @@ function ConversationRow({ conv, active, projects, onSelect, onChanged }) {
 
   async function doRename(title) {
     setDialog(null)
-    await renameConversation(conv.id, title)
-    onChanged()
+    try {
+      await renameConversation(conv.id, title)
+      onChanged()
+    } catch {
+      notifyError('Couldn’t rename the conversation. Please try again.')
+    }
   }
 
   async function move(e) {
     const val = e.target.value
     const projectId = val === '' ? null : Number(val)
-    await moveConversation(conv.id, projectId)
-    setMenuOpen(false)
-    onChanged()
+    try {
+      await moveConversation(conv.id, projectId)
+      setMenuOpen(false)
+      onChanged()
+    } catch {
+      notifyError('Couldn’t move the conversation. Please try again.')
+    }
   }
 
   async function doDelete() {
     setDialog(null)
-    await deleteConversation(conv.id)
-    onChanged()
+    try {
+      await deleteConversation(conv.id)
+      onChanged()
+    } catch {
+      notifyError('Couldn’t delete the conversation. Please try again.')
+    }
   }
 
   return (
@@ -155,13 +168,22 @@ export default function ConversationSidebar({
   const [instructionsProject, setInstructionsProject] = useState(null)
   const [deleteProjectTarget, setDeleteProjectTarget] = useState(null) // project | null
 
+  const loadErrShownRef = useRef(false)
   const reload = useCallback(async () => {
     if (!username) return
     try {
       const [pj, cv] = await Promise.all([listProjects(), listConversations()])
       setProjects(pj)
       setConversations(cv)
-    } catch { }
+      loadErrShownRef.current = false
+    } catch {
+      // Deduped: reload runs on mount and after every chat turn (reloadSignal),
+      // so surface the failure once rather than on every retry while down.
+      if (!loadErrShownRef.current) {
+        loadErrShownRef.current = true
+        notifyError('Couldn’t load your chats and projects. Check that the backend is running.')
+      }
+    }
   }, [username])
 
   useEffect(() => { reload() }, [reload, reloadSignal])
@@ -169,24 +191,36 @@ export default function ConversationSidebar({
   async function addProject() {
     const name = newProjectName.trim()
     if (!name) { setNewProjectOpen(false); return }
-    await createProject(name)
-    setNewProjectName('')
-    setNewProjectOpen(false)
-    reload()
+    try {
+      await createProject(name)
+      setNewProjectName('')
+      setNewProjectOpen(false)
+      reload()
+    } catch {
+      notifyError(`Couldn’t create the project “${name}”. Please try again.`)
+    }
   }
 
   async function removeProject() {
     const p = deleteProjectTarget
     setDeleteProjectTarget(null)
     if (!p) return
-    await deleteProject(p.id)
-    reload()
+    try {
+      await deleteProject(p.id)
+      reload()
+    } catch {
+      notifyError(`Couldn’t delete the project “${p.name}”. Please try again.`)
+    }
   }
 
   async function startChat(projectId = null) {
-    const conv = await createConversation({ project_id: projectId, knowledge_base_id: activeKbId ?? null })
-    await reload()
-    onSelectConversation(conv)
+    try {
+      const conv = await createConversation({ project_id: projectId, knowledge_base_id: activeKbId ?? null })
+      await reload()
+      onSelectConversation(conv)
+    } catch {
+      notifyError('Couldn’t start a new chat. Check that the backend is running.')
+    }
   }
 
   const looseConvs = conversations.filter(c => c.project_id == null)

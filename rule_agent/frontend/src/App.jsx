@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ChatBox from './components/ChatBox.jsx'
 import ConversationSidebar from './components/ConversationSidebar.jsx'
 import Login from './components/Login.jsx'
 import Settings from './components/Settings.jsx'
 import RuleCard from './components/RuleCard.jsx'
+import RuleCardSkeleton from './components/RuleCardSkeleton.jsx'
+import ToastHost from './components/Toast.jsx'
+import { subscribeToasts, notifyError } from './utils/toast.js'
 import { branding } from './config/branding.js'
-import { getUsername, setUsername, listKBs, getRuleCard } from './api.js'
+import {
+  getUsername, setUsername, listKBs, getRuleCard,
+  listKbRepos, createKbRepo, resyncKbRepo, deleteKbRepo,
+} from './api.js'
 
 const THEME_KEY = 'rule_agent_theme'
 const ACTIVE_KB_KEY = 'rule_agent_active_kb'
@@ -83,9 +89,12 @@ export default function App() {
     try { return localStorage.getItem(ACTIVE_KB_KEY) || null } catch { return null }
   })
   const [switcherEnabled, setSwitcherEnabled] = useState(false)
+  // Surface a KB-load failure at most once (this runs on mount AND on every 3s
+  // repo-poll tick, so an un-deduped toast would spam while the backend is down).
+  const kbLoadErrorRef = useRef(false)
 
-  useEffect(() => {
-    listKBs()
+  const refreshKbs = useCallback(() => {
+    return listKBs()
       .then(data => {
         const kbs = data.knowledge_bases ?? []
         setKnowledgeBases(kbs)
@@ -94,14 +103,111 @@ export default function App() {
           if (prev && kbs.some(k => k.id === prev)) return prev
           return data.active_kb ?? kbs[0]?.id ?? null
         })
+        kbLoadErrorRef.current = false
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!kbLoadErrorRef.current) {
+          kbLoadErrorRef.current = true
+          notifyError('Couldn’t reach the server to load knowledge bases. Check that the backend is running.')
+        }
+      })
   }, [])
+
+  useEffect(() => { refreshKbs() }, [refreshKbs])
 
   useEffect(() => {
     if (!activeKbId) return
     try { localStorage.setItem(ACTIVE_KB_KEY, activeKbId) } catch {}
   }, [activeKbId])
+
+  // ── App-wide toasts ──────────────────────────────────────────────────────
+  const [toasts, setToasts] = useState([])
+  const pushToast = useCallback(({ type, message }) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setToasts(prev => [...prev, { id, type, message }])
+  }, [])
+  const dismissToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }, [])
+  // Errors raised anywhere in the app (utils/toast) surface as toasts here.
+  useEffect(() => subscribeToasts(t => setToasts(prev => [...prev, t])), [])
+
+  // ── Knowledge repositories (self-service ingestion, polled app-wide) ────────
+  // Ownership lives here (not in Settings) so a repo keeps updating — and
+  // fires its toast — even while Settings is closed.
+  const [repos, setRepos] = useState([])
+  const [reposLoading, setReposLoading] = useState(false)
+  const [reposLoadError, setReposLoadError] = useState('')
+  const prevRepoStatusRef = useRef({})
+
+  const loadRepos = useCallback(async ({ silent } = {}) => {
+    if (!silent) setReposLoading(true)
+    if (!silent) setReposLoadError('')
+    try {
+      const data = await listKbRepos()
+      const next = data.repos ?? []
+      const prevMap = prevRepoStatusRef.current
+
+      next.forEach(r => {
+        const before = prevMap[r.id]
+        if (before && before !== r.status) {
+          if (r.status === 'ready') {
+            pushToast({ type: 'success', message: `✓ '${r.name}' is ready — select it in the switcher` })
+            refreshKbs()
+          } else if (r.status === 'error') {
+            const reason = r.status_detail || 'An unknown error occurred.'
+            const hadContent = (r.chunks > 0) || (r.documents > 0)
+            const message = hadContent
+              ? `⚠ '${r.name}' couldn't update: ${reason}. Still using the previous version.`
+              : `⚠ '${r.name}' couldn't be added: ${reason}`
+            pushToast({ type: 'error', message })
+          }
+        }
+      })
+
+      const nextMap = {}
+      next.forEach(r => { nextMap[r.id] = r.status })
+      prevRepoStatusRef.current = nextMap
+
+      setRepos(next)
+    } catch {
+      if (!silent) setReposLoadError('Could not load knowledge repositories.')
+    } finally {
+      if (!silent) setReposLoading(false)
+    }
+  }, [pushToast, refreshKbs])
+
+  useEffect(() => { loadRepos() }, [loadRepos])
+
+  // Poll every 3s while any repo is still queued/ingesting — regardless of
+  // whether Settings is open — so the switcher and toasts stay live.
+  useEffect(() => {
+    const hasPending = repos.some(r => r.status === 'queued' || r.status === 'ingesting')
+    if (!hasPending) return
+    const timer = setInterval(async () => {
+      await loadRepos({ silent: true })
+      refreshKbs()
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [repos, loadRepos, refreshKbs])
+
+  const reloadRepo = useCallback(async (id) => {
+    await resyncKbRepo(id)
+    await loadRepos({ silent: true })
+    refreshKbs()
+  }, [loadRepos, refreshKbs])
+
+  const deleteRepo = useCallback(async (id) => {
+    await deleteKbRepo(id)
+    await loadRepos({ silent: true })
+    refreshKbs()
+  }, [loadRepos, refreshKbs])
+
+  const addRepo = useCallback(async (payload) => {
+    await createKbRepo(payload)
+    await loadRepos({ silent: true })
+    refreshKbs()
+  }, [loadRepos, refreshKbs])
 
   function handleSelectConversation(conv) {
     setActiveConversation(conv ? { id: conv.id, project_id: conv.project_id } : null)
@@ -133,7 +239,11 @@ export default function App() {
     try {
       setRuleData(await getRuleCard(activeKbId, ruleId))
     } catch {
+      // Don't leave the loading skeleton hanging forever — close the panel and
+      // tell the user instead of failing silently.
+      setActiveRuleId(null)
       setRuleData(null)
+      notifyError(`Couldn’t load rule ${ruleId}. Please try again.`)
     }
   }, [activeKbId])
 
@@ -164,11 +274,18 @@ export default function App() {
             <select
               className="topbar-kb-select"
               value={activeKbId ?? ''}
-              onChange={e => { setActiveKbId(e.target.value); setActiveConversation(null) }}
+              onChange={e => {
+                const kb = knowledgeBases.find(k => k.id === e.target.value)
+                if (kb && !kb.selectable) return // guard: shouldn't fire for a disabled option
+                setActiveKbId(e.target.value)
+                setActiveConversation(null)
+              }}
               aria-label="Active knowledge base"
             >
               {knowledgeBases.map(kb => (
-                <option key={kb.id} value={kb.id}>{kb.name}</option>
+                <option key={kb.id} value={kb.id} disabled={!kb.selectable}>
+                  {kb.selectable ? kb.name : `${kb.name} (updating…)`}
+                </option>
               ))}
             </select>
           )}
@@ -209,7 +326,6 @@ export default function App() {
             activeKb={activeKb}
             onConversationCreated={(conv) => { handleSelectConversation(conv); bumpConvReload() }}
             onConversationUpdated={bumpConvReload}
-            onStartNewChat={() => setActiveConversation(null)}
             onRuleSelected={entityCapable ? loadRule : undefined}
             prefill={chatPrefill}
           />
@@ -230,7 +346,7 @@ export default function App() {
                   onAskAboutRule={(id) => setChatPrefill({ text: `Explain rule ${id}`, id: Date.now() })}
                 />
               ) : (
-                <div className="rule-panel-loading">Loading {activeRuleId}…</div>
+                <RuleCardSkeleton />
               )}
             </div>
           </aside>
@@ -246,8 +362,16 @@ export default function App() {
           theme={theme}
           onSetTheme={setTheme}
           onClose={() => setSettingsOpen(false)}
+          repos={repos}
+          reposLoading={reposLoading}
+          reposLoadError={reposLoadError}
+          onReloadRepo={reloadRepo}
+          onDeleteRepo={deleteRepo}
+          onAddRepo={addRepo}
         />
       )}
+
+      <ToastHost toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

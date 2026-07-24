@@ -50,6 +50,11 @@ class RagSource(BaseModel):
     git_ref: str | None = None          # branch / tag / sha
     # name of the env var holding the PAT (never the token itself)
     auth_token_env: str | None = None
+    # In-memory-only: a PAT resolved at descriptor-build time (e.g. by
+    # kb_repo_service.descriptor_from_repo, decrypting a self-service repo's
+    # stored token). Never serialized to a kb/*.yaml file and never logged —
+    # see ingestion._clone_git_repo, which prefers this over auth_token_env.
+    auth_token: str | None = None
 
 
 class HybridSource(BaseModel):

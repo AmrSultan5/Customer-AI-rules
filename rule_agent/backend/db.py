@@ -24,7 +24,7 @@ import ssl
 from pathlib import Path
 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -84,6 +84,38 @@ sync_engine = create_engine(
     SYNC_DATABASE_URL, future=True, connect_args=_sync_connect_args
 )
 SyncSessionLocal = sessionmaker(sync_engine, expire_on_commit=False)
+
+
+def _apply_sqlite_pragmas(dbapi_conn, _record):
+    """Make SQLite tolerant of concurrent access.
+
+    Default SQLite locks the whole file for writes and, with a zero busy
+    timeout, a colliding reader/writer errors out *immediately* with
+    "database is locked" — which surfaces once the app has more than one
+    thing touching the DB at once (async request path + the sync background
+    ingestion + polling). WAL lets readers proceed alongside a single writer,
+    and busy_timeout makes a connection wait for a lock (up to 5s) instead of
+    failing instantly. synchronous=NORMAL is the safe, faster companion to WAL.
+
+    NOTE: WAL relies on proper file locking / shared memory, which cloud-synced
+    folders (OneDrive, Dropbox) and network shares do not provide reliably.
+    For anything beyond single-user local dev, point DATABASE_URL at a DB on a
+    real local disk (outside OneDrive) or, better, at Postgres.
+    """
+    cur = dbapi_conn.cursor()
+    try:
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=5000")
+        cur.execute("PRAGMA synchronous=NORMAL")
+    finally:
+        cur.close()
+
+
+if _is_sqlite:
+    # Apply to every new connection on both engines (async aiosqlite exposes a
+    # sync_engine we can hook the same way).
+    event.listen(sync_engine, "connect", _apply_sqlite_pragmas)
+    event.listen(async_engine.sync_engine, "connect", _apply_sqlite_pragmas)
 
 
 async def init_db() -> None:

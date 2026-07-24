@@ -1,12 +1,17 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Tooltip from './Tooltip.jsx'
 import RichInput from './RichInput.jsx'
 import { apiPost, apiPostStream, getConversation, createConversation } from '../api.js'
+import { notifyError } from '../utils/toast.js'
 import { copyText } from '../utils/exporters.js'
 
-const GENERAL_STORAGE_KEY = 'rule_agent_general_mode'
+// react-markdown's default urlTransform sanitizes/strips unknown URL schemes
+// (including our custom "rule:" scheme used for rule-id links). Preserve it
+// so those links keep routing to the rule card instead of falling through to
+// a stripped, empty href.
+const ruleUrlTransform = (url) => (url && url.startsWith('rule:') ? url : defaultUrlTransform(url))
 
 const WELCOME_MESSAGE =
   'Hello! Ask me anything about this knowledge base — describe what you\'re looking for, ' +
@@ -146,12 +151,6 @@ const SendIcon = () => (
   </svg>
 )
 
-const TrashIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-    <path d="M1.5 3h8M4 3V2h3v1M2.5 3l.5 6.5h5L9 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-)
-
 const ThumbIcon = ({ down, filled }) => (
   <svg
     width="12" height="12" viewBox="0 0 12 12" fill={filled ? 'currentColor' : 'none'}
@@ -229,17 +228,21 @@ export default function ChatBox({
   activeKb = null,
   onConversationCreated,
   onConversationUpdated,
-  onStartNewChat,
   onRuleSelected = null,
   prefill = null,
 }) {
   const md = useMemo(() => makeMdComponents(onRuleSelected), [onRuleSelected])
+  // A repo-backed KB that's queued/ingesting (a reload in progress on the KB
+  // you're currently chatting in) — keep the conversation but freeze input
+  // until it flips back to "ready". Static KBs are always "ready", so this
+  // never triggers for them.
+  const kbUpdating = activeKb?.status === 'queued' || activeKb?.status === 'ingesting'
+  // A repo-backed KB whose last reload failed but that still has previous
+  // content being served — non-blocking: the chat keeps working against the
+  // old version, so only a warning banner shows (input stays enabled).
+  const kbStale = activeKb?.status === 'error'
   const [messages, setMessages] = useState(() => initialMessages())
   const [loading, setLoading] = useState(false)
-  const [generalMode, setGeneralMode] = useState(() => {
-    try { return localStorage.getItem(GENERAL_STORAGE_KEY) === '1' } catch {}
-    return false
-  })
   const [editorHasContent, setEditorHasContent] = useState(false)
   const bottomRef        = useRef(null)
   const richInputRef     = useRef(null)
@@ -279,23 +282,6 @@ export default function ChatBox({
     if (!loading) richInputRef.current?.focus()
   }, [loading])
 
-  function toggleGeneralMode() {
-    if (loading) return
-    setGeneralMode(prev => {
-      const next = !prev
-      try { localStorage.setItem(GENERAL_STORAGE_KEY, next ? '1' : '0') } catch {}
-      return next
-    })
-  }
-
-  // "New chat" — drop the active conversation and start a fresh draft.
-  function newChat() {
-    if (loading) return
-    loadedConvRef.current = null
-    setMessages(initialMessages())
-    onStartNewChat?.()
-  }
-
   async function send(overrideText) {
     let text
     if (overrideText !== undefined) {
@@ -304,7 +290,7 @@ export default function ChatBox({
       text = richInputRef.current?.getMarkdown()?.trim() ?? ''
       if (text) richInputRef.current?.clear()
     }
-    if (!text || loading) return
+    if (!text || loading || kbUpdating) return
 
     // Ensure a server-side conversation exists; history is loaded from the DB,
     // so the client no longer sends a history window.
@@ -319,7 +305,10 @@ export default function ChatBox({
         cid = createdConv.id
         loadedConvRef.current = cid
       } catch {
-        // fall through with cid=null → backend stays stateless for this turn
+        // Persistence is down (e.g. a locked/unreachable DB). We still answer
+        // this turn statelessly, but the user MUST be told — otherwise the chat
+        // silently loses all memory of previous turns with no indication why.
+        notifyError('Couldn’t save this chat — your messages won’t be remembered after you leave this page.')
       }
     }
 
@@ -339,7 +328,7 @@ export default function ChatBox({
     try {
       const reader = await apiPostStream(streamPath, {
         message: text,
-        general: generalMode,
+        general: false,
         history: [],
         conversation_id: cid,
       })
@@ -423,17 +412,24 @@ export default function ChatBox({
       const tail = decoder.decode()
       if (tail) buffer += tail
     } catch (err) {
+      // A 409 means the KB flipped to queued/ingesting mid-flight (e.g. a
+      // reload started right after this send went out) — surface it like
+      // any other stream error rather than a raw status code.
+      const isKbUpdating = /\b409\b/.test(err.message)
+      const errText = isKbUpdating
+        ? 'This knowledge base is updating — please wait for it to finish, then try again.'
+        : `Error: ${err.message}`
       setMessages(prev => {
         const updated = [...prev]
         const last = updated[updated.length - 1]
         if (last?.isStreaming || (last?.role === 'agent' && last?.text === NBSP)) {
           updated[updated.length - 1] = {
-            role: 'agent', text: `Error: ${err.message}`,
+            role: 'agent', text: errText,
             isError: true, ts: Date.now(), followups: [],
           }
         } else {
           updated.push({
-            role: 'agent', text: `Error: ${err.message}`,
+            role: 'agent', text: errText,
             isError: true, ts: Date.now(), followups: [],
           })
         }
@@ -477,7 +473,6 @@ export default function ChatBox({
   }, [prefill])
 
   const userMsgCount  = messages.filter(m => m.role === 'user').length
-  const hasHistory    = messages.length > 1
   const isFreshChat   =
     messages.length === 1 &&
     messages[0].role === 'agent' &&
@@ -495,39 +490,6 @@ export default function ChatBox({
           {userMsgCount > 0 && (
             <span className="chat-msg-count">{userMsgCount}</span>
           )}
-        </div>
-
-        <div className="chat-header-right">
-          {hasHistory ? (
-            <Tooltip content="Start a new chat">
-              <button className="clear-btn" onClick={newChat}>
-                <TrashIcon />New chat
-              </button>
-            </Tooltip>
-          ) : (
-            /* Invisible placeholder keeps the header from reflowing when the
-               first message arrives. */
-            <button className="clear-btn is-hidden" tabIndex={-1} aria-hidden="true">
-              <TrashIcon />New chat
-            </button>
-          )}
-          <Tooltip
-            content={
-              generalMode
-                ? 'General Q&A is ON — I can also answer questions beyond this knowledge base. Click to scope answers back to it.'
-                : 'Scoped to this knowledge base — click to also allow general questions'
-            }
-          >
-            <button
-              className={`header-action-btn${generalMode ? ' active' : ''}`}
-              onClick={toggleGeneralMode}
-              disabled={loading}
-              aria-pressed={generalMode}
-            >
-              <span className={`action-dot${generalMode ? ' on' : ''}`} aria-hidden="true" />
-              General Q&A
-            </button>
-          </Tooltip>
         </div>
       </div>
 
@@ -563,13 +525,13 @@ export default function ChatBox({
                       ) : msg.isStreaming ? (
                         // Answer text: render markdown live so it's formatted as it streams
                         <>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={md} urlTransform={ruleUrlTransform}>
                             {linkifyRules(msg.text, !!onRuleSelected)}
                           </ReactMarkdown>
                           <span className="streaming-cursor" aria-hidden="true" />
                         </>
                       ) : (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={md} urlTransform={ruleUrlTransform}>
                           {linkifyRules(msg.text, !!onRuleSelected)}
                         </ReactMarkdown>
                       )}
@@ -608,19 +570,33 @@ export default function ChatBox({
 
       <div className="chat-input-row">
         <div className="chat-input-inner">
-          <div className="input-wrap" data-tour="chat-input" onClick={() => richInputRef.current?.focus()}>
+          {kbUpdating && (
+            <div className="chat-kb-updating-banner" role="status">
+              Updating this knowledge base — you can chat again once it's ready.
+            </div>
+          )}
+          {!kbUpdating && kbStale && (
+            <div className="chat-kb-stale-banner" role="status">
+              Last update failed: {activeKb?.status_detail || 'The last update to this knowledge base failed.'} Still answering from the previous version.
+            </div>
+          )}
+          <div
+            className={`input-wrap${kbUpdating ? ' input-wrap-disabled' : ''}`}
+            data-tour="chat-input"
+            onClick={() => !kbUpdating && richInputRef.current?.focus()}
+          >
             <RichInput
               ref={richInputRef}
               onSend={() => send()}
               placeholder="Ask a question about the knowledge base…"
-              disabled={loading}
+              disabled={loading || kbUpdating}
               onIsEmptyChange={(empty) => setEditorHasContent(!empty)}
             />
             <Tooltip content="Send message (Enter)">
               <button
                 className="send-btn"
                 onClick={() => send()}
-                disabled={loading || !editorHasContent}
+                disabled={loading || !editorHasContent || kbUpdating}
               >
                 <SendIcon />
               </button>

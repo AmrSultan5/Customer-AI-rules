@@ -7,6 +7,7 @@ calls are made anywhere in this file.
 """
 
 import base64
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -204,3 +205,85 @@ def test_git_clone_without_pat_omits_auth_header(monkeypatch, tmp_path):
     cmd = captured["cmd"]
     assert not any(c.startswith("http.extraHeader=") for c in cmd)
     assert "-c" not in cmd
+
+
+# ── classify_clone_error / is_clone_error_message (friendly classification) ─
+
+
+@pytest.mark.parametrize(
+    "stderr, expected",
+    [
+        (
+            "remote: Authentication failed for 'https://dev.azure.com/org/project/_git/repo'",
+            "Couldn't access the repository — check the access token (private repos require one).",
+        ),
+        (
+            "fatal: could not read Username for 'https://dev.azure.com': terminal prompts disabled",
+            "Couldn't access the repository — check the access token (private repos require one).",
+        ),
+        (
+            "remote: TF401019: The Git repository with name or identifier does not exist",
+            "Repository not found — check the Git URL and branch.",
+        ),
+        (
+            "remote: Repository not found.",
+            "Repository not found — check the Git URL and branch.",
+        ),
+        (
+            "fatal: unable to access 'https://dev.azure.com/org/project/_git/repo/': Could not resolve host: dev.azure.com",
+            "Couldn't reach the repository host — check the URL and your network.",
+        ),
+        (
+            "fatal: unable to access 'https://dev.azure.com/x': Connection timed out",
+            "Couldn't reach the repository host — check the URL and your network.",
+        ),
+    ],
+)
+def test_classify_clone_error_maps_known_keywords_to_friendly_reason(stderr, expected):
+    exc = subprocess.CalledProcessError(returncode=128, cmd=["git", "clone"], output="", stderr=stderr)
+    assert ingestion.classify_clone_error(exc) == expected
+
+
+def test_classify_clone_error_falls_back_to_generic_message_with_exit_code():
+    exc = subprocess.CalledProcessError(returncode=17, cmd=["git", "clone"], output="", stderr="some other git failure")
+    message = ingestion.classify_clone_error(exc)
+    assert message == "Couldn't clone the repository (git exited with code 17)."
+    # The raw stderr text must never leak into the curated message.
+    assert "some other git failure" not in message
+
+
+def test_is_clone_error_message_recognizes_curated_and_generic_messages():
+    assert ingestion.is_clone_error_message(
+        "Couldn't access the repository — check the access token (private repos require one)."
+    )
+    assert ingestion.is_clone_error_message("Couldn't clone the repository (git exited with code 42).")
+    assert not ingestion.is_clone_error_message("Some unrelated RuntimeError text.")
+
+
+def test_clone_git_repo_raises_friendly_message_never_raw_stderr_or_pat(monkeypatch, tmp_path):
+    def fake_run(cmd, check, capture_output, text):
+        raise subprocess.CalledProcessError(
+            returncode=128,
+            cmd=cmd,
+            output="",
+            stderr="remote: Authentication failed for 'https://dev.azure.com/org/project/_git/repo'",
+        )
+
+    monkeypatch.setattr(ingestion.subprocess, "run", fake_run)
+    monkeypatch.setenv("CLONE_FAIL_PAT", "super-secret-pat-value")
+
+    from kb._schema import RagSource
+
+    rag_source = RagSource(
+        roots=[],
+        git_url="https://dev.azure.com/org/project/_git/repo",
+        auth_token_env="CLONE_FAIL_PAT",
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        ingestion._clone_git_repo(rag_source, tmp_path / "dest")
+
+    message = str(exc_info.value)
+    assert message == "Couldn't access the repository — check the access token (private repos require one)."
+    assert "super-secret-pat-value" not in message
+    assert "Authentication failed" not in message

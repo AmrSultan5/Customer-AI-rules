@@ -73,6 +73,23 @@ class KnowledgeBaseRegistry:
         self._providers[kb_id] = provider
         return provider
 
+    def register_descriptor(self, descriptor: KBDescriptor) -> None:
+        """Insert or replace a descriptor at runtime (self-service Git-repo
+        KBs — main.py's POST /kb-repos and its startup reconciliation step).
+
+        Drops any cached provider for this id so the next get_provider() call
+        rebuilds it from the new descriptor rather than serving a stale one.
+        """
+        self._descriptors[descriptor.id] = descriptor
+        self._providers.pop(descriptor.id, None)
+
+    def unregister_descriptor(self, kb_id: str) -> None:
+        """Remove a runtime-registered descriptor and its cached provider, if
+        present (main.py's DELETE /kb-repos/{id}). No-op for an unknown id —
+        in particular, does not touch YAML-loaded descriptors by accident."""
+        self._descriptors.pop(kb_id, None)
+        self._providers.pop(kb_id, None)
+
     @property
     def default_kb_id(self) -> str:
         return self._default_kb_id

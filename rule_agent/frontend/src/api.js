@@ -126,6 +126,19 @@ export const getRuleCard = (kbId, entityId) => _json(`/kb/${kbId}/entity/${entit
 /** Up to 4 rules related to this one (same category/table). */
 export const getRelatedRules = (kbId, entityId) => _json(`/kb/${kbId}/entities/related/${entityId}`)
 
+// ── Knowledge base repositories (self-service ingestion) ──────────────────────
+// Repo shape: { id, name, git_url, git_ref|null, include_globs|null,
+//   status: "queued"|"ingesting"|"ready"|"error", status_detail|null,
+//   documents|null, chunks|null, created_at, updated_at } — never contains a token.
+
+/** { repos: [repo, ...] } */
+export const listKbRepos = () => _json('/kb-repos')
+/** payload: { name, git_url, git_ref?, include_globs?, visibility, auth_token? } */
+export const createKbRepo = (payload) => _json('/kb-repos', { method: 'POST', body: payload })
+export const getKbRepo = (id) => _json(`/kb-repos/${id}`)
+export const resyncKbRepo = (id) => _json(`/kb-repos/${id}/resync`, { method: 'POST' })
+export const deleteKbRepo = (id) => _json(`/kb-repos/${id}`, { method: 'DELETE' })
+
 export const listProjects = () => _json('/projects')
 export const createProject = (name, instructions = null) =>
   _json('/projects', { method: 'POST', body: { name, instructions } })

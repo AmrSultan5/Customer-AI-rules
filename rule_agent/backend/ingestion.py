@@ -86,24 +86,70 @@ def _resolve_root(root_str: str) -> Path:
 # ── Azure DevOps Repos clone (git subprocess, fully mockable) ──────────────
 
 
+# Curated, safe reasons for a `git clone` failure aimed at a non-technical
+# stakeholder — matched against exc.stderr (lowercased) keyword-by-keyword,
+# first match wins. Never the raw stderr (which may echo back the failing
+# URL) and never `cmd` (carries the auth header). Exposed so main.py's
+# _friendly_ingest_error can recognize an already-friendly clone message and
+# pass it through unchanged instead of re-wrapping it.
+CLONE_ERROR_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("authentication failed", "could not read username", "invalid username or password", "403"),
+        "Couldn't access the repository — check the access token (private repos require one).",
+    ),
+    (
+        ("repository not found", "not found", "does not exist", "404"),
+        "Repository not found — check the Git URL and branch.",
+    ),
+    (
+        ("could not resolve host", "unable to access", "connection", "timed out"),
+        "Couldn't reach the repository host — check the URL and your network.",
+    ),
+)
+
+_CLONE_ERROR_GENERIC_PREFIX = "Couldn't clone the repository (git exited with code"
+
+
+def classify_clone_error(exc: subprocess.CalledProcessError) -> str:
+    """Map a failed `git clone`'s stderr to a curated, plain-English reason
+    via CLONE_ERROR_KEYWORDS. Falls back to a generic message carrying only
+    the exit code — never the raw stderr text itself."""
+    stderr = (exc.stderr or "").lower()
+    for keywords, message in CLONE_ERROR_KEYWORDS:
+        if any(keyword in stderr for keyword in keywords):
+            return message
+    return f"{_CLONE_ERROR_GENERIC_PREFIX} {exc.returncode})."
+
+
+def is_clone_error_message(message: str) -> bool:
+    """True if `message` is one of classify_clone_error's curated outputs."""
+    return (
+        any(message == friendly for _, friendly in CLONE_ERROR_KEYWORDS)
+        or message.startswith(_CLONE_ERROR_GENERIC_PREFIX)
+    )
+
+
 def _clone_git_repo(rag_source: RagSource, dest_dir: Path) -> None:
     """Shallow-clone `rag_source.git_url` into `dest_dir`.
 
-    For a private Azure DevOps repo, the PAT (read from
-    `os.environ[rag_source.auth_token_env]`) is sent via the Azure-recommended
-    HTTP Basic auth header — `-c http.extraHeader="Authorization: Basic
-    <base64(':'+PAT)>"` — rather than embedded in the clone URL. The PAT
-    itself is never logged: only the repo URL/ref are, and the constructed
-    `cmd` list (which does contain the base64-encoded header value, as
-    git requires) is passed straight to subprocess.run — it is never printed,
-    logged, or otherwise persisted.
+    For a private repo, the PAT — `rag_source.auth_token` if set (an
+    in-memory token resolved by the caller, e.g. kb_repo_service.
+    descriptor_from_repo decrypting a self-service repo's stored token),
+    otherwise read from `os.environ[rag_source.auth_token_env]` — is sent via
+    the Azure-recommended HTTP Basic auth header — `-c
+    http.extraHeader="Authorization: Basic <base64(':'+PAT)>"` — rather than
+    embedded in the clone URL. The PAT itself is never logged: only the repo
+    URL/ref are, and the constructed `cmd` list (which does contain the
+    base64-encoded header value, as git requires) is passed straight to
+    subprocess.run — it is never printed, logged, or otherwise persisted.
     """
     config_args: list[str] = []
-    if rag_source.auth_token_env:
-        pat = os.environ.get(rag_source.auth_token_env, "")
-        if pat:
-            token_b64 = base64.b64encode(f":{pat}".encode("utf-8")).decode("ascii")
-            config_args = ["-c", f"http.extraHeader=Authorization: Basic {token_b64}"]
+    pat = rag_source.auth_token or (
+        os.environ.get(rag_source.auth_token_env, "") if rag_source.auth_token_env else ""
+    )
+    if pat:
+        token_b64 = base64.b64encode(f":{pat}".encode("utf-8")).decode("ascii")
+        config_args = ["-c", f"http.extraHeader=Authorization: Basic {token_b64}"]
 
     cmd = ["git"] + config_args + ["clone", "--depth", "1"]
     if rag_source.git_ref:
@@ -115,10 +161,9 @@ def _clone_git_repo(rag_source: RagSource, dest_dir: Path) -> None:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
         # Deliberately do not include `cmd` (carries the auth header) or raw
-        # stderr (git may echo back the failing URL) in the raised message.
-        raise RuntimeError(
-            f"git clone failed for {rag_source.git_url!r} (ref={rag_source.git_ref!r}), exit={exc.returncode}"
-        ) from None
+        # stderr (git may echo back the failing URL) in the raised message —
+        # only a curated, safe reason from classify_clone_error.
+        raise RuntimeError(classify_clone_error(exc)) from None
 
 
 # ── File walking ────────────────────────────────────────────────────────────

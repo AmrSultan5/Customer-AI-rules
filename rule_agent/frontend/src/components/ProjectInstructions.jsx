@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { updateProject } from '../api.js'
+import { notifyError } from '../utils/toast.js'
 
 /**
  * Modal editor for a project's standing-instructions string.
@@ -17,6 +18,7 @@ export default function ProjectInstructions({ project, onClose, onSaved }) {
       onClose?.()
     } catch {
       setSaving(false)
+      notifyError('Couldn’t save the project instructions. Please try again.')
     }
   }
 

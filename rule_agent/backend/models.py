@@ -227,6 +227,42 @@ class KbChunk(Base):
     document: Mapped["KbDocument"] = relationship(back_populates="chunks")
 
 
+# ── Self-service Git-repo KBs (Phase 9) ─────────────────────────────────────
+#
+# One row per user-added "add a Git repo" knowledge base (POST /kb-repos in
+# main.py). `id` doubles as the kb_id used everywhere else (kb_chunks,
+# kb_documents, chat routing — see kb_repo_service.make_repo_id). `status`
+# tracks the background ingestion lifecycle ("queued" -> "ingesting" ->
+# "ready" | "error") so the frontend can poll GET /kb-repos/{id}; main.py's
+# list_kbs filters a repo KB out of the switcher until it reaches "ready".
+
+
+class KbRepo(Base):
+    __tablename__ = "kb_repos"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    git_url: Mapped[str] = mapped_column(String(2048))
+    git_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Comma-separated glob list as submitted by the caller; kb_repo_service
+    # parses it into RagSource.include_globs. None/blank => a generic default.
+    include_globs: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Fernet-encrypted (or, without KB_REPO_SECRET_KEY / the `cryptography`
+    # package, plaintext — see kb_repo_service.py) PAT for a private repo.
+    # Never returned by the API — see main.py._serialize_kb_repo.
+    auth_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued")
+    status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    documents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 # ── Analytics (migrated from the old SQLite analytics.db) ────────────────────
 
 

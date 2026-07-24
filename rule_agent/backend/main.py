@@ -30,10 +30,11 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data_loader import (
@@ -54,7 +55,7 @@ import openai_client
 import prompts
 from config import settings
 from db import get_session
-from models import KnowledgeBase
+from models import KbRepo, KnowledgeBase
 from providers.registry import KnowledgeBaseRegistry
 
 log = logging.getLogger(__name__)
@@ -133,6 +134,44 @@ def get_provider(kb_id: str | None = None, conversation_kb: str | None = None):
             detail={"error": f"Unknown knowledge base: {resolved_id!r}"},
         )
     return provider
+
+
+async def _repo_block_reason(
+    session: AsyncSession, kb_id: str,
+) -> tuple[str, str | None] | None:
+    """Return (status, status_detail) when `kb_id` names a repo KB that
+    cannot currently serve requests, else None (not a repo KB at all, or a
+    repo KB that can serve: 'ready', or 'error' with prior content — a
+    reload that failed still serves its last good ingest).
+
+    A repo blocks only when it's 'queued'/'ingesting' (no content yet), or
+    'error' with NO prior content (never successfully ingested — chunks is
+    null/0). Used as a defense-in-depth 409 guard on chat/entity routes — the
+    frontend already disables selection of a non-servable repo KB in the
+    switcher, but a direct/stale request must still be rejected server-side
+    rather than hitting an empty/stale RAG index."""
+    row = await session.get(KbRepo, kb_id)
+    if row is None or row.status == "ready":
+        return None
+    has_content = bool(row.chunks and row.chunks > 0)
+    if row.status == "error" and has_content:
+        return None
+    return row.status, row.status_detail
+
+
+def _raise_repo_not_ready(
+    kb_id: str, status: str, status_detail: str | None = None, name: str | None = None,
+) -> None:
+    if status == "error":
+        message = status_detail or (
+            f"Knowledge base '{name or kb_id}' failed to update and has no usable content."
+        )
+    else:
+        message = (
+            f"Knowledge base '{name or kb_id}' is still being prepared. "
+            "Try again once it's ready."
+        )
+    raise HTTPException(status_code=409, detail={"error": message})
 
 # ── Rate limiting ──────────────────────────────────────────────────────────────
 
@@ -297,6 +336,24 @@ class PromptSaveRequest(BaseModel):
     enhanced_prompt: Annotated[str | None, Field(max_length=_MAX_PROMPT_LEN)] = None
 
 
+# ── Self-service Git-repo KB request models (Phase 9) ───────────────────────
+
+
+class KbRepoCreateRequest(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    git_url: Annotated[str, Field(min_length=1, max_length=2048)]
+    git_ref: Annotated[str | None, Field(max_length=200)] = None
+    include_globs: Annotated[str | None, Field(max_length=2000)] = None
+    visibility: Literal["public", "private"] = "public"
+    auth_token: Annotated[str | None, Field(max_length=4000)] = None
+
+    @model_validator(mode="after")
+    def _private_requires_token(self) -> "KbRepoCreateRequest":
+        if self.visibility == "private" and not (self.auth_token and self.auth_token.strip()):
+            raise ValueError("auth_token is required when visibility is 'private'.")
+        return self
+
+
 # ── Lifespan ───────────────────────────────────────────────────────────────────
 
 
@@ -315,6 +372,8 @@ async def lifespan(app: FastAPI):
         log.info("[INFO] Database schema ready.")
         await db.seed_knowledge_bases()
         log.info("[INFO] Knowledge base registry seeded.")
+        await _register_and_reconcile_kb_repos()
+        log.info("[INFO] Git-repo knowledge bases registered/reconciled.")
     except Exception as exc:
         log.critical(
             "[CRITICAL] Startup data load failed: %s — %s",
@@ -412,11 +471,39 @@ router = APIRouter(dependencies=[Depends(_check_auth)])
 
 
 @router.get("/kbs")
-async def list_kbs():
+async def list_kbs(session: AsyncSession = Depends(get_session)):
     """List every registered KB plus which one is active / whether the
-    in-app switcher is enabled (drives the frontend KB chooser)."""
+    in-app switcher is enabled (drives the frontend KB chooser).
+
+    A self-service Git-repo KB (Phase 9, see the /kb-repos section below) is
+    included while it's still loading (status 'queued'/'ingesting') so the
+    frontend can show it as a disabled "updating…" entry. An 'error' repo is
+    included ONLY if it has prior content (chunks > 0 from a last-good
+    ingest) — a failed reload keeps serving that last-good version, shown as
+    status 'error' with its status_detail so the frontend can surface the
+    reason without blocking use. An 'error' repo with no prior content (never
+    successfully ingested) is left out entirely — visible only via
+    GET /kb-repos in Settings. A descriptor id that isn't a repo id at all
+    (every YAML-loaded KB) is always included with status 'ready'.
+    """
+    repo_info = {
+        row.id: row
+        for row in (await session.execute(
+            select(KbRepo.id, KbRepo.status, KbRepo.status_detail, KbRepo.chunks)
+        )).all()
+    }
     kbs = []
     for descriptor in _kb_registry.list_descriptors():
+        info = repo_info.get(descriptor.id)
+        if info is None:
+            status, status_detail, selectable = "ready", None, True
+        else:
+            has_content = bool(info.chunks and info.chunks > 0)
+            if info.status == "error" and not has_content:
+                continue  # never successfully ingested — Settings-only
+            status = info.status
+            status_detail = info.status_detail if status == "error" else None
+            selectable = status == "ready" or (status == "error" and has_content)
         provider = _kb_registry.get_provider(descriptor.id)
         kbs.append({
             "id": descriptor.id,
@@ -425,6 +512,9 @@ async def list_kbs():
             "adapter": descriptor.adapter,
             "retrieval_mode": descriptor.retrieval_mode,
             "capabilities": sorted(provider.capabilities()) if provider else [],
+            "status": status,
+            "status_detail": status_detail,
+            "selectable": selectable,
         })
     return {
         "knowledge_bases": kbs,
@@ -452,6 +542,224 @@ async def get_kb_detail(kb_id: str, session: AsyncSession = Depends(get_session)
         "custom_prompt": row.custom_prompt if row else None,
         "enhanced_prompt": row.enhanced_prompt if row else None,
     }
+
+
+# ── Self-service Git-repo knowledge bases (Phase 9) ─────────────────────────
+#
+# Add a Git repo (public or private) as a brand-new RAG knowledge base,
+# DB-persisted (models.KbRepo / kb_repos table) so it survives a Render
+# restart. Ingestion (clone + chunk + embed, ingestion.ingest_kb) runs in the
+# background; the frontend polls GET /kb-repos/{id} for status until it
+# reaches "ready", at which point list_kbs() above starts including it and
+# it's immediately usable in chat via _kb_registry.get_provider(repo_id).
+
+
+def _serialize_kb_repo(row: KbRepo) -> dict:
+    """Repo object per the API contract. NEVER includes the token."""
+    return {
+        "id": row.id,
+        "name": row.name,
+        "git_url": row.git_url,
+        "git_ref": row.git_ref,
+        "include_globs": row.include_globs,
+        "status": row.status,
+        "status_detail": row.status_detail,
+        "documents": row.documents,
+        "chunks": row.chunks,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+async def _register_and_reconcile_kb_repos() -> None:
+    """Startup step (lifespan, after seed_knowledge_bases): re-register every
+    persisted kb_repos descriptor into the module-level KB registry — a repo
+    ingested before a restart otherwise only lives in the in-process
+    registry (register_descriptor), which a restart wipes — and reconcile
+    any row an interrupted process left mid-flight ('queued'/'ingesting':
+    there is no background task still running to finish it) to 'error', so
+    the frontend/user knows to resync rather than polling forever."""
+    from kb_repo_service import decrypt_token, descriptor_from_repo
+
+    async with db.AsyncSessionLocal() as session:
+        rows = (await session.execute(select(KbRepo))).scalars().all()
+        for row in rows:
+            token = decrypt_token(row.auth_token_encrypted) if row.auth_token_encrypted else None
+            _kb_registry.register_descriptor(descriptor_from_repo(row, token=token))
+            if row.status in ("queued", "ingesting"):
+                row.status = "error"
+                row.status_detail = "Interrupted by restart — resync to retry."
+        await session.commit()
+
+
+_ZERO_FILES_DETAIL = (
+    "No matching files found to ingest — check the include patterns (e.g. **/*.md)."
+)
+
+
+def _friendly_ingest_error(exc: Exception) -> str:
+    """Map an ingest_kb() failure to a plain-English, actionable reason for
+    status_detail — never the raw exception text, which may carry a PAT or
+    other internal detail. A clone failure (ingestion._clone_git_repo) already
+    raises RuntimeError with a curated, safe message — passed through as-is
+    (see ingestion.is_clone_error_message). An OpenAI/embeddings failure
+    (detected by exception module/type name) gets its own friendly reason.
+    Anything else falls back to a generic "Update failed (<ExcType>)."."""
+    from ingestion import is_clone_error_message
+
+    if isinstance(exc, RuntimeError) and is_clone_error_message(str(exc)):
+        return str(exc)
+    module_name = (type(exc).__module__ or "").lower()
+    type_name = type(exc).__name__
+    if "openai" in module_name or "openai" in type_name.lower():
+        return "Couldn't generate embeddings — the OpenAI API key may be missing or invalid."
+    return f"Update failed ({type_name})."
+
+
+async def _run_repo_ingest(repo_id: str) -> None:
+    """Background ingestion for one kb_repos row: set status='ingesting',
+    run ingestion.ingest_kb off-thread, then record 'ready' + counts or
+    'error' + a friendly detail. Runs in its own DB session — the request
+    that spawned this task (asyncio.create_task) has already returned.
+    Never raises: a failure here must not crash the fire-and-forget task
+    silently either, but there is no caller left to observe an exception, so
+    it's caught and recorded on the row instead.
+
+    A failed reload leaves `documents`/`chunks` untouched, so a repo that was
+    previously ingested successfully keeps serving that last-good content
+    (see _repo_block_reason / list_kbs) even though status is now 'error'. A
+    first-ever ingest that finds no matching files at all is *also* recorded
+    as 'error' (not 'ready') — see the zero-files check below — since there
+    is nothing servable yet.
+    """
+    from kb_repo_service import decrypt_token, descriptor_from_repo
+    from ingestion import ingest_kb
+
+    async with db.AsyncSessionLocal() as session:
+        row = await session.get(KbRepo, repo_id)
+        if row is None:
+            return  # deleted before ingestion started
+        had_content = bool(row.chunks and row.chunks > 0)
+        row.status = "ingesting"
+        row.status_detail = None
+        await session.commit()
+        token = decrypt_token(row.auth_token_encrypted) if row.auth_token_encrypted else None
+        descriptor = descriptor_from_repo(row, token=token)
+
+    try:
+        counts = await asyncio.to_thread(ingest_kb, descriptor)
+    except Exception as exc:
+        # Log the real error server-side only; only the friendly text is
+        # persisted/returned so nothing internal (token, stack trace) leaks.
+        log.error("[kb-repos] ingest failed for %s: %s — %s", repo_id, type(exc).__name__, exc)
+        friendly = _friendly_ingest_error(exc)
+        async with db.AsyncSessionLocal() as session:
+            row = await session.get(KbRepo, repo_id)
+            if row is not None:
+                row.status = "error"
+                row.status_detail = friendly
+                await session.commit()
+        return
+
+    new_documents = counts.get("documents") or 0
+    new_chunks = counts.get("chunks") or 0
+
+    async with db.AsyncSessionLocal() as session:
+        row = await session.get(KbRepo, repo_id)
+        if row is not None:
+            row.documents = new_documents
+            row.chunks = new_chunks
+            if new_documents == 0 and new_chunks == 0 and not had_content:
+                # Nothing changed this run AND nothing servable from before —
+                # a first add whose include patterns matched no files.
+                row.status = "error"
+                row.status_detail = _ZERO_FILES_DETAIL
+            else:
+                row.status = "ready"
+                row.status_detail = None
+            await session.commit()
+
+
+# asyncio only holds a *weak* reference to a bare create_task(), so a
+# long-running clone+embed could be garbage-collected mid-flight. Keep a strong
+# reference until the task finishes (discarded via the done callback).
+_repo_ingest_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_repo_ingest(repo_id: str) -> None:
+    task = asyncio.create_task(_run_repo_ingest(repo_id))
+    _repo_ingest_tasks.add(task)
+    task.add_done_callback(_repo_ingest_tasks.discard)
+
+
+@router.post("/kb-repos")
+async def create_kb_repo(body: KbRepoCreateRequest, session: AsyncSession = Depends(get_session)):
+    """Register a new Git-repo KB and kick off background ingestion."""
+    from kb_repo_service import descriptor_from_repo, encrypt_token, make_repo_id
+
+    is_private = body.visibility == "private"
+    token = body.auth_token.strip() if is_private and body.auth_token else None
+
+    row = KbRepo(
+        id=make_repo_id(body.name),
+        name=body.name,
+        git_url=body.git_url,
+        git_ref=body.git_ref,
+        include_globs=body.include_globs,
+        auth_token_encrypted=encrypt_token(token) if token else None,
+        status="queued",
+    )
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+
+    _kb_registry.register_descriptor(descriptor_from_repo(row, token=token))
+    _spawn_repo_ingest(row.id)
+
+    return _serialize_kb_repo(row)
+
+
+@router.get("/kb-repos")
+async def list_kb_repos(session: AsyncSession = Depends(get_session)):
+    rows = (await session.execute(select(KbRepo).order_by(KbRepo.created_at))).scalars().all()
+    return {"repos": [_serialize_kb_repo(r) for r in rows]}
+
+
+@router.get("/kb-repos/{repo_id}")
+async def get_kb_repo(repo_id: str, session: AsyncSession = Depends(get_session)):
+    row = await session.get(KbRepo, repo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown repo: {repo_id!r}"})
+    return _serialize_kb_repo(row)
+
+
+@router.post("/kb-repos/{repo_id}/resync")
+async def resync_kb_repo(repo_id: str, session: AsyncSession = Depends(get_session)):
+    row = await session.get(KbRepo, repo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown repo: {repo_id!r}"})
+    row.status = "queued"
+    row.status_detail = None
+    await session.commit()
+    await session.refresh(row)
+
+    _spawn_repo_ingest(repo_id)
+    return _serialize_kb_repo(row)
+
+
+@router.delete("/kb-repos/{repo_id}")
+async def delete_kb_repo(repo_id: str, session: AsyncSession = Depends(get_session)):
+    row = await session.get(KbRepo, repo_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"error": f"Unknown repo: {repo_id!r}"})
+
+    from vector_store import get_vector_store
+
+    await asyncio.to_thread(get_vector_store().delete_kb, repo_id)
+    _kb_registry.unregister_descriptor(repo_id)
+    await session.delete(row)
+    await session.commit()
+    return {"ok": True}
 
 
 # ── Entity (rule) detail — the rule card, for entity-capable KBs only ────────
@@ -542,16 +850,31 @@ def _build_rule_response(rule_id: str) -> dict:
 
 
 @router.get("/kb/{kb_id}/entity/{entity_id}")
-async def get_kb_entity(kb_id: str, entity_id: str):
-    """Full rule card for one entity. 404 for a KB without addressable
-    entities (e.g. a rag-only docs KB)."""
+async def get_kb_entity(
+    kb_id: str, entity_id: str, session: AsyncSession = Depends(get_session),
+):
+    """Full rule card for one entity. 409 for a repo KB still ingesting
+    (checked first — a clean "still preparing" beats a confusing 404, since a
+    repo KB is rag-only and would otherwise 404 on the entity-capability
+    check below regardless of ingestion state); 404 for a KB without
+    addressable entities (e.g. a rag-only docs KB)."""
+    block = await _repo_block_reason(session, kb_id)
+    if block is not None:
+        descriptor = _kb_registry.get_descriptor(kb_id)
+        _raise_repo_not_ready(kb_id, *block, descriptor.name if descriptor else None)
     _require_entity_kb(kb_id)
     return _build_rule_response(entity_id)
 
 
 @router.get("/kb/{kb_id}/entities/related/{entity_id}")
-async def get_kb_related_entities(kb_id: str, entity_id: str):
+async def get_kb_related_entities(
+    kb_id: str, entity_id: str, session: AsyncSession = Depends(get_session),
+):
     """Up to 4 rules sharing this rule's category or table."""
+    block = await _repo_block_reason(session, kb_id)
+    if block is not None:
+        descriptor = _kb_registry.get_descriptor(kb_id)
+        _raise_repo_not_ready(kb_id, *block, descriptor.name if descriptor else None)
     _require_entity_kb(kb_id)
     rules = get_rules()
     match = rules[rules["rule_id"].str.upper() == entity_id.upper()]
@@ -713,6 +1036,9 @@ async def _chat_handler(
         )
     try:
         provider = _resolve_chat_provider(kb_id_path, body.knowledge_base_id)
+        block = await _repo_block_reason(session, provider.kb.id)
+        if block is not None:
+            _raise_repo_not_ready(provider.kb.id, *block, provider.kb.name)
         custom_prompt = await cs.get_kb_prompt(session, provider.kb.id)
         history = _history_for_agent(body)
         result = handle_message(
@@ -805,11 +1131,16 @@ async def _chat_stream_handler(
         await session.commit()
 
     provider = _resolve_chat_provider(kb_id_path, body.knowledge_base_id, conversation_kb)
-    custom_prompt = await cs.get_kb_prompt(session, provider.kb.id)
     resolved_kb_id = provider.kb.id
 
     # Validate before starting the generator — once StreamingResponse begins,
     # the HTTP 200 header is already sent and we cannot return a 4xx.
+    block = await _repo_block_reason(session, resolved_kb_id)
+    if block is not None:
+        _raise_repo_not_ready(resolved_kb_id, *block, provider.kb.name)
+
+    custom_prompt = await cs.get_kb_prompt(session, resolved_kb_id)
+
     if len(message) > _MAX_MESSAGE_LEN:
         raise HTTPException(
             status_code=400,
