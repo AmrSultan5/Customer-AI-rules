@@ -278,6 +278,11 @@ def test_chat_stream_engineer_accepts_long_message(monkeypatch):
     import json as _json
     import main as main_module
 
+    # Engineer is admin-gated and disabled by default (analyst-only) — enable
+    # it so this ad-hoc (no conversation_id) engineer-mode stream isn't 403'd.
+    r = client.put("/admin/personas", headers=AUTH, json={"enabled": ["analyst", "engineer"]})
+    assert r.status_code == 200
+
     async def fake_stream(message, context_rule_id=None, history=None, mode="analyst"):
         assert mode == "engineer"
         yield f"data: {_json.dumps({'type': 'chunk', 'text': 'ok'})}\n\n"

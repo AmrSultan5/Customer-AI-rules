@@ -24,6 +24,16 @@ def _hdr(username: str) -> dict:
     return {**AUTH, "X-User": username}
 
 
+def _enable_all_personas():
+    """Enable engineer/pm (analyst is always on) for tests that exercise them
+    directly — the app defaults to analyst-only per the admin persona toggle."""
+    r = client.put(
+        "/admin/personas", headers=AUTH,
+        json={"enabled": ["analyst", "engineer", "pm"]},
+    )
+    assert r.status_code == 200
+
+
 @pytest.fixture(autouse=True)
 def _clean_db_and_limiter():
     """Fresh schema and reset rate-limit counters before each test."""
@@ -78,6 +88,7 @@ def test_missing_x_user_header_rejected():
 
 def test_conversation_crud_and_persona():
     # one conversation per persona, all under a project
+    _enable_all_personas()
     pid = client.post("/projects", headers=_hdr("alice"), json={"name": "P"}).json()["id"]
     ids = {}
     for persona in ("analyst", "engineer", "pm"):
@@ -165,6 +176,7 @@ def test_chat_stream_persists_and_titles_and_injects_instructions(monkeypatch):
     monkeypatch.setattr(openai_client, "generate_title_async", fake_title)
 
     # project with instructions + an engineer conversation in it
+    _enable_all_personas()
     pid = client.post(
         "/projects", headers=_hdr("dave"),
         json={"name": "P", "instructions": "Always mention DCC."},

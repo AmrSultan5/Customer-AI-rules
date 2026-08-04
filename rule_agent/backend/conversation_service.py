@@ -12,8 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Conversation, Message, Project, User
+from personas import PERSONA_IDS
 
-_VALID_PERSONAS = {"analyst", "engineer", "pm"}
+_VALID_PERSONAS = PERSONA_IDS
 _HISTORY_LIMIT = 20
 
 
@@ -99,12 +100,15 @@ async def list_conversations(
     user_id: int,
     project_id: int | None = None,
     persona: str | None = None,
+    enabled: set[str] | None = None,
 ) -> list[dict]:
     stmt = select(Conversation).where(Conversation.user_id == user_id)
     if project_id is not None:
         stmt = stmt.where(Conversation.project_id == project_id)
     if persona is not None:
         stmt = stmt.where(Conversation.persona == persona)
+    if enabled is not None:
+        stmt = stmt.where(Conversation.persona.in_(enabled))
     stmt = stmt.order_by(Conversation.updated_at.desc())
     rows = (await session.execute(stmt)).scalars().all()
 

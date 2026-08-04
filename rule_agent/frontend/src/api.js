@@ -94,13 +94,16 @@ export async function apiPostStream(path, body) {
 // ── Workspace helpers (users / projects / conversations) ─────────────────────
 // These return parsed JSON and throw on error, unlike the raw apiGet/apiPost.
 
-async function _json(path, { method = 'GET', body } = {}) {
+async function _json(path, { method = 'GET', body, headers } = {}) {
   const res = await apiFetch(path, {
     method,
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(headers ? { headers } : {}),
   })
   if (!res.ok) {
-    throw new Error(`API ${method} ${path} → ${res.status}`)
+    const err = new Error(`API ${method} ${path} → ${res.status}`)
+    err.status = res.status
+    throw err
   }
   if (res.status === 204) return null
   return res.json()
@@ -131,3 +134,19 @@ export const moveConversation = (id, projectId) =>
   _json(`/conversations/${id}`, { method: 'PATCH', body: { project_id: projectId } })
 export const deleteConversation = (id) =>
   _json(`/conversations/${id}`, { method: 'DELETE' })
+
+// ── Persona gating (admin-controlled) ─────────────────────────────────────
+
+export const listPersonas = () => _json('/personas')
+
+export const getAdminPersonas = (token) =>
+  _json('/admin/personas', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+
+export const updateAdminPersonas = (token, enabledIds) =>
+  _json('/admin/personas', {
+    method: 'PUT',
+    body: { enabled: enabledIds },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })

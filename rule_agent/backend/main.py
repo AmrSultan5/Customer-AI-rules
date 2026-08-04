@@ -56,6 +56,7 @@ import db
 import conversation_service as cs
 import openai_client
 from db import get_session
+from personas import PERSONAS, PersonaId, get_enabled_personas, set_enabled_personas
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -185,7 +186,7 @@ class ChatMessage(BaseModel):
 
 class FeedbackRequest(BaseModel):
     rating: Literal["up", "down"]
-    mode: Literal["analyst", "engineer", "pm"] = "analyst"
+    mode: PersonaId = "analyst"
     rule_id: Annotated[str | None, Field(max_length=64)] = None
 
 
@@ -200,7 +201,7 @@ class ChatRequest(BaseModel):
     # per-request in the endpoints based on mode.
     message: Annotated[str, Field(min_length=1, max_length=_MAX_PERSONA_MESSAGE_LEN)]
     context_rule_id: str | None = None
-    mode: Literal["analyst", "engineer", "pm"] = "analyst"
+    mode: PersonaId = "analyst"
     # Analyst-only opt-in: when true, off-catalog questions get a direct general
     # answer instead of being forced through rule search. Toggled by a button in
     # the UI; default false keeps the strict rules-only behavior.
@@ -233,7 +234,7 @@ class ProjectUpdateRequest(BaseModel):
 
 
 class ConversationCreateRequest(BaseModel):
-    persona: Literal["analyst", "engineer", "pm"] = "analyst"
+    persona: PersonaId = "analyst"
     project_id: int | None = None
     title: Annotated[str | None, Field(max_length=200)] = None
     context_rule_id: Annotated[str | None, Field(max_length=64)] = None
@@ -242,6 +243,10 @@ class ConversationCreateRequest(BaseModel):
 class ConversationUpdateRequest(BaseModel):
     title: Annotated[str | None, Field(max_length=200)] = None
     project_id: int | None = None
+
+
+class PersonaSettingsRequest(BaseModel):
+    enabled: list[PersonaId]
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────────────
@@ -586,6 +591,10 @@ async def chat_stream(
     conv_id = body.conversation_id
     user_id: int | None = None
     context_rule_id = body.context_rule_id
+    # Fetched once and reused below for both the conversation-bound and the
+    # ad-hoc (no conversation_id) persona checks, so a disabled persona is
+    # rejected on every path into this endpoint — not just conversation-bound.
+    enabled_personas = await get_enabled_personas(session)
 
     if conv_id is not None:
         if not x_user or not x_user.strip():
@@ -599,6 +608,13 @@ async def chat_stream(
         if conv is None:
             raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
         mode = conv.persona  # the conversation's persona drives the answer flow
+        # Check BEFORE persisting the user turn below, so a rejected request
+        # never leaves an orphan user message in the DB.
+        if mode not in enabled_personas:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "That assistant mode is not currently available."},
+            )
         context_rule_id = body.context_rule_id or conv.context_rule_id
         db_hist = await cs.recent_history(session, conv_id)
         if db_hist:
@@ -617,6 +633,15 @@ async def chat_stream(
         raise HTTPException(
             status_code=400,
             detail={"detail": f"Message exceeds maximum length of {_MAX_MESSAGE_LEN} characters."},
+        )
+    # Ad-hoc requests (no conversation_id) resolve mode straight from body.mode
+    # and were not checked above — reject a disabled persona here too. This is
+    # a cheap re-check (no extra query) when conv_id is set, since mode was
+    # already validated against the same enabled_personas set above.
+    if mode not in enabled_personas:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "That assistant mode is not currently available."},
         )
 
     user_message = body.message
@@ -751,6 +776,17 @@ def get_rule_tree():
     }
 
 
+def _personas_payload(enabled: set[str]) -> dict:
+    return {"personas": [{**p, "enabled": p["id"] in enabled} for p in PERSONAS]}
+
+
+@router.get("/personas")
+async def get_personas(session: AsyncSession = Depends(get_session)):
+    """List all personas with their current admin-enabled state."""
+    enabled = set(await get_enabled_personas(session))
+    return _personas_payload(enabled)
+
+
 # ── Admin router ───────────────────────────────────────────────────────────────
 
 admin_router = APIRouter(prefix="/admin", dependencies=[Depends(_check_admin_auth)])
@@ -791,6 +827,22 @@ async def admin_probe_llm():
         return {"llm": "ok"}
     except Exception as exc:
         return JSONResponse(status_code=503, content={"llm": "degraded", "llm_error": type(exc).__name__})
+
+
+@admin_router.get("/personas")
+async def admin_get_personas(session: AsyncSession = Depends(get_session)):
+    """Admin view of persona enablement — same shape as GET /personas."""
+    enabled = set(await get_enabled_personas(session))
+    return _personas_payload(enabled)
+
+
+@admin_router.put("/personas")
+async def admin_put_personas(
+    body: PersonaSettingsRequest, session: AsyncSession = Depends(get_session)
+):
+    """Set which personas are enabled. `analyst` can never be disabled."""
+    enabled = set(await set_enabled_personas(session, body.enabled))
+    return _personas_payload(enabled)
 
 
 # ── Chat workspace router (users, projects, conversations) ───────────────────
@@ -853,7 +905,8 @@ async def get_conversations(
     user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    return await cs.list_conversations(session, user.id, project_id, persona)
+    enabled = set(await get_enabled_personas(session))
+    return await cs.list_conversations(session, user.id, project_id, persona, enabled=enabled)
 
 
 @workspace_router.post("/conversations")
@@ -864,6 +917,12 @@ async def post_conversation(
 ):
     if body.project_id is not None and await cs.get_project(session, body.project_id, user.id) is None:
         raise HTTPException(status_code=404, detail={"error": "Project not found."})
+    enabled_personas = await get_enabled_personas(session)
+    if body.persona not in enabled_personas:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "That assistant mode is not currently available."},
+        )
     return await cs.create_conversation(
         session, user.id, persona=body.persona, project_id=body.project_id,
         title=body.title, context_rule_id=body.context_rule_id,
@@ -878,6 +937,11 @@ async def get_conversation_detail(
 ):
     result = await cs.get_conversation_with_messages(session, conversation_id, user.id)
     if result is None:
+        raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
+    enabled_personas = await get_enabled_personas(session)
+    if result["persona"] not in enabled_personas:
+        # Hidden, not deleted: a stale deep link to a disabled persona's
+        # conversation must not be able to reopen it.
         raise HTTPException(status_code=404, detail={"error": "Conversation not found."})
     return result
 

@@ -7,26 +7,26 @@ import {
   listConversations, createConversation, renameConversation,
   moveConversation, deleteConversation,
 } from '../api.js'
+import { PERSONAS } from '../personas.js'
 
-const PERSONAS = [
-  { id: 'analyst', label: 'Analyst', short: 'A' },
-  { id: 'engineer', label: 'Engineer', short: 'E' },
-  { id: 'pm', label: 'PM', short: 'PM' },
-]
-
-const personaLabel = (id) => PERSONAS.find(p => p.id === id)?.label ?? id
+// This file previously hardcoded its own PERSONAS list with abbreviated labels
+// ("Analyst"/"Engineer"/"PM") — that's the shared constant's `shortLabel`
+// field, NOT `label` (which is the full "Data Engineer"/"Project Manager" used
+// by ChatBox). Using shortLabel here keeps every visible string byte-identical
+// to what this file rendered before centralizing.
+const personaLabel = (id) => PERSONAS.find(p => p.id === id)?.shortLabel ?? id
 
 // Titles are plain text in the sidebar; strip markdown formatting the title
 // generator sometimes emits (and that older stored titles still contain).
 // Underscores stay — rule IDs like RCCOMP_103.1 legitimately contain them.
 const cleanTitle = (t) => (t ?? '').replace(/[*`#]+/g, '').trim() || 'New chat'
 
-function PersonaPicker({ onPick, onCancel }) {
+function PersonaPicker({ personas, onPick, onCancel }) {
   return (
     <div className="persona-picker">
-      {PERSONAS.map(p => (
+      {personas.map(p => (
         <button key={p.id} className="persona-pick-btn" onClick={() => onPick(p.id)}>
-          {p.label}
+          {p.shortLabel}
         </button>
       ))}
       <button className="persona-pick-cancel" onClick={onCancel} aria-label="Cancel">×</button>
@@ -168,7 +168,13 @@ export default function ConversationSidebar({
   onSelectConversation,
   reloadSignal,
   open = true,
+  enabledPersonas = ['analyst'],
 }) {
+  const enabledPersonaList = PERSONAS.filter(p => enabledPersonas.includes(p.id))
+  // When only one persona is enabled, skip the picker entirely — "+ New chat"
+  // creates a conversation directly in that persona.
+  const soleEnabled = enabledPersonas.length === 1 ? enabledPersonas[0] : null
+
   const [projects, setProjects] = useState([])
   const [conversations, setConversations] = useState([])
   const [newProjectOpen, setNewProjectOpen] = useState(false)
@@ -230,8 +236,10 @@ export default function ConversationSidebar({
       </div>
 
       <div className="conv-sidebar-actions">
-        {pickerFor === 'loose' ? (
-          <PersonaPicker onPick={(p) => startChat(p, null)} onCancel={() => setPickerFor(undefined)} />
+        {soleEnabled ? (
+          <button className="conv-new-btn" onClick={() => startChat(soleEnabled, null)}>+ New chat</button>
+        ) : pickerFor === 'loose' ? (
+          <PersonaPicker personas={enabledPersonaList} onPick={(p) => startChat(p, null)} onCancel={() => setPickerFor(undefined)} />
         ) : (
           <button className="conv-new-btn" onClick={() => setPickerFor('loose')}>+ New chat</button>
         )}
@@ -293,8 +301,10 @@ export default function ConversationSidebar({
                       onChanged={reload}
                     />
                   ))}
-                  {pickerFor === p.id ? (
-                    <PersonaPicker onPick={(persona) => startChat(persona, p.id)} onCancel={() => setPickerFor(undefined)} />
+                  {soleEnabled ? (
+                    <button className="conv-add-in-project" onClick={() => startChat(soleEnabled, p.id)}>+ chat</button>
+                  ) : pickerFor === p.id ? (
+                    <PersonaPicker personas={enabledPersonaList} onPick={(persona) => startChat(persona, p.id)} onCancel={() => setPickerFor(undefined)} />
                   ) : (
                     <button className="conv-add-in-project" onClick={() => setPickerFor(p.id)}>+ chat</button>
                   )}

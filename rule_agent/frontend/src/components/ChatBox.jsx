@@ -6,6 +6,7 @@ import YamlValidator from './YamlValidator.jsx'
 import RichInput from './RichInput.jsx'
 import { apiGet, apiPost, apiPostStream, getConversation, createConversation } from '../api.js'
 import { copyText, buildDatabricksNotebook, downloadFile, markdownToJira } from '../utils/exporters.js'
+import { PERSONAS } from '../personas.js'
 
 const MODE_STORAGE_KEY = 'rule_agent_chat_mode'
 const GENERAL_STORAGE_KEY = 'rule_agent_general_mode'
@@ -44,11 +45,10 @@ function mapConversationMessages(detail) {
   }))
 }
 
-const MODES = [
-  { id: 'analyst', label: 'Analyst' },
-  { id: 'engineer', label: 'Data Engineer' },
-  { id: 'pm', label: 'Project Manager' },
-]
+// Full persona metadata lives in ../personas.js (shared with the sidebar and
+// admin dashboard). MODES keeps this file's original name/shape so the rest
+// of this file (mode toggle JSX, getStoredMode) is unchanged.
+const MODES = PERSONAS
 
 function getStoredMode() {
   try {
@@ -331,6 +331,11 @@ export default function ChatBox({
   onConversationCreated,
   onConversationUpdated,
   onStartNewChat,
+  // null = App.jsx hasn't heard back from /personas yet. Kept distinct from a
+  // *resolved* ['analyst'] so the reconcile effect below never mistakes "not
+  // loaded yet" for "only analyst is enabled" and wipes a stored engineer/pm
+  // preference that turns out to be valid once the real list arrives.
+  enabledPersonas = null,
 }) {
   const [messages, setMessages] = useState(() => initialMessagesFor(getStoredMode()))
   const [loading, setLoading]       = useState(false)
@@ -354,6 +359,24 @@ export default function ChatBox({
   useEffect(() => {
     if (conversationId != null && conversationPersona) setMode(conversationPersona)
   }, [conversationId, conversationPersona])
+
+  // Reconcile the current mode against the admin-enabled persona list.
+  // enabledPersonas arrives asynchronously (fetched once in App.jsx), so a
+  // user whose localStorage/mode points at a persona that just got disabled
+  // must be dropped back to 'analyst'. Skipped while enabledPersonas is still
+  // null (not yet loaded) and whenever an active conversation is forcing its
+  // own persona (the effect above owns that case) — this keeps the two
+  // effects from fighting each other. Depends only on enabledPersonas, not on
+  // mode, so it never re-fires from its own setMode call (no loop).
+  useEffect(() => {
+    if (enabledPersonas == null) return
+    if (conversationId != null) return
+    if (enabledPersonas.includes(modeRef.current)) return
+    setMode('analyst')
+    try { localStorage.setItem(MODE_STORAGE_KEY, 'analyst') } catch {}
+    loadedConvRef.current = null
+    setMessages(initialMessagesFor('analyst'))
+  }, [enabledPersonas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load messages when the active conversation changes (skip if ChatBox just
   // created it during send — loadedConvRef already points at it).
@@ -400,14 +423,17 @@ export default function ChatBox({
     slider.style.transitionDuration = ''
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Slide to new position on mode change (after paint so CSS transition fires)
+  // Slide to new position on mode change (after paint so CSS transition fires).
+  // Also re-syncs when the number of visible modes changes (e.g. the toggle
+  // reappears after enabledPersonas grows back past 1), since the toggle's
+  // buttons remount in that case and the slider needs to re-measure them.
   useEffect(() => {
     const slider = sliderRef.current
     const btn = modeBtnRefs.current[mode]
     if (!slider || !btn) return
     slider.style.left  = `${btn.offsetLeft}px`
     slider.style.width = `${btn.offsetWidth}px`
-  }, [mode])
+  }, [mode, (enabledPersonas ?? ['analyst']).length])
 
   useEffect(() => {
     if (prefill) {
@@ -621,6 +647,10 @@ export default function ChatBox({
   }
 
   const mdComponents = makeMarkdownComponents(handleRuleLinkClick)
+  // Before /personas resolves (enabledPersonas === null), render as analyst-only —
+  // consistent with the fail-closed default and with the reconcile effect above,
+  // which also treats null as "not yet known" rather than "nothing enabled".
+  const visibleModes = MODES.filter(m => (enabledPersonas ?? ['analyst']).includes(m.id))
   const userMsgCount  = messages.filter(m => m.role === 'user').length
   const hasHistory    = messages.length > 1
   const isFreshChat   =
@@ -652,24 +682,26 @@ export default function ChatBox({
           )}
         </div>
 
-        <div className="chat-header-center">
-          <div className="mode-toggle" data-tour="modes" role="tablist" aria-label="Assistant mode">
-            <div className="mode-toggle-slider" ref={sliderRef} aria-hidden="true" />
-            {MODES.map(m => (
-              <button
-                key={m.id}
-                ref={el => { modeBtnRefs.current[m.id] = el }}
-                role="tab"
-                aria-selected={mode === m.id}
-                className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}
-                onClick={() => switchMode(m.id)}
-                disabled={loading}
-              >
-                {m.label}
-              </button>
-            ))}
+        {visibleModes.length > 1 && (
+          <div className="chat-header-center">
+            <div className="mode-toggle" data-tour="modes" role="tablist" aria-label="Assistant mode">
+              <div className="mode-toggle-slider" ref={sliderRef} aria-hidden="true" />
+              {visibleModes.map(m => (
+                <button
+                  key={m.id}
+                  ref={el => { modeBtnRefs.current[m.id] = el }}
+                  role="tab"
+                  aria-selected={mode === m.id}
+                  className={`mode-toggle-btn${mode === m.id ? ' active' : ''}`}
+                  onClick={() => switchMode(m.id)}
+                  disabled={loading}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="chat-header-right">
           {hasHistory ? (
@@ -685,6 +717,10 @@ export default function ChatBox({
               <TrashIcon />New chat
             </button>
           )}
+          {/* General Q&A toggle — hidden for now. The backing state
+              (generalMode / toggleGeneralMode) and the `general` flag sent to
+              /chat/stream are left intact, so restoring this is just a matter
+              of uncommenting the block below.
           {mode === 'analyst' && (
             <Tooltip
               content={
@@ -704,6 +740,7 @@ export default function ChatBox({
               </button>
             </Tooltip>
           )}
+          */}
           {mode === 'engineer' && (
             <Tooltip content="Check an edited pipeline YAML against the repository before committing">
               <button className="header-action-btn" onClick={() => setShowValidator(true)}>

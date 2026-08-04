@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { apiFetch } from '../api.js'
+import { apiFetch, getAdminPersonas, updateAdminPersonas } from '../api.js'
+import { PERSONAS } from '../personas.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 export const RefreshIcon = ({ spinning }) => (
@@ -152,11 +153,10 @@ function prettyIntent(intent) {
   return String(intent).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-const MODE_LABELS = {
-  analyst:  'Analyst',
-  engineer: 'Data Engineer',
-  pm:       'Project Manager',
-}
+// Derived from the shared persona list (../personas.js) so labels stay in sync
+// with the rest of the app. Values are unchanged from the previous literal
+// ("Analyst" / "Data Engineer" / "Project Manager") — used only in FeedbackByMode.
+const MODE_LABELS = Object.fromEntries(PERSONAS.map(p => [p.id, p.label]))
 
 const CALL_TYPE_LABELS = {
   explain_rule: 'Rule Explanation',
@@ -356,6 +356,12 @@ export default function AdminDashboard({ token, onRefresh }) {
   const [llmStatus,   setLlmStatus]   = useState(null) // { ok, text }
   const loadingRef = useRef(false)
 
+  // ── Assistant Personas card ──────────────────────────────────────────────
+  const [personas,        setPersonas]        = useState(null) // [{id,label,description,enabled}]
+  const [personasLoading, setPersonasLoading] = useState(true)
+  const [personaSaving,   setPersonaSaving]   = useState(false)
+  const [personaStatus,   setPersonaStatus]   = useState(null) // { ok, text }
+
   // Fetch rule count from the public health endpoint right away
   useEffect(() => {
     apiFetch('/health')
@@ -404,6 +410,47 @@ export default function AdminDashboard({ token, onRefresh }) {
     }, 60_000)
     return () => clearInterval(id)
   }, [load])
+
+  // Separate from load()/analytics — a persona-fetch failure shouldn't block
+  // the rest of the dashboard from rendering.
+  const loadPersonas = useCallback(async () => {
+    setPersonasLoading(true)
+    try {
+      const res = await getAdminPersonas(token)
+      setPersonas(res.personas)
+    } catch (e) {
+      if (e.status === 401) { onRefresh?.(); return }
+      // leave personas null — the card shows its own inline error state
+    } finally {
+      setPersonasLoading(false)
+    }
+  }, [token, onRefresh])
+
+  useEffect(() => { loadPersonas() }, [loadPersonas])
+
+  async function togglePersona(id, nextEnabled) {
+    if (personaSaving || !personas) return
+    const prevPersonas = personas
+    const optimistic = personas.map(p => p.id === id ? { ...p, enabled: nextEnabled } : p)
+    setPersonas(optimistic)
+    setPersonaSaving(true)
+    setPersonaStatus(null)
+    try {
+      const enabledIds = optimistic.filter(p => p.enabled).map(p => p.id)
+      const res = await updateAdminPersonas(token, enabledIds)
+      // The server force-enables analyst and normalizes the set — always trust
+      // its response over our optimistic guess.
+      setPersonas(res.personas)
+      setPersonaStatus({ ok: true, text: 'Saved' })
+    } catch (e) {
+      if (e.status === 401) { onRefresh?.(); return }
+      setPersonas(prevPersonas)
+      setPersonaStatus({ ok: false, text: 'Could not save — try again.' })
+    } finally {
+      setPersonaSaving(false)
+      setTimeout(() => setPersonaStatus(null), 8000)
+    }
+  }
 
   async function checkLlm() {
     if (llmChecking) return
@@ -544,6 +591,50 @@ export default function AdminDashboard({ token, onRefresh }) {
               value={loading ? undefined : (fbTotal ? `${Math.round((fb.up / fbTotal) * 100)}%` : '—')}
               sub={loading ? '' : (fbTotal ? `${fb.up} up · ${fb.down} down` : 'No votes yet')}
             />
+          </section>
+
+          {/* Assistant Personas — admin on/off switches */}
+          <section className="adm-card adm-persona-card">
+            <div className="adm-card-header">
+              <span className="adm-card-title">Assistant Personas</span>
+              {personaStatus && (
+                <span className={`adm-status ${personaStatus.ok ? 'ok' : 'fail'}`}>{personaStatus.text}</span>
+              )}
+            </div>
+            {personasLoading ? (
+              <SkeletonRows n={3} widths={[100, 100, 100]} />
+            ) : !personas ? (
+              <p className="adm-persona-error">Could not load persona settings.</p>
+            ) : (
+              <ul className="adm-persona-list">
+                {personas.map(p => {
+                  const meta = PERSONAS.find(m => m.id === p.id)
+                  const locked = p.id === 'analyst'
+                  return (
+                    <li key={p.id} className="adm-persona-row">
+                      <div className="adm-persona-info">
+                        <span className="adm-persona-label">{meta?.label ?? p.label}</span>
+                        <span className="adm-persona-desc">{p.description}</span>
+                      </div>
+                      <div className="adm-persona-control">
+                        {locked && <span className="adm-persona-hint">Always on</span>}
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={p.enabled}
+                          aria-label={`${meta?.label ?? p.label} ${p.enabled ? 'enabled' : 'disabled'}`}
+                          className={`adm-switch${p.enabled ? ' on' : ''}`}
+                          disabled={locked || personaSaving}
+                          onClick={() => togglePersona(p.id, !p.enabled)}
+                        >
+                          <span className="adm-switch-knob" />
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </section>
 
           {/* Main grid */}

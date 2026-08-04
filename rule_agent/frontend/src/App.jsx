@@ -8,7 +8,7 @@ import Tooltip from './components/Tooltip.jsx'
 import Onboarding from './components/Onboarding.jsx'
 import ConversationSidebar from './components/ConversationSidebar.jsx'
 import Login from './components/Login.jsx'
-import { apiGet, apiFetch, getUsername, setUsername } from './api.js'
+import { apiGet, apiFetch, getUsername, setUsername, listPersonas } from './api.js'
 
 const RULE_HISTORY_KEY = 'rule_agent_rule_history'
 const PINNED_RULES_KEY = 'pinned_rules'
@@ -155,6 +155,16 @@ export default function App() {
   const [rulesReady, setRulesReady] = useState(false)
   const [showTour, setShowTour] = useState(false)
 
+  // ── Admin-controlled persona gating ──────────────────────────────────────
+  // null = not yet resolved (kept distinct from a *resolved* ['analyst'] so
+  // ChatBox's mode-reconcile effect — which resets a stored engineer/pm
+  // preference back to analyst when its persona isn't enabled — never fires
+  // against this transient default and wipes a preference that turns out to
+  // be valid once the real list arrives). FAIL CLOSED: any fetch error
+  // resolves to ['analyst'] so a backend hiccup never exposes a persona the
+  // admin switched off.
+  const [enabledPersonas, setEnabledPersonas] = useState(null)
+
   // ── Workspace (username + active conversation) ──────────────────────────────
   const [username, setUsernameState] = useState(() => getUsername())
   const [activeConversation, setActiveConversation] = useState(null) // {id, persona, project_id} | null
@@ -189,6 +199,16 @@ export default function App() {
       .then(d => { if (typeof d.rules_loaded === 'number') setRulesLoaded(d.rules_loaded) })
       .catch(() => {})
       .finally(() => setRulesReady(true))
+  }, [])
+
+  // Fetch which personas are admin-enabled (public endpoint, no auth needed).
+  useEffect(() => {
+    listPersonas()
+      .then(d => {
+        const ids = (d?.personas ?? []).filter(p => p.enabled).map(p => p.id)
+        setEnabledPersonas(ids.length ? ids : ['analyst'])
+      })
+      .catch(() => setEnabledPersonas(['analyst'])) // FAIL CLOSED
   }, [])
 
   useEffect(() => {
@@ -386,6 +406,7 @@ export default function App() {
           onSelectConversation={handleSelectConversation}
           reloadSignal={convReload}
           open={convSidebarOpen}
+          enabledPersonas={enabledPersonas ?? ['analyst']}
         />
         <SidebarTabToggle open={convSidebarOpen} onClick={() => setConvSidebarOpen(v => !v)} />
 
@@ -430,6 +451,9 @@ export default function App() {
             onConversationCreated={(conv) => { handleSelectConversation(conv); bumpConvReload() }}
             onConversationUpdated={bumpConvReload}
             onStartNewChat={() => setActiveConversation(null)}
+            // Deliberately raw (may be null before /personas resolves) — ChatBox
+            // treats null as "not yet loaded" and skips reconciling against it.
+            enabledPersonas={enabledPersonas}
           />
         </main>
 

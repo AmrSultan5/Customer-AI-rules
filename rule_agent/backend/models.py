@@ -120,6 +120,21 @@ class Message(Base):
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
 
+# ── App settings (admin-controlled feature toggles) ──────────────────────────
+
+
+class AppSetting(Base):
+    """Generic key/value settings row, e.g. {"ids": [...]} for enabled_personas."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 # ── Analytics (migrated from the old SQLite analytics.db) ────────────────────
 
 
