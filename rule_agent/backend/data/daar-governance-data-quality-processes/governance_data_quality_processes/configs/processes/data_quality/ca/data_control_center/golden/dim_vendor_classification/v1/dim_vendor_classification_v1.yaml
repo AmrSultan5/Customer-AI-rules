@@ -1,0 +1,148 @@
+transform:
+  name: dim_vendor_classification
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: select
+    name: select_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_account_group_code: vendor_account_group_code
+        vendor_account_group_name: vendor_account_group_name
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: select
+    name: select_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        company_name: company_name
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_purchasing_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+
+  - kind: select
+    name: select_dm_vendor_purchasing_organization
+    params:
+      columns:
+        vendor_code: vendor_code
+        purchasing_organization_code: purchasing_organization_code
+        purchasing_organization_name: purchasing_organization_name
+        preferred_vendor: po_preferred_vendor
+      distinct: true
+
+  - kind: join
+    name: join_vendor
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_purchasing_organization
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_dim_product_classification_expression
+    params:
+      - column: preferred_vendor
+        expression: if(isnull(po_preferred_vendor) or po_preferred_vendor= '', '0', '1')
+      - column: vend_class_id
+        expression: MD5(
+                    ifnull(vendor_account_group_code, 'null') ||
+                    ifnull(purchasing_organization_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    preferred_vendor
+                    )
+      - column: account_group
+        expression: vendor_account_group_code || ' - ' || vendor_account_group_name
+      - column: purchasing_organization
+        expression: purchasing_organization_code || ' - ' || purchasing_organization_name
+      - column: company
+        expression: company_code || ' - ' || company_name
+
+  - kind: select
+    name: select_dm_product_classification
+    params:
+      columns:
+        vendor_account_group_code: account_group_code
+        vendor_account_group_name: account_group_name
+        account_group: account_group
+        vend_class_id: vend_class_id
+        purchasing_organization_code: purchasing_organization_code
+        purchasing_organization_name: purchasing_organization_name
+        purchasing_organization: purchasing_organization
+        company_code: company_code
+        company_name: company_name
+        company: company
+        preferred_vendor: preferred_vendor
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dim_vendor_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_vendor_classification
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: incremental

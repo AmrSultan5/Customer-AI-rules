@@ -1,0 +1,654 @@
+transform:
+  name: global_customer_trade_name_consistency
+  operations:
+
+#du
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: filter
+    name: filter_dm_customer_c1
+    context_name: read_dm_customer
+    params:
+      - condition:
+            account_group_code like '90%'
+            AND division_code = '01'
+            AND distribution_channel_code = '01' 
+            AND order_block_code NOT IN ('S1', 'E', 'G', 'R', 'U', 'S', 
+            'S3', 'S4', 'SP', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9')
+            AND is_l7_customer_in_scope = '1'
+            AND global_customer_code IN ('9007699', '9001157', '9000896', '9000017', 
+            '9000010', '9000013', '9001331', '9001332', '9001333', 
+            '9000981', '9000902', '9001202', '9001394', 
+            '9001351', '9001503', '9000030', '9000031', 
+            '9001176', '9001372', '9000004', '9000034', 
+            '9000901', '9000037', '9000040', '9000042', 
+            '9002255', '9001399', '9000045', '9001178', 
+            '9006012', '9000018', '9001408', '9001927', 
+            '9000023', '9001337', '9005552', '9005555', 
+            '9001359', '9000007', '9007123')
+
+  - kind: select
+    name: select_dm_customer_c1
+    context_name: filter_dm_customer_c1
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        account_group_code: account_group_code
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        country_code: country_code
+        global_customer_code: global_customer_code
+        global_customer_standard_name: global_customer_standard_name
+        is_global_customer_code_with_standard: is_global_customer_code_with_standard
+        trading_group_code: trading_group_code
+        trading_group_standard_name: trading_group_standard_name
+        is_trading_group_code_with_standard: is_trading_group_code_with_standard
+        sales_org_code: sales_org_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_dm_customer_c2
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c2
+        customer_name: customer_name_c2
+        global_customer_code: global_customer_code_c2
+        global_customer_standard_name: global_customer_standard_name_c2
+        is_global_customer_code_with_standard: is_global_customer_code_with_standard_c2
+        trading_group_code: trading_group_code_c2
+        trading_group_standard_name: trading_group_standard_name_c2
+        is_trading_group_code_with_standard: is_trading_group_code_with_standard_c2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c3
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c3
+        customer_name: customer_name_c3
+        global_customer_code: global_customer_code_c3
+        global_customer_standard_name: global_customer_standard_name_c3
+        is_global_customer_code_with_standard: is_global_customer_code_with_standard_c3
+        trading_group_code: trading_group_code_c3
+        trading_group_standard_name: trading_group_standard_name_c3
+        is_trading_group_code_with_standard: is_trading_group_code_with_standard_c3
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_cust_hierarchy
+    context_name: read_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l6_customer_code: l6_customer_code
+        l5_customer_code: l5_customer_code
+        l7_sales_org_code: l7_sales_org_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_du_global_customer_trade_name_consistency
+    context_name: select_dm_customer_c1
+    params:
+      - other:
+          select_dm_cust_hierarchy
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sales_org_code: l7_sales_org_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c2
+        how:
+          inner
+        columns:
+          l6_customer_code: customer_code_c2
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c3
+        how:
+          left
+        columns:
+          l5_customer_code: customer_code_c3
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_du_global_customer_trade_name_consistency
+    context_name: join_du_global_customer_trade_name_consistency
+    params:
+      - column: sales_organization
+        expression: sales_org_code
+      - column: order_block
+        expression: order_block_code
+      - column: order_block_description
+        expression: order_block_name
+      - column: business_partner
+        expression: l7_customer_code
+      - column: business_partner_name
+        expression: customer_name
+      - column: customer_gkc
+        expression: global_customer_code
+      - column: customer_gkc_description
+        expression: global_customer_standard_name
+      - column: is_customer_gkc_standard
+        expression: is_global_customer_code_with_standard
+      - column: customer_tn
+        expression: trading_group_code
+      - column: customer_tn_description
+        expression: trading_group_standard_name
+      - column: is_customer_tn_standard
+        expression: is_trading_group_code_with_standard
+      - column: cpl_division
+        expression: customer_code_c2
+      - column: cpl_division_name
+        expression: customer_name_c2
+      - column: is_cpl_division_gkc_standard
+        expression: is_global_customer_code_with_standard_c2
+      - column: is_cpl_division_tn_standard
+        expression: is_trading_group_code_with_standard_c2
+      - column: cpl
+        expression: customer_code_c3
+      - column: cpl_name
+        expression: customer_name_c3
+      - column: is_cpl_gkc_standard
+        expression: is_global_customer_code_with_standard_c3
+      - column: is_cpl_tn_standard
+        expression: is_trading_group_code_with_standard_c3
+      - column: cpl_division_gkc
+        expression: if(global_customer_code_c2 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    global_customer_code_c2, '')
+      - column: cpl_division_gkc_description
+        expression: if(global_customer_code_c2 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    global_customer_standard_name_c2, '')
+      - column: cpl_division_tn
+        expression: if(global_customer_code_c2 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    trading_group_code_c2, '')
+      - column: cpl_division_tn_description
+        expression: if(global_customer_code_c2 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    trading_group_standard_name_c2, '')
+      - column: cpl_gkc
+        expression: if(global_customer_code_c3 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    global_customer_code_c3, '')
+      - column: cpl_gkc_description
+        expression: if(global_customer_code_c3 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    global_customer_standard_name_c3, '')
+      - column: cpl_tn
+        expression: if(global_customer_code_c3 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    trading_group_code_c3, '')
+      - column: cpl_tn_description
+        expression: if(global_customer_code_c3 in ('9007699', '9001157', '9000896', '9000017', 
+                    '9000010', '9000013', '9001331', '9001332', '9001333', 
+                    '9000981', '9000902', '9001202', '9001394', '9001351', 
+                    '9001503', '9000030', '9000031', '9001176', '9001372', 
+                    '9000004', '9000034', '9000901', '9000037', '9000040', 
+                    '9000042', '9002255', '9001399', '9000045', '9001178', 
+                    '9006012', '9000018', '9001408', '9001927', '9000023', 
+                    '9001337', '9005552', '9005555', '9001359', '9000007', '9007123'),
+                    trading_group_standard_name_c3, '')
+
+  - kind: group
+    name: group_cpl_division_tn
+    params:
+      - aggs:
+          cpl_division_tn: count
+        by:
+        - cpl_gkc
+        - sap_cluster
+
+  - kind: join
+    name: join_count_cpl_division_tn
+    context_name: add_du_global_customer_trade_name_consistency
+    params:
+      - other:
+          group_cpl_division_tn
+        how:
+          left
+        columns:
+          cpl_gkc: cpl_gkc
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_du_global_customer_trade_name_consistency_output
+    context_name: join_count_cpl_division_tn
+    params:
+      - column: output_gkc
+        expression: if(isnull(customer_gkc) or isnull(cpl_division_gkc)
+                    or isnull(cpl_gkc),
+                    '0',
+                    if(customer_gkc = cpl_division_gkc
+                    and cpl_division_gkc = cpl_gkc, '1', '0'))
+      - column: output_tn
+        expression: if(customer_tn = cpl_division_tn
+                    and cpl_division_tn = cpl_tn,
+                    '1',
+                    if(customer_tn = cpl_division_tn
+                    and output_gkc = '1' 
+                    and is_customer_tn_standard= '1'
+                    and is_customer_gkc_standard = '1'
+                    and isnull(cpl_tn)
+                    and count_cpl_division_tn > 1, '1', 
+                    if(isnull(customer_tn) 
+                    or isnull(cpl_division_tn)
+                    or isnull(cpl_tn), '0', '0')))
+      - column: output_link_gkc_tn
+        expression: if(is_cpl_tn_standard = '1'
+                    and is_cpl_gkc_standard = '1'
+                    and is_cpl_division_tn_standard = '1'
+                    and is_cpl_division_gkc_standard = '1'
+                    and is_customer_tn_standard = '1'
+                    and is_customer_gkc_standard = '1', '1', 
+                    if(output_tn = '1' 
+                    and is_cpl_division_tn_standard = '1'
+                    and is_cpl_division_gkc_standard = '1'
+                    and is_customer_tn_standard = '1' 
+                    and is_customer_gkc_standard = '1', '1', '0'))
+
+  - kind: select
+    name: select_du_global_customer_trade_name_consistency
+    context_name: add_du_global_customer_trade_name_consistency_output
+    params:
+      columns:
+        sales_organization: sales_organization
+        country_code: country_code
+        order_block: order_block
+        order_block_description: order_block_description
+        business_partner: business_partner
+        business_partner_name: business_partner_name
+        customer_gkc: customer_gkc
+        customer_gkc_description: customer_gkc_description
+        is_customer_gkc_standard: is_customer_gkc_standard
+        customer_tn: customer_tn
+        customer_tn_description: customer_tn_description
+        is_customer_tn_standard: is_customer_tn_standard
+        cpl_division: cpl_division
+        cpl_division_name: cpl_division_name
+        cpl_division_gkc: cpl_division_gkc
+        cpl_division_gkc_description: cpl_division_gkc_description
+        is_cpl_division_gkc_standard: is_cpl_division_gkc_standard
+        cpl_division_tn: cpl_division_tn
+        cpl_division_tn_description: cpl_division_tn_description
+        is_cpl_division_tn_standard: is_cpl_division_tn_standard
+        cpl: cpl
+        cpl_name: cpl_name
+        cpl_gkc: cpl_gkc
+        cpl_gkc_description: cpl_gkc_description
+        is_cpl_gkc_standard: is_cpl_gkc_standard
+        cpl_tn: cpl_tn
+        cpl_tn_description: cpl_tn_description
+        is_cpl_tn_standard: is_cpl_tn_standard
+        sap_cluster: sap_cluster
+        output_gkc: output_gkc
+        output_tn: output_tn
+        output_link_gkc_tn: output_link_gkc_tn
+      distinct: true
+
+#detailed
+  - kind: add
+    name: add_global_key
+    params:
+      - column: quality_category
+        expression: '''Global Key Customer'''
+      - column: quality_check_flag
+        expression: output_gkc
+      - column: dq_message_output
+        expression: IF(output_gkc='1', 'OK','GKC is missing or inconsistent')
+
+  - kind: add
+    name: add_trade_name
+    context_name: select_du_global_customer_trade_name_consistency
+    params:
+      - column: quality_category
+        expression: '''Trade Name'''
+      - column: quality_check_flag
+        expression: output_tn
+      - column: dq_message_output
+        expression: IF(output_tn= '1','OK','TN is missing or inconsistent')
+
+  - kind: add
+    name: add_link
+    context_name: select_du_global_customer_trade_name_consistency
+    params:
+      - column: quality_category
+        expression: '''Link Global Key Customer Trade Name'''
+      - column: quality_check_flag
+        expression: output_link_gkc_tn
+      - column: dq_message_output
+        expression: IF(output_link_gkc_tn='1', 'OK',IF(output_link_gkc_tn='0','The GKC-TN link is incorrect','Missing link'))
+
+  - kind: union
+    name: union_global_key_&_trade_name
+    context_name: add_global_key
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_trade_name
+
+  - kind: union
+    name: union_global_key_&_trade_name_link
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_link
+
+
+  - kind: select
+    name: select_global_customer_trade_name_consistency
+    params:
+      columns:
+        sales_organization: sales_organization
+        country_code: country_code
+        order_block: order_block
+        order_block_description: order_block_description
+        business_partner: business_partner
+        business_partner_name: business_partner_name
+        customer_gkc: customer_gkc
+        customer_gkc_description: customer_gkc_description
+        is_customer_gkc_standard: is_customer_gkc_standard
+        customer_tn: customer_tn
+        customer_tn_description: customer_tn_description
+        is_customer_tn_standard: is_customer_tn_standard
+        cpl_division: cpl_division
+        cpl_division_name: cpl_division_name
+        cpl_division_gkc: cpl_division_gkc
+        cpl_division_gkc_description: cpl_division_gkc_description
+        is_cpl_division_gkc_standard: is_cpl_division_gkc_standard
+        cpl_division_tn: cpl_division_tn
+        cpl_division_tn_description: cpl_division_tn_description
+        is_cpl_division_tn_standard: is_cpl_division_tn_standard
+        cpl: cpl
+        cpl_name: cpl_name
+        cpl_gkc: cpl_gkc
+        cpl_gkc_description: cpl_gkc_description
+        is_cpl_gkc_standard: is_cpl_gkc_standard
+        cpl_tn: cpl_tn
+        cpl_tn_description: cpl_tn_description
+        is_cpl_tn_standard: is_cpl_tn_standard
+        sap_cluster: sap_cluster
+        quality_category: quality_category
+        quality_check_flag: quality_check_flag
+        dq_message_output: dq_message_output
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: global_customer_trade_name_consistency
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#AGGREGATED
+#global_customer_trade_name_consistency
+#global_key_customer
+
+  - kind: select
+    name: select_output_gkc
+    context_name: select_du_global_customer_trade_name_consistency
+    params:
+      columns:
+        country_code: country_code
+        output_gkc: output_gkc
+        sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_global_key
+    params:
+      - column: quality_category
+        expression: '''Global Key Customer'''
+      - column: total_checks
+        expression: cast(1 as integer)
+      - column: invalid_checks
+        expression: IF(output_gkc <> '1', 1, NULL)
+
+  - kind: group
+    name: group_global_key
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - sap_cluster
+
+  - kind: select
+    name: select_global_key_customer
+    params:
+      columns:
+        country_code: country_code
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        count_total_checks: total_checks
+        sap_cluster: sap_cluster
+
+
+#trade name
+
+  - kind: select
+    name: select_output_tn
+    context_name: select_du_global_customer_trade_name_consistency
+    params:
+      columns:
+        country_code: country_code
+        output_tn: output_tn
+        sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_trade_name
+    params:
+      - column: quality_category
+        expression: '''Trade Name'''
+      - column: total_checks
+        expression: cast(1 as integer)
+      - column: invalid_checks
+        expression: IF(output_tn <> '1', 1, NULL)
+
+  - kind: group
+    name: group_trade_name
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - sap_cluster
+
+  - kind: select
+    name: select_trade_name
+    params:
+      columns:
+        country_code: country_code
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        count_total_checks: total_checks
+        sap_cluster: sap_cluster
+
+#link global key customer trade name
+
+  - kind: select
+    name: select_output_link
+    context_name: select_du_global_customer_trade_name_consistency
+    params:
+      columns:
+        country_code: country_code
+        output_link_gkc_tn: output_link_gkc_tn
+        sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_output_link
+    params:
+      - column: quality_category
+        expression: '''Link Global Key Customer Trade Name'''
+      - column: total_checks
+        expression: cast(1 as integer)
+      - column: invalid_checks
+        expression: IF(output_link_gkc_tn <> '1', 1, NULL)
+
+  - kind: group
+    name: group_link
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - sap_cluster
+
+  - kind: select
+    name: select_link
+    params:
+      columns:
+        country_code: country_code
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        count_total_checks: total_checks
+        sap_cluster: sap_cluster
+
+  - kind: union
+    name: union_global_customer_trade_name
+    context_name: select_global_key_customer
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_trade_name
+
+  - kind: union
+    name: union_global_customer_trade_name_link
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_link
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: total_checks
+        to: integer
+      - column: invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_global_customer_trade_name_consistency
+    params:
+      columns:
+        country_code: country_code
+        total_checks: total_checks
+        quality_category: quality_category
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: global_customer_trade_name_consistency
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

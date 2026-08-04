@@ -1,0 +1,820 @@
+transform:
+  name: dm_customer_check_results_activeness
+  operations:
+
+# payer_check
+  - kind: read_dataio
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_partner
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_partner
+    context_name: read_dm_customer_partner
+    params:
+      - condition:
+          partner_function_code_converted = 'PY'
+
+  - kind: select
+    name: select_dm_customer_partner
+    params:
+      columns:
+        customer_code: customer_code
+        partner_function_code_converted: partner_f_code
+      distinct: true
+
+#  fsm_049_visit
+  - kind: read_dataio
+    name: read_fsm049_strike_rate_detailed
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        storage_id: '{{dataio.storage_id}}'
+        layer: udm
+      namespace: mtc
+      domain: datamart
+      object_name: fsm049_strike_rate_detailed
+      schema_version: v2
+
+  - kind: filter
+    name: filter_fsm049_strike_rate_detailed
+    context_name: read_fsm049_strike_rate_detailed
+    params:
+      - condition:
+          calday >= add_months(current_date(),-24)
+      - condition: 
+          executed_visits_ad_hoc = 1 OR executed_visits_planned = 1
+
+  - kind: group
+    name: group_fsm049_strike_rate_detailed
+    context_name: filter_fsm049_strike_rate_detailed
+    params:
+      - aggs:
+          calday: max
+        by:
+        - customer
+
+  - kind: add
+    name: add_visits_check
+    context_name: group_fsm049_strike_rate_detailed
+    params:
+      - column: customer_code_visited_outlet
+        expression: customer
+
+  - kind: select
+    name: select_visits
+    context_name: add_visits_check
+    params:
+      columns:
+        max_calday: max_calday_1
+        customer: customer_code
+        customer_code_visited_outlet: customer_code_visited_outlet
+      distinct: true     
+
+
+#   nsr_volumes
+  - kind: read_dataio
+    name: read_fsm038_indirect_sales_volume_and_revenue_6d
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        storage_id: '{{dataio.storage_id}}'
+        layer: udm
+      namespace: mtc
+      domain: datamart
+      object_name: fsm038_indirect_sales_volume_and_revenue_6d
+      schema_version: v2
+
+  - kind: filter
+    name: filter_fsm038_indirect_sales_volume_and_revenue_6d
+    context_name: read_fsm038_indirect_sales_volume_and_revenue_6d
+    params:
+      - condition:
+          calday >= add_months(current_date(),-24) and isds_nsr > 0
+
+  - kind: group
+    name: group_fsm038_indirect_sales_volume_and_revenue_6d
+    context_name: filter_fsm038_indirect_sales_volume_and_revenue_6d
+    params:
+      - aggs:
+          calday: max
+        by:
+        - customer
+
+  - kind: add
+    name: add_nsr_volumes_check
+    context_name: group_fsm038_indirect_sales_volume_and_revenue_6d
+    params:
+      - column: customer_code_nsr_volumes
+        expression: customer
+
+  - kind: select
+    name: select_nsr_volumes
+    context_name: add_nsr_volumes_check
+    params:
+      columns:
+        max_calday: max_calday_2
+        customer: customer_code
+        customer_code_nsr_volumes: customer_code_nsr_volumes
+      distinct: true    
+
+#   red_surveys
+  - kind: read_dataio
+    name: read_fsm001_field_sales_activities
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        storage_id: '{{dataio.storage_id}}'
+        layer: udm
+      namespace: mtc
+      domain: datamart
+      object_name: fsm001_field_sales_activities
+      schema_version: v1
+
+  - kind: filter
+    name: filter_fsm001_field_sales_activities
+    context_name: read_fsm001_field_sales_activities
+    params:
+      - condition:
+          calday >= add_months(current_date(),-24) and crm_prctyp = "ZOUT" and crm_obj_id IS NOT NULL
+
+  - kind: group
+    name: group_fsm001_field_sales_activities
+    context_name: filter_fsm001_field_sales_activities
+    params:
+      - aggs:
+          calday: max
+        by:
+        - customer
+
+  - kind: add
+    name: add_red_surveys_check
+    context_name: group_fsm001_field_sales_activities
+    params:
+      - column: customer_code_red_surveys
+        expression: customer
+
+  - kind: select
+    name: select_red_surveys
+    context_name: add_red_surveys_check
+    params:
+      columns:
+        max_calday: max_calday_3
+        customer: customer_code
+        customer_code_red_surveys: customer_code_red_surveys
+      distinct: true     
+
+# dm_customer_sales_documents check
+  - kind: read_dataio
+    name: read_dm_customer_sales_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_sales_documents
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_sales_documents
+    context_name: read_dm_customer_sales_documents
+    params:
+      - condition:
+          creation_date >= add_months(current_date(),-24)
+
+  - kind: group
+    name: group_dm_customer_sales_documents
+    context_name: filter_dm_customer_sales_documents
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+        - sap_cluster
+
+
+  - kind: select
+    name: select_sales_documents_check
+    context_name: group_dm_customer_sales_documents
+    params:
+      columns:
+        count_customer_code: count_sales_documents
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+# dm_customer_open_items check
+  - kind: read_dataio
+    name: read_dm_customer_open_items
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_open_items
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_open_items
+    context_name: read_dm_customer_open_items
+    params:
+      - condition:
+          record_type = 'Customer open items'
+
+  - kind: group
+    name: group_dm_customer_open_items
+    context_name: filter_dm_customer_open_items
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+        - sap_cluster
+
+  - kind: select
+    name: select_dm_customer_open_items_check
+    context_name: group_dm_customer_open_items
+    params:
+      columns:
+        count_customer_code: count_open_items
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+# dm_customer_delivery_shippment check
+  - kind: read_dataio
+    name: read_dm_customer_delivery_shippment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_delivery_shippment
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dm_customer_delivery_shippment
+    context_name: read_dm_customer_delivery_shippment
+    params:
+      - condition:
+          shippment_completion_status != 'X'
+
+  - kind: group
+    name: group_deliveries
+    context_name: filter_dm_customer_delivery_shippment
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+        - sap_cluster
+
+  - kind: group
+    name: group_deliveries_sold_to
+    context_name: filter_dm_customer_delivery_shippment
+    params:
+      - aggs:
+          customer_sold_to_code: count
+        by:
+        - customer_sold_to_code
+        - sap_cluster
+
+  - kind: group
+    name: group_shippments
+    context_name: read_dm_customer_delivery_shippment
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+        - sap_cluster
+
+  - kind: group
+    name: group_shippments_sold_to
+    context_name: read_dm_customer_delivery_shippment
+    params:
+      - aggs:
+          customer_sold_to_code: count
+        by:
+        - customer_sold_to_code
+        - sap_cluster
+
+  - kind: select
+    name: select_deliveries_check
+    context_name: group_deliveries
+    params:
+      columns:
+        count_customer_code: count_deliveries
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_deliveries_check_sold_to
+    context_name: group_deliveries_sold_to
+    params:
+      columns:
+        count_customer_sold_to_code: count_deliveries_sold_to
+        customer_sold_to_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_shippments_check
+    context_name: group_shippments
+    params:
+      columns:
+        count_customer_code: count_shippments
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_shippments_check_sold_to
+    context_name: group_shippments_sold_to
+    params:
+      columns:
+        count_customer_sold_to_code: count_shippments_sold_to
+        customer_sold_to_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+# dm_customer_sales_documents check
+  - kind: read_dataio
+    name: read_dm_customer_satisfaction_surveys
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_satisfaction_surveys
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_satisfaction_surveys
+    context_name: read_dm_customer_satisfaction_surveys
+    params:
+      - condition:
+          response_date >= add_months(current_date(),-24)
+
+  - kind: group
+    name: group_dm_customer_satisfaction_surveys
+    context_name: filter_dm_customer_satisfaction_surveys
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+
+  - kind: select
+    name: select_satisfaction_surveys_check
+    context_name: group_shippments
+    params:
+      columns:
+        count_customer_code: count_satisfaction_surveys
+        customer_code: customer_code
+      distinct: true
+
+# dm_customer_billing_documents
+  - kind: read_dataio
+    name: read_dm_customer_billing_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_billing_documents
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dm_customer_billing_documents
+    context_name: read_dm_customer_billing_documents
+    params:
+      - condition:
+          creation_date >= add_months(current_date(),-24)
+
+  - kind: group
+    name: group_dm_customer_billing_documents
+    context_name: filter_dm_customer_billing_documents
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+
+  - kind: group
+    name: group_dm_customer_billing_documents_sold_to
+    context_name: filter_dm_customer_billing_documents
+    params:
+      - aggs:
+          customer_sold_to_code: count
+        by:
+        - customer_sold_to_code
+
+  - kind: select
+    name: select_customer_billing_documents
+    context_name: group_dm_customer_billing_documents
+    params:
+      columns:
+        count_customer_code: count_billing_documents
+        customer_code: customer_code
+      distinct: true
+
+  - kind: select
+    name: select_customer_billing_documents_sold_to
+    context_name: group_dm_customer_billing_documents_sold_to
+    params:
+      columns:
+        count_customer_sold_to_code: count_billing_documents_sold_to
+        customer_sold_to_code: customer_code
+      distinct: true
+
+# dm_customer_equipment
+  - kind: read_dataio
+    name: read_dm_customer_equipment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_equipment
+      schema_version: v3
+
+  - kind: filter
+    name: filter_dm_customer_equipment
+    context_name: read_dm_customer_equipment
+    params:
+      - condition:
+          equipment_status_code IN('FOND', 'LOST', 'NACT', 'UINV', 'PLCD') and cde_type = 'COOLER'
+
+  - kind: group
+    name: group_dm_customer_equipment
+    context_name: filter_dm_customer_equipment
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+
+  - kind: select
+    name: select_customer_equipment
+    context_name: group_dm_customer_equipment
+    params:
+      columns:
+        count_customer_code: count_equipment
+        customer_code: customer_code
+      distinct: true
+
+# dm_customer_crm_activities
+  - kind: read_dataio
+    name: read_dm_customer_crm_activities
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_crm_activities
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dm_customer_crm_activities_visit
+    context_name: read_dm_customer_crm_activities
+    params:
+      - condition:
+          planning_visit_status <> '' or execution_visit_status <> ''
+
+  - kind: group
+    name: group_dm_customer_crm_activities_visit
+    context_name: filter_dm_customer_crm_activities_visit
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+
+  - kind: select
+    name: select_customer_crm_activities_visit
+    context_name: group_dm_customer_crm_activities_visit
+    params:
+      columns:
+        count_customer_code: count_crm_activities_visit
+        customer_code: customer_code
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_crm_activities_calls
+    context_name: read_dm_customer_crm_activities
+    params:
+      - condition:
+          planning_calls_status <> '' or execution_calls_status <> ''
+
+  - kind: group
+    name: group_dm_customer_crm_activities_calls
+    context_name: filter_dm_customer_crm_activities_calls
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+
+  - kind: select
+    name: select_customer_crm_activities_calls
+    context_name: group_dm_customer_crm_activities_calls
+    params:
+      columns:
+        count_customer_code: count_crm_activities_calls
+        customer_code: customer_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+      schema_version: v3
+
+  - kind: select
+    name: select_dm_customer_sales_organization
+    context_name: read_dm_customer_sales_organization
+    params:
+      columns:
+        customer_code: customer_code
+        ext_sales_uc_qty_24m: ext_sales_uc_qty_24m
+        sap_cluster: sap_cluster
+      distinct: true
+
+# dm_customer_general check
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: join
+    name: join_checks
+    context_name: read_dm_customer_general
+    params:
+      - other:
+          select_sales_documents_check
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_open_items_check
+        how:
+          left
+        columns:
+         customer_code: customer_code
+         sap_cluster: sap_cluster
+      - other:
+          select_deliveries_check
+        how:
+          left
+        columns:
+         customer_code: customer_code
+         sap_cluster: sap_cluster
+      - other:
+          select_deliveries_check_sold_to
+        how:
+          left
+        columns:
+         customer_code: customer_code
+         sap_cluster: sap_cluster
+      - other:
+          select_shippments_check
+        how:
+          left
+        columns:
+         customer_code: customer_code
+         sap_cluster: sap_cluster
+      - other:
+          select_shippments_check_sold_to
+        how:
+          left
+        columns:
+         customer_code: customer_code
+         sap_cluster: sap_cluster
+      - other:
+          select_satisfaction_surveys_check
+        how:
+          left
+        columns:
+         customer_code: customer_code
+      - other:
+          select_customer_billing_documents
+        how:
+          left
+        columns:
+         customer_code: customer_code
+      - other:
+          select_customer_billing_documents_sold_to
+        how:
+          left
+        columns:
+         customer_code: customer_code
+      - other:
+          select_customer_equipment
+        how:
+          left
+        columns:
+         customer_code: customer_code
+      - other:
+          select_customer_crm_activities_visit
+        how:
+          left
+        columns:
+         customer_code: customer_code
+      - other:
+          select_customer_crm_activities_calls
+        how:
+          left
+        columns:
+         customer_code: customer_code
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:  #
+          select_visits
+        how:
+          left
+        columns:
+          customer_code: customer_code
+      - other:
+          select_nsr_volumes
+        how:
+          left
+        columns:
+          customer_code: customer_code
+      - other:
+          select_red_surveys
+        how:
+          left
+        columns:
+          customer_code: customer_code
+      - other:
+          select_dm_customer_partner
+        how:
+          left
+        columns:
+          customer_code: customer_code
+
+  - kind: add
+    name: add_activeness_check
+    context_name: join_checks
+    params:
+      - column: payer_check
+        expression: if(partner_f_code IS NOT NULL , '1','0')
+      - column: visited_outlet_check
+        expression: if(customer_code_visited_outlet IS NOT NULL , '1', '0')
+      - column: nsr_volumes_check
+        expression: if(customer_code_nsr_volumes IS NOT NULL , '1', '0')
+      - column: red_surveys_check
+        expression: if(customer_code_red_surveys IS NOT NULL , '1', '0')
+      - column: sales_open_check
+        expression: if(count_sales_documents >= 1, '1', '0')
+      - column: items_open_check
+        expression: if(count_open_items >= 1, '1', '0')
+      - column: deliveries_open_check
+        expression: if(count_deliveries >= 1 or count_deliveries_sold_to >= 1, '1', '0')
+      - column: shippment_open_check
+        expression: if(count_shippments >= 1 or count_shippments_sold_to >= 1, '1', '0')
+      - column: customers_surveys_check
+        expression: if(count_satisfaction_surveys >= 1, '1', '0')
+      - column: invoices_open_check
+        expression: if(count_billing_documents >= 1 or count_billing_documents_sold_to >= 1, '1', '0')
+      - column: cooler_status_check
+        expression: if(count_equipment >= 1, '1', '0')
+      - column: customers_visit_check
+        expression: if(count_crm_activities_visit >= 1, '1', '0')
+      - column: customers_calls_check
+        expression: if(count_crm_activities_calls >= 1, '1', '0')
+      - column: red_outlet_check
+        expression: if(red_survey_outlet_flag = 'X', '1', '0')
+      - column: external_sales_check
+        expression: if(ext_sales_uc_qty_24m > 0 or ext_sales_uc_qty_24m < 0, '1', '0')
+      - column: activeness_check 
+        expression: if(date(creation_date) > add_months(current_date(), -3), '',
+                    if(central_order_block_code in('SP', 'E', 'F', 'G'), '1', 
+                    if(central_order_block_code in('R', 'U', 'NH', 'PR'), '', 
+                    if(sales_open_check = '1' 
+                    or deliveries_open_check = '1' 
+                    or shippment_open_check = '1' 
+                    or customers_surveys_check = '1' 
+                    or red_outlet_check = '1' 
+                    or invoices_open_check = '1' 
+                    or cooler_status_check = '1' 
+                    or customers_visit_check = '1' 
+                    or customers_calls_check = '1' 
+                    or external_sales_check = '1'
+                    or visited_outlet_check = '1'
+                    or nsr_volumes_check = '1'
+                    or payer_check = '1'
+                    or red_surveys_check = '1', '1', '0'))))
+      - column: rule_code
+        expression: '''RCACTI_1'''
+      - column: value_checked
+        expression: '''N/A'''
+      - column: check_date
+        expression: current_timestamp()
+
+
+        
+  - kind: select
+    name: select_dm_customer_check_results_activeness
+    params:
+      columns:
+        rule_code: rule_code
+        activeness_check: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+        sales_open_check : sales_open_check
+        items_open_check: items_open_check
+        deliveries_open_check: deliveries_open_check
+        shippment_open_check: shippment_open_check
+        red_outlet_check: red_outlet_check
+        invoices_open_check: invoices_open_check
+        cooler_status_check: cooler_status_check
+        customers_visit_check: customers_visit_check
+        customers_calls_check: customers_calls_check
+        customers_surveys_check: customers_surveys_check
+        external_sales_check: external_sales_check
+        visited_outlet_check: visited_outlet_check
+        nsr_volumes_check: nsr_volumes_check
+        red_surveys_check: red_surveys_check
+        payer_check: payer_check
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_check_results_activeness
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_check_results_activeness
+      process_run_id: "{{process_run_id}}"
+      schema_version: v4
+      refresh_mode: full

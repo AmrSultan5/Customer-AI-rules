@@ -1,0 +1,150 @@
+transform:
+  name: dm_finance_cost_element
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cskb
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: cskb
+
+  - kind: filter
+    name: filter_cskb
+    params:
+      - condition:
+          DATBI= '9999-12-31 00:00:00.000' 
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_csku
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: csku
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_zco_celem_subcat
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zco_celem_subcat
+
+  - kind: filter
+    name: filter_csku
+    context_name: read_csku
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_cskb
+    context_name: filter_cskb
+    params:
+      columns:
+        kstar: kstar
+        kokrs: kokrs
+        datbi: datbi
+        datab: datab
+        katyp: katyp
+        eigen: eigen
+        zzsubcat: zzsubcat
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_csku
+    context_name: filter_csku
+    params:
+      columns:
+        kstar: kstar
+        ktopl: ktopl
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_zco_celem_subcat
+    context_name: read_zco_celem_subcat
+    params:
+      columns:
+        subcat: subcat
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_finance_cost_element
+    context_name: select_cskb
+    params:
+      - other:
+          select_csku
+        how:
+          left
+        columns:
+          kstar: kstar
+          sap_cluster: sap_cluster
+      - other:
+          select_zco_celem_subcat
+        how:
+          left
+        columns:
+          zzsubcat: subcat
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_expressions
+    context_name: join_dm_finance_cost_element
+    params:
+      - column: is_cost_element_subcategory_allowed
+        expression: if(isnotnull(subcat), '1', '0')
+
+  - kind: select
+    name: select_dm_finance_cost_element
+    context_name: add_expressions
+    params:
+      columns:
+        kstar: cost_element
+        zzsubcat: cost_element_subcategory
+        is_cost_element_subcategory_allowed: is_cost_element_subcategory_allowed
+        kokrs: controlling_area_code
+        datbi: valid_to
+        datab: valid_from
+        katyp: cost_element_category
+        eigen: cost_element_attributes
+        ktopl: chart_of_accounts
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_cost_element
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_element
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,264 @@
+transform:
+  name: dm_customer_credit
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read UKMBP_CMS_SGM
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ukmbp_cms_sgm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: ukmbp_cms_sgm
+
+  - kind: filter
+    name: filter_limit_valid_date
+    params:
+      - condition:
+          (date_format(to_date(left(limit_valid_date,10),"yyyy-MM-dd"),"yyyy-MM-dd")) > current_date() OR limit_valid_date IS NULL
+
+
+  - kind: select
+    name: select_sgm
+    params:
+      columns:
+        partner: partner_sgm
+        limit_valid_date: limit_valid_to
+        credit_limit: credit_limit
+        credit_sgmnt: credit_sgmnt
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read UKMBP_CMS
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ukmbp_cms
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: ukmbp_cms
+
+  - kind: filter
+    name: filter_rating_val_date
+    params:
+      - condition:
+          (date_format(to_date(left(rating_val_date,10),"yyyy-MM-dd"),"yyyy-MM-dd")) > current_date() OR rating_val_date IS NULL
+
+
+
+  - kind: select
+    name: select_csm
+    params:
+      columns:
+        partner: partner_csm
+        credit_group: credit_group
+        risk_class: risk_class
+        rating_val_date: rating_val_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_outer_sgm_csm_anti_left
+    context_name: select_sgm
+    params:
+      - other:
+          select_csm
+        how:
+          full_outer
+        columns:
+          partner_sgm: partner_csm
+          sap_cluster: sap_cluster
+
+
+
+  - kind: select
+    name: select_outer
+    params:
+      columns:
+        partner_sgm: partner_sgm
+        partner_csm: partner_csm
+        limit_valid_to: limit_valid_to
+        credit_limit: credit_limit
+        credit_sgmnt: credit_sgmnt
+        credit_group: credit_group
+        risk_class: risk_class
+        rating_val_date: rating_val_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read T014T
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t014t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t014t
+
+  - kind: filter
+    name: filter_t014t
+    params:
+      - condition:
+          spras = 'E'
+
+
+  - kind: select
+    name: select_t2
+    params:
+      columns:
+        kkber: kkber_t2
+        kkbtx: kkbtx_t2
+        sap_cluster: sap_cluster
+
+
+# Read T691T
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t691t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t691t
+
+  - kind: filter
+    name: filter_t691t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t3
+    params:
+      columns:
+        ctlpc: ctlpc_t3
+        kkber: kkber_t3
+        rtext: rtext_t3
+        sap_cluster: sap_cluster
+
+
+
+  - kind: select
+    name: select_t4_distinct
+    context_name: filter_t691t
+    params:
+      columns:
+        ctlpc: ctlpc_t4
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: join
+    name: join_all
+    context_name: select_outer
+    params:
+      - other:
+          select_t2
+        how:
+          left
+        columns:
+          credit_sgmnt: kkber_t2
+          sap_cluster: sap_cluster
+      - other:
+          select_t3
+        how:
+          left
+        columns:
+          risk_class: ctlpc_t3
+          credit_sgmnt: kkber_t3
+          sap_cluster: sap_cluster
+      - other:
+          select_t4_distinct
+        how:
+          left
+        columns:
+          risk_class: ctlpc_t4
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_all_sources
+    params:
+      columns:
+        partner_sgm: partner_sgm
+        partner_csm: partner_csm
+        limit_valid_to: limit_valid_to
+        credit_limit: credit_limit
+        credit_sgmnt: credit_sgmnt
+        credit_group: credit_group
+        risk_class: risk_class
+        rating_val_date: rating_val_date
+        kkber_t2: kkber_t2
+        kkbtx_t2: kkbtx_t2
+        ctlpc_t3: ctlpc_t3
+        kkber_t3: kkber_t3
+        rtext_t3: rtext_t3
+        ctlpc_t4: ctlpc_t4
+        sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_partner
+    context_name: select_all_sources
+    params:
+      - column: partner
+        expression: coalesce(partner_sgm, partner_csm)
+      - column: is_allowed_risk_class_code
+        expression: "CASE WHEN ctlpc_t4 IS NOT NULL THEN '1' ELSE '0' END"
+
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        partner: customer_code
+        credit_group: credit_group_code
+        risk_class: risk_class_code
+        is_allowed_risk_class_code: is_allowed_risk_class_code
+        rtext_t3: risk_class_name
+        rating_val_date: raiting_valid_to
+        limit_valid_to: limit_valid_to
+        credit_limit: credit_limit
+        credit_sgmnt: credit_segment_code
+        kkbtx_t2: credit_segment_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_dm_customer_credit
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_credit
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

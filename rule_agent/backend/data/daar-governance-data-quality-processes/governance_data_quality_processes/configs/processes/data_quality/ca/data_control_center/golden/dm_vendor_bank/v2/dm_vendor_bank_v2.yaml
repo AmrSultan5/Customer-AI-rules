@@ -1,0 +1,207 @@
+transform:
+  name: dm_vendor_bank
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read but0bk
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but0bk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: bank_data
+      object_name: but0bk
+
+  - kind: filter
+    name: filter_but0bk
+    params:
+      - condition:
+          ( bk_valid_to='99991231235959')
+
+
+  - kind: select
+    name: select_but0bk
+    params:
+      columns:
+        partner: partner
+        bkvid: bkvid
+        banks: banks
+        bankl: bankl
+        bankn: bankn
+        accname: accname
+        account_type: account_type
+        bkont: bkont
+        koinh: koinh
+        bkext: bkext
+        bkref: bkref
+        bk_valid_from: bk_valid_from
+        bk_valid_to: bk_valid_to
+        xezer: collection_authorization_flag
+
+      distinct: true
+
+# Read bnka
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_bnka
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: bank_data
+      object_name: bnka
+
+
+  - kind: select
+    name: select_bnka
+    context_name: read_bnka
+    params:
+      columns:
+        banka: banka
+        banks: banks
+        bankl: bankl
+      distinct: true
+
+# Read tiban
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tiban
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: bank_data
+      object_name: tiban
+
+
+  - kind: select
+    name: select_tiban
+    context_name: read_tiban
+    params:
+      columns:
+        banks: banks
+        bankl: bankl
+        bankn: bankn
+        iban: iban
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfbk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfbk
+
+  - kind: select
+    name: select_lfbk
+    params:
+      columns:
+        lifnr: lifnr
+        bvtyp: bvtyp
+      distinct: true  
+
+  - kind: add
+    name: add_vendor_code
+    context_name: select_but0bk
+    params:
+      - column: vendor_code
+        expression: "CASE
+                    WHEN substring(partner,0,3) ='V43' THEN replace(partner,LEFT(partner,3),'430')
+                    WHEN substring(partner,0,3) ='V40' THEN REPLACE(partner,LEFT(partner,3),'400')
+                    WHEN substring(partner,0,3) ='V90' THEN REPLACE(partner,LEFT(partner,3),'900')
+                    ELSE partner END"
+
+
+  - kind: join
+    name: join_but0bk
+    context_name: add_vendor_code
+    params:
+      - other:
+          select_bnka
+        how:
+          left
+        columns:
+          banks: banks
+          bankl: bankl
+      - other:
+          select_tiban
+        how:
+          left
+        columns:
+          banks: banks
+          bankl: bankl
+          bankn: bankn
+      - other:
+          select_lfbk
+        how:
+          left
+        columns:
+          vendor_code: lifnr
+
+  - kind: cast
+    name: cast_cols
+    params:
+      - column: bk_valid_from
+        to: decimal(15,0)
+      - column: bk_valid_to
+        to: decimal(15,0)
+
+  - kind: select
+    name: select_but0bk
+    params:
+      columns:
+        partner: partner_code
+        vendor_code: vendor_code
+        bkvid: bank_details_id
+        banks: bank_country_code
+        bankl: bank_code
+        banka: bank_name
+        bankn: bank_account_number
+        accname: bank_account_name
+        bkont: bank_control_key
+        koinh: account_holder_name
+        bkext: external_system_bank_details_id
+        iban: iban
+        bkref: reference_details_for_bank_details
+        bk_valid_from: valid_from
+        bk_valid_to: valid_to
+        bvtyp: partner_bank_type
+        collection_authorization_flag: collection_authorization_flag
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_dm_vendor_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_bank
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

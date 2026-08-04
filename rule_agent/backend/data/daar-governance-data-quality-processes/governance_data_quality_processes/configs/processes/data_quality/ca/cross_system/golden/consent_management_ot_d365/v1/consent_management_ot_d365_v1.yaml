@@ -1,0 +1,508 @@
+transform:
+  name: consent_management
+  operations:
+
+##d365
+  - kind: read_dataio
+    name: read_d365_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: contact
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_d365_cch_contactrole
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: cch_contactrole
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_d365_account
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: account
+      schema_version: v1
+
+  - kind: filter
+    name: filter_d365_contact
+    context_name: read_d365_contact
+    params:
+      - condition:
+          statecode = '0' and emailaddress1 is not null
+
+  - kind: filter
+    name: filter_d365_cch_contactrole
+    context_name: read_d365_cch_contactrole
+    params:
+      - condition:
+          cch_contactrole = 311220009
+
+  - kind: filter
+    name: filter_d365_account
+    context_name: read_d365_account
+    params:
+      - condition:
+          cch_countryidname in ('Armenia', 
+                                'Austria', 
+                                'Belgium', 
+                                'Bosnia and Herzegovina', 
+                                'Bulgaria', 
+                                'China', 
+                                'Croatia', 
+                                'Cyprus', 
+                                'Czech Republic', 
+                                'Denmark', 
+                                'Estonia', 
+                                'Finland', 
+                                'France', 
+                                'Germany', 
+                                'Greece', 
+                                'Guinea', 
+                                'Hungary', 
+                                'Ireland', 
+                                'Italy', 
+                                'Kosovo', 
+                                'Latvia', 
+                                'Liechtenstein', 
+                                'Lithuania', 
+                                'Luxembourg', 
+                                'Malta', 
+                                'Moldova', 
+                                'Montenegro', 
+                                'Netherlands', 
+                                'Nigeria', 
+                                'Norway', 
+                                'Poland', 
+                                'R.N. Macedonia',
+                                'North Macedonia', 
+                                'Romania', 
+                                'San Marino', 
+                                'Serbia', 
+                                'Sierra Leone', 
+                                'Singapore', 
+                                'Slovakia', 
+                                'Slovenia', 
+                                'South Africa', 
+                                'Spain', 
+                                'Sweden', 
+                                'Switzerland', 
+                                'Turkey', 
+                                'Ukraine', 
+                                'United Arab Emirates', 
+                                'United Kingdom', 
+                                'United States', 
+                                'Vatican City')
+
+  - kind: select
+    name: select_d365_contact
+    context_name: filter_d365_contact
+    params:
+      columns:
+        contactid: contactid
+        emailaddress1: emailaddress1
+        donotbulkemail: donotbulkemail
+        cch_donotsms: cch_donotsms
+      distinct: true
+
+  - kind: select
+    name: select_d365_cch_contactrole
+    context_name: filter_d365_cch_contactrole
+    params:
+      columns:
+        cch_contactid: cch_contactid
+        cch_accountid: cch_accountid
+      distinct: true
+
+  - kind: select
+    name: select_d365_account
+    context_name: filter_d365_account
+    params:
+      columns:
+        cch_countryidname: cch_countryidname
+        accountid: accountid
+      distinct: true
+
+  - kind: join
+    name: join_d365
+    context_name: select_d365_contact
+    params:
+      - other:
+          select_d365_cch_contactrole
+        how:
+          inner
+        columns:
+          contactid: cch_contactid
+      - other:
+          select_d365_account
+        how:
+          inner
+        columns:
+          cch_accountid: accountid
+
+  - kind: add
+    name: add_d365
+    context_name: join_d365
+    params:
+      - column: target
+        expression: '''d365'''
+      - column: email_norm
+        expression: lower(trim(emailaddress1))
+      - column: email_consent
+        expression: if(coalesce(donotbulkemail, FALSE) = FALSE, 'Active', 'Withdrawn')
+      - column: sms_consent
+        expression: if(coalesce(cch_donotsms, FALSE) = FALSE, 'Active', 'Withdrawn')
+      - column: country
+        expression: CASE cch_countryidname
+                      WHEN 'Armenia' THEN 'AM'
+                      WHEN 'Austria' THEN 'AT'
+                      WHEN 'Belgium' THEN 'BE'
+                      WHEN 'Bosnia and Herzegovina' THEN 'BA'
+                      WHEN 'Bulgaria' THEN 'BG'
+                      WHEN 'China' THEN 'CN'
+                      WHEN 'Croatia' THEN 'HR'
+                      WHEN 'Cyprus' THEN 'CY'
+                      WHEN 'Czech Republic' THEN 'CZ'
+                      WHEN 'Denmark' THEN 'DK'
+                      WHEN 'Estonia' THEN 'EE'
+                      WHEN 'Finland' THEN 'FI'
+                      WHEN 'France' THEN 'FR'
+                      WHEN 'Germany' THEN 'DE'
+                      WHEN 'Greece' THEN 'GR'
+                      WHEN 'Guinea' THEN 'GN'
+                      WHEN 'Hungary' THEN 'HU'
+                      WHEN 'Ireland' THEN 'IE'
+                      WHEN 'Italy' THEN 'IT'
+                      WHEN 'Kosovo' THEN 'KV'
+                      WHEN 'Latvia' THEN 'LV'
+                      WHEN 'Liechtenstein' THEN 'LI'
+                      WHEN 'Lithuania' THEN 'LT'
+                      WHEN 'Luxembourg' THEN 'LU'
+                      WHEN 'Malta' THEN 'MT'
+                      WHEN 'Moldova' THEN 'MD'
+                      WHEN 'Montenegro' THEN 'ME'
+                      WHEN 'Netherlands' THEN 'NL'
+                      WHEN 'Nigeria' THEN 'NG'
+                      WHEN 'Norway' THEN 'NO'
+                      WHEN 'Poland' THEN 'PL'
+                      WHEN 'R.N. Macedonia' THEN 'MK'
+                      WHEN 'North Macedonia' THEN 'MK'
+                      WHEN 'Romania' THEN 'RO'
+                      WHEN 'San Marino' THEN 'SM'
+                      WHEN 'Serbia' THEN 'RS'
+                      WHEN 'Sierra Leone' THEN 'SL'
+                      WHEN 'Singapore' THEN 'SG'
+                      WHEN 'Slovakia' THEN 'SK'
+                      WHEN 'Slovenia' THEN 'SI'
+                      WHEN 'South Africa' THEN 'ZA'
+                      WHEN 'Spain' THEN 'ES'
+                      WHEN 'Sweden' THEN 'SE'
+                      WHEN 'Switzerland' THEN 'CH'
+                      WHEN 'Turkey' THEN 'TR'
+                      WHEN 'Ukraine' THEN 'UA'
+                      WHEN 'United Arab Emirates' THEN 'AE'
+                      WHEN 'United Kingdom' THEN 'GB'
+                      WHEN 'United States' THEN 'US'
+                      WHEN 'Vatican City' THEN 'VA'
+                      ELSE cch_countryidname
+                    END
+
+  - kind: select
+    name: select_d365
+    context_name: add_d365
+    params:
+      columns:
+        target: target
+        cch_countryidname: cch_countryidname
+        country: country
+        email_norm: email_norm
+        emailaddress1: emailaddress1_raw
+        email_consent: email_consent_d365
+        sms_consent: sms_consent_d365
+      distinct: true
+
+##ot
+  - kind: read_dataio
+    name: read_ot_data_subject_profiles
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: onetrust
+      namespace: data_subject_profiles
+      object_name: data_subject_profiles
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_ot_data_subject_profile_purposes
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: onetrust
+      namespace: data_subject_profiles
+      object_name: data_subject_profile_purposes
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_ot_data_subject_profile_purpose_preferences
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: onetrust
+      namespace: data_subject_profiles
+      object_name: data_subject_profile_purpose_preferences
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_ot_data_subject_profile_purpose_preference_options
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: onetrust
+      namespace: data_subject_profiles
+      object_name: data_subject_profile_purpose_preference_options
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ot_data_subject_profiles
+    context_name: read_ot_data_subject_profiles
+    params:
+      - condition:
+          identifier is not null
+
+  - kind: filter
+    name: filter_ot_data_subject_profile_purposes
+    context_name: read_ot_data_subject_profile_purposes
+    params:
+      - condition:
+          purpose_name = 'Marketing Communications'
+
+  - kind: select
+    name: select_ot_data_subject_profiles
+    context_name: filter_ot_data_subject_profiles
+    params:
+      columns:
+        ot_id: ot_id
+        identifier: identifier
+      distinct: true
+
+  - kind: select
+    name: select_ot_data_subject_profile_purposes
+    context_name: filter_ot_data_subject_profile_purposes
+    params:
+      columns:
+        ot_id: ot_id
+        purpose_id: purpose_id
+        status: status
+      distinct: true
+
+  - kind: select
+    name: select_ot_data_subject_profile_purpose_preferences
+    context_name: read_ot_data_subject_profile_purpose_preferences
+    params:
+      columns:
+        ot_id: ot_id
+        purpose_id: purpose_id
+        preference_id: preference_id
+      distinct: true
+
+  - kind: select
+    name: select_ot_data_subject_profile_purpose_preference_options
+    context_name: read_ot_data_subject_profile_purpose_preference_options
+    params:
+      columns:
+        ot_id: ot_id
+        preference_id: preference_id
+        option_name: option_name
+      distinct: true
+
+  - kind: join
+    name: join_ot
+    context_name: select_ot_data_subject_profiles
+    params:
+      - other:
+          select_ot_data_subject_profile_purposes
+        how:
+          inner
+        columns:
+          ot_id: ot_id
+      - other:
+          select_ot_data_subject_profile_purpose_preferences
+        how:
+          left
+        columns:
+          purpose_id: purpose_id
+          ot_id: ot_id
+      - other:
+          select_ot_data_subject_profile_purpose_preference_options
+        how:
+          left
+        columns:
+          preference_id: preference_id
+          ot_id: ot_id
+
+  - kind: add
+    name: add_ot
+    context_name: join_ot
+    params:
+      - column: source
+        expression: '''onetrust'''
+      - column: email_consent
+        expression: if(option_name = 'Email',
+                    if(status = 'ACTIVE', 'Active', 'Withdrawn'), null)
+      - column: sms_consent
+        expression: if(option_name = 'SMS',
+                    if(status = 'ACTIVE', 'Active', 'Withdrawn'), null)
+      - column: email_norm
+        expression: lower(trim(identifier))
+
+  - kind: group
+    name: group_ot
+    context_name: add_ot
+    params:
+      - aggs:
+          email_consent: max
+          sms_consent: max
+        by:
+        - email_norm
+        - source
+
+  - kind: add
+    name: add_group_ot
+    context_name: group_ot
+    params:
+      - column: email_consent
+        expression: coalesce(max_email_consent, 'Withdrawn')
+      - column: sms_consent
+        expression: coalesce(max_sms_consent, 'Withdrawn')
+
+  - kind: select
+    name: select_ot
+    context_name: add_group_ot
+    params:
+      columns:
+        source: source
+        email_norm: email_norm
+        email_consent: email_consent_ot
+        sms_consent: sms_consent_ot
+      distinct: true
+
+##consent management
+
+  - kind: join
+    name: join_d365_ot
+    context_name: select_d365
+    params:
+      - other:
+          select_ot
+        how:
+          inner
+        columns:
+          email_norm: email_norm
+
+  - kind: add
+    name: add_consent_management
+    context_name: join_d365_ot
+    params:
+      - column: is_email_consent_match
+        expression: if(email_consent_d365 = email_consent_ot, '1', '0')
+      - column: is_sms_consent_match
+        expression: if(sms_consent_d365 = sms_consent_ot, '1', '0')
+      - column: is_all_consent_match
+        expression: if(email_consent_d365 = email_consent_ot
+                    and sms_consent_d365 = sms_consent_ot, '1', '0')
+      - column: is_all_consent_mismatch
+        expression: if(email_consent_d365 <> email_consent_ot
+                    and sms_consent_d365 <> sms_consent_ot, '1', '0')
+      - column: is_email_match_sms_consent_mismatch
+        expression: if(email_consent_d365 = email_consent_ot
+                    and sms_consent_d365 <> sms_consent_ot, '1', '0')
+      - column: is_email_mismatch_sms_consent_match            
+        expression: if(email_consent_d365 <> email_consent_ot
+                    and sms_consent_d365 = sms_consent_ot, '1', '0')
+      - column: msg1
+        expression: if(email_consent_d365 = email_consent_ot, 'email_consent_match', '')
+      - column: msg2
+        expression: if(sms_consent_d365 = sms_consent_ot, 'sms_consent_match', '')
+      - column: msg3
+        expression: if(email_consent_d365 = email_consent_ot
+                    and sms_consent_d365 = sms_consent_ot, 'all_consent_match', '')
+      - column: msg4
+        expression: if(email_consent_d365 <> email_consent_ot
+                    and sms_consent_d365 <> sms_consent_ot, 'all_consent_mismatch', '')
+      - column: msg5
+        expression: if(email_consent_d365 = email_consent_ot
+                    and sms_consent_d365 <> sms_consent_ot, 'email_match_sms_consent_mismatch', '')
+      - column: msg6         
+        expression: if(email_consent_d365 <> email_consent_ot
+                    and sms_consent_d365 = sms_consent_ot, 'email_mismatch_sms_consent_match', '')
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''OT-D365 Consent Management'''
+      - column: loading_date
+        expression: current_date()
+
+
+  - kind: select
+    name: select_consent_management
+    context_name: add_consent_management
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        source: src_system
+        target: tgt_system
+        emailaddress1_raw: primary_key_l1
+        email_consent_d365: attribute1
+        sms_consent_d365: attribute2
+        email_consent_ot: attribute3
+        sms_consent_ot: attribute4
+        msg1: attribute5
+        msg2: attribute6
+        msg3: attribute7
+        msg4: attribute8
+        msg5: attribute9
+        msg6: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_consent_management
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True

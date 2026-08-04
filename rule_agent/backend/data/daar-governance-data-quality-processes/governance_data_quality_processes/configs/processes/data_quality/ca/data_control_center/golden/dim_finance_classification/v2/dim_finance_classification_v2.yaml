@@ -1,0 +1,514 @@
+transform:
+  name: dim_finance_classification
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_finance_controlling_area
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts_code
+        sap_cluster: sap_cluster
+      distinct: true
+      
+  - kind: read_dataio
+    name: read_dm_finance_chart_of_accounts
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_chart_of_accounts
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_finance_chart_of_accounts
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        chart_of_accounts_description: chart_of_accounts_description
+        chart_of_accounts: chart_of_accounts_code
+        sap_cluster: sap_cluster
+      distinct: true
+ 
+  - kind: read_dataio
+    name: read_dm_finance_general_ledger
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_general_ledger
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_finance_general_ledger
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        chart_of_accounts: chart_of_accounts_code
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true
+ 
+  - kind: read_dataio
+    name: read_dm_finance_asset
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_finance_asset
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true 
+     
+  - kind: read_dataio
+    name: read_dm_finance_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_finance_cost_center
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        cost_center_number: cost_center_code_cc
+        cost_center_number_description: cost_center_name_cc
+        functional_area: functional_area_code_cc
+        functional_area_name: functional_area_name_cc
+        standard_hierarchy_area: cost_center_hierarchy_cc
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true
+  
+  - kind: join
+    name: join_finance_ca
+    context_name: select_dm_finance_controlling_area
+    params:
+      - other:
+          select_dm_finance_general_ledger
+        how:
+          inner
+        columns:
+          chart_of_accounts_code: chart_of_accounts_code
+          company_code: company_code
+          sap_cluster: sap_cluster 
+      - other:
+          select_dm_finance_asset
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster          
+      - other:
+          select_dm_finance_cost_center
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster          
+      - other:
+          select_dm_finance_chart_of_accounts
+        how:
+          inner
+        columns:
+          chart_of_accounts_code: chart_of_accounts_code
+          g_l_account_number: g_l_account_number
+          sap_cluster: sap_cluster
+  
+  - kind: add
+    name: add_dim_finance_classification_expression_cc
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Cost Center'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type ||
+                    ifnull(cost_center_code_cc, 'null')
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      - column: cost_center
+        expression: cost_center_code_cc || ' - ' || cost_center_name_cc
+      - column: functional_area
+        expression: functional_area_code_cc || ' - ' || functional_area_name_cc
+ 
+  - kind: select
+    name: select_cc
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_description
+        object_type: object_type
+        finance_class_id: finance_class_id
+        cost_center_code_cc: cost_center_code
+        cost_center_name_cc: cost_center_name
+        cost_center: cost_center
+        functional_area_code_cc: functional_area_code
+        functional_area_name_cc: functional_area_name
+        functional_area: functional_area
+        cost_center_hierarchy_cc: cost_center_hierarchy
+      distinct: true
+      
+  - kind: add
+    name: add_dim_finance_classification_expression_fa
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Fixed Assets'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      - column: cost_center
+        expression: "''"
+      - column: cost_center_code
+        expression: "''"
+      - column: cost_center_name
+        expression: "''"
+      - column: functional_area
+        expression: "''"
+      - column: functional_area_code
+        expression: "''"
+      - column: functional_area_name
+        expression: "''"
+      - column: cost_center_hierarchy
+        expression: "''"
+ 
+  - kind: select
+    name: select_fa
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_description
+        object_type: object_type
+        finance_class_id: finance_class_id
+        cost_center_code: cost_center_code
+        cost_center_name: cost_center_name
+        cost_center: cost_center
+        functional_area_code: functional_area_code
+        functional_area_name: functional_area_name
+        functional_area: functional_area
+        cost_center_hierarchy: cost_center_hierarchy
+      distinct: true
+            
+  - kind: add
+    name: add_dim_finance_classification_expression_io
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Internal Order'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      - column: cost_center
+        expression: "''"
+      - column: cost_center_code
+        expression: "''"
+      - column: cost_center_name
+        expression: "''"
+      - column: functional_area
+        expression: "''"
+      - column: functional_area_code
+        expression: "''"
+      - column: functional_area_name
+        expression: "''"
+      - column: cost_center_hierarchy
+        expression: "''"
+       
+  - kind: select
+    name: select_io
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_description
+        object_type: object_type
+        finance_class_id: finance_class_id
+        cost_center_code: cost_center_code
+        cost_center_name: cost_center_name
+        cost_center: cost_center
+        functional_area_code: functional_area_code
+        functional_area_name: functional_area_name
+        functional_area: functional_area
+        cost_center_hierarchy: cost_center_hierarchy
+      distinct: true
+            
+  - kind: add
+    name: add_dim_finance_classification_expression_ios
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Internal Order Settlement'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      - column: cost_center
+        expression: "''"
+      - column: cost_center_code
+        expression: "''"
+      - column: cost_center_name
+        expression: "''"
+      - column: functional_area
+        expression: "''"
+      - column: functional_area_code
+        expression: "''"
+      - column: functional_area_name
+        expression: "''"
+      - column: cost_center_hierarchy
+        expression: "''"
+       
+  - kind: select
+    name: select_ios
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_description
+        object_type: object_type
+        finance_class_id: finance_class_id
+        cost_center_code: cost_center_code
+        cost_center_name: cost_center_name
+        cost_center: cost_center
+        functional_area_code: functional_area_code
+        functional_area_name: functional_area_name
+        functional_area: functional_area
+        cost_center_hierarchy: cost_center_hierarchy
+      distinct: true
+            
+  - kind: add
+    name: add_dim_finance_classification_expression_gl
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''General Ledger'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      - column: cost_center
+        expression: "''"
+      - column: cost_center_code
+        expression: "''"
+      - column: cost_center_name
+        expression: "''"
+      - column: functional_area
+        expression: "''"
+      - column: functional_area_code
+        expression: "''"
+      - column: functional_area_name
+        expression: "''"
+      - column: cost_center_hierarchy
+        expression: "''"
+ 
+  - kind: select
+    name: select_gl
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_description
+        object_type: object_type
+        finance_class_id: finance_class_id
+        cost_center_code: cost_center_code
+        cost_center_name: cost_center_name
+        cost_center: cost_center
+        functional_area_code: functional_area_code
+        functional_area_name: functional_area_name
+        functional_area: functional_area
+        cost_center_hierarchy: cost_center_hierarchy
+      distinct: true
+            
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_cc
+
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_fa
+      
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_io
+      
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_ios
+
+  - kind: select
+    name: select_dm_finance_classification
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_name
+        object_type: object_type
+        finance_class_id: finance_class_id
+        cost_center_code: cost_center_number
+        cost_center_name: cost_center_name
+        cost_center: cost_center
+        functional_area_code: functional_area_code
+        functional_area_name: functional_area_name
+        functional_area: functional_area
+        cost_center_hierarchy: cost_center_hierarchy
+      distinct: true
+      
+  - kind: write_dataio
+    name: write_dim_finance_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_finance_classification
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: incremental

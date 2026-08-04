@@ -1,0 +1,686 @@
+transform:
+  name: matching_results_history
+  operations:
+
+# pmh - initial transformations
+  - kind: read_dataio
+    name: read_pmh
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: results_history
+      schema_version: v1
+
+  - kind: filter
+    name: filter_system_pmh
+    context_name: read_pmh
+    params:
+      - condition:
+          source_system = 'ered'
+
+  - kind: select
+    name: select_initial_pmh
+    context_name: filter_system_pmh
+    params:
+      columns:
+        ext_product_name: ext_product_name_pmh
+        ext_country_code: ext_country_code_pmh
+        sap_product_code: sap_product_code_pmh
+        matching_score: matching_score
+        # status_code: status_code
+        processing_date: processing_date
+        source_system: source_system_pmh
+
+  - kind: group
+    name: group_date_system_pmh
+    context_name: select_initial_pmh
+    params:
+      - aggs:
+          processing_date: max
+        by:
+        - source_system_pmh
+
+  - kind: join
+    name: join_date_system_pmh
+    context_name: select_initial_pmh
+    params:
+      - other:
+          group_date_system_pmh
+        how:
+          inner
+        columns:
+          source_system_pmh : source_system_pmh
+          processing_date: max_processing_date
+
+# spu
+  - kind: read_dataio
+    name: read_spu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_spu
+    context_name: read_spu
+    params:
+      columns:
+        product_code: sap_product_code_spu
+        country_code: country_code_spu
+        product_name_raw: sap_product_name_spu
+        ean_code: sap_ean_code
+        brand_name: sap_brand_name
+        flavour_name: sap_flavour_name
+        pack_size_name: sap_pack_size_name
+        pack_type_name: sap_pack_type_name
+        sales_unit_name: sap_sales_unit_name
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+        ean_piece: ean_piece
+        ean_pack: ean_pack
+        ean_case: ean_case
+        base_unit_of_measure: sap_base_unit_of_measure
+
+# epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_epu
+    context_name: read_epu
+    params:
+      columns:
+        product_name_raw: ext_product_name_epu
+        source_system: source_system_epu
+        country_code: country_code_epu
+        brand_name: ext_brand_name
+        flavour_name: ext_flavour_name
+        pack_size_name: ext_pack_size_name
+        pack_type_name: ext_pack_type_name
+        sales_unit_name: ext_sales_unit_name
+        blacklisting_mode: blacklisting_mode
+        base_unit_of_measure: ext_base_unit_of_measure
+
+# ep
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: ered_products
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_ep
+    context_name: read_ep
+    params:
+      columns:
+        product_code: product_code_ep
+        product_name: product_name_ep
+        source_system: source_system_ep
+        country_code: country_code_ep
+        qc_name: qc_name
+        qc_address: qc_address
+
+# base join
+  - kind: join
+    name: join_base
+    context_name: join_date_system_pmh
+    params:
+      - other:
+          select_initial_spu
+        how:
+          left
+        columns:
+          sap_product_code_pmh: sap_product_code_spu
+          ext_country_code_pmh: country_code_spu
+      - other:
+          select_initial_epu
+        how:
+          left
+        columns:
+          ext_product_name_pmh: ext_product_name_epu
+          ext_country_code_pmh: country_code_epu
+          source_system_pmh: source_system_epu
+      # - other:
+      #     select_initial_ep
+      #   how:
+      #     left
+      #   columns:
+      #     ext_product_name_pmh: product_name_ep
+      #     ext_country_code_pmh: country_code_ep
+      #     source_system_pmh: source_system_ep
+
+  - kind: select
+    name: select_base
+    context_name: join_base
+    params:
+      columns:
+        ext_product_name_pmh: ext_product_name
+        ext_country_code_pmh: ext_country_code
+        sap_product_code_pmh: sap_product_code
+        matching_score: matching_score
+        processing_date: processing_date
+        source_system_pmh: source_system
+        sap_product_name_spu: sap_product_name
+        sap_ean_code: sap_ean_code
+        sap_brand_name: sap_brand_name
+        sap_flavour_name: sap_flavour_name
+        sap_pack_size_name: sap_pack_size_name
+        sap_pack_type_name: sap_pack_type_name
+        sap_sales_unit_name: sap_sales_unit_name
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        # qc_name: qc_name
+        # qc_address: qc_address
+        blacklisting_mode: blacklisting_mode
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+        ean_piece: sap_ean_piece
+        ean_pack: sap_ean_pack
+        ean_case: sap_ean_case
+        sap_base_unit_of_measure: sap_base_unit_of_measure
+        ext_base_unit_of_measure: ext_base_unit_of_measure
+
+# MRA (matching results analysis)
+
+# rule 1 Manual mapping
+
+# rule 2 Blacklisting
+# to be changed - is_in_scope calculation should be in epu
+  - kind: add
+    name: add_is_in_scope_flg
+    context_name: select_base
+    params:
+      - column: is_in_scope
+        expression: case when blacklisting_mode = 'row' then '0' else '1' end
+
+  - kind: filter
+    name: filter_in_scope_1
+    context_name: add_is_in_scope_flg
+    params:
+      - condition:
+          is_in_scope = '1'
+
+  - kind: select
+    name: select_in_scope_1
+    context_name: filter_in_scope_1
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        sap_product_code: sap_product_code
+        matching_score: matching_score
+        processing_date: processing_date
+        source_system: source_system
+        sap_product_name: sap_product_name
+        sap_ean_code: sap_ean_code
+        sap_brand_name: sap_brand_name
+        sap_flavour_name: sap_flavour_name
+        sap_pack_size_name: sap_pack_size_name
+        sap_pack_type_name: sap_pack_type_name
+        sap_sales_unit_name: sap_sales_unit_name
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        # qc_name: qc_name
+        # qc_address: qc_address
+        blacklisting_mode: blacklisting_mode
+        is_in_scope: is_in_scope
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+        sap_ean_piece: sap_ean_piece
+        sap_ean_pack: sap_ean_pack
+        sap_ean_case: sap_ean_case
+        sap_base_unit_of_measure: sap_base_unit_of_measure
+        ext_base_unit_of_measure: ext_base_unit_of_measure        
+
+  - kind: filter
+    name: filter_in_scope_0
+    context_name: add_is_in_scope_flg
+    params:
+      - condition:
+          is_in_scope = '0'
+
+  - kind: select
+    name: select_in_scope_0_base
+    context_name: filter_in_scope_0
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        # sap_product_code_pmh: sap_product_code
+        # matching_score: matching_score
+        processing_date: processing_date
+        source_system: source_system
+        # sap_product_name_spu: sap_product_name
+        # sap_ean_code: sap_ean_code
+        # sap_brand_name: sap_brand_name
+        # sap_flavour_name: sap_flavour_name
+        # sap_pack_size_name: sap_pack_size_name
+        # sap_pack_type_name: sap_pack_type_name
+        # sap_sales_unit_name: sap_sales_unit_name
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        ext_base_unit_of_measure: ext_base_unit_of_measure
+        # qc_name: qc_name
+        # qc_address: qc_address
+        # blacklisting_mode: blacklisting_mode
+        # is_in_scope: is_in_scope
+        # is_abp: is_abp
+        # is_in_use: is_in_use
+        # is_actively_used: is_actively_used
+      distinct: true
+
+  - kind: add
+    name: add_sap_cols_in_scope_0
+    context_name: select_in_scope_0_base
+    params:
+      - column: sap_product_code
+        expression: ''''''
+      - column: matching_score
+        expression: ''''''
+      - column: sap_product_name
+        expression: ''''''
+      - column: sap_ean_code
+        expression: ''''''
+      - column: sap_brand_name
+        expression: ''''''
+      - column: sap_flavour_name
+        expression: ''''''
+      - column: sap_pack_size_name
+        expression: ''''''
+      - column: sap_pack_type_name
+        expression: ''''''
+      - column: sap_sales_unit_name
+        expression: ''''''
+      - column: blacklisting_mode
+        expression: ''''''
+      - column: is_in_scope
+        expression: ''''''
+      - column: is_abp
+        expression: ''''''
+      - column: is_in_use
+        expression: ''''''
+      - column: is_actively_used
+        expression: ''''''
+      - column: sap_ean_piece
+        expression: ''''''
+      - column: sap_ean_pack
+        expression: ''''''
+      - column: sap_ean_case
+        expression: ''''''
+      - column: sap_base_unit_of_measure
+        expression: ''''''
+
+  - kind: select
+    name: select_in_scope_0
+    context_name: add_sap_cols_in_scope_0
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        sap_product_code: sap_product_code
+        matching_score: matching_score
+        processing_date: processing_date
+        source_system: source_system
+        sap_product_name: sap_product_name
+        sap_ean_code: sap_ean_code
+        sap_brand_name: sap_brand_name
+        sap_flavour_name: sap_flavour_name
+        sap_pack_size_name: sap_pack_size_name
+        sap_pack_type_name: sap_pack_type_name
+        sap_sales_unit_name: sap_sales_unit_name
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        ext_base_unit_of_measure: ext_base_unit_of_measure
+        # qc_name: qc_name
+        # qc_address: qc_address
+        blacklisting_mode: blacklisting_mode
+        is_in_scope: is_in_scope
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+        sap_ean_piece: sap_ean_piece
+        sap_ean_pack: sap_ean_pack
+        sap_ean_case: sap_ean_case
+        sap_base_unit_of_measure: sap_base_unit_of_measure
+
+  - kind: union
+    name: union_scopes
+    context_name: select_in_scope_1
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_in_scope_0
+
+# rule 3 ABP
+  - kind: add
+    name: add_const_1_abp
+    context_name: union_scopes
+    params:
+      - column: const_1_abp
+        expression: '''1'''
+
+  - kind: group
+    name: group_abp
+    context_name: add_const_1_abp
+    params:
+      - aggs:
+          const_1_abp: sum
+          is_abp: sum
+        by:
+        - ext_product_name
+        - ext_country_code
+
+  - kind: join
+    name: join_abp
+    context_name: add_const_1_abp
+    params:
+      - other:
+          group_abp
+        how:
+          inner
+        columns:
+          ext_product_name: ext_product_name
+          ext_country_code: ext_country_code
+
+  - kind: filter
+    name: filter_abp
+    context_name: join_abp
+    params:
+      - condition:
+          (sum_const_1_abp != if(sum_is_abp is null, 0, sum_is_abp) AND if(is_abp = '', 0, is_abp) = 0) OR (sum_const_1_abp = if(sum_is_abp is null, 0, sum_is_abp)) OR (sap_product_code is null)
+
+# rule 4 Blocked products
+  - kind: add
+    name: add_const_1_bp
+    context_name: filter_abp
+    params:
+      - column: const_1_bp
+        expression: '''1'''
+
+  - kind: group
+    name: group_bp
+    context_name: add_const_1_bp
+    params:
+      - aggs:
+          const_1_bp: sum
+          is_in_use: sum
+        by:
+        - ext_product_name
+        - ext_country_code
+
+  - kind: join
+    name: join_bp
+    context_name: add_const_1_bp
+    params:
+      - other:
+          group_bp
+        how:
+          inner
+        columns:
+          ext_product_name: ext_product_name
+          ext_country_code: ext_country_code
+
+  - kind: filter
+    name: filter_bp
+    context_name: join_bp
+    params:
+      - condition:
+          (sum_const_1_bp != sum_const_1_bp - if(sum_is_in_use is null, 0, sum_is_in_use) AND if(is_in_use = '', 0, is_in_use) = 1) OR (if(sum_is_in_use is null, 0, sum_is_in_use) = 0)
+
+# rule 5 Activity
+  - kind: add
+    name: add_const_1_act
+    context_name: filter_bp
+    params:
+      - column: const_1_act
+        expression: '''1'''
+
+  - kind: group
+    name: group_act
+    context_name: add_const_1_act
+    params:
+      - aggs:
+          const_1_act: sum
+          is_actively_used: sum
+        by:
+        - ext_product_name
+        - ext_country_code
+
+  - kind: join
+    name: join_act
+    context_name: add_const_1_act
+    params:
+      - other:
+          group_act
+        how:
+          inner
+        columns:
+          ext_product_name: ext_product_name
+          ext_country_code: ext_country_code
+
+  - kind: filter
+    name: filter_act
+    context_name: join_act
+    params:
+      - condition:
+          (sum_const_1_act != sum_const_1_act - if(sum_is_actively_used is null, 0, sum_is_actively_used) AND if(is_actively_used = '', 0, is_actively_used) = 1) OR (if(sum_is_actively_used is null, 0, sum_is_actively_used) = 0)
+
+  - kind: filter
+    name: filter_temp_ro
+    params:
+      - condition:
+          ext_country_code = 'ro'
+
+  - kind: select
+    name: select_temp_ro
+    params:
+      columns:
+        ext_product_name: ext_product_name
+      distinct: true
+
+# rule 5 Top results
+  - kind: add
+    name: add_score_rank
+    context_name: filter_act
+    params:
+      - column: score_rank
+        expression: rank(matching_score) over (partition by ext_product_name, ext_country_code order by matching_score desc)
+
+  - kind: filter
+    name: filter_score_rank
+    context_name: add_score_rank
+    params:
+      - condition:
+          score_rank <= 5
+
+# rule 6 Bad results
+  - kind: add
+    name: add_const_1_br
+    context_name: filter_score_rank
+    params:
+      - column: const_1_br
+        expression: '''1'''
+
+  - kind: group
+    name: group_br_const_all
+    context_name: add_const_1_br
+    params:
+      - aggs:
+          const_1_br: sum
+        by:
+        - ext_product_name
+        - ext_country_code
+
+  - kind: filter
+    name: filter_score_rank
+    context_name: add_const_1_br
+    params:
+      - condition:
+          matching_score < 0.5 or matching_score = '' or matching_score is null
+
+  - kind: group
+    name: group_br_const_below
+    context_name: filter_score_rank
+    params:
+      - aggs:
+          const_1_br: sum
+        by:
+        - ext_product_name
+        - ext_country_code
+
+  - kind: select
+    name: select_const_below
+    context_name: group_br_const_below
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        sum_const_1_br: sum_const_1_br_below
+
+  - kind: join
+    name: join_br
+    context_name: add_const_1_br
+    params:
+      - other:
+          group_br_const_all
+        how:
+          inner
+        columns:
+          ext_product_name: ext_product_name
+          ext_country_code: ext_country_code
+      - other:
+          select_const_below
+        how:
+          left
+        columns:
+          ext_product_name: ext_product_name
+          ext_country_code: ext_country_code
+
+  - kind: filter
+    name: filter_br
+    context_name: join_br
+    params:
+      - condition:
+          (sum_const_1_br != case when sum_const_1_br_below is null then 0 else sum_const_1_br_below end AND matching_score >= 0.5) OR (sum_const_1_br = case when sum_const_1_br_below is null then 0 else sum_const_1_br_below end)
+
+# final calculations and select
+  - kind: join
+    name: join_final
+    context_name: filter_br
+    params:
+      - other:
+          select_initial_ep
+        how:
+          left
+        columns:
+          ext_product_name: product_name_ep
+          ext_country_code: country_code_ep
+          source_system: source_system_ep
+
+  - kind: add
+    name: add_placeholders_conversions
+    context_name: join_final
+    params:
+      - column: matching_status
+        expression: case when sap_product_code = '' or sap_product_code is null then '0' else '1' end
+      - column: processing_date
+        overwrite: true
+        expression: cast(processing_date as string)
+      - column: sap_product_code
+        overwrite: true
+        expression: cast(sap_product_code as integer)
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        product_code_ep: ext_product_code
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        sap_product_code: sap_product_code
+        sap_product_name: sap_product_name
+        matching_score: matching_score
+        matching_status: matching_status
+        processing_date: processing_date
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        sap_ean_code: sap_ean_code
+        sap_brand_name: sap_brand_name
+        sap_flavour_name: sap_flavour_name
+        sap_pack_size_name: sap_pack_size_name
+        sap_pack_type_name: sap_pack_type_name
+        sap_sales_unit_name: sap_sales_unit_name
+        qc_name: qc_name
+        qc_address: qc_address
+        sap_ean_piece: sap_ean_piece
+        sap_ean_pack: sap_ean_pack
+        sap_ean_case: sap_ean_case
+        ext_base_unit_of_measure: ext_unit_of_measure
+        sap_base_unit_of_measure: sap_unit_of_measure
+      distinct: true
+
+  - kind: write_dataio
+    name: write_results_summary
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: golden
+      object_name: results_summary
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

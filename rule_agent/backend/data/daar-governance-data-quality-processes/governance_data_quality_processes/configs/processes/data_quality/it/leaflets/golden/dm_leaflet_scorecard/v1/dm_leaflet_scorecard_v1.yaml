@@ -1,0 +1,795 @@
+transform:
+  name: dm_leaflet_scorecard
+  operations:
+
+################################################## NULL NO PROMO PRICES #############################################
+
+  - kind: read_dataio
+    name: read_md_market_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_market_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_scorecard_prices
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: scorecard_prices
+      schema_version: v2
+
+  - kind: filter
+    name: filter_mtd_no_promo
+    context_name: read_scorecard_prices
+    params:
+      - condition:
+          time_frame = 'MTD'
+
+  - kind: add
+    name: add_dates_no_promo
+    context_name: filter_mtd_no_promo
+    params:
+      - column: np_month
+        expression: TO_CHAR(date, 'MM')
+      - column: np_year
+        expression: TO_CHAR(date, 'yyyy')
+
+  - kind: select
+    name: select_distinct_months_no_promo
+    context_name: add_dates_no_promo
+    params:
+      columns:
+        category: category
+        mercato: mercato
+        sku: sku
+        periodo2: periodo2
+        non_promo_price_pr_l_kg: non_promo_price_pr_l_kg
+        time_frame: time_frame
+        date: date
+        country: country
+        np_month: np_month
+        np_year: np_year
+      distinct: true
+
+  - kind: add
+    name: add_row_number_no_promo
+    context_name: select_distinct_months_no_promo
+    params:
+      - column: row_number  
+        expression: 'ROW_NUMBER() OVER (PARTITION BY mercato, sku, np_year ORDER BY mercato, sku, np_year, np_month)'
+              
+  - kind: group
+    name: group_avg_no_promo
+    context_name: add_row_number_no_promo
+    params:
+      - aggs:
+          non_promo_price_pr_l_kg: avg
+          row_number: max
+        by:
+        - mercato
+        - sku
+        - np_year
+        - category
+        - country
+
+  - kind: join
+    name: join_max_periodo2_no_promo
+    context_name: add_row_number_no_promo
+    params:
+      - other:
+          group_avg_no_promo
+        how:
+          left
+        columns:
+          mercato: mercato
+          sku: sku
+          np_year: np_year
+          category: category
+          country: country
+          row_number: max_row_number
+
+  - kind: filter
+    name: filter_not_null_max_row_number_no_promo
+    context_name: join_max_periodo2_no_promo
+    params:
+      - condition:
+          max_row_number IS NOT NULL
+
+  - kind: select
+    name: select_sp2_l1
+    context_name: filter_not_null_max_row_number_no_promo
+    params:
+      columns:
+        mercato: mercato_sp2_l1
+        sku: sku_sp2_l1
+        avg_non_promo_price_pr_l_kg: avg_non_promo_price_pr_l_kg_sp2_l1
+        np_year: year_sp2_l1
+      distinct: true
+
+################################################## NULL PROMO PRICES #############################################
+
+  - kind: filter
+    name: filter_mtd_promo
+    context_name: read_scorecard_prices
+    params:
+      - condition:
+          time_frame = 'MTD'
+
+  - kind: add
+    name: add_dates_promo
+    context_name: filter_mtd_promo
+    params:
+      - column: p_month
+        expression: CAST(DATE_FORMAT(date, 'MM') AS INT)
+      - column: p_year
+        expression: CAST(DATE_FORMAT(date, 'yyyy') AS INT)
+      - column: previous_month
+        expression: if(p_month = 1, 12, p_month - 1)
+      - column: previous_year
+        expression: if(p_month = 1, p_year - 1, p_year)
+
+  - kind: group
+    name: group_duplicated_months
+    context_name: add_dates_promo
+    params:
+      - aggs:
+          price_volume_promo_price: max
+        by:
+        - category
+        - mercato
+        - sku
+        - periodo2
+        - time_frame
+        - date
+        - country
+        - p_month
+        - p_year
+        - previous_month
+        - previous_year
+
+  - kind: select
+    name: select_distinct_previous_months_promo
+    context_name: group_duplicated_months
+    params:
+      columns:
+        category: category_previous
+        mercato: mercato_previous
+        sku: sku_previous
+        periodo2: periodo2_previous
+        max_price_volume_promo_price: price_volume_promo_price_previous
+        time_frame: time_frame_previous
+        date: date_previous
+        country: country_previous
+        p_month: p_month_previous
+        p_year: p_year_previous
+        previous_month: previous_month
+        previous_year: previous_year
+      distinct: true
+
+  - kind: select
+    name: select_distinct_months_promo
+    context_name: group_duplicated_months
+    params:
+      columns:
+        category: category
+        mercato: mercato
+        sku: sku
+        periodo2: periodo2
+        max_price_volume_promo_price: price_volume_promo_price
+        time_frame: time_frame
+        date: date
+        country: country
+        p_month: p_month
+        p_year: p_year
+      distinct: true
+
+  - kind: join
+    name: join_previous_month_price_promo
+    context_name: select_distinct_previous_months_promo
+    params:
+      - other:
+          select_distinct_months_promo
+        how:
+          left
+        columns:
+          mercato_previous: mercato
+          sku_previous: sku
+          previous_year: p_year
+          previous_month: p_month
+
+  - kind: add
+    name: add_select_promo_price
+    context_name: join_previous_month_price_promo
+    params:
+      - column: price_volume_promo_price_previous 
+        expression: if(price_volume_promo_price_previous IS NULL OR price_volume_promo_price_previous = '' OR price_volume_promo_price_previous = '0', price_volume_promo_price, price_volume_promo_price_previous)
+        overwrite: true
+      - column: p_month_previous
+        expression: lpad(CAST(p_month_previous AS STRING), 2, '0')
+        overwrite: true
+      - column: previous_month
+        expression: lpad(CAST(previous_month AS STRING), 2, '0')
+        overwrite: true
+
+  - kind: select
+    name: select_promo_price_sp3_l1
+    context_name: add_select_promo_price
+    params:
+      columns:
+        mercato_previous: mercato_sp3_l1
+        sku_previous: sku_sp3_l1
+        date_previous: date_sp3_l1
+        price_volume_promo_price_previous: price_volume_promo_price_sp3_l1
+        p_month_previous: month_sp3_l1
+        p_year_previous: year_sp3_l1
+      distinct: true
+
+###################### PROMO FIRST FUTURE MONTH
+
+  - kind: select
+    name: select_promo_price_sp4_initial
+    context_name: group_duplicated_months
+    params:
+      columns:
+        mercato: mercato_sp4
+        sku: sku_sp4
+        date: date_sp4
+        max_price_volume_promo_price: price_volume_promo_price_sp4
+        p_month: month_sp4
+        p_year: year_sp4
+      distinct: true
+
+  - kind: filter
+    name: filter_out_null_promo_price_sp4
+    context_name: select_promo_price_sp4_initial
+    params:
+      - condition:
+          price_volume_promo_price_sp4 is not null AND price_volume_promo_price_sp4 > 0
+
+########################################### ADD MISSING MONTHS ##########################################
+
+  - kind: select
+    name: select_all_distinct_dates_sp4
+    context_name: read_scorecard_prices
+    params:
+      columns:
+        mercato: mercato_dist
+        sku: sku_dist
+        date: date_dist
+      distinct: true
+
+  - kind: join
+    name: join_price_promo_missing_dates
+    context_name: select_all_distinct_dates_sp4
+    params:
+      - other:
+          filter_out_null_promo_price_sp4
+        how:
+          left
+        columns:
+          mercato_dist: mercato_sp4
+          sku_dist: sku_sp4
+          date_dist: date_sp4
+
+  - kind: add
+    name: add_price_promo_missing_dates
+    context_name: join_price_promo_missing_dates
+    params:
+      - column: month_sp4
+        expression: TO_CHAR(date_dist, 'MM')
+        overwrite: true
+      - column: year_sp4
+        expression: TO_CHAR(date_dist, 'yyyy')
+        overwrite: true
+
+  - kind: select
+    name: select_promo_price_sp4
+    context_name: add_price_promo_missing_dates
+    params:
+      columns:
+        mercato_dist: mercato_sp4
+        sku_dist: sku_sp4
+        date_dist: date_sp4
+        price_volume_promo_price_sp4: price_volume_promo_price_sp4
+        month_sp4: month_sp4
+        year_sp4: year_sp4
+      distinct: true
+
+#################################################################
+
+  - kind: select
+    name: select_future_promo_price_sp4
+    context_name: filter_out_null_promo_price_sp4
+    params:
+      columns:
+        mercato_sp4: mercato_future_sp4
+        sku_sp4: sku_future_sp4
+        date_sp4: date_future_sp4
+        price_volume_promo_price_sp4: price_volume_promo_price_future_sp4
+        month_sp4: month_future_sp4
+        year_sp4: year_future_sp4
+      distinct: true
+
+  - kind: join
+    name: join_first_future_month_price_promo
+    context_name: select_promo_price_sp4
+    params:
+      - other:
+          select_future_promo_price_sp4
+        how:
+          left
+        columns:
+          mercato_sp4: mercato_future_sp4
+          sku_sp4: sku_future_sp4
+          year_sp4: year_future_sp4
+
+  - kind: filter
+    name: filter_past_months_sp4
+    context_name: join_first_future_month_price_promo
+    params:
+      - condition:
+          month_sp4 < month_future_sp4
+
+  - kind: add
+    name: add_row_number_promo_sp4
+    params:
+      - column: row_number  
+        expression: 'ROW_NUMBER() OVER (PARTITION BY mercato_sp4, sku_sp4, date_sp4 ORDER BY mercato_sp4, sku_sp4, year_future_sp4, month_future_sp4)'
+
+  - kind: filter
+    name: filter_first_future_month
+    context_name: add_row_number_promo_sp4
+    params:
+      - condition:
+          row_number = 1
+
+  - kind: add
+    name: add_final_promo_price_sp4
+    context_name: filter_first_future_month
+    params:
+      - column: price_volume_promo_price_sp4
+        expression: if(price_volume_promo_price_sp4 > 0, price_volume_promo_price_sp4, price_volume_promo_price_future_sp4 )
+        overwrite: true
+
+  - kind: select
+    name: select_final_promo_price_sp4_l1
+    context_name: add_final_promo_price_sp4
+    params:
+      columns:
+        mercato_sp4: mercato_sp4_l1
+        sku_sp4: sku_sp4_l1
+        price_volume_promo_price_sp4: price_volume_promo_price_sp4_l1
+        month_sp4: month_sp4_l1
+        year_sp4: year_sp4_l1
+      distinct: true
+
+# ################################################## SCORECARD PRICES #############################################
+  
+  - kind: filter
+    name: filter_no_promo_scorecard_prices
+    context_name: read_scorecard_prices
+    params:
+      - condition:
+          time_frame = 'YTD' 
+
+  - kind: add
+    name: add_month_year_no_promo_l1
+    context_name: filter_no_promo_scorecard_prices
+    params:
+      - column: month_sp1
+        expression: TO_CHAR(date,'MM')
+      - column: year_sp1
+        expression: TO_CHAR(date, 'yyyy')
+      - column: price_volume_promo_price
+        expression: 'NULL'
+        overwrite: true
+
+  - kind: filter
+    name: filter_promo_scorecard_prices
+    context_name: read_scorecard_prices
+    params:
+      - condition:
+          time_frame = 'MTD'
+
+  - kind: add
+    name: add_month_year_promo_l1
+    context_name: filter_promo_scorecard_prices
+    params:
+      - column: month_sp1
+        expression: TO_CHAR(date,'MM')
+      - column: year_sp1
+        expression: TO_CHAR(date, 'yyyy')
+      - column: non_promo_price_pr_l_kg
+        expression: 'NULL'
+        overwrite: true
+
+  - kind: union
+    name: union_l1
+    context_name: add_month_year_no_promo_l1
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_month_year_promo_l1
+
+  - kind: group
+    name: group_prices_l1
+    context_name: union_l1
+    params:
+      - aggs:
+          non_promo_price_pr_l_kg: max
+          price_volume_promo_price: max
+        by:
+        - mercato
+        - sku
+        - date
+        - month_sp1
+        - year_sp1
+
+  - kind: select
+    name: select_sp1_l1
+    context_name: group_prices_l1
+    params:
+      columns:
+        mercato: mercato_sp1_l1
+        sku: sku_sp1_l1
+        max_non_promo_price_pr_l_kg: non_promo_price_pr_l_kg_sp1_l1
+        max_price_volume_promo_price: price_volume_promo_price_sp1_l1
+        date: date_sp1_l1
+        month_sp1: month_sp1_l1
+        year_sp1: year_sp1_l1
+      distinct: true
+
+  - kind: join
+    name: join_market_level_1_final
+    context_name: select_sp1_l1
+    params:
+      - other:
+          select_sp2_l1
+        how:
+          left
+        columns:
+          mercato_sp1_l1: mercato_sp2_l1
+          sku_sp1_l1: sku_sp2_l1
+          year_sp1_l1: year_sp2_l1
+      - other:
+          select_promo_price_sp3_l1
+        how:
+          left
+        columns:
+          mercato_sp1_l1: mercato_sp3_l1
+          sku_sp1_l1: sku_sp3_l1
+          year_sp1_l1: year_sp3_l1
+          month_sp1_l1: month_sp3_l1
+      - other:
+          select_final_promo_price_sp4_l1
+        how:
+          left
+        columns:
+          mercato_sp1_l1: mercato_sp4_l1
+          sku_sp1_l1: sku_sp4_l1
+          year_sp1_l1: year_sp4_l1
+          month_sp1_l1: month_sp4_l1
+
+######################################## MARKET LEVEL 2 ###################################################
+
+  - kind: select
+    name: select_sp1_l2
+    context_name: select_sp1_l1
+    params:
+      columns:
+        mercato_sp1_l1: mercato_sp1_l2
+        sku_sp1_l1: sku_sp1_l2
+        non_promo_price_pr_l_kg_sp1_l1: non_promo_price_pr_l_kg_sp1_l2
+        price_volume_promo_price_sp1_l1: price_volume_promo_price_sp1_l2
+        date_sp1_l1: date_sp1_l2
+        month_sp1_l1: month_sp1_l2
+        year_sp1_l1: year_sp1_l2
+      distinct: true
+
+  - kind: select
+    name: select_sp2_l2
+    context_name: select_sp2_l1
+    params:
+      columns:
+        mercato_sp2_l1: mercato_sp2_l2
+        sku_sp2_l1: sku_sp2_l2
+        avg_non_promo_price_pr_l_kg_sp2_l1: avg_non_promo_price_pr_l_kg_sp2_l2
+        year_sp2_l1: year_sp2_l2
+      distinct: true
+
+  - kind: select
+    name: select_promo_price_sp3_l2
+    context_name: select_promo_price_sp3_l1
+    params:
+      columns:
+        mercato_sp3_l1: mercato_sp3_l2
+        sku_sp3_l1: sku_sp3_l2
+        date_sp3_l1: date_sp3_l2
+        price_volume_promo_price_sp3_l1: price_volume_promo_price_sp3_l2
+        month_sp3_l1: month_sp3_l2
+        year_sp3_l1: year_sp3_l2
+      distinct: true
+
+  - kind: select
+    name: select_final_promo_price_sp4_l2
+    context_name: select_final_promo_price_sp4_l1
+    params:
+      columns:
+        mercato_sp4_l1: mercato_sp4_l2
+        sku_sp4_l1: sku_sp4_l2
+        price_volume_promo_price_sp4_l1: price_volume_promo_price_sp4_l2
+        month_sp4_l1: month_sp4_l2
+        year_sp4_l1: year_sp4_l2
+      distinct: true
+
+  - kind: join
+    name: join_market_level_2_final
+    context_name: join_market_level_1_final
+    params:
+      - other:
+          read_md_market_hierarchy
+        how:
+          left
+        columns:
+          mercato_sp1_l1: mercato
+      - other:
+          select_sp1_l2
+        how:
+          left
+        columns:
+          level_2: mercato_sp1_l2
+          sku_sp1_l1: sku_sp1_l2
+          date_sp1_l1: date_sp1_l2
+      - other:
+          select_sp2_l2
+        how:
+          left
+        columns:
+          level_2: mercato_sp2_l2
+          sku_sp1_l1: sku_sp2_l2
+          year_sp1_l1: year_sp2_l2
+      - other:
+          select_promo_price_sp3_l2
+        how:
+          left
+        columns:
+          level_2: mercato_sp3_l2
+          sku_sp1_l1: sku_sp3_l2
+          year_sp1_l1: year_sp3_l2
+          month_sp1_l1: month_sp3_l2
+      - other:
+          select_final_promo_price_sp4_l2
+        how:
+          left
+        columns:
+          level_2: mercato_sp4_l2
+          sku_sp1_l1: sku_sp4_l2
+          year_sp1_l1: year_sp4_l2
+          month_sp1_l1: month_sp4_l2
+
+######################################## MARKET LEVEL 3 ###################################################
+
+  - kind: select
+    name: select_sp1_l3
+    context_name: select_sp1_l1
+    params:
+      columns:
+        mercato_sp1_l1: mercato_sp1_l3
+        sku_sp1_l1: sku_sp1_l3
+        non_promo_price_pr_l_kg_sp1_l1: non_promo_price_pr_l_kg_sp1_l3
+        price_volume_promo_price_sp1_l1: price_volume_promo_price_sp1_l3
+        date_sp1_l1: date_sp1_l3
+        month_sp1_l1: month_sp1_l3
+        year_sp1_l1: year_sp1_l3
+      distinct: true
+
+  - kind: select
+    name: select_sp2_l3
+    context_name: select_sp2_l1
+    params:
+      columns:
+        mercato_sp2_l1: mercato_sp2_l3
+        sku_sp2_l1: sku_sp2_l3
+        avg_non_promo_price_pr_l_kg_sp2_l1: avg_non_promo_price_pr_l_kg_sp2_l3
+        year_sp2_l1: year_sp2_l3
+      distinct: true
+
+  - kind: select
+    name: select_promo_price_sp3_l3
+    context_name: select_promo_price_sp3_l1
+    params:
+      columns:
+        mercato_sp3_l1: mercato_sp3_l3
+        sku_sp3_l1: sku_sp3_l3
+        date_sp3_l1: date_sp3_l3
+        price_volume_promo_price_sp3_l1: price_volume_promo_price_sp3_l3
+        month_sp3_l1: month_sp3_l3
+        year_sp3_l1: year_sp3_l3
+      distinct: true
+
+  - kind: select
+    name: select_final_promo_price_sp4_l3
+    context_name: select_final_promo_price_sp4_l1
+    params:
+      columns:
+        mercato_sp4_l1: mercato_sp4_l3
+        sku_sp4_l1: sku_sp4_l3
+        price_volume_promo_price_sp4_l1: price_volume_promo_price_sp4_l3
+        month_sp4_l1: month_sp4_l3
+        year_sp4_l1: year_sp4_l3
+      distinct: true
+
+  - kind: join
+    name: join_market_level_3_final
+    context_name: join_market_level_2_final
+    params:
+      - other:
+          select_sp1_l3
+        how:
+          left
+        columns:
+          level_3: mercato_sp1_l3
+          sku_sp1_l1: sku_sp1_l3
+          date_sp1_l1: date_sp1_l3
+      - other:
+          select_sp2_l3
+        how:
+          left
+        columns:
+          level_3: mercato_sp2_l3
+          sku_sp1_l1: sku_sp2_l3
+          year_sp1_l1: year_sp2_l3
+      - other:
+          select_promo_price_sp3_l3
+        how:
+          left
+        columns:
+          level_3: mercato_sp3_l3
+          sku_sp1_l1: sku_sp3_l3
+          year_sp1_l1: year_sp3_l3
+          month_sp1_l1: month_sp3_l3
+      - other:
+          select_final_promo_price_sp4_l3
+        how:
+          left
+        columns:
+          level_3: mercato_sp4_l3
+          sku_sp1_l1: sku_sp4_l3
+          year_sp1_l1: year_sp4_l3
+          month_sp1_l1: month_sp4_l3
+
+  - kind: add
+    name: add_final_prices
+    context_name: join_market_level_3_final
+    params:
+      - column: market_level_1
+        expression: mercato_sp1_l1
+      - column: is_scorecard_date
+        expression: mercato_sp1_l1
+      - column: price_no_promo_1
+        expression: if(non_promo_price_pr_l_kg_sp1_l1 IS NULL OR non_promo_price_pr_l_kg_sp1_l1 = 0, avg_non_promo_price_pr_l_kg_sp2_l1, non_promo_price_pr_l_kg_sp1_l1)
+      - column: price_no_promo_2
+        expression: if(non_promo_price_pr_l_kg_sp1_l2 IS NULL OR non_promo_price_pr_l_kg_sp1_l2 = 0, avg_non_promo_price_pr_l_kg_sp2_l2, non_promo_price_pr_l_kg_sp1_l2)
+      - column: price_no_promo_3
+        expression: if(non_promo_price_pr_l_kg_sp1_l3 IS NULL OR non_promo_price_pr_l_kg_sp1_l3 = 0, avg_non_promo_price_pr_l_kg_sp2_l3, non_promo_price_pr_l_kg_sp1_l3)
+      - column: price_no_promo_final_1
+        expression: if(price_no_promo_1 IS NULL OR price_no_promo_1 = 0, price_no_promo_2, price_no_promo_1) 
+      - column: price_no_promo_final_2
+        expression: if(price_no_promo_final_1 IS NULL OR price_no_promo_final_1 = 0, price_no_promo_3, price_no_promo_final_1)
+      - column: price_promo_1
+        expression: if((price_volume_promo_price_sp1_l1 IS NULL OR price_volume_promo_price_sp1_l1 = 0) AND (price_volume_promo_price_sp3_l1 IS NOT NULL AND price_volume_promo_price_sp3_l1 > 0) , price_volume_promo_price_sp3_l1, price_volume_promo_price_sp1_l1)
+      - column: price_promo_1_2
+        expression: if((price_promo_1 IS NULL OR price_promo_1 = 0) AND (price_volume_promo_price_sp4_l1 IS NOT NULL AND price_volume_promo_price_sp4_l1 > 0), price_volume_promo_price_sp4_l1, price_promo_1)
+      - column: price_promo_2
+        expression: if((price_volume_promo_price_sp1_l2 IS NULL OR price_volume_promo_price_sp1_l2 = 0) AND (price_volume_promo_price_sp3_l2 IS NOT NULL AND price_volume_promo_price_sp3_l2 > 0) , price_volume_promo_price_sp3_l2, price_volume_promo_price_sp1_l2)
+      - column: price_promo_2_2
+        expression: if((price_promo_2 IS NULL OR price_promo_2 = 0) AND (price_volume_promo_price_sp4_l2 IS NOT NULL AND price_volume_promo_price_sp4_l2 > 0), price_volume_promo_price_sp4_l2, price_promo_2)
+      - column: price_promo_3
+        expression: if((price_volume_promo_price_sp1_l3 IS NULL OR price_volume_promo_price_sp1_l3 = 0) AND (price_volume_promo_price_sp3_l3 IS NOT NULL AND price_volume_promo_price_sp3_l3 > 0) , price_volume_promo_price_sp3_l3, price_volume_promo_price_sp1_l3)
+      - column: price_promo_3_2
+        expression: if((price_promo_3 IS NULL OR price_promo_3 = 0) AND (price_volume_promo_price_sp4_l3 IS NOT NULL AND price_volume_promo_price_sp4_l3 > 0), price_volume_promo_price_sp4_l3, price_promo_3)
+      - column: price_promo_final_1
+        expression: if(price_promo_1_2 IS NULL OR price_promo_1_2 = 0, price_promo_2_2, price_promo_1_2)
+      - column: price_promo_final_2
+        expression: if(price_promo_final_1 IS NULL OR price_promo_final_1 = 0, price_promo_3_2, price_promo_final_1)
+      - column: price_discount
+        expression: if(price_no_promo_final_2 > 0, (1 - price_promo_final_2) / price_no_promo_final_2, 0)
+
+  - kind: cast
+    name: cast_to decimal
+    context_name: add_final_prices
+    params:
+      - column: non_promo_price_pr_l_kg_sp1_l1
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp1_l1
+        to: decimal(10,2)
+      - column: avg_non_promo_price_pr_l_kg_sp2_l1
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp3_l1
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp4_l1
+        to: decimal(10,2)
+      - column: non_promo_price_pr_l_kg_sp1_l2
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp1_l2
+        to: decimal(10,2)
+      - column: avg_non_promo_price_pr_l_kg_sp2_l2
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp3_l2
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp4_l2
+        to: decimal(10,2)
+      - column: non_promo_price_pr_l_kg_sp1_l3
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp1_l3
+        to: decimal(10,2)
+      - column: avg_non_promo_price_pr_l_kg_sp2_l3
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp3_l3
+        to: decimal(10,2)
+      - column: price_volume_promo_price_sp4_l3
+        to: decimal(10,2)
+      - column: price_no_promo_final_2
+        to: decimal(10,2)
+      - column: price_promo_final_2
+        to: decimal(10,2)
+      - column: price_discount
+        to: decimal(10,2)
+
+  - kind: select
+    name: select_final_promo_price_sp4_l3
+    context_name: cast_to decimal
+    params:
+      columns:
+        sku_sp1_l1: sku_text
+        year_sp1_l1: year
+        month_sp1_l1: month
+        is_scorecard_date: is_scorecard_date
+        market_level_1: market_level_1
+        non_promo_price_pr_l_kg_sp1_l1: m1_price_no_promo_current_period
+        price_volume_promo_price_sp1_l1: m1_price_promo_current_period
+        avg_non_promo_price_pr_l_kg_sp2_l1: m1_price_no_promo_current_year
+        price_volume_promo_price_sp3_l1: m1_price_promo_previous_period
+        price_volume_promo_price_sp4_l1: m1_price_promo_next_period
+        level_2: market_level_2
+        non_promo_price_pr_l_kg_sp1_l2: m2_price_no_promo_current_period
+        price_volume_promo_price_sp1_l2: m2_price_promo_current_period
+        avg_non_promo_price_pr_l_kg_sp2_l2: m2_price_no_promo_current_year
+        price_volume_promo_price_sp3_l2: m2_price_promo_previous_period
+        price_volume_promo_price_sp4_l2: m2_price_promo_next_period
+        level_3: market_level_3
+        non_promo_price_pr_l_kg_sp1_l3: m3_price_no_promo_current_period
+        price_volume_promo_price_sp1_l3: m3_price_promo_current_period
+        avg_non_promo_price_pr_l_kg_sp2_l3: m3_price_no_promo_current_year
+        price_volume_promo_price_sp3_l3: m3_price_promo_previous_period
+        price_volume_promo_price_sp4_l3: m3_price_promo_next_period
+        price_no_promo_final_2 : price_no_promo
+        price_promo_final_2: price_promo
+        price_discount: price_discount
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_leaflet_scorecard
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_leaflet_scorecard
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,182 @@
+transform:
+  name: dm_sales_documents
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_vbak
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: vbak
+
+  - kind: select
+    name: select_vbak
+    params:
+      columns:
+        kunnr: kunnr_b
+        vbeln: vbeln_b
+        vkorg: vkorg_b
+        audat: audat_b
+        kvgr4: kvgr4_b
+        gueen: gueen_b
+        auart: auart_b
+        lfstk: lfstk_b
+        gbstk: gbstk_b
+        erdat: erdat_b
+        gbstk: gbstk_b
+        sap_cluster: sap_cluster_b
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_vbap
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: vbap
+
+  - kind: select
+    name: select_vbap
+    params:
+      columns:
+        vbeln: vbeln_a
+        matnr: matnr_a
+        posnr: posnr_a
+        werks: werks_a
+        stlnr: stlnr_a
+        sap_cluster: sap_cluster_a
+        erdat: erdat_a
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_vbuk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: vbuk
+
+  - kind: select
+    name: select_vbuk
+    params:
+      columns:
+        vbeln: vbeln_c
+        vbtyp: vbtyp_c
+        gbstk: gbstk_c
+        lfgsk: lfgsk_c
+        sap_cluster: sap_cluster_c
+
+  - kind: add
+    name: add_vbap_left_werks
+    context_name: select_vbap
+    params:
+      - column: vbap_left_werks
+        expression: left(werks_a, 2)
+
+# Read plant_code_mapping
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_vbak_vbap
+    context_name: select_vbak
+    params:
+      - other:
+          add_vbap_left_werks
+        how:
+          left
+        columns:
+          vbeln_b: vbeln_a
+          sap_cluster_b: sap_cluster_a
+      - other:
+          select_vbuk
+        how:
+          left
+        columns:
+          vbeln_b: vbeln_c
+          sap_cluster_b: sap_cluster_c          
+      - other:
+          select_pcm
+        how:
+          left
+        columns:
+          vbap_left_werks: plant_code_short
+          sap_cluster_a: sap_cluster
+
+  - kind: select
+    name: select_dm_sales_documents
+    params:
+      columns:
+        kunnr_b: customer_code
+        vbeln_b: sales_document_number
+        vkorg_b: sales_org_code
+        erdat_b: creation_date
+        vbtyp_c: sales_document_category
+        gbstk_b: overall_processing_status_header
+        gbstk_c: overall_processing_status_header_status
+        lfgsk_c: overall_delivery_status
+        audat_b: document_date
+        kvgr4_b: customer_group_4_code
+        gueen_b: valid_to_date
+        auart_b: sales_document_type
+        lfstk_b: delivery_status
+        matnr_a: material_code
+        posnr_a: sales_document_item_number
+        country_code: country_code
+        werks_a: plant_code
+        stlnr_a: bom_number
+        sap_cluster_b: sap_cluster
+        erdat_a: item_creation_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_sales_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_sales_documents
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

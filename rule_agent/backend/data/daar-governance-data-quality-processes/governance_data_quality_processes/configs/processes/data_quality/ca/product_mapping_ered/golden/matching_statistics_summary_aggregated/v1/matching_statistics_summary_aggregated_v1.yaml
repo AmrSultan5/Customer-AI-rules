@@ -1,0 +1,2884 @@
+transform:
+  name: matching_statistics_aggregated
+  operations:
+
+####################### PMM #############################
+# pmh - initial transformations
+  - kind: read_dataio
+    name: read_pmh
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: results_history
+      schema_version: v1
+
+  - kind: filter
+    name: filter_system_pmh
+    context_name: read_pmh
+    params:
+      - condition:
+          source_system = 'ered'
+
+  - kind: select
+    name: select_initial_pmh
+    context_name: filter_system_pmh
+    params:
+      columns:
+        ext_product_name: ext_product_name_pmh
+        ext_country_code: ext_country_code_pmh
+        sap_product_code: sap_product_code_pmh
+        matching_score: matching_score
+        # status_code: status_code
+        processing_date: processing_date
+        source_system: source_system_pmh
+
+  - kind: group
+    name: group_date_system_pmh
+    context_name: select_initial_pmh
+    params:
+      - aggs:
+          processing_date: max
+        by:
+        - source_system_pmh
+
+  - kind: join
+    name: join_date_system_pmh
+    context_name: select_initial_pmh
+    params:
+      - other:
+          group_date_system_pmh
+        how:
+          inner
+        columns:
+          source_system_pmh : source_system_pmh
+          processing_date: max_processing_date
+
+# Read spu after basic load
+# sap_products_universe - spu
+  - kind: read_dataio
+    name: read_spu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_spu
+    context_name: read_spu
+    params:
+      columns:
+        product_code: sap_product_code_spu
+        country_code: country_code_spu
+        product_name_raw: sap_product_name_spu
+        ean_code: sap_ean_code
+        brand_name: sap_brand_name
+        flavour_name: sap_flavour_name
+        pack_size_name: sap_pack_size_name
+        pack_type_name: sap_pack_type_name
+        sales_unit_name: sap_sales_unit_name
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+
+# Read epu after basic load
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_epu
+    context_name: read_epu
+    params:
+      columns:
+        product_name_raw: ext_product_name_epu
+        source_system: source_system_epu
+        country_code: country_code_epu
+        brand_name: ext_brand_name
+        flavour_name: ext_flavour_name
+        pack_size_name: ext_pack_size_name
+        pack_type_name: ext_pack_type_name
+        sales_unit_name: ext_sales_unit_name
+        blacklisting_mode: blacklisting_mode
+
+# Read ep after basic load
+# ered_products - ep
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: ered_products
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_ep
+    context_name: read_ep
+    params:
+      columns:
+        product_name: product_name_ep
+        source_system: source_system_ep
+        country_code: country_code_ep
+        qc_name: qc_name
+        qc_address: qc_address
+
+# base join
+  - kind: join
+    name: join_base
+    context_name: join_date_system_pmh
+    params:
+      - other:
+          select_initial_spu
+        how:
+          left
+        columns:
+          sap_product_code_pmh: sap_product_code_spu
+          ext_country_code_pmh: country_code_spu
+      - other:
+          select_initial_epu
+        how:
+          left
+        columns:
+          ext_product_name_pmh: ext_product_name_epu
+          ext_country_code_pmh: country_code_epu
+          source_system_pmh: source_system_epu
+      # - other:
+      #     select_initial_ep
+      #   how:
+      #     left
+      #   columns:
+      #     ext_product_name_pmh: product_name_ep
+      #     ext_country_code_pmh: country_code_ep
+      #     source_system_pmh: source_system_ep
+
+  - kind: select
+    name: select_base
+    context_name: join_base
+    params:
+      columns:
+        ext_product_name_pmh: ext_product_name
+        ext_country_code_pmh: ext_country_code
+        sap_product_code_pmh: sap_product_code
+        matching_score: matching_score
+        processing_date: processing_date
+        source_system_pmh: source_system
+        sap_product_name_spu: sap_product_name
+        sap_ean_code: sap_ean_code
+        sap_brand_name: sap_brand_name
+        sap_flavour_name: sap_flavour_name
+        sap_pack_size_name: sap_pack_size_name
+        sap_pack_type_name: sap_pack_type_name
+        sap_sales_unit_name: sap_sales_unit_name
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        # qc_name: qc_name
+        # qc_address: qc_address
+        blacklisting_mode: blacklisting_mode
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+
+####################### MRA #############################
+  - kind: read_dataio
+    name: read_mra
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: golden
+      object_name: results_summary
+      schema_version: v1
+
+  - kind: add
+    name: add_read_mra
+    params:
+      - column: source_system
+        expression: '''ered'''
+
+  - kind: filter
+    name: filter_mra
+    context_name: add_read_mra
+    params:
+      - condition:
+          matching_status <> '0'
+
+  - kind: filter
+    name: filter_mra_0
+    context_name: add_read_mra
+    params:
+      - condition:
+          matching_status = '0'
+
+#########################################################
+# AGGREGATED
+#########################################################
+
+####################### PMM #############################
+########## SAP_PROD_COUNT_PMM 
+  - kind: group
+    name: group_count_num_match
+    context_name: select_base
+    params:
+      - aggs:
+          ext_product_name: count
+        by:
+        - ext_country_code
+        - sap_product_code
+        # - scenaro_id
+
+  - kind: join
+    name: join_count_num_match
+    context_name: select_base
+    params:
+      - other:
+          group_count_num_match
+        how:
+          inner
+        columns:
+          ext_country_code : ext_country_code
+          sap_product_code: sap_product_code
+          # scenario_id: scenario_id
+
+  - kind: filter
+    name: filter_count_SAP_single_match
+    context_name: join_count_num_match
+    params:
+      - condition:
+          count_ext_product_name = '1'
+
+  - kind: group
+    name: group_count_SAP_single_match
+    params:
+      - aggs:
+          count_ext_product_name: count
+        by:
+        - ext_country_code
+
+  - kind: join
+    name: join_count_SAP_single_match
+    context_name: filter_count_SAP_single_match
+    params:
+      - other:
+          group_count_SAP_single_match
+        how:
+          inner
+        columns:
+          ext_country_code : ext_country_code
+
+  - kind: select
+    name: select_SAP_single_match
+    context_name: join_count_SAP_single_match
+    params:
+      columns:
+        processing_date: processing_date
+        ext_country_code: ext_country_code
+        count_count_ext_product_name: kpi_value
+        source_system: source_system
+      distinct: true        
+
+  - kind: add
+    name: add_count_SAP_single_match
+    params:
+      - column: kpi_code
+        expression: '''SAP_PROD_COUNT_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+
+  - kind: select
+    name: select_SAP_PROD_COUNT_PMM
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+########## MIN_MAX_AVG_SCORE_PMM country 
+# MIN
+  - kind: group
+    name: group_min_PMM
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: min
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_min_PMM
+    params:
+      - column: kpi_code
+        expression: '''MIN_SCORE_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: 100 * min_matching_score
+
+  - kind: select
+    name: select_min_PMM
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# MAX
+  - kind: group
+    name: group_max_PMM
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: max
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_max_PMM
+    params:
+      - column: kpi_code
+        expression: '''MAX_SCORE_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: 100 * max_matching_score
+
+  - kind: select
+    name: select_max_PMM
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# AVG
+  - kind: group
+    name: group_avg_PMM
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: avg
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_avg_PMM
+    params:
+      - column: kpi_code
+        expression: '''AVG_SCORE_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: 100 * avg_matching_score
+
+  - kind: select
+    name: select_avg_PMM
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+  - kind: union
+    name: union_min_max_PMM
+    context_name: select_min_PMM
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_max_PMM
+
+  - kind: union
+    name: union_min_max_avg_PMM
+    context_name: union_min_max_PMM
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_avg_PMM
+
+########## MIN_MAX_AVG_SCORE_PMM all 
+# MIN
+  - kind: group
+    name: group_min_PMM_all
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: min
+        by:
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_min_PMM_all
+    params:
+      - column: kpi_code
+        expression: '''MIN_SCORE_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''all'''
+      - column: kpi_value
+        expression: 100 * min_matching_score
+      - column: ext_country_code
+        expression: '''''' 
+
+  - kind: select
+    name: select_min_PMM_all
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# MAX
+  - kind: group
+    name: group_max_PMM_all
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: max
+        by:
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_max_PMM_all
+    params:
+      - column: kpi_code
+        expression: '''MAX_SCORE_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''all'''
+      - column: kpi_value
+        expression: 100 * max_matching_score
+      - column: ext_country_code
+        expression: ''''''
+
+  - kind: select
+    name: select_max_PMM_all
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# AVG
+  - kind: group
+    name: group_avg_PMM_all
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: avg
+        by:
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_avg_PMM_all
+    params:
+      - column: kpi_code
+        expression: '''AVG_SCORE_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''all'''
+      - column: kpi_value
+        expression: 100 * avg_matching_score
+      - column: ext_country_code
+        expression: ''''''
+
+  - kind: select
+    name: select_avg_PMM_all
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+  - kind: union
+    name: union_min_max_PMM_all
+    context_name: select_min_PMM_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_max_PMM_all
+
+  - kind: union
+    name: union_min_max_avg_PMM_all
+    context_name: union_min_max_PMM_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_avg_PMM_all
+
+########## COUNT_PMM 
+  - kind: select
+    name: select_count_PMM
+    context_name: select_base
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        source_system: source_system
+      distinct: true        
+
+  - kind: group
+    name: group_count_PMM
+    context_name: select_count_PMM
+    params:
+      - aggs:
+          ext_product_name: count
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_count_PMM
+    params:
+      - column: kpi_code
+        expression: '''COUNT_PMM'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: count_ext_product_name
+
+  - kind: select
+    name: select_count_PMM
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# union PMM
+  - kind: union
+    name: union_PMM_1
+    context_name: select_SAP_PROD_COUNT_PMM
+    params:
+      allow_missing: false
+      by_name: true
+      other: union_min_max_avg_PMM
+      
+  - kind: union
+    name: union_PMM_2
+    context_name: union_PMM_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: union_min_max_avg_PMM_all
+
+  - kind: union
+    name: union_PMM
+    context_name: union_PMM_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_count_PMM
+
+########## SAP_PROD_COUNT_MRA ##########
+  - kind: group
+    name: group_count_num_match_MRA
+    context_name: read_mra
+    params:
+      - aggs:
+          ext_product_name: count
+        by:
+        - ext_country_code
+        - sap_product_code
+        # - scenaro_id
+
+  - kind: join
+    name: join_count_num_match_MRA
+    context_name: read_mra
+    params:
+      - other:
+          group_count_num_match_MRA
+        how:
+          inner
+        columns:
+          ext_country_code : ext_country_code
+          sap_product_code: sap_product_code
+          # scenario_id: scenario_id
+
+  - kind: filter
+    name: filter_count_SAP_single_match_MRA
+    context_name: join_count_num_match_MRA
+    params:
+      - condition:
+          count_ext_product_name = '1'
+
+  - kind: group
+    name: group_count_SAP_single_match_MRA
+    params:
+      - aggs:
+          count_ext_product_name: count
+        by:
+        - ext_country_code
+
+  - kind: join
+    name: join_count_SAP_single_match_MRA
+    context_name: filter_count_SAP_single_match_MRA
+    params:
+      - other:
+          group_count_SAP_single_match_MRA
+        how:
+          inner
+        columns:
+          ext_country_code : ext_country_code
+          # scenario_id : scenario_id
+
+  - kind: select
+    name: select_SAP_single_match_MRA
+    context_name: join_count_SAP_single_match_MRA
+    params:
+      columns:
+        processing_date: processing_date
+        ext_country_code: ext_country_code
+        count_count_ext_product_name: kpi_value
+      distinct: true        
+
+  - kind: add
+    name: add_count_SAP_single_match_MRA
+    params:
+      - column: kpi_code
+        expression: '''SAP_PROD_COUNT_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: source_system  # to be removed
+        expression: '''ered'''
+
+  - kind: select
+    name: select_SAP_PROD_COUNT_MRA
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true       
+
+########## MIN_MAX_AVG_SCORE_MRA country ##########
+# MIN
+  - kind: group
+    name: group_min_MRA
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: min
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_min_MRA
+    params:
+      - column: kpi_code
+        expression: '''MIN_SCORE_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: 100 * min_matching_score
+
+  - kind: select
+    name: select_min_MRA
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# MAX
+  - kind: group
+    name: group_max_MRA
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: max
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_max_MRA
+    params:
+      - column: kpi_code
+        expression: '''MAX_SCORE_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: 100 * max_matching_score
+
+  - kind: select
+    name: select_max_MRA
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# AVG
+  - kind: group
+    name: group_avg_MRA
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: avg
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_avg_MRA
+    params:
+      - column: kpi_code
+        expression: '''AVG_SCORE_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: 100 * avg_matching_score
+
+  - kind: select
+    name: select_avg_MRA
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+  - kind: union
+    name: union_min_max_MRA
+    context_name: select_min_MRA
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_max_MRA
+
+  - kind: union
+    name: union_min_max_avg_MRA
+    context_name: union_min_max_MRA
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_avg_MRA
+
+########## MIN_MAX_AVG_SCORE_MRA all ##########
+# MIN
+  - kind: group
+    name: group_min_MRA_all
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: min
+        by:
+        - processing_date
+        # - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_min_MRA_all
+    params:
+      - column: kpi_code
+        expression: '''MIN_SCORE_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''all'''
+      - column: kpi_value
+        expression: 100 * min_matching_score
+      - column: ext_country_code
+        expression: '''''' 
+      - column: source_system  # to be removed
+        expression: '''ered''' 
+
+  - kind: select
+    name: select_min_MRA_all
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# MAX
+  - kind: group
+    name: group_max_MRA_all
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: max
+        by:
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_max_MRA_all
+    params:
+      - column: kpi_code
+        expression: '''MAX_SCORE_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''all'''
+      - column: kpi_value
+        expression: 100 * max_matching_score
+      - column: ext_country_code
+        expression: ''''''
+
+  - kind: select
+    name: select_max_MRA_all
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# AVG
+  - kind: group
+    name: group_avg_MRA_all
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: avg
+        by:
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_avg_MRA_all
+    params:
+      - column: kpi_code
+        expression: '''AVG_SCORE_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''all'''
+      - column: kpi_value
+        expression: 100 * avg_matching_score
+      - column: ext_country_code
+        expression: ''''''
+
+  - kind: select
+    name: select_avg_MRA_all
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+  - kind: union
+    name: union_min_max_MRA_all
+    context_name: select_min_MRA_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_max_MRA_all
+
+  - kind: union
+    name: union_min_max_avg_MRA_all
+    context_name: union_min_max_MRA_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_avg_MRA_all
+
+########## COUNT_MRA ##########
+  - kind: select
+    name: select_count_MRA
+    context_name: read_mra
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        # source_system: source_system
+      distinct: true        
+
+  - kind: group
+    name: group_count_MRA
+    context_name: select_count_MRA
+    params:
+      - aggs:
+          ext_product_name: count
+        by:
+        - ext_country_code
+        - processing_date
+        # - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_count_MRA
+    params:
+      - column: kpi_code
+        expression: '''COUNT_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: count_ext_product_name
+      - column: source_system # to be removed
+        expression: '''ered'''
+
+  - kind: select
+    name: select_count_MRA
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+########## COUNT_NO_MAPPING_MRA ########## 
+  - kind: select
+    name: select_count_MRA_0
+    context_name: filter_mra_0
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        source_system: source_system
+      distinct: true        
+
+  - kind: group
+    name: group_count_MRA_0
+    context_name: select_count_MRA_0
+    params:
+      - aggs:
+          ext_product_name: count
+        by:
+        - ext_country_code
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: add
+    name: add_count_MRA_0
+    params:
+      - column: kpi_code
+        expression: '''COUNT_NO_MAPPING_MRA'''
+      - column: kpi_scope
+        expression: '''matching'''
+      - column: kpi_level
+        expression: '''country'''
+      - column: kpi_value
+        expression: count_ext_product_name
+
+  - kind: select
+    name: select_count_MRA_0
+    params:
+      columns:
+        ext_country_code: ext_country_code
+        # scenario_id: scenario_id
+        processing_date: processing_date
+        kpi_code: kpi_code
+        kpi_scope: kpi_scope
+        kpi_level: kpi_level
+        kpi_value: kpi_value
+        source_system: source_system
+      distinct: true        
+
+# union MRA
+  - kind: union
+    name: union_MRA_1
+    context_name: select_SAP_PROD_COUNT_MRA
+    params:
+      allow_missing: false
+      by_name: true
+      other: union_min_max_avg_MRA
+      
+  - kind: union
+    name: union_MRA_2
+    context_name: union_MRA_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: union_min_max_avg_MRA_all
+
+  - kind: union
+    name: union_MRA_3
+    context_name: union_MRA_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_count_MRA
+
+  - kind: union
+    name: union_MRA
+    context_name: union_MRA_3
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_count_MRA_0
+
+# final union
+  - kind: union
+    name: union_PMM_MRA
+    context_name: union_PMM
+    params:
+      allow_missing: false
+      by_name: true
+      other: union_MRA
+
+############################################################# MODEL METRICS ############################################################################
+# evaluation set
+  - kind: read_local
+    name: read_eval
+    params:
+      format: parquet
+      location: "{{mnt_path}}eRED/model_management/model_validation/"
+          
+  - kind: add
+    name: add_eval_source_system
+    params:
+      - column: source_system
+        expression: '''ered'''
+
+  - kind: read_dataio
+    name: read_mmi
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: product_mapping_ered
+      object_name: manual_input
+      schema_version: v1
+
+  - kind: join
+    name: join_mmi_sap
+    context_name: read_mmi
+    params:
+      - other:
+          read_spu
+        how:
+          left
+        columns:
+          sap_product_code : product_code
+          ext_country_code : country_code
+
+  - kind: filter
+    name: filter_mmi
+    context_name: join_mmi_sap
+    params:
+      - condition:
+          mapping_status = '1'
+
+  - kind: select
+    name: select_mmi
+    params:
+      columns:
+        ext_country_code: country_code
+        ext_product_name: product_name_raw
+        pack_type_code: pack_type
+        flavour_name: flavour
+        brand_name: brand_name
+        # processing_date: processing_date
+      distinct: true        
+
+  - kind: add
+    name: add_mmi_source_system
+    params:
+      - column: source_system
+        expression: '''ered'''
+
+  - kind: select
+    name: select_processing_date_scenario_id
+    params:
+      columns:
+        source_system: source_system
+        # processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true        
+
+  - kind: join
+    name: join_eval_processing_date_scenario_id
+    context_name: add_eval_source_system
+    params:
+      - other:
+          select_processing_date_scenario_id
+        how:
+          left
+        columns:
+          source_system : source_system
+
+  - kind: union
+    name: union_mmi
+    context_name: add_mmi_source_system
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_eval_processing_date_scenario_id
+
+  - kind: select
+    name: select_eval
+    params:
+      columns:
+        country_code: country_code_eval
+        product_name_raw: product_name_raw_eval
+        pack_type: pack_type_eval
+        flavour: flavour_eval
+        brand_name: brand_name_eval
+        # processing_date: processing_date_eval
+        source_system: source_system_eval
+      distinct: true   
+
+  - kind: add
+    name: add_eval
+    params:
+      - column: brand_name_eval_cleansed
+        expression: "TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(brand_name_eval), 'schweppes-cs', 'schweppes-club'), '[^a-z0-9,.-]+', ' '))"
+      - column: flavour_eval_cleansed
+        expression: "REGEXP_REPLACE(TRIM(REGEXP_REPLACE(lower(flavour_eval), '[^a-z0-9,.-]+', ' ')), ' ', '-')"
+      - column: pack_type_eval_cleansed
+        expression: "lower(pack_type_eval)"
+        
+  - kind: add
+    name: add_epu_pack_type
+    context_name: read_epu
+    params:
+      - column: pack_type
+        expression: pack_type_name
+
+  - kind: join
+    name: join_eval_epu
+    context_name: add_eval
+    params:
+      - other:
+          add_epu_pack_type
+        how:
+          inner
+        columns:
+          product_name_raw_eval : product_name_raw
+          country_code_eval : country_code
+ 
+### brand_name all
+  - kind: add
+    name: add_eval_epu
+    context_name: join_eval_epu
+    params:
+      - column: true_brand_name_pred
+        expression: IF(brand_name_eval_cleansed = brand_name, 1, 0)
+      - column: false_brand_name_pred
+        expression: IF(brand_name_eval_cleansed = brand_name, 0, 1)
+
+  - kind: group
+    name: group_brand_name_all_tp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          true_brand_name_pred: sum
+        by:
+        - brand_name_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_brand_name_all_tp
+    params:
+      columns:
+        sum_true_brand_name_pred: tp
+        brand_name_eval_cleansed: brand_name_eval_cleansed
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_brand_name_all_fp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_brand_name_pred: sum
+        by:
+        - brand_name
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_brand_name_all_fp
+    params:
+      columns:
+        sum_false_brand_name_pred: fp
+        brand_name: brand_name
+        source_system_eval: source_system
+        # processing_date_eval: processing_date
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_brand_name_all_fn
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_brand_name_pred: sum
+        by:
+        - brand_name_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_brand_name_all_fn
+    params:
+      columns:
+        sum_false_brand_name_pred: fn
+        brand_name_eval_cleansed: brand_name_eval_cleansed
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: join
+    name: join_brand_name_all
+    context_name: select_brand_name_all_tp
+    params:
+      - other:
+          select_brand_name_all_fn
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system_eval
+          brand_name_eval_cleansed: brand_name_eval_cleansed
+          # processing_date_eval : processing_date_eval
+          # scenario_id: scenario_id
+      - other:
+          select_brand_name_all_fp
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system
+          brand_name_eval_cleansed: brand_name
+          # processing_date_eval : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_brand_name_all
+    context_name: join_brand_name_all
+    params:
+      - column: tp
+        expression: IF(tp IS NULL, 0, tp)
+        overwrite: true
+      - column: fp
+        expression: IF(fp IS NULL, 0, fp)
+        overwrite: true
+      - column: fn
+        expression: IF(fn IS NULL, 0, fn)
+        overwrite: true
+      - column: brand_name
+        expression: IF(brand_name IS NULL, brand_name_eval_cleansed, brand_name)
+        overwrite: true
+      - column: source_system
+        expression: IF(source_system IS NULL, source_system_eval, source_system)
+        overwrite: true
+      # - column: processing_date
+      #   expression: IF(processing_date IS NULL, processing_date_eval, processing_date)
+      #   overwrite: true
+
+  - kind: add
+    name: add_metrics_1
+    context_name: add_brand_name_all
+    params:
+      - column: support
+        expression: tp + fn 
+
+  - kind: group
+    name: group_metrics_1
+    context_name: add_metrics_1
+    params:
+      - aggs:
+          support: sum
+          tp: sum
+        by:
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: join
+    name: join_metrics_1
+    context_name: add_metrics_1
+    params:
+      - other:
+          group_metrics_1
+        how:
+          left
+        columns:
+          source_system : source_system          
+          # processing_date : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_metrics_2
+    context_name: join_metrics_1
+    params:
+      - column: precision
+        expression: IF(tp + fp = 0, 0, 100 * tp / (tp + fp))
+      - column: recall
+        expression: IF(tp + fn = 0, 0, 100* tp / (tp + fn))
+      - column: f1 
+        expression: IF(precision + recall = 0, 0, 2 * precision * recall / (precision + recall))
+      - column: accuracy
+        expression: 100 * sum_tp/sum_support
+      - column: weights 
+        expression: support/sum_support
+
+  - kind: add
+    name: add_metrics_3
+    context_name: add_metrics_2
+    params:
+      - column: weigthed_precision
+        expression: weights * precision
+      - column: weigthed_recall
+        expression: weights * recall
+      - column: weigthed_f1 
+        expression: weights * f1
+
+  - kind: group
+    name: group_brand_name_all_metrics
+    context_name: add_metrics_3
+    params:
+      - aggs:
+          precision: avg
+          recall: avg
+          f1: avg
+          accuracy: avg
+          weigthed_precision: sum
+          weigthed_recall: sum
+          weigthed_f1: sum
+        by:
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: add
+    name: add_processing_date
+    context_name: group_brand_name_all_metrics
+    params:
+      - column: processing_date
+        expression: cast(current_timestamp() as string)
+
+  - kind: select
+    name: select_brand_name_all_metrics
+    params:
+      columns:
+        avg_precision: macro_precision_brand_name
+        avg_recall: macro_recall_brand_name
+        avg_f1: macro_f1_brand_name
+        avg_accuracy: accuracy_brand_name
+        sum_weigthed_precision: weighted_precision_brand_name
+        sum_weigthed_recall: weighted_recall_brand_name
+        sum_weigthed_f1: weighted_f1_brand_name
+        source_system: source_system
+        processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true         
+
+  - kind: unpivot
+    name: unpivot_brand_name_all_metrics
+    context_name: select_brand_name_all_metrics
+    params:
+      by:
+       - source_system
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: brand_name_all_metrics
+    context_name: unpivot_brand_name_all_metrics
+    params:
+      - column: ext_country_code
+        expression: ''''''
+      - column: kpi_scope
+        expression: '''model'''
+      - column: kpi_level
+        expression: '''all'''
+
+### brand_name country
+  - kind: group
+    name: group_brand_name_country_tp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          true_brand_name_pred: sum
+        by:
+        - country_code_eval
+        - brand_name_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_brand_name_country_tp
+    params:
+      columns:
+        sum_true_brand_name_pred: tp
+        brand_name_eval_cleansed: brand_name_eval_cleansed
+        country_code_eval: country_code_eval
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_brand_name_country_fp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_brand_name_pred: sum
+        by:
+        - brand_name
+        - country_code_eval
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_brand_name_country_fp
+    params:
+      columns:
+        sum_false_brand_name_pred: fp
+        brand_name: brand_name
+        country_code_eval: country_code
+        source_system_eval: source_system
+        # processing_date_eval: processing_date
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_brand_name_country_fn
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_brand_name_pred: sum
+        by:
+        - brand_name_eval_cleansed
+        - country_code_eval
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_brand_name_country_fn
+    params:
+      columns:
+        sum_false_brand_name_pred: fn
+        brand_name_eval_cleansed: brand_name_eval_cleansed
+        country_code_eval: country_code_eval
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: join
+    name: join_brand_name_country
+    context_name: select_brand_name_country_tp
+    params:
+      - other:
+          select_brand_name_country_fn
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system_eval
+          brand_name_eval_cleansed: brand_name_eval_cleansed
+          country_code_eval : country_code_eval
+          # processing_date_eval : processing_date_eval
+          # scenario_id: scenario_id
+      - other:
+          select_brand_name_country_fp
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system
+          brand_name_eval_cleansed: brand_name
+          country_code_eval : country_code
+          # processing_date_eval : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_brand_name_country
+    context_name: join_brand_name_country
+    params:
+      - column: tp
+        expression: IF(tp IS NULL, 0, tp)
+        overwrite: true
+      - column: fp
+        expression: IF(fp IS NULL, 0, fp)
+        overwrite: true
+      - column: fn
+        expression: IF(fn IS NULL, 0, fn)
+        overwrite: true
+      - column: brand_name
+        expression: IF(brand_name IS NULL, brand_name_eval_cleansed, brand_name)
+        overwrite: true
+      - column: source_system
+        expression: IF(source_system IS NULL, source_system_eval, source_system)
+        overwrite: true
+      # - column: processing_date
+      #   expression: IF(processing_date IS NULL, processing_date_eval, processing_date)
+      #   overwrite: true
+      - column: country_code
+        expression: IF(country_code IS NULL, country_code_eval, country_code)
+        overwrite: true
+
+  - kind: add
+    name: add_metrics_1
+    context_name: add_brand_name_country
+    params:
+      - column: support
+        expression: tp + fn 
+
+  - kind: group
+    name: group_metrics_1
+    context_name: add_metrics_1
+    params:
+      - aggs:
+          support: sum
+          tp: sum
+        by:
+        - country_code
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: join
+    name: join_metrics_1
+    context_name: add_metrics_1
+    params:
+      - other:
+          group_metrics_1
+        how:
+          left
+        columns:
+          country_code : country_code
+          source_system : source_system          
+          # processing_date : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_metrics_2
+    context_name: join_metrics_1
+    params:
+      - column: precision
+        expression: IF(tp + fp = 0, 0, 100 * tp / (tp + fp))
+      - column: recall
+        expression: IF(tp + fn = 0, 0, 100* tp / (tp + fn))
+      - column: f1 
+        expression: IF(precision + recall = 0, 0, 2 * precision * recall / (precision + recall))
+      - column: accuracy
+        expression: 100 * sum_tp/sum_support
+      - column: weights 
+        expression: support/sum_support
+
+  - kind: add
+    name: add_metrics_3
+    context_name: add_metrics_2
+    params:
+      - column: weigthed_precision
+        expression: weights * precision
+      - column: weigthed_recall
+        expression: weights * recall
+      - column: weigthed_f1 
+        expression: weights * f1
+
+  - kind: group
+    name: group_brand_name_country_metrics
+    context_name: add_metrics_3
+    params:
+      - aggs:
+          precision: avg
+          recall: avg
+          f1: avg
+          accuracy: avg
+          weigthed_precision: sum
+          weigthed_recall: sum
+          weigthed_f1: sum
+        by:
+        - country_code
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: add
+    name: add_processing_date_country
+    context_name: group_brand_name_country_metrics
+    params:
+      - column: processing_date
+        expression: cast(current_timestamp() as string)
+
+  - kind: select
+    name: select_brand_name_country_metrics
+    params:
+      columns:
+        avg_precision: macro_precision_brand_name
+        avg_recall: macro_recall_brand_name
+        avg_f1: macro_f1_brand_name
+        avg_accuracy: accuracy_brand_name
+        sum_weigthed_precision: weighted_precision_brand_name
+        sum_weigthed_recall: weighted_recall_brand_name
+        sum_weigthed_f1: weighted_f1_brand_name
+        country_code: ext_country_code
+        source_system: source_system
+        processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true         
+
+  - kind: unpivot
+    name: unpivot_brand_name_country_metrics
+    context_name: select_brand_name_country_metrics
+    params:
+      by:
+       - source_system
+       - ext_country_code
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: brand_name_country_metrics
+    context_name: unpivot_brand_name_country_metrics
+    params:
+      - column: kpi_scope
+        expression: '''model'''
+      - column: kpi_level
+        expression: '''country'''
+
+  - kind: union
+    name: brand_name_metrics
+    params:
+      allow_missing: false
+      by_name: true
+      other: brand_name_all_metrics
+
+#######################
+### pack_type 
+  - kind: add
+    name: add_eval_epu
+    context_name: join_eval_epu
+    params:
+      - column: true_pack_type_pred
+        expression: IF(pack_type_eval_cleansed = pack_type, 1, 0)
+      - column: false_pack_type_pred
+        expression: IF(pack_type_eval_cleansed = pack_type, 0, 1)
+
+  - kind: group
+    name: group_pack_type_all_tp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          true_pack_type_pred: sum
+        by:
+        - pack_type_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_pack_type_all_tp
+    params:
+      columns:
+        sum_true_pack_type_pred: tp
+        pack_type_eval_cleansed: pack_type_eval_cleansed
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_pack_type_all_fp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_pack_type_pred: sum
+        by:
+        - pack_type
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_pack_type_all_fp
+    params:
+      columns:
+        sum_false_pack_type_pred: fp
+        pack_type: pack_type
+        source_system_eval: source_system
+        # processing_date_eval: processing_date
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_pack_type_all_fn
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_pack_type_pred: sum
+        by:
+        - pack_type_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_pack_type_all_fn
+    params:
+      columns:
+        sum_false_pack_type_pred: fn
+        pack_type_eval_cleansed: pack_type_eval_cleansed
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: join
+    name: join_pack_type_all
+    context_name: select_pack_type_all_tp
+    params:
+      - other:
+          select_pack_type_all_fn
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system_eval
+          pack_type_eval_cleansed: pack_type_eval_cleansed
+          # processing_date_eval : processing_date_eval
+          # scenario_id: scenario_id
+      - other:
+          select_pack_type_all_fp
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system
+          pack_type_eval_cleansed: pack_type
+          # processing_date_eval : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_pack_type_all
+    context_name: join_pack_type_all
+    params:
+      - column: tp
+        expression: IF(tp IS NULL, 0, tp)
+        overwrite: true
+      - column: fp
+        expression: IF(fp IS NULL, 0, fp)
+        overwrite: true
+      - column: fn
+        expression: IF(fn IS NULL, 0, fn)
+        overwrite: true
+      - column: pack_type
+        expression: IF(pack_type IS NULL, pack_type_eval_cleansed, pack_type)
+        overwrite: true
+      - column: source_system
+        expression: IF(source_system IS NULL, source_system_eval, source_system)
+        overwrite: true
+      # - column: processing_date
+      #   expression: IF(processing_date IS NULL, processing_date_eval, processing_date)
+      #   overwrite: true
+
+  - kind: add
+    name: add_metrics_1
+    context_name: add_pack_type_all
+    params:
+      - column: support
+        expression: tp + fn 
+
+  - kind: group
+    name: group_metrics_1
+    context_name: add_metrics_1
+    params:
+      - aggs:
+          support: sum
+          tp: sum
+        by:
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: join
+    name: join_metrics_1
+    context_name: add_metrics_1
+    params:
+      - other:
+          group_metrics_1
+        how:
+          left
+        columns:
+          source_system : source_system          
+          # processing_date : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_metrics_2
+    context_name: join_metrics_1
+    params:
+      - column: precision
+        expression: IF(tp + fp = 0, 0, 100 * tp / (tp + fp))
+      - column: recall
+        expression: IF(tp + fn = 0, 0, 100* tp / (tp + fn))
+      - column: f1 
+        expression: IF(precision + recall = 0, 0, 2 * precision * recall / (precision + recall))
+      - column: accuracy
+        expression: 100 * sum_tp/sum_support
+      - column: weights 
+        expression: support/sum_support
+
+  - kind: add
+    name: add_metrics_3
+    context_name: add_metrics_2
+    params:
+      - column: weigthed_precision
+        expression: weights * precision
+      - column: weigthed_recall
+        expression: weights * recall
+      - column: weigthed_f1 
+        expression: weights * f1
+
+  - kind: group
+    name: group_pack_type_all_metrics
+    context_name: add_metrics_3
+    params:
+      - aggs:
+          precision: avg
+          recall: avg
+          f1: avg
+          accuracy: avg
+          weigthed_precision: sum
+          weigthed_recall: sum
+          weigthed_f1: sum
+        by:
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: add
+    name: add_processing_date_pt_all
+    context_name: group_pack_type_all_metrics
+    params:
+      - column: processing_date
+        expression: cast(current_timestamp() as string)
+
+  - kind: select
+    name: select_pack_type_all_metrics
+    params:
+      columns:
+        avg_precision: macro_precision_pack_type
+        avg_recall: macro_recall_pack_type
+        avg_f1: macro_f1_pack_type
+        avg_accuracy: accuracy_pack_type
+        sum_weigthed_precision: weighted_precision_pack_type
+        sum_weigthed_recall: weighted_recall_pack_type
+        sum_weigthed_f1: weighted_f1_pack_type
+        source_system: source_system
+        processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true         
+
+  - kind: unpivot
+    name: unpivot_pack_type_all_metrics
+    context_name: select_pack_type_all_metrics
+    params:
+      by:
+       - source_system
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: pack_type_all_metrics
+    context_name: unpivot_pack_type_all_metrics
+    params:
+      - column: ext_country_code
+        expression: ''''''
+      - column: kpi_scope
+        expression: '''model'''
+      - column: kpi_level
+        expression: '''all'''
+
+### pack_type country
+  - kind: group
+    name: group_pack_type_country_tp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          true_pack_type_pred: sum
+        by:
+        - country_code_eval
+        - pack_type_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_pack_type_country_tp
+    params:
+      columns:
+        sum_true_pack_type_pred: tp
+        pack_type_eval_cleansed: pack_type_eval_cleansed
+        country_code_eval: country_code_eval
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_pack_type_country_fp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_pack_type_pred: sum
+        by:
+        - pack_type
+        - country_code_eval
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_pack_type_country_fp
+    params:
+      columns:
+        sum_false_pack_type_pred: fp
+        pack_type: pack_type
+        country_code_eval: country_code
+        source_system_eval: source_system
+        # processing_date_eval: processing_date
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_pack_type_country_fn
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_pack_type_pred: sum
+        by:
+        - pack_type_eval_cleansed
+        - country_code_eval
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_pack_type_country_fn
+    params:
+      columns:
+        sum_false_pack_type_pred: fn
+        pack_type_eval_cleansed: pack_type_eval_cleansed
+        country_code_eval: country_code_eval
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: join
+    name: join_pack_type_country
+    context_name: select_pack_type_country_tp
+    params:
+      - other:
+          select_pack_type_country_fn
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system_eval
+          pack_type_eval_cleansed: pack_type_eval_cleansed
+          country_code_eval : country_code_eval
+          # processing_date_eval : processing_date_eval
+          # scenario_id: scenario_id
+      - other:
+          select_pack_type_country_fp
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system
+          pack_type_eval_cleansed: pack_type
+          country_code_eval : country_code
+          # processing_date_eval : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_pack_type_country
+    context_name: join_pack_type_country
+    params:
+      - column: tp
+        expression: IF(tp IS NULL, 0, tp)
+        overwrite: true
+      - column: fp
+        expression: IF(fp IS NULL, 0, fp)
+        overwrite: true
+      - column: fn
+        expression: IF(fn IS NULL, 0, fn)
+        overwrite: true
+      - column: pack_type
+        expression: IF(pack_type IS NULL, pack_type_eval_cleansed, pack_type)
+        overwrite: true
+      - column: source_system
+        expression: IF(source_system IS NULL, source_system_eval, source_system)
+        overwrite: true
+      # - column: processing_date
+      #   expression: IF(processing_date IS NULL, processing_date_eval, processing_date)
+      #   overwrite: true
+      - column: country_code
+        expression: IF(country_code IS NULL, country_code_eval, country_code)
+        overwrite: true
+
+  - kind: add
+    name: add_metrics_1
+    context_name: add_pack_type_country
+    params:
+      - column: support
+        expression: tp + fn 
+
+  - kind: group
+    name: group_metrics_1
+    context_name: add_metrics_1
+    params:
+      - aggs:
+          support: sum
+          tp: sum
+        by:
+        - country_code
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: join
+    name: join_metrics_1
+    context_name: add_metrics_1
+    params:
+      - other:
+          group_metrics_1
+        how:
+          left
+        columns:
+          country_code : country_code
+          source_system : source_system          
+          # processing_date : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_metrics_2
+    context_name: join_metrics_1
+    params:
+      - column: precision
+        expression: IF(tp + fp = 0, 0, 100 * tp / (tp + fp))
+      - column: recall
+        expression: IF(tp + fn = 0, 0, 100* tp / (tp + fn))
+      - column: f1 
+        expression: IF(precision + recall = 0, 0, 2 * precision * recall / (precision + recall))
+      - column: accuracy
+        expression: 100 * sum_tp/sum_support
+      - column: weights 
+        expression: support/sum_support
+
+  - kind: add
+    name: add_metrics_3
+    context_name: add_metrics_2
+    params:
+      - column: weigthed_precision
+        expression: weights * precision
+      - column: weigthed_recall
+        expression: weights * recall
+      - column: weigthed_f1 
+        expression: weights * f1
+
+  - kind: group
+    name: group_pack_type_country_metrics
+    context_name: add_metrics_3
+    params:
+      - aggs:
+          precision: avg
+          recall: avg
+          f1: avg
+          accuracy: avg
+          weigthed_precision: sum
+          weigthed_recall: sum
+          weigthed_f1: sum
+        by:
+        - country_code
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: add
+    name: add_processing_date_pt_caountry
+    context_name: group_pack_type_country_metrics
+    params:
+      - column: processing_date
+        expression: cast(current_timestamp() as string)
+
+  - kind: select
+    name: select_pack_type_country_metrics
+    params:
+      columns:
+        avg_precision: macro_precision_pack_type
+        avg_recall: macro_recall_pack_type
+        avg_f1: macro_f1_pack_type
+        avg_accuracy: accuracy_pack_type
+        sum_weigthed_precision: weighted_precision_pack_type
+        sum_weigthed_recall: weighted_recall_pack_type
+        sum_weigthed_f1: weighted_f1_pack_type
+        country_code: ext_country_code
+        source_system: source_system
+        processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true         
+
+  - kind: unpivot
+    name: unpivot_pack_type_country_metrics
+    context_name: select_pack_type_country_metrics
+    params:
+      by:
+       - source_system
+       - ext_country_code
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: pack_type_country_metrics
+    context_name: unpivot_pack_type_country_metrics
+    params:
+      - column: kpi_scope
+        expression: '''model'''
+      - column: kpi_level
+        expression: '''country'''
+
+  - kind: union
+    name: pack_type_metrics
+    params:
+      allow_missing: false
+      by_name: true
+      other: pack_type_all_metrics
+
+### flavour 
+  - kind: add
+    name: add_eval_epu
+    context_name: join_eval_epu
+    params:
+      - column: true_flavour_pred
+        expression: IF(flavour_eval_cleansed = flavour_name, 1, 0)
+      - column: false_flavour_pred
+        expression: IF(flavour_eval_cleansed = flavour_name, 0, 1)
+
+  - kind: group
+    name: group_flavour_all_tp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          true_flavour_pred: sum
+        by:
+        - flavour_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_flavour_all_tp
+    params:
+      columns:
+        sum_true_flavour_pred: tp
+        flavour_eval_cleansed: flavour_eval_cleansed
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_flavour_all_fp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_flavour_pred: sum
+        by:
+        - flavour_name
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_flavour_all_fp
+    params:
+      columns:
+        sum_false_flavour_pred: fp
+        flavour_name: flavour_name
+        source_system_eval: source_system
+        # processing_date_eval: processing_date
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_flavour_all_fn
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_flavour_pred: sum
+        by:
+        - flavour_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_flavour_all_fn
+    params:
+      columns:
+        sum_false_flavour_pred: fn
+        flavour_eval_cleansed: flavour_eval_cleansed
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: join
+    name: join_flavour_all
+    context_name: select_flavour_all_tp
+    params:
+      - other:
+          select_flavour_all_fn
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system_eval
+          flavour_eval_cleansed: flavour_eval_cleansed
+          # processing_date_eval : processing_date_eval
+          # scenario_id: scenario_id
+      - other:
+          select_flavour_all_fp
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system
+          flavour_eval_cleansed: flavour_name
+          # processing_date_eval : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_flavour_all
+    context_name: join_flavour_all
+    params:
+      - column: tp
+        expression: IF(tp IS NULL, 0, tp)
+        overwrite: true
+      - column: fp
+        expression: IF(fp IS NULL, 0, fp)
+        overwrite: true
+      - column: fn
+        expression: IF(fn IS NULL, 0, fn)
+        overwrite: true
+      - column: flavour_name
+        expression: IF(flavour_name IS NULL, flavour_eval_cleansed, flavour_name)
+        overwrite: true
+      - column: source_system
+        expression: IF(source_system IS NULL, source_system_eval, source_system)
+        overwrite: true
+      # - column: processing_date
+      #   expression: IF(processing_date IS NULL, processing_date_eval, processing_date)
+      #   overwrite: true
+
+  - kind: add
+    name: add_metrics_1
+    context_name: add_flavour_all
+    params:
+      - column: support
+        expression: tp + fn 
+
+  - kind: group
+    name: group_metrics_1
+    context_name: add_metrics_1
+    params:
+      - aggs:
+          support: sum
+          tp: sum
+        by:
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: join
+    name: join_metrics_1
+    context_name: add_metrics_1
+    params:
+      - other:
+          group_metrics_1
+        how:
+          left
+        columns:
+          source_system : source_system          
+          # processing_date : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_metrics_2
+    context_name: join_metrics_1
+    params:
+      - column: precision
+        expression: IF(tp + fp = 0, 0, 100 * tp / (tp + fp))
+      - column: recall
+        expression: IF(tp + fn = 0, 0, 100* tp / (tp + fn))
+      - column: f1 
+        expression: IF(precision + recall = 0, 0, 2 * precision * recall / (precision + recall))
+      - column: accuracy
+        expression: 100 * sum_tp/sum_support
+      - column: weights 
+        expression: support/sum_support
+
+  - kind: add
+    name: add_metrics_3
+    context_name: add_metrics_2
+    params:
+      - column: weigthed_precision
+        expression: weights * precision
+      - column: weigthed_recall
+        expression: weights * recall
+      - column: weigthed_f1 
+        expression: weights * f1
+
+  - kind: group
+    name: group_flavour_all_metrics
+    context_name: add_metrics_3
+    params:
+      - aggs:
+          precision: avg
+          recall: avg
+          f1: avg
+          accuracy: avg
+          weigthed_precision: sum
+          weigthed_recall: sum
+          weigthed_f1: sum
+        by:
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: add
+    name: add_processing_date_f_all
+    context_name: group_flavour_all_metrics
+    params:
+      - column: processing_date
+        expression: cast(current_timestamp() as string)
+
+  - kind: select
+    name: select_flavour_all_metrics
+    params:
+      columns:
+        avg_precision: macro_precision_flavour
+        avg_recall: macro_recall_flavour
+        avg_f1: macro_f1_flavour
+        avg_accuracy: accuracy_flavour
+        sum_weigthed_precision: weighted_precision_flavour
+        sum_weigthed_recall: weighted_recall_flavour
+        sum_weigthed_f1: weighted_f1_flavour
+        source_system: source_system
+        processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true         
+
+  - kind: unpivot
+    name: unpivot_flavour_all_metrics
+    context_name: select_flavour_all_metrics
+    params:
+      by:
+       - source_system
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: flavour_all_metrics
+    context_name: unpivot_flavour_all_metrics
+    params:
+      - column: ext_country_code
+        expression: ''''''
+      - column: kpi_scope
+        expression: '''model'''
+      - column: kpi_level
+        expression: '''all'''
+
+### flavour country
+  - kind: group
+    name: group_flavour_country_tp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          true_flavour_pred: sum
+        by:
+        - country_code_eval
+        - flavour_eval_cleansed
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_flavour_country_tp
+    params:
+      columns:
+        sum_true_flavour_pred: tp
+        flavour_eval_cleansed: flavour_eval_cleansed
+        country_code_eval: country_code_eval
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_flavour_country_fp
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_flavour_pred: sum
+        by:
+        - flavour_name
+        - country_code_eval
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_flavour_country_fp
+    params:
+      columns:
+        sum_false_flavour_pred: fp
+        flavour_name: flavour_name
+        country_code_eval: country_code
+        source_system_eval: source_system
+        # processing_date_eval: processing_date
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: group
+    name: group_flavour_country_fn
+    context_name: add_eval_epu
+    params:
+      - aggs:
+          false_flavour_pred: sum
+        by:
+        - flavour_eval_cleansed
+        - country_code_eval
+        - source_system_eval
+        # - processing_date_eval
+        # - scenario_id
+
+  - kind: select
+    name: select_flavour_country_fn
+    params:
+      columns:
+        sum_false_flavour_pred: fn
+        flavour_eval_cleansed: flavour_eval_cleansed
+        country_code_eval: country_code_eval
+        source_system_eval: source_system_eval
+        # processing_date_eval: processing_date_eval
+        # scenario_id: scenario_id
+      distinct: true   
+
+  - kind: join
+    name: join_flavour_country
+    context_name: select_flavour_country_tp
+    params:
+      - other:
+          select_flavour_country_fn
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system_eval
+          flavour_eval_cleansed: flavour_eval_cleansed
+          country_code_eval : country_code_eval
+          # processing_date_eval : processing_date_eval
+          # scenario_id: scenario_id
+      - other:
+          select_flavour_country_fp
+        how:
+          full_outer
+        columns:
+          source_system_eval : source_system
+          flavour_eval_cleansed: flavour_name
+          country_code_eval : country_code
+          # processing_date_eval : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_flavour_country
+    context_name: join_flavour_country
+    params:
+      - column: tp
+        expression: IF(tp IS NULL, 0, tp)
+        overwrite: true
+      - column: fp
+        expression: IF(fp IS NULL, 0, fp)
+        overwrite: true
+      - column: fn
+        expression: IF(fn IS NULL, 0, fn)
+        overwrite: true
+      - column: flavour_name
+        expression: IF(flavour_name IS NULL, flavour_eval_cleansed, flavour_name)
+        overwrite: true
+      - column: source_system
+        expression: IF(source_system IS NULL, source_system_eval, source_system)
+        overwrite: true
+      # - column: processing_date
+      #   expression: IF(processing_date IS NULL, processing_date_eval, processing_date)
+      #   overwrite: true
+      - column: country_code
+        expression: IF(country_code IS NULL, country_code_eval, country_code)
+        overwrite: true
+
+  - kind: add
+    name: add_metrics_1
+    context_name: add_flavour_country
+    params:
+      - column: support
+        expression: tp + fn 
+
+  - kind: group
+    name: group_metrics_1
+    context_name: add_metrics_1
+    params:
+      - aggs:
+          support: sum
+          tp: sum
+        by:
+        - country_code
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: join
+    name: join_metrics_1
+    context_name: add_metrics_1
+    params:
+      - other:
+          group_metrics_1
+        how:
+          left
+        columns:
+          country_code : country_code
+          source_system : source_system          
+          # processing_date : processing_date
+          # scenario_id: scenario_id
+
+  - kind: add
+    name: add_metrics_2
+    context_name: join_metrics_1
+    params:
+      - column: precision
+        expression: IF(tp + fp = 0, 0, 100 * tp / (tp + fp))
+      - column: recall
+        expression: IF(tp + fn = 0, 0, 100* tp / (tp + fn))
+      - column: f1 
+        expression: IF(precision + recall = 0, 0, 2 * precision * recall / (precision + recall))
+      - column: accuracy
+        expression: 100 * sum_tp/sum_support
+      - column: weights 
+        expression: support/sum_support
+
+  - kind: add
+    name: add_metrics_3
+    context_name: add_metrics_2
+    params:
+      - column: weigthed_precision
+        expression: weights * precision
+      - column: weigthed_recall
+        expression: weights * recall
+      - column: weigthed_f1 
+        expression: weights * f1
+
+  - kind: group
+    name: group_flavour_country_metrics
+    context_name: add_metrics_3
+    params:
+      - aggs:
+          precision: avg
+          recall: avg
+          f1: avg
+          accuracy: avg
+          weigthed_precision: sum
+          weigthed_recall: sum
+          weigthed_f1: sum
+        by:
+        - country_code
+        - source_system
+        # - processing_date
+        # - scenario_id
+
+  - kind: add
+    name: add_processing_date_f_country
+    context_name: group_flavour_country_metrics
+    params:
+      - column: processing_date
+        expression: cast(current_timestamp() as string)
+
+  - kind: select
+    name: select_flavour_country_metrics
+    params:
+      columns:
+        avg_precision: macro_precision_flavour
+        avg_recall: macro_recall_flavour
+        avg_f1: macro_f1_flavour
+        avg_accuracy: accuracy_flavour
+        sum_weigthed_precision: weighted_precision_flavour
+        sum_weigthed_recall: weighted_recall_flavour
+        sum_weigthed_f1: weighted_f1_flavour
+        country_code: ext_country_code
+        source_system: source_system
+        processing_date: processing_date
+        # scenario_id: scenario_id
+      distinct: true         
+
+  - kind: unpivot
+    name: unpivot_flavour_country_metrics
+    context_name: select_flavour_country_metrics
+    params:
+      by:
+       - source_system
+       - ext_country_code
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: flavour_country_metrics
+    context_name: unpivot_flavour_country_metrics
+    params:
+      - column: kpi_scope
+        expression: '''model'''
+      - column: kpi_level
+        expression: '''country'''
+
+  - kind: union
+    name: flavour_metrics
+    params:
+      allow_missing: false
+      by_name: true
+      other: flavour_all_metrics
+
+####################### final all metrics union #######################
+  - kind: union
+    name: union_flavour_pack_type
+    context_name: flavour_metrics
+    params:
+      allow_missing: false
+      by_name: true
+      other: pack_type_metrics
+
+  - kind: union
+    name: union_flavour_pack_type_brand_name
+    context_name: union_flavour_pack_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: brand_name_metrics
+
+  - kind: union
+    name: union_final
+    context_name: union_flavour_pack_type_brand_name
+    params:
+      allow_missing: false
+      by_name: true
+      other: union_PMM_MRA
+
+  - kind: cast
+    name: cast_final
+    params:
+      - column: kpi_value
+        to: decimal(13,3)
+
+  - kind: write_dataio
+    name: write_matching_statistics_aggregated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: golden
+      object_name: matching_statistics_summary_aggregated
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

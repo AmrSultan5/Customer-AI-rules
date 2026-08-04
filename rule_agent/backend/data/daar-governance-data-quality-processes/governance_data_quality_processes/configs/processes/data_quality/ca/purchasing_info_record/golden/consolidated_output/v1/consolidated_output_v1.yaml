@@ -1,0 +1,2088 @@
+transform:
+  name: du
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_material_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_plant
+      schema_version: v3
+
+  - kind: select
+    name: select_mp
+    context_name: read_dm_material_plant
+    params:
+      columns:
+        material_code: material_code_mp
+        plant_code: plant_code_mp
+        procurement_type: procurement_type_mp
+        country_code: country_code_mp
+        country_code_of_origin: country_code_of_origin_mp
+        material_status_code: material_status_code_mp
+        do_not_cost_indicator: do_not_cost_indicator_mp    
+        commodity_code: commodity_code_mp
+        sap_cluster: sap_cluster_mp
+      distinct: true           
+      
+  - kind: filter
+    name: filter_mp
+    context_name: select_mp
+    params:
+      - condition:
+         material_status_code_mp NOT IN ('97', '98', '99', 'ZA', 'Z8','Z9') AND
+         do_not_cost_indicator_mp <> 'X' AND
+         procurement_type_mp IN ('E', 'F', 'X') AND
+         plant_code_mp NOT IN ('5503')
+         
+########################################################
+
+  - kind: read_dataio
+    name: read_dm_material_procurement
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_procurement
+      schema_version: v1
+      
+  - kind: select
+    name: select_mpa
+    context_name: read_dm_material_procurement
+    params:
+      columns:
+        material_code: material_code_mpa
+        plant_code: plant_code_mpa
+        quantity_structure_type: quantity_structure_type_mpa
+        posting_period: posting_period_mpa
+        purchasing_organization_code: purchasing_organization_code_mpa
+        procurement_alternative_process_category: procurement_alternative_process_category_mpa
+        special_procurement_plant_code: special_procurement_plant_code_mpa
+        vendor_code: vendor_code_mpa
+        production_version: production_version_mpa
+        bom_usage: bom_usage_mpa
+        bom_alternative: bom_alternative_mpa
+        mixing_ratio: mixing_ratio_mpa
+        quantity_structure_type: quantity_structure_type_mpa
+        fiscal_year: fiscal_year_mpa
+        sap_cluster: sap_cluster_mpa
+      distinct: true     
+      
+  - kind: add
+    name: add_posting_period_filter
+    context_name: select_mpa
+    params:
+      - column: posting_period_filter
+        expression: "CASE WHEN SUBSTR(plant_code_mpa, 1, 2) != 49 AND posting_period_mpa = '0' THEN 'X' 
+                    WHEN SUBSTR(plant_code_mpa, 1, 2) = 49 AND posting_period_mpa = MONTH(GETDATE()) THEN 'X'
+                    ELSE ''
+                    END"                       
+      
+  - kind: filter
+    name: filter_mpa
+    context_name: add_posting_period_filter
+    params:
+      - condition:
+         fiscal_year_mpa = YEAR(current_date()) AND
+         fiscal_year_mpa is not null AND
+         quantity_structure_type_mpa IN ('ZZ02', 'ZZ01') AND
+         posting_period_filter = 'X' AND
+         procurement_alternative_process_category_mpa IN ('BL', 'BB')
+         
+         
+ ########################################################
+
+  - kind: read_dataio
+    name: read_dm_material_valuation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_valuation
+      schema_version: v1
+      
+  - kind: select
+    name: select_dv
+    context_name: read_dm_material_valuation
+    params:
+      columns:
+        material_code: material_code_dv
+        plant_valuation_area: plant_valuation_area_dv
+        valuation_class_code: valuation_class_code_dv
+        price_control_flag: price_control_flag_dv
+        sap_cluster: sap_cluster_dv
+      distinct: true     
+      
+  - kind: filter
+    name: filter_dv
+    context_name: select_dv
+    params:
+      - condition:
+         price_control_flag_dv = 'S' AND
+         valuation_class_code_dv NOT IN ('0000','1990','2091','4099')
+         
+########################################################
+
+  - kind: read_dataio
+    name: read_dm_purchasing_info 
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_purchasing_info
+      schema_version: v1
+      
+  - kind: select
+    name: select_pi
+    context_name: read_dm_purchasing_info 
+    params:
+      columns:
+        material_code: material_code_pi
+        plant_code: plant_code_pi
+        purchasing_organization_code: purchasing_organization_code_pi
+        condition_record_number: condition_record_number_pi
+        production_version: production_version_pi
+        general_deletion_flag: general_deletion_flag_pi
+        purchase_org_deletion_flag: purchase_org_deletion_flag_pi
+        purchasing_info_record: purchasing_info_record_pi
+        vendor_code: vendor_code_pi
+        certificate_category_code: certificate_category_code_pi
+        info_record_category_code: info_record_category_code_pi
+        order_price_unit_code: order_price_unit_code_pi
+        valid_to_date: valid_to_date_pi
+        vendor_code: vendor_pi
+        price_valid_to_date: price_valid_to_date_pi
+        sap_cluster: sap_cluster_pi
+      distinct: true     
+      
+  - kind: filter
+    name: filter_pi
+    context_name: select_pi
+    params:
+      - condition:
+         info_record_category_code_pi IN ('0','3') AND
+         (price_valid_to_date_pi >= current_date() OR valid_to_date_pi >= current_date()) AND
+         (purchase_org_deletion_flag_pi != 'X' OR general_deletion_flag_pi != 'X')
+
+#######################################################
+
+  - kind: read_dataio
+    name: read_dm_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      schema_version: v6
+      
+  - kind: select
+    name: select_m
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code_m
+        material_type_code: material_type_code_m
+        material_group_code: material_group_code_m
+        maintenance_status: maintenance_status_m
+        unit_of_measure_code: unit_of_measure_code_m
+        material_status: material_status_code_m
+        sap_cluster: sap_cluster_m
+      distinct: true     
+      
+  - kind: filter
+    name: filter_m
+    context_name: select_m
+    params:
+      - condition:
+         material_type_code_m IN ('ZFG', 'ZFGA', 'ZFGC', 'ZFGM', 'ZFGP', 'ZFGS', 'ZMM', 'ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND
+         material_group_code_m <> '1110000' AND
+         (maintenance_status_m LIKE '%B%' and maintenance_status_m LIKE '%G%') AND
+         material_status_code_m NOT IN ('97', '98', '99', 'ZA', 'Z8','Z9')
+         
+ ########################################################
+
+  - kind: read_dataio
+    name: read_dm_conditions_scale
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_conditions_scale
+      schema_version: v1
+      
+  - kind: select
+    name: select_cs
+    context_name: read_dm_conditions_scale
+    params:
+      columns:
+        condition_record_number: condition_record_number_cs
+        scale_quantity: scale_quantity_cs
+        scale_number: scale_number_cs
+        scale_rate: scale_rate_cs       
+        sequence_number: sequence_number_cs  
+        sap_cluster: sap_cluster_cs
+      distinct: true     
+      
+ ########################################################
+
+  - kind: read_dataio
+    name: read_dm_bom
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_bom
+      schema_version: v1
+      
+  - kind: select
+    name: select_b
+    context_name: read_dm_bom
+    params:
+      columns:
+        material_code: material_code_b
+        plant_code: plant_code_b
+        bom_usage: bom_usage_b
+        bom_alternative: bom_alternative_b
+        bom_number: bom_number_b
+        bom_material_status: bom_material_status_b
+        bom_item_link_deletion_flag: bom_item_link_deletion_flag_b
+        bom_item_link_counter: bom_item_link_counter_b
+        bom_deletion_flag: bom_deletion_flag_b
+        sap_cluster: sap_cluster_b
+      distinct: true       
+
+  - kind: filter
+    name: filter_b
+    context_name: select_b
+    params:
+      - condition:
+         bom_usage_b = 1
+
+  - kind: select
+    name: select_b_before_grouped
+    params:
+      columns:
+        material_code_b: material_code_b
+        plant_code_b: plant_code_b
+        bom_alternative_b: bom_alternative_b
+        bom_item_link_counter_b: bom_item_link_counter_b
+        sap_cluster_b: sap_cluster_b
+      distinct: true    
+
+  - kind: group
+    name: grouped_b
+    params:
+      - aggs:
+          bom_item_link_counter_b: max
+        by:
+        - material_code_b
+        - plant_code_b
+        - bom_alternative_b
+        - sap_cluster_b
+
+  - kind: join
+    name: join_b_grouped_b
+    context_name: filter_b
+    params:
+      - other:
+          grouped_b
+        how:
+          left
+        columns:
+          material_code_b: material_code_b
+          plant_code_b: plant_code_b
+          bom_alternative_b: bom_alternative_b
+          sap_cluster_b: sap_cluster_b
+
+  - kind: filter
+    name: filter_b_max_counter
+    params:
+      - condition:
+         bom_item_link_counter_b = max_bom_item_link_counter_b
+
+  - kind: select
+    name: select_b_final
+    params:
+      columns:
+        material_code_b: material_code_b
+        plant_code_b: plant_code_b
+        bom_usage_b: bom_usage_b
+        bom_alternative_b: bom_alternative_b
+        bom_number_b: bom_number_b
+        bom_material_status_b: bom_material_status_b
+        bom_item_link_deletion_flag_b: bom_item_link_deletion_flag_b
+        bom_deletion_flag_b: bom_deletion_flag_b
+        sap_cluster_b: sap_cluster_b
+        max_bom_item_link_counter_b: max_bom_item_link_counter_b
+      distinct: true    
+
+########################################################
+
+  - kind: read_dataio
+    name: read_dm_material_production_versions
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_production_versions
+      schema_version: v2
+      
+  - kind: select
+    name: select_pv1
+    context_name: read_dm_material_production_versions
+    params:
+      columns:
+        material_code: material_code_pv1
+        plant_code: plant_code_pv1
+        group_counter: group_counter_pv1
+        production_version: production_version_pv1
+        task_list_number: task_list_number_pv1
+        bom_alternative: bom_alternative_pv1
+        production_version_valid_to_date: production_version_valid_to_date_pv1
+        production_version_lock: production_version_lock_pv1
+        production_version_check_status: production_version_check_status_pv1
+        production_version_last_check_date: production_version_last_check_date_pv1
+        sap_cluster: sap_cluster_pv1
+      distinct: true     
+      
+  - kind: filter
+    name: filter_pv1
+    context_name: select_pv1
+    params:
+      - condition:
+         production_version_pv1 LIKE 'X%'
+
+########################################################
+
+  - kind: read_dataio
+    name: read_dm_material_task_lists
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_task_lists
+      schema_version: v1
+      
+  - kind: select
+    name: select_tl
+    context_name: read_dm_material_task_lists
+    params:
+      columns:
+        material_code: material_code_tl
+        plant_code: plant_code_tl
+        group_counter: group_counter_tl
+        task_list_number: task_list_number_tl
+        deletion_flag: deletion_flag_tl
+        sap_cluster: sap_cluster_tl
+      distinct: true     
+
+  - kind: add
+    name: add_flags_1
+    params:
+      - column: task_list_number_code
+        expression: regexp_extract(task_list_number_tl, '^[0-9]+', 0)   
+
+  - kind: filter
+    name: filter_tl
+    params:
+      - condition:
+         task_list_number_code IS NOT NULL AND task_list_number_code != ''
+         
+########################################################
+      
+  - kind: select
+    name: select_pv2
+    context_name: read_dm_material_production_versions
+    params:
+      columns:
+        material_code: material_code_pv2
+        plant_code: plant_code_pv2
+        bom_alternative: bom_alternative_pv2
+        bom_usage: bom_usage_pv2
+        group_counter: group_counter_pv2
+        task_list_number: task_list_number_pv2
+        sap_cluster: sap_cluster_pv2
+      distinct: true     
+      
+ #############################################################################################################
+ 
+  - kind: join
+    name: join_m_mp_mpa_dv_pi
+    context_name: filter_m
+    params:
+      - other:
+          filter_mp
+        how:
+          inner
+        columns:
+          material_code_m: material_code_mp
+          sap_cluster_m: sap_cluster_mp
+      - other:
+          filter_mpa
+        how:
+          inner
+        columns:
+          material_code_mp: material_code_mpa
+          plant_code_mp: plant_code_mpa
+          sap_cluster_mp: sap_cluster_mpa
+      - other:
+          filter_dv
+        how:
+          inner
+        columns:
+          material_code_mp: material_code_dv
+          plant_code_mp: plant_valuation_area_dv
+          sap_cluster_mp: sap_cluster_dv
+      - other:
+          filter_pi
+        how:
+          left
+        columns:
+          material_code_mp: material_code_pi
+          plant_code_mp: plant_code_pi
+          purchasing_organization_code_mpa: purchasing_organization_code_pi
+          sap_cluster_mp: sap_cluster_pi
+
+  - kind: join
+    name: join_mpa_pi_as_mpa1
+    context_name: filter_pi
+    params:
+      - other:
+          filter_mpa
+        how:
+          left
+        columns:
+          material_code_pi: material_code_mpa
+          plant_code_pi: plant_code_mpa
+          vendor_pi: vendor_code_mpa
+          sap_cluster_pi: sap_cluster_mpa
+
+  - kind: select
+    name: select_mpa_pi_as_mpa1
+    params:
+      columns:
+        material_code_mpa: material_code_mpa_mpa1
+        plant_code_mpa: plant_code_mpa_mpa1
+        vendor_code_mpa: vendor_code_mpa_mpa1
+        vendor_pi: vendor_pi_mpa1
+        purchasing_info_record_pi: purchasing_info_record_mpa1
+        purchasing_organization_code_mpa: purchasing_organization_code_mpa1
+        sap_cluster_mpa: sap_cluster_mpa_mpa1
+      distinct: true     
+
+  - kind: join
+    name: join_m_mp_mpa_dv_pi_mpa1
+    context_name: join_m_mp_mpa_dv_pi
+    params:
+      - other:
+          select_mpa_pi_as_mpa1
+        how:
+          left
+        columns:
+          material_code_mpa: material_code_mpa_mpa1
+          plant_code_mpa: plant_code_mpa_mpa1
+          vendor_pi: vendor_code_mpa_mpa1
+          vendor_code_mpa: vendor_code_mpa_mpa1
+          sap_cluster_mpa: sap_cluster_mpa_mpa1
+
+  - kind: filter
+    name: filter_pi_purchasing_is_not_null_v2
+    params:
+      - condition:        
+         (purchasing_info_record_pi IS NULL OR purchasing_info_record_pi = '') OR (vendor_code_mpa_mpa1 IS NOT NULL AND vendor_code_mpa_mpa1 != '') 
+ 
+###############################################################################################################
+  
+  - kind: add
+    name: add_flags_1
+    params:
+      - column: dq_pir_completeness_flag
+        expression: "CASE WHEN (purchasing_info_record_pi IS NULL OR purchasing_info_record_pi = '') THEN '0' 
+                    ELSE '1' END"                    
+      - column: dq_pir_status_flag
+        expression: "CASE WHEN purchase_org_deletion_flag_pi  = 'X' AND general_deletion_flag_pi  != 'X' AND (purchasing_info_record_pi  IS NOT NULL AND purchasing_info_record_pi  !='') THEN '2'
+                    WHEN purchase_org_deletion_flag_pi  != 'X' and general_deletion_flag_pi  = 'X' AND (purchasing_info_record_pi  IS NOT NULL AND purchasing_info_record_pi  != '') THEN '3'
+                    WHEN (purchasing_info_record_pi  IS NULL OR purchasing_info_record_pi  = '') THEN ''
+                    ELSE '1' END"
+      - column: dq_country_of_origin_completeness_flag
+        expression: "CASE WHEN (country_code_of_origin_mp IS NULL OR country_code_of_origin_mp = '') THEN '0'
+                    ELSE '1' END"
+      - column: dq_comodity_code_flag
+        expression: "CASE WHEN (country_code_of_origin_mp IS NULL OR country_code_of_origin_mp = '') OR country_code_of_origin_mp = country_code_mp THEN ''
+                    WHEN country_code_of_origin_mp <> country_code_mp AND (commodity_code_mp IS NOT NULL AND commodity_code_mp != '') THEN '1'
+                    ELSE '0' END"
+                    
+  - kind: add
+    name: add_dq_block_pir_status
+    context_name: add_flags_1
+    params:
+      - column: dq_block_pir_status
+        expression: "CASE WHEN dq_pir_completeness_flag = '1' AND dq_pir_status_flag = '1' THEN '1'
+                    WHEN dq_pir_completeness_flag = '0' OR dq_pir_status_flag IN ('2', '3') THEN '0' 
+                    ELSE '' END" 
+########################################################################################################################################
+
+  - kind: select
+    name: select_cert_category
+    context_name: add_dq_block_pir_status
+    params:
+      columns:
+        purchasing_info_record_pi: purchasing_info_record_pi
+        country_code_mp: country_code_mp
+        sap_cluster_mp: sap_cluster_mp
+      distinct: true     
+
+  - kind: group
+    name: group_cert_category
+    params:
+      - aggs:
+          country_code_mp: count
+        by:
+        - purchasing_info_record_pi
+        - sap_cluster_mp
+
+  - kind: join
+    name: join_m_mp_mpa_dv_pi_mpa1_cert_category
+    context_name: add_dq_block_pir_status
+    params:
+      - other:
+          group_cert_category
+        how:
+          left
+        columns:
+          purchasing_info_record_pi: purchasing_info_record_pi
+          sap_cluster_mp: sap_cluster_mp
+          
+####################################################################################################
+  - kind: add
+    name: add_flags_2
+    context_name: join_m_mp_mpa_dv_pi_mpa1_cert_category
+    params:                    
+      - column: dq_mixing_ratio_flag
+        expression: "CASE WHEN dq_block_pir_status = '0' THEN '' 
+                    WHEN mixing_ratio_mpa IS NULL  THEN '0' 
+                    ELSE '1' END"
+      - column: dq_pir_validity_flag
+        expression: "CASE WHEN dq_block_pir_status = '0' THEN '' 
+                    WHEN valid_to_date_pi >= current_date() THEN '1'
+                    ELSE '0' END"
+      - column: dq_pir_category_flag
+        expression: "CASE WHEN dq_block_pir_status = '0' THEN ''
+                    WHEN (procurement_alternative_process_category_mpa = 'BB' AND info_record_category_code_pi = '0') OR (procurement_alternative_process_category_mpa = 'BL' AND info_record_category_code_pi = '3') THEN '1'
+                    ELSE '0' END"
+      - column: dq_uom_flag
+        expression: "CASE WHEN dq_block_pir_status = '0' THEN ''
+                    WHEN order_price_unit_code_pi = unit_of_measure_code_m THEN '1'
+                    ELSE '0' END"
+      - column: dq_cert_category_flag 
+        expression: CASE WHEN dq_block_pir_status = '0' THEN ''
+                    WHEN vendor_code_mpa NOT LIKE '4000%' OR ((material_code_m NOT BETWEEN LPAD('1000', 18, '0') AND LPAD('9999999', 18, '0')) AND (material_code_m NOT BETWEEN LPAD('12000000', 18, '0') AND LPAD('12999999', 18, '0')) AND (material_code_m NOT BETWEEN LPAD('15000000', 18, '0') AND LPAD('15999999', 18, '0')) AND (material_code_m NOT BETWEEN LPAD('85000000', 18, '0') AND LPAD('85499999', 18, '0')) AND (material_code_m NOT BETWEEN LPAD('95000000', 18, '0') AND LPAD('97999999', 18, '0'))) THEN ''
+                    WHEN certificate_category_code_pi IS NOT NULL AND certificate_category_code_pi != '' THEN '2'
+                    WHEN (certificate_category_code_pi IS NULL OR certificate_category_code_pi = '') AND count_country_code_mp > 1 THEN '3'
+                    WHEN (certificate_category_code_pi IS NULL OR certificate_category_code_pi = '') AND count_country_code_mp = 1 AND material_status_code_mp = '99' THEN '4'
+                    WHEN (certificate_category_code_pi IS NULL OR certificate_category_code_pi = '') AND count_country_code_mp = 1 AND material_status_code_mp != '99' THEN '5'
+                    ELSE '' END
+              
+  - kind: join
+    name: join_subcontracting_scale_cs
+    context_name: add_flags_2
+    params:
+      - other:
+          select_cs
+        how:
+          left
+        columns:
+          condition_record_number_pi: condition_record_number_cs
+          sap_cluster_pi: sap_cluster_cs
+      - other:
+          filter_pv1
+        how:
+          left
+        columns:
+          material_code_pi: material_code_pv1
+          plant_code_pi: plant_code_pv1
+          production_version_pi: production_version_pv1
+          sap_cluster_pi: sap_cluster_pv1      
+      - other:
+          select_b_final
+        how:
+          left
+        columns:
+          material_code_pi: material_code_b
+          plant_code_pi: plant_code_b
+          bom_alternative_pv1: bom_alternative_b
+          sap_cluster_pi: sap_cluster_b   
+      - other:
+          filter_tl
+        how:
+          left
+        columns:
+          material_code_pi: material_code_tl
+          plant_code_pi: plant_code_tl
+          group_counter_pv1: group_counter_tl
+          task_list_number_pv1: task_list_number_tl
+          sap_cluster_pi: sap_cluster_tl     
+      - other:
+          select_pv2
+        how:
+          left
+        columns:
+          material_code_pi: material_code_pv2
+          plant_code_pi: plant_code_pv2
+          bom_alternative_b: bom_alternative_pv2
+          bom_usage_b: bom_usage_pv2
+          group_counter_tl: group_counter_pv2
+          task_list_number_tl: task_list_number_pv2
+          sap_cluster_tl: sap_cluster_pv2           
+
+  - kind: add
+    name: add_next_scale_quantity_rate
+    context_name: join_subcontracting_scale_cs
+    params:                                     
+      - column: next_quantity_scale_number
+        expression: LEAD(scale_quantity_cs) OVER (PARTITION BY condition_record_number_cs ORDER BY scale_number_cs ASC)
+      - column: next_rate_scale_number
+        expression: LEAD(scale_rate_cs) OVER (PARTITION BY condition_record_number_cs ORDER BY scale_number_cs ASC)
+
+  - kind: group
+    name: group_scale_number
+    params:
+      - aggs:
+          scale_number_cs: count
+        by:
+        - condition_record_number_cs
+
+  - kind: join
+    name: join_group_scale_number
+    context_name: add_next_scale_quantity_rate
+    params:
+      - other:
+          group_scale_number
+        how:
+          left
+        columns:
+          condition_record_number_cs: condition_record_number_cs 
+
+  - kind: add
+    name: add_dq_scale_flag_v1
+    context_name: join_group_scale_number
+    params:                    
+      - column: dq_scale_flag_v1
+        expression: CASE WHEN (condition_record_number_cs IS NULL OR condition_record_number_cs = '') THEN '' WHEN scale_number_cs IS NULL THEN ''
+                    WHEN sequence_number_cs IS NULL THEN ''
+                    WHEN count_scale_number_cs = 1 THEN '1'
+                    WHEN scale_quantity_cs < next_quantity_scale_number AND scale_rate_cs >= next_rate_scale_number THEN '1'
+                    ELSE '0' END        
+
+  - kind: group
+    name: group_sum_flag
+    params:
+      - aggs:
+          dq_scale_flag_v1: sum
+        by:
+        - condition_record_number_cs
+
+  - kind: join
+    name: join_group_sum_flag_v2
+    context_name: add_dq_scale_flag_v1
+    params:
+      - other:
+          group_sum_flag
+        how:
+          left
+        columns:
+          condition_record_number_cs: condition_record_number_cs 
+
+  - kind: add
+    name: add_dq_scale_flag
+    context_name: join_group_sum_flag_v2
+    params:                    
+      - column: dq_scale_flag
+        expression: CASE WHEN dq_scale_flag_v1 = '' THEN '' WHEN sum_dq_scale_flag_v1 = count_scale_number_cs - 1 THEN '1'
+                    ELSE '0' END      
+
+  - kind: filter
+    name: filter_deletion_flag
+    context_name: add_dq_scale_flag
+    params:
+      - condition:
+         purchase_org_deletion_flag_pi != 'X' AND general_deletion_flag_pi != 'X'
+
+  - kind: select
+    name: select_mixing_ratio
+    params:
+      columns:
+        material_code_mpa: material_code_mpa
+        plant_code_mpa: plant_code_mpa
+        sap_cluster_mpa: sap_cluster_mpa
+        mixing_ratio_mpa: mixing_ratio_mpa
+      distinct: true   
+
+  - kind: group
+    name: group_subcontracting
+    params:
+      - aggs:
+          mixing_ratio_mpa: sum
+        by:
+        - material_code_mpa
+        - plant_code_mpa
+        - sap_cluster_mpa
+  
+###################################################33
+
+  - kind: join
+    name: join_group_subcontracting_mixing_ratio_count
+    context_name: add_dq_scale_flag
+    params:
+      - other:
+          group_subcontracting
+        how:
+          left
+        columns:
+          material_code_mpa: material_code_mpa
+          plant_code_mpa: plant_code_mpa
+          sap_cluster_mpa: sap_cluster_mpa           
+
+###########################################################
+
+  - kind: filter
+    name: filter_production_version_valid_to_date
+    context_name: join_group_subcontracting_mixing_ratio_count
+    params:
+      - condition:
+         production_version_valid_to_date_pv1 < CURRENT_DATE()
+
+  - kind: group
+    name: group_filter_production_version_valid_to_date
+    context_name: filter_production_version_valid_to_date
+    params:
+      - aggs:
+          production_version_valid_to_date_pv1: count
+        by:
+        - material_code_mpa
+        - plant_code_mpa
+        - sap_cluster_mpa
+
+  - kind: group
+    name: group_filter_production_version_valid_to_date_all
+    context_name: join_group_subcontracting_mixing_ratio_count
+    params:
+      - aggs:
+          production_version_valid_to_date_pv1: count
+        by:
+        - material_code_mpa
+        - plant_code_mpa
+        - sap_cluster_mpa
+        
+  - kind: select
+    name: select_group_filter_production_version_valid_to_date_all
+    context_name: group_filter_production_version_valid_to_date_all
+    params:
+      columns:
+        material_code_mpa: material_code_mpa
+        plant_code_mpa: plant_code_mpa
+        count_production_version_valid_to_date_pv1: count_production_version_valid_to_date_pv1_all
+        sap_cluster_mpa: sap_cluster_mpa
+
+  - kind: join
+    name: join_group_production_version_valid_to_date
+    context_name: join_group_subcontracting_mixing_ratio_count
+    params:
+      - other:
+          group_filter_production_version_valid_to_date
+        how:
+          left
+        columns:
+          material_code_mpa: material_code_mpa
+          plant_code_mpa: plant_code_mpa
+          sap_cluster_mpa: sap_cluster_mpa            
+      - other:
+          select_group_filter_production_version_valid_to_date_all
+        how:
+          left
+        columns:
+          material_code_mpa: material_code_mpa
+          plant_code_mpa: plant_code_mpa
+          sap_cluster_mpa: sap_cluster_mpa
+
+#########################
+
+  - kind: add
+    name: add_dq_subcontracting_flag
+    context_name: join_group_production_version_valid_to_date
+    params:                                        
+      - column: dq_subcontracting_flag
+        expression: CASE WHEN info_record_category_code_pi = '0' OR dq_pir_validity_flag != '1' OR procurement_alternative_process_category_mpa != 'BL' THEN ''
+                    WHEN (info_record_category_code_pi IS NULL OR info_record_category_code_pi = '') AND (dq_pir_validity_flag IS NULL OR dq_pir_validity_flag = '') THEN ''
+                    WHEN dq_pir_validity_flag = '1' AND info_record_category_code_pi = '3' THEN (CASE WHEN sum_mixing_ratio_mpa != 100 THEN '2' 
+                    WHEN procurement_alternative_process_category_mpa = 'BL' AND production_version_pi NOT LIKE 'X%' THEN '3'  
+                    WHEN (material_code_pv1 IS NULL OR material_code_pv1 = '') THEN '4'
+                    WHEN count_production_version_valid_to_date_pv1 = count_production_version_valid_to_date_pv1_all THEN '5'
+                    WHEN (production_version_lock_pv1 IS NOT NULL AND production_version_lock_pv1 != '') THEN '6'
+                    WHEN (production_version_check_status_pv1 IS NULL OR production_version_check_status_pv1 = '') AND (production_version_last_check_date_pv1 IS NULL OR production_version_last_check_date_pv1 = '') THEN '7'
+                    WHEN (bom_number_b IS NULL OR bom_number_b = '') THEN '8'
+                    WHEN bom_material_status_b = '2' THEN '9' 
+                    WHEN bom_item_link_deletion_flag_b = 'X' OR bom_deletion_flag_b = 'X' THEN '10'
+                    WHEN (material_code_tl IS NULL OR material_code_tl = '') THEN '11'
+                    WHEN deletion_flag_tl = 'X' THEN '12'
+                    WHEN  (material_code_pv2 IS NULL OR material_code_pv2 = '') THEN '13'
+                    ELSE '1' END) ELSE '' END                   
+
+  - kind: select
+    name: select_du
+    context_name: add_dq_subcontracting_flag
+    params:
+      columns:
+        country_code_mp: country_code
+        plant_code_mp: plant_code
+        material_code_m: material_code
+        material_status_code_mp: plant_material_status_code    
+        material_type_code_m: material_type
+        valuation_class_code_dv: valuation_class
+        do_not_cost_indicator_mp: do_not_cost_indicator
+        procurement_type_mp: procurement_type
+        procurement_alternative_process_category_mpa: procurement_alternative_process_category
+        purchasing_organization_code_mpa: purchasing_organization_code
+        special_procurement_plant_code_mpa: special_procurement_plant_code
+        vendor_code_mpa: vendor_code_pa
+        production_version_pv1: procurement_production_version
+        production_version_pi: pir_production_version
+        bom_usage_b: bom_usage
+        bom_alternative_b: bom_alternative
+        mixing_ratio_mpa: mixing_ratio
+        quantity_structure_type_mpa: quantity_structure_type
+        fiscal_year_mpa: fiscal_year
+        posting_period_mpa: posting_period
+        general_deletion_flag_pi: general_deletion_flag
+        purchase_org_deletion_flag_pi: purchase_org_deletion_flag
+        purchasing_info_record_pi: purchasing_info_record
+        vendor_pi: vendor_code_pir
+        certificate_category_code_pi: certificate_category_code
+        info_record_category_code_pi: info_record_category_code
+        order_price_unit_code_pi: order_price_unit_code
+        unit_of_measure_code_m: base_unit_of_measure
+        valid_to_date_pi: valid_to_date
+        sap_cluster_mp: sap_cluster
+        country_code_of_origin_mp: country_code_of_origin
+        commodity_code_mp: commodity_code
+        dq_block_pir_status: dq_block_pir_status
+        dq_mixing_ratio_flag: dq_mixing_ratio_flag
+        dq_pir_completeness_flag: dq_pir_completeness_flag
+        dq_pir_status_flag: dq_pir_status_flag
+        dq_pir_validity_flag: dq_pir_validity_flag
+        dq_pir_category_flag: dq_pir_category_flag
+        dq_uom_flag: dq_uom_flag
+        dq_cert_category_flag: dq_cert_category_flag
+        dq_country_of_origin_completeness_flag: dq_country_of_origin_completeness_flag
+        dq_comodity_code_flag: dq_comodity_code_flag
+        dq_scale_flag: dq_scale_flag
+        dq_subcontracting_flag: dq_subcontracting_flag
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_du
+    context_name: select_du
+
+########### IF in the output we have exactly the same rows with all value the same except pi.purchasing_info_record then remove one of them (GR case, ex. 000000000095001713)############
+  - kind: group
+    name: grouped_pir
+    params:
+      - aggs:
+          purchasing_info_record: max
+        by:
+        - country_code
+        - plant_code
+        - material_code
+        - plant_material_status_code
+        - material_type
+        - valuation_class
+        - do_not_cost_indicator
+        - procurement_type
+        - procurement_alternative_process_category
+        - purchasing_organization_code
+        - special_procurement_plant_code
+        - vendor_code_pa
+        - procurement_production_version
+        - pir_production_version
+        - bom_usage
+        - bom_alternative
+        - mixing_ratio
+        - quantity_structure_type
+        - fiscal_year
+        - posting_period
+        - general_deletion_flag
+        - purchase_org_deletion_flag
+        - vendor_code_pir
+        - certificate_category_code
+        - info_record_category_code
+        - order_price_unit_code
+        - base_unit_of_measure
+        - valid_to_date
+        - sap_cluster
+        - country_code_of_origin
+        - commodity_code
+        - dq_block_pir_status
+        - dq_mixing_ratio_flag
+        - dq_pir_completeness_flag
+        - dq_pir_status_flag
+        - dq_pir_validity_flag
+        - dq_pir_category_flag
+        - dq_uom_flag
+        - dq_cert_category_flag
+        - dq_country_of_origin_completeness_flag
+        - dq_comodity_code_flag
+        - dq_scale_flag
+        - dq_subcontracting_flag
+
+  - kind: select
+    name: select_final_du
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        plant_material_status_code: plant_material_status_code    
+        material_type: material_type
+        valuation_class: valuation_class
+        do_not_cost_indicator: do_not_cost_indicator
+        procurement_type: procurement_type
+        procurement_alternative_process_category: procurement_alternative_process_category
+        purchasing_organization_code: purchasing_organization_code
+        special_procurement_plant_code: special_procurement_plant_code
+        vendor_code_pa: vendor_code_pa
+        procurement_production_version: procurement_production_version
+        pir_production_version: pir_production_version
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        mixing_ratio: mixing_ratio
+        quantity_structure_type: quantity_structure_type
+        fiscal_year: fiscal_year
+        posting_period: posting_period
+        general_deletion_flag: general_deletion_flag
+        purchase_org_deletion_flag: purchase_org_deletion_flag
+        max_purchasing_info_record: purchasing_info_record
+        vendor_code_pir: vendor_code_pir
+        certificate_category_code: certificate_category_code
+        info_record_category_code: info_record_category_code
+        order_price_unit_code: order_price_unit_code
+        base_unit_of_measure: base_unit_of_measure
+        valid_to_date: valid_to_date
+        sap_cluster: sap_cluster
+        country_code_of_origin: country_code_of_origin
+        commodity_code: commodity_code
+        dq_block_pir_status: dq_block_pir_status
+        dq_mixing_ratio_flag: dq_mixing_ratio_flag
+        dq_pir_completeness_flag: dq_pir_completeness_flag
+        dq_pir_status_flag: dq_pir_status_flag
+        dq_pir_validity_flag: dq_pir_validity_flag
+        dq_pir_category_flag: dq_pir_category_flag
+        dq_uom_flag: dq_uom_flag
+        dq_cert_category_flag: dq_cert_category_flag
+        dq_country_of_origin_completeness_flag: dq_country_of_origin_completeness_flag
+        dq_comodity_code_flag: dq_comodity_code_flag
+        dq_scale_flag: dq_scale_flag
+        dq_subcontracting_flag: dq_subcontracting_flag
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_final_du
+    context_name: select_final_du
+
+
+###DETAILED
+
+  - kind: add
+    name: add_pir_subcontracting_version
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''PIR subcontracting version'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_subcontracting_flag = '' THEN 'N/A'
+                    WHEN dq_subcontracting_flag = '1' THEN 'OK'
+                    WHEN dq_subcontracting_flag = '2' THEN 'Invalid Mixing Ratio'
+                    WHEN dq_subcontracting_flag = '3' THEN 'No suitable or assigned subcontracting Production Version'
+                    WHEN dq_subcontracting_flag = '4' THEN 'Missing Subcontracting Version'
+                    WHEN dq_subcontracting_flag = '5' THEN 'Version is not valid'
+                    WHEN dq_subcontracting_flag = '6' THEN 'Version is locked'
+                    WHEN dq_subcontracting_flag = '7' THEN 'Missing check date in PV'
+                    WHEN dq_subcontracting_flag = '8' THEN 'Missing BOM for subcontracting version'
+                    WHEN dq_subcontracting_flag = '9' THEN 'BOM is inactive for subcontracting version'
+                    WHEN dq_subcontracting_flag = '10' THEN 'BOM is blocked for Subcontracting version'
+                    WHEN dq_subcontracting_flag = '11' THEN 'Routing is missing for Subcontracting Version'
+                    WHEN dq_subcontracting_flag = '12' THEN 'Routing is locked'
+                    WHEN dq_subcontracting_flag = '13' THEN 'Routing is missing for Subcontracting Version MKAL' END
+      - column: dq_flag_output
+        expression: CASE WHEN dq_subcontracting_flag IN ('', '1') THEN dq_subcontracting_flag ELSE '0' END
+
+  - kind: add
+    name: add_scale
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''Scale'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_scale_flag = '1' THEN 'OK' WHEN dq_scale_flag = '0' THEN 'Error in scales' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_scale_flag
+
+  - kind: add
+    name: add_mixing_ratio
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''Mixing Ratio'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_block_pir_status = '0' THEN 'Missing PIR – N/A' WHEN dq_mixing_ratio_flag = '0' THEN 'Missing MR' WHEN dq_block_pir_status = '1' THEN 'OK' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_mixing_ratio_flag
+
+  - kind: add
+    name: add_purchasing_info_record
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''Purchasing Info Record'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_pir_completeness_flag = '0' THEN 'Missing PIR' WHEN dq_pir_completeness_flag = '1' THEN'OK' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_pir_completeness_flag
+
+  - kind: add
+    name: add_pir_status
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''PIR Status'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_pir_status_flag  = '0' THEN 'Blocked PIR'
+                    WHEN dq_pir_status_flag  = '2' THEN 'Blocked in EINE - sugg.Gen.Block ' || sap_cluster
+                    WHEN dq_pir_status_flag  = '3' then 'Blocked in EINA ' || sap_cluster
+                    WHEN dq_pir_status_flag  = '1' THEN 'OK'
+                    ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: CASE WHEN dq_pir_status_flag IN ('2','3') THEN '0' ELSE dq_pir_status_flag END
+
+  - kind: add
+    name: add_pir_validity
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''PIR Validity'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_block_pir_status = '0' THEN 'Missing PIR – N/A' WHEN dq_pir_validity_flag = '0' THEN 'No active PIR for current period' WHEN dq_pir_validity_flag = '1' THEN 'OK' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_pir_validity_flag
+
+  - kind: add
+    name: add_pir_category
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''PIR Category'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_block_pir_status = '0' THEN 'Missing PIR – N/A' WHEN dq_pir_category_flag = '0' THEN 'Wrong PIR category & PA type' WHEN dq_pir_category_flag = '1' THEN 'OK' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_pir_category_flag
+
+  - kind: add
+    name: add_buom
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''BUoM'''
+      - column: quality_category
+        expression: '''Consistency'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_block_pir_status = '0' THEN 'Missing PIR – N/A' WHEN dq_uom_flag = '0' THEN 'Inconsistent OPU and BUoM' WHEN dq_uom_flag = '1' THEN 'OK' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_uom_flag
+
+
+  - kind: add
+    name: add_certificate_category
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''Certificate Category'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_block_pir_status = '0' THEN 'Missing PIR – N/A' 
+                    WHEN dq_cert_category_flag = '2' THEN 'OK' 
+                    WHEN dq_cert_category_flag = '3' THEN 'Certificate category is missing, but PIR is used by another PO/Country' 
+                    WHEN dq_cert_category_flag = '4' THEN 'Block PIR on PO level' 
+                    WHEN dq_cert_category_flag = '5' THEN 'Missing Certificate Category prerequisite. Please check and revise' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: CASE WHEN dq_cert_category_flag  IN ('2','3') THEN '1' WHEN dq_cert_category_flag  IN ('4','5') THEN '0' ELSE dq_cert_category_flag  END
+
+
+  - kind: add
+    name: add_country_of_origin_status
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''Country of origin status'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_country_of_origin_completeness_flag = '0' THEN 'Missing country of origin' WHEN dq_country_of_origin_completeness_flag = '1' THEN 'OK' END
+      - column: dq_flag_output
+        expression: dq_country_of_origin_completeness_flag
+
+
+  - kind: add
+    name: add_commodity_code_status
+    context_name: checkpoint_final_du
+    params:
+      - column: quality_type
+        expression: '''Commodity Code Status'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN dq_comodity_code_flag = '0' THEN 'Missing commodity code in the prod.master' WHEN dq_comodity_code_flag = '1' THEN 'OK' ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: dq_comodity_code_flag
+
+  - kind: union
+    name: union_pir_1
+    context_name: add_pir_subcontracting_version
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_scale
+
+  - kind: union
+    name: union_pir_2
+    context_name: union_pir_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_mixing_ratio
+
+  - kind: union
+    name: union_pir_3
+    context_name: union_pir_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_purchasing_info_record
+
+  - kind: union
+    name: union_pir_4
+    context_name: union_pir_3
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_pir_status
+
+  - kind: union
+    name: union_pir_5
+    context_name: union_pir_4
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_pir_validity
+
+
+  - kind: union
+    name: union_pir_6
+    context_name: union_pir_5
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_pir_category
+
+  - kind: union
+    name: union_pir_7
+    context_name: union_pir_6
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_buom
+
+  - kind: union
+    name: union_pir_8
+    context_name: union_pir_7
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_certificate_category
+
+  - kind: union
+    name: union_pir_9
+    context_name: union_pir_8
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_country_of_origin_status
+
+  - kind: union
+    name: union_pir_10
+    context_name: union_pir_9
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_commodity_code_status
+
+  - kind: select
+    name: select_detailed
+    context_name: union_pir_10
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        plant_material_status_code: plant_material_status_code    
+        material_type: material_type_code
+        valuation_class: valuation_class
+        do_not_cost_indicator: do_not_cost_indicator
+        procurement_type: procurement_type
+        procurement_alternative_process_category: procurement_alternative_process_category
+        purchasing_organization_code: purchasing_organization_code
+        special_procurement_plant_code: special_procurement_plant_code
+        vendor_code_pa: vendor_code_pa
+        procurement_production_version: procurement_production_version
+        pir_production_version: pir_production_version
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        mixing_ratio: mixing_ratio
+        quantity_structure_type: quantity_structure_type
+        fiscal_year: fiscal_year
+        posting_period: posting_period
+        general_deletion_flag: general_deletion_flag
+        purchase_org_deletion_flag: purchase_org_deletion_flag
+        purchasing_info_record: purchasing_info_record
+        vendor_code_pir: vendor_code_pir
+        certificate_category_code: certificate_category_code
+        info_record_category_code: info_record_category_code
+        order_price_unit_code: order_price_unit_code
+        base_unit_of_measure: base_unit_of_measure
+        valid_to_date: valid_to_date
+        sap_cluster: sap_cluster
+        country_code_of_origin: country_code_of_origin
+        commodity_code: commodity_code
+        quality_type: quality_type
+        quality_category: quality_category
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: purchasing_info_record
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+### AGGREGATED
+
+## Subcontracting Version Status
+  - kind: add
+    name: add_subcontracting_version_status
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_subcontracting_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''PIR subcontracting version'''       
+      - column: invalid_checks
+        expression: IF(dq_subcontracting_flag NOT IN ('', '1'), 1, NULL)
+       
+  - kind: group
+    name: group_subcontracting_version_status
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_subcontracting_version_status
+    context_name: group_subcontracting_version_status
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_subcontracting_version_status
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## Scale
+  - kind: add
+    name: add_scale
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_scale_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''Scale'''       
+      - column: invalid_checks
+        expression: IF(dq_scale_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_scale
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_scale
+    context_name: group_scale
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_scale
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## Mixing Ratio
+  - kind: add
+    name: add_mixing_ratio
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_mixing_ratio_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Mixing Ratio'''       
+      - column: invalid_checks
+        expression: IF(dq_mixing_ratio_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_mixing_ratio
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_mixing_ratio
+    context_name: group_mixing_ratio
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_mixing_ratio
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## Purchasing Info Record
+  - kind: add
+    name: add_purchasing_info_record
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_pir_completeness_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Purchasing Info Record'''       
+      - column: invalid_checks
+        expression: IF(dq_pir_completeness_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_purchasing_info_record
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_purchasing_info_record
+    context_name: group_purchasing_info_record
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_purchasing_info_record
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## PIR Status
+  - kind: add
+    name: add_pir_status
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_pir_status_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''PIR Status'''       
+      - column: invalid_checks
+        expression: IF(dq_pir_status_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_pir_status
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_pir_status
+    context_name: group_pir_status
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_pir_status
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## PIR Validity
+  - kind: add
+    name: add_pir_validity
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_pir_validity_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''PIR Validity'''       
+      - column: invalid_checks
+        expression: IF(dq_pir_validity_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_pir_validity
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_pir_validity
+    context_name: group_pir_validity
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_pir_validity
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## PIR Category
+  - kind: add
+    name: add_pir_category
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_pir_category_flag  != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''PIR Category'''       
+      - column: invalid_checks
+        expression: IF(dq_pir_category_flag  = '0', 1, NULL)
+       
+  - kind: group
+    name: group_pir_category
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_pir_category
+    context_name: group_pir_category
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_pir_category
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## BUOM
+  - kind: add
+    name: add_buom
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_uom_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Consistency''' 
+      - column: quality_type
+        expression: '''BUoM'''       
+      - column: invalid_checks
+        expression: IF(dq_uom_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_buom
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_buom
+    context_name: group_buom
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_buom
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## Certificate Category
+  - kind: add
+    name: add_certificate_category
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_cert_category_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Certificate Category'''       
+      - column: invalid_checks
+        expression: IF(dq_cert_category_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_certificate_category
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_certificate_category
+    context_name: group_certificate_category
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_certificate_category
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## Country of origin status
+  - kind: add
+    name: add_country_of_origin_status
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_country_of_origin_completeness_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Country of origin status'''       
+      - column: invalid_checks
+        expression: IF(dq_country_of_origin_completeness_flag = '0', 1, NULL)
+       
+  - kind: group
+    name: group_country_of_origin_status
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_country_of_origin_status
+    context_name: group_country_of_origin_status
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_country_of_origin_status
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+## Commodity Code Status
+  - kind: add
+    name: add_commodity_code_status
+    context_name: checkpoint_final_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_comodity_code_flag  != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Commodity Code Status'''       
+      - column: invalid_checks
+        expression: IF(dq_comodity_code_flag  = '0', 1, NULL)
+       
+  - kind: group
+    name: group_commodity_code_status
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+          total_records: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_commodity_code_status
+    context_name: group_commodity_code_status
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_commodity_code_status
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: union
+    name: union_pir_agg_1
+    context_name: select_subcontracting_version_status
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_scale
+
+  - kind: union
+    name: union_pir_agg_2
+    context_name: union_pir_agg_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_mixing_ratio
+
+  - kind: union
+    name: union_pir_agg_3
+    context_name: union_pir_agg_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_purchasing_info_record
+
+  - kind: union
+    name: union_pir_agg_4
+    context_name: union_pir_agg_3
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pir_status
+
+  - kind: union
+    name: union_pir_agg_5
+    context_name: union_pir_agg_4
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pir_validity
+
+  - kind: union
+    name: union_pir_agg_6
+    context_name: union_pir_agg_5
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pir_category
+
+  - kind: union
+    name: union_pir_agg_7
+    context_name: union_pir_agg_6
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_buom
+
+  - kind: union
+    name: union_pir_agg_8
+    context_name: union_pir_agg_7
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_certificate_category
+
+  - kind: union
+    name: union_pir_agg_9
+    context_name: union_pir_agg_8
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_country_of_origin_status
+
+
+  - kind: union
+    name: union_pir_agg_10
+    context_name: union_pir_agg_9
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_commodity_code_status
+
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: purchasing_info_record
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

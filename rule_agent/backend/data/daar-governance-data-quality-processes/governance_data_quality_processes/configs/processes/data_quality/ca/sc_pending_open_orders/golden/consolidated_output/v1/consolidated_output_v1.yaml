@@ -1,0 +1,970 @@
+transform:
+  name: du
+  operations:
+
+######################## read dm_production_orders as pr ################################
+  - kind: read_dataio
+    name: read_dm_production_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_production_orders
+      schema_version: v1
+
+  - kind: select
+    name: select_pr
+    context_name: read_dm_production_orders
+    params:
+      columns:
+        material_code: material_code_pr
+        company_code: company_code_pr
+        plant_code: plant_code_pr
+        business_unit_code: business_unit_code_pr
+        business_unit_description: business_unit_description_pr
+        order_category: order_category_pr
+        order_type: order_type_pr
+        order_number: order_number_pr
+        delivery_completion_code: delivery_completion_code_pr
+        item_number: item_number_pr
+        delivery_date: delivery_date_pr
+        quantity_ordered: quantity_ordered_pr
+        quantity_delivered: quantity_delivered_pr
+        unit_of_measure_code: unit_of_measure_code_pr
+        mrp_controller: mrp_controller_pr
+        created_by: created_by_pr
+        sap_cluster: sap_cluster_pr
+      distinct: true           
+      
+  - kind: filter
+    name: filter_pr
+    context_name: select_pr
+    params:
+      - condition:
+         order_type_pr IN ('ZPP1', 'ZPP2', 'ZPP3', 'ZPP4', 'ZPP5', 'ZPP6', 'ZPP7', 'ZPP8', 'ZPP9') AND
+         delivery_date_pr <= current_date()
+         
+######################## read dm_purchase_orders as pu ################################
+
+  - kind: read_dataio
+    name: read_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_purchase_orders
+      schema_version: v2
+
+  - kind: select
+    name: select_pu
+    context_name: read_dm_purchase_orders
+    params:
+      columns:
+        material_code: material_code_pu
+        company_code: company_code_pu
+        plant_code: plant_code_pu
+        business_unit_code: business_unit_code_pu
+        business_unit_description: business_unit_description_pu
+        purchasing_group_code: purchasing_group_code_pu
+        purchasing_document_type: purchasing_document_type_pu
+        purchasing_document_type_name: purchasing_document_type_name_pu
+        purchasing_document_number: purchasing_document_number_pu
+        purchasing_document_category: purchasing_document_category_pu
+        item_number: item_number_pu
+        order_created_when: order_created_when_pu
+        item_created_when: item_created_when_pu
+        delivery_completion_flag: delivery_completion_flag_pu
+        delivery_date: delivery_date_pu
+        quantity_ordered: quantity_ordered_pu
+        quantity_delivered: quantity_delivered_pu
+        unit_of_measure_code: unit_of_measure_code_pu
+        vendor_code: vendor_code_pu
+        created_by: created_by_pu
+        sap_cluster: sap_cluster_pu
+      distinct: true           
+      
+  - kind: filter
+    name: filter_pu
+    context_name: select_pu
+    params:
+      - condition:
+         order_created_when_pu > ADD_MONTHS(current_date(), -12) AND 
+         item_created_when_pu > ADD_MONTHS(current_date(), -12) AND 
+         purchasing_document_category_pu = 'F' AND
+         purchasing_document_type_pu IN ('NB', 'UB', 'ZI', 'ZC' , 'ZCO', 'ZCC', 'ZEO', 'ZN') AND
+         delivery_date_pu <= current_date()
+         
+# ####################### read dm_material as m1 and m2 #################################
+
+  - kind: read_dataio
+    name: read_dm_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      schema_version: v6
+      
+  - kind: select
+    name: select_m1
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code_m1
+        material_type_code: material_type_code_m1
+        sales_organization: sales_organization_m1
+        distribution_channel: distribution_channel_m1
+        material_name: material_name_m1
+        material_group_code: material_group_code_m1
+        product_hierarchy_name: product_hierarchy_name_m1
+        package_type_code: package_type_code_m1
+        package_size_name: package_size_name_m1
+        sap_cluster: sap_cluster_m1
+      distinct: true     
+      
+  - kind: filter
+    name: filter_m1
+    context_name: select_m1
+    params:
+      - condition:
+         ((sales_organization_m1 = '0001' AND distribution_channel_m1 = '01') OR sales_organization_m1 IS NULL) AND
+         material_type_code_m1 IN ('ZFG', 'ZFGA', 'ZFGC', 'ZFGM', 'ZFGS', 'ZKIT', 'ZRW', 'ZRWT', 'ZSF', 'ZSFT')
+              
+  - kind: select
+    name: select_m2
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code_m2
+        material_type_code: material_type_code_m2
+        sales_organization: sales_organization_m2
+        distribution_channel: distribution_channel_m2
+        material_name: material_name_m2
+        material_group_code: material_group_code_m2
+        product_hierarchy_name: product_hierarchy_name_m2
+        package_type_code: package_type_code_m2
+        package_size_name: package_size_name_m2
+        sap_cluster: sap_cluster_m2
+      distinct: true     
+      
+  - kind: filter
+    name: filter_m2
+    context_name: select_m2
+    params:
+      - condition:
+         ((sales_organization_m2 = '0001' AND distribution_channel_m2 = '01') OR sales_organization_m2 IS NULL) AND
+         material_type_code_m2 IN ('ZFG', 'ZFGA', 'ZFGC', 'ZFGM', 'ZFGS', 'ZKIT', 'ZRW', 'ZRWT', 'ZSF', 'ZSFT')
+         
+####################### read dm_org_hierarchy as ch1 #################################
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1    
+
+  - kind: filter
+    name: filter_dm_org_hierarchy
+    context_name: read_dm_org_hierarchy
+    params:
+      - condition:
+         country_code NOT IN ('nl', 'fi')            
+      
+  - kind: select
+    name: select_ch1
+    context_name: filter_dm_org_hierarchy
+    params:
+      columns:
+        company_code: company_code_ch1
+        country_code: country_code_ch1
+      distinct: true     
+          
+  - kind: select
+    name: select_ch2
+    context_name: filter_dm_org_hierarchy
+    params:
+      columns:
+        company_code: company_code_ch2
+        country_code: country_code_ch2
+      distinct: true     
+      
+####################### read reference_matrix #################################
+
+  - kind: read_dataio
+    name: read_document_material_type_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: document_material_type_matrix
+      schema_version: v1
+
+  - kind: select
+    name: select_ref
+    context_name: read_document_material_type_matrix
+    params:
+      columns:
+        purchasing_document_type: purchasing_document_type_ref
+        material_type_code: material_type_code_ref
+        in_scope: in_scope_ref
+      distinct: true     
+
+####################### joins pu ################################
+ 
+  - kind: join
+    name: join_pu_m1_ref_ch1
+    context_name: filter_pu
+    params:
+      - other:
+          filter_m1
+        how:
+          inner
+        columns:
+          material_code_pu: material_code_m1
+          sap_cluster_pu: sap_cluster_m1
+      - other:
+          select_ref
+        how:
+          inner
+        columns:
+          purchasing_document_type_pu: purchasing_document_type_ref
+          material_type_code_m1: material_type_code_ref
+      - other:
+          select_ch1
+        how:
+          inner
+        columns:
+          company_code_pu: company_code_ch1
+ 
+  - kind: checkpoint
+    name: checkpoint_join_pu_m1_ref_ch1
+    context_name: join_pu_m1_ref_ch1
+
+####################### joins pr ################################
+ 
+  - kind: join
+    name: join_pr_m2_ch2
+    context_name: filter_pr
+    params:
+      - other:
+          filter_m2
+        how:
+          inner
+        columns:
+          material_code_pr: material_code_m2
+          sap_cluster_pr: sap_cluster_m2
+      - other:
+          select_ch2
+        how:
+          inner
+        columns:
+          company_code_pr: company_code_ch2
+ 
+  - kind: checkpoint
+    name: checkpoint_join_pr_m2_ch2
+    context_name: join_pr_m2_ch2
+
+####################### table PU for union ################################
+
+  - kind: select
+    name: select_tab1_pu
+    context_name: checkpoint_join_pu_m1_ref_ch1
+    params:
+      columns:
+        country_code_ch1: country_code
+        company_code_pu: company_code
+        plant_code_pu: plant_code
+        business_unit_code_pu: business_unit_code
+        business_unit_description_pu: business_unit_description
+        purchasing_document_category_pu: order_category
+        purchasing_group_code_pu: purchasing_group_code
+        purchasing_document_type_pu: order_type
+        purchasing_document_number_pu: order_number
+        item_number_pu: order_item_number
+        quantity_ordered_pu: quantity_ordered
+        quantity_delivered_pu: quantity_delivered
+        unit_of_measure_code_pu: unit_of_measure_code
+        material_code_pu: material_code
+        material_name_m1: material_name
+        material_type_code_m1: material_type_code 
+        material_group_code_m1: material_group_code
+        product_hierarchy_name_m1: product_hierarchy_name
+        package_type_code_m1: pack_type_code
+        package_size_name_m1: pack_size_name
+        created_by_pu: created_by
+        sap_cluster_pu: sap_cluster
+        vendor_code_pu: vendor_code
+        purchasing_document_type_name_pu: record_type
+        delivery_completion_flag_pu: delivery_completion_flag_pu
+      distinct: true     
+
+  - kind: add
+    name: add_columns
+    context_name: select_tab1_pu
+    params:
+      - column: delivery_completion_status
+        expression: delivery_completion_flag_pu
+      - column: mrp_controller
+        expression: IF(1 == 1, NULL, NULL)
+      - column: material_category
+        expression: "CASE WHEN material_type_code IN ('ZFG', 'ZFGA', 'ZFGC', 'ZFGM', 'ZFGS') THEN 'Finished goods'
+                     WHEN material_type_code IN ('ZRW', 'ZRWT') THEN 'Raw material'
+                     WHEN material_type_code IN ('ZSF', 'ZSFT') THEN 'Semi finished goods'
+                     WHEN material_type_code = 'ZKIT' THEN 'Concentrate'
+                     END"
+      - column: delivery_completion_flag
+        expression: "CASE WHEN delivery_completion_flag_pu = 'X' THEN '0' 
+                     ELSE '1' 
+                     END"
+ 
+# finding delivery first and last date, sum quantity delivered
+
+  - kind: add
+    name: add_delivery_date_pu_duplication
+    context_name: filter_pu
+    params:
+      - column: delivery_date_pu_max
+        expression: delivery_date_pu
+
+  - kind: group
+    name: group_delivery_date_pu
+    context_name: add_delivery_date_pu_duplication
+    params:
+      - aggs:
+          delivery_date_pu: min
+          delivery_date_pu_max: max
+          quantity_delivered_pu: sum
+        by:
+        - company_code_pu
+        - plant_code_pu
+        - purchasing_document_number_pu
+        - purchasing_document_type_pu
+        - purchasing_document_category_pu
+        - item_number_pu
+        - created_by_pu
+        - sap_cluster_pu
+
+  - kind: join
+    name: join_delivery_date_pu
+    context_name: add_columns
+    params:
+      - other:
+          group_delivery_date_pu
+        how:
+          left
+        columns:        
+          company_code: company_code_pu
+          plant_code: plant_code_pu
+          order_number: purchasing_document_number_pu
+          order_type: purchasing_document_type_pu
+          order_category: purchasing_document_category_pu
+          order_item_number: item_number_pu
+          created_by: created_by_pu
+          sap_cluster: sap_cluster_pu
+
+  - kind: select
+    name: select_join_delivery_date_pu
+    context_name: join_delivery_date_pu
+    params:
+      columns:
+        country_code: country_code
+        company_code: company_code
+        plant_code: plant_code
+        business_unit_code: business_unit_code
+        business_unit_description: business_unit_description
+        order_category: order_category
+        purchasing_group_code: purchasing_group_code
+        order_type: order_type
+        order_number: order_number
+        order_item_number: order_item_number
+        quantity_ordered: quantity_ordered
+        quantity_delivered: quantity_delivered
+        unit_of_measure_code: unit_of_measure_code
+        material_code: material_code
+        material_name: material_name
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        product_hierarchy_name: product_hierarchy_name
+        pack_type_code: pack_type_code
+        pack_size_name: pack_size_name
+        created_by: created_by
+        sap_cluster: sap_cluster
+        vendor_code: vendor_code
+        record_type: record_type
+        delivery_completion_status: delivery_completion_status
+        mrp_controller: mrp_controller
+        material_category: material_category
+        delivery_completion_flag: delivery_completion_flag
+        min_delivery_date_pu: delivery_first_date
+        sum_quantity_delivered_pu: sum_quantity_delivered
+        max_delivery_date_pu_max: delivery_latest_date
+      distinct: true   
+
+  - kind: add
+    name: add_quantity_remaining
+    context_name: select_join_delivery_date_pu
+    params:
+      - column: quantity_remaining
+        expression: quantity_ordered - sum_quantity_delivered 
+
+# finding count of distinct delivery dates 
+  - kind: select
+    name: select_distinct_delivery_dates_pu
+    context_name: filter_pu
+    params:
+      columns: 
+          company_code_pu: company_code
+          plant_code_pu: plant_code
+          purchasing_document_number_pu: order_number
+          purchasing_document_type_pu: order_type
+          purchasing_document_category_pu: order_category
+          item_number_pu: order_item_number
+          created_by_pu: created_by
+          sap_cluster_pu: sap_cluster
+          delivery_date_pu: delivery_date
+      distinct: true # if really want to count deliveries 'distinct' here should be removed
+
+  - kind: group
+    name: group_delivery_date_count_pu
+    context_name: select_distinct_delivery_dates_pu
+    params:
+      - aggs:
+          delivery_date: count
+        by:
+        - company_code
+        - plant_code
+        - order_number
+        - order_type
+        - order_category
+        - order_item_number
+        - created_by
+        - sap_cluster
+
+  - kind: join
+    name: join_delivery_date_count_pu
+    context_name: add_quantity_remaining
+    params:
+      - other:
+          group_delivery_date_count_pu
+        how:
+          left
+        columns:           
+          company_code: company_code
+          plant_code: plant_code
+          order_number: order_number
+          order_type: order_type
+          order_category: order_category
+          order_item_number: order_item_number
+          created_by: created_by
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dq_check_delivery_completion_flag
+    context_name: join_delivery_date_count_pu
+    params:
+      - column: dq_check_delivery_completion_flag
+        expression: "CASE WHEN delivery_completion_flag = '1' AND delivery_latest_date <= DATE_SUB(current_date(), 1) AND quantity_remaining > 0 THEN '0'
+                     ELSE '1' 
+                     END"
+ 
+  - kind: add
+    name: add_upper_country
+    params:
+     - column: country_code
+       expression: UPPER(country_code)
+       overwrite: true
+
+  - kind: select
+    name: select_final_pu
+    context_name: add_upper_country
+    params:
+      columns:
+        country_code: country_code
+        company_code: company_code
+        plant_code: plant_code
+        business_unit_code: business_unit_code
+        business_unit_description: business_unit_description
+        order_category: order_category
+        purchasing_group_code: purchasing_group_code
+        order_type: order_type
+        order_number: order_number
+        order_item_number: order_item_number
+        delivery_completion_status: delivery_completion_status
+        delivery_completion_flag: delivery_completion_flag
+        delivery_first_date: delivery_first_date
+        delivery_latest_date: delivery_latest_date
+        count_delivery_date: delivery_count_dates
+        quantity_ordered: quantity_ordered
+        sum_quantity_delivered: quantity_delivered
+        quantity_remaining: quantity_remaining
+        unit_of_measure_code: unit_of_measure_code
+        material_code: material_code
+        material_name: material_name
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        product_hierarchy_name: product_hierarchy_name
+        pack_type_code: pack_type_code
+        pack_size_name: pack_size_name
+        mrp_controller: mrp_controller
+        vendor_code: vendor_code
+        created_by: created_by
+        record_type: record_type
+        material_category: material_category
+        sap_cluster: sap_cluster
+        dq_check_delivery_completion_flag: dq_check_delivery_completion_flag
+      distinct: true   
+
+####################### table PR for union ################################
+
+  - kind: select
+    name: select_tab2_pr
+    context_name: checkpoint_join_pr_m2_ch2
+    params:
+      columns:
+        country_code_ch2: country_code
+        company_code_pr: company_code
+        plant_code_pr: plant_code
+        business_unit_code_pr: business_unit_code
+        business_unit_description_pr: business_unit_description
+        order_category_pr: order_category
+        order_type_pr: order_type
+        order_number_pr: order_number
+        item_number_pr: order_item_number
+        delivery_completion_code_pr: delivery_completion_status
+        delivery_date_pr: delivery_latest_date
+        quantity_ordered_pr: quantity_ordered
+        quantity_delivered_pr: quantity_delivered
+        unit_of_measure_code_pr: unit_of_measure_code
+        material_code_pr: material_code
+        material_name_m2: material_name
+        material_type_code_m2: material_type_code 
+        material_group_code_m2: material_group_code
+        product_hierarchy_name_m2: product_hierarchy_name
+        package_type_code_m2: pack_type_code
+        package_size_name_m2: pack_size_name
+        mrp_controller_pr: mrp_controller
+        created_by_pr: created_by
+        sap_cluster_pr: sap_cluster
+      distinct: true     
+
+  - kind: add
+    name: add_columns_pr
+    context_name: select_tab2_pr
+    params:
+      - column: purchasing_group_code
+        expression: IF(1 == 1, NULL, NULL)
+      - column: delivery_count_dates
+        expression: IF(1 == 1, 1, 1)        
+      - column: delivery_completion_flag
+        expression: "CASE WHEN delivery_completion_status in ('TECO', 'CLSD', 'DLFL') THEN '0' 
+                     ELSE '1' 
+                     END"
+      - column: delivery_first_date
+        expression: delivery_latest_date
+      - column: quantity_remaining
+        expression: quantity_ordered - quantity_delivered
+      - column: vendor_code
+        expression: IF(1 == 1, NULL, NULL)
+      - column: record_type
+        expression: '''Production Order'''
+      - column: material_category
+        expression: "CASE WHEN material_type_code IN ('ZFG', 'ZFGA', 'ZFGC', 'ZFGM', 'ZFGS') THEN 'Finished goods'
+                     WHEN material_type_code IN ('ZRW', 'ZRWT') THEN 'Raw material' 
+                     WHEN material_type_code IN ('ZSF', 'ZSFT') then 'Semi finished goods'
+                     WHEN material_type_code = 'ZKIT' THEN 'Concentrate'
+                     END"    
+      - column: row_number
+        expression: row_number() OVER (PARTITION BY company_code, plant_code, order_number, order_type, order_category, created_by, sap_cluster ORDER BY delivery_latest_date)
+
+# for one pr order you can have more than 1 delivery_completition_code. In such cases please take first non-null code
+
+  - kind: group
+    name: group_max_row_number
+    context_name: add_columns_pr
+    params:
+      - aggs:
+          row_number: max
+        by:
+        - company_code
+        - plant_code
+        - order_number
+        - order_type
+        - order_category
+        - created_by
+        - sap_cluster
+
+  - kind: join
+    name: join_max_row_number
+    context_name: add_columns_pr
+    params:
+      - other:
+          group_max_row_number
+        how:
+          left
+        columns:           
+          company_code: company_code
+          plant_code: plant_code
+          order_number: order_number
+          order_type: order_type
+          order_category: order_category
+          created_by: created_by
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_one_records_pr
+    context_name: join_max_row_number
+    params:
+      - condition:
+         max_row_number = 1
+         
+  - kind: filter
+    name: filter_more_records_pr
+    context_name: join_max_row_number
+    params:
+      - condition:
+         max_row_number > 1 AND
+         delivery_completion_status IS NOT NULL
+
+  - kind: group
+    name: group_min_row_number
+    context_name: filter_more_records_pr
+    params:
+      - aggs:
+          row_number: min
+        by:
+        - company_code
+        - plant_code
+        - order_number
+        - order_type
+        - order_category
+        - created_by
+        - sap_cluster
+
+  - kind: join
+    name: join_min_row_number
+    context_name: filter_more_records_pr
+    params:
+      - other:
+          group_min_row_number
+        how:
+          left
+        columns:           
+          company_code: company_code
+          plant_code: plant_code
+          order_number: order_number
+          order_type: order_type
+          order_category: order_category
+          created_by: created_by
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_more_records_pr_min_row_number
+    context_name: join_min_row_number
+    params:
+      - condition:
+         row_number = min_row_number
+
+  - kind: select
+    name: select_more_records_pr_min_row_number
+    context_name: filter_more_records_pr_min_row_number
+    params:
+      columns:
+        country_code: country_code
+        company_code: company_code
+        plant_code: plant_code
+        business_unit_code: business_unit_code
+        business_unit_description: business_unit_description
+        order_category: order_category
+        order_type: order_type
+        order_number: order_number
+        order_item_number: order_item_number
+        delivery_completion_status: delivery_completion_status
+        delivery_first_date: delivery_first_date
+        delivery_latest_date: delivery_latest_date
+        quantity_ordered: quantity_ordered
+        quantity_delivered: quantity_delivered
+        unit_of_measure_code: unit_of_measure_code
+        material_code: material_code
+        material_name: material_name
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        product_hierarchy_name: product_hierarchy_name
+        pack_type_code: pack_type_code
+        pack_size_name: pack_size_name
+        mrp_controller: mrp_controller
+        created_by: created_by
+        sap_cluster: sap_cluster
+        purchasing_group_code: purchasing_group_code
+        delivery_count_dates: delivery_count_dates
+        delivery_completion_flag: delivery_completion_flag
+        quantity_remaining: quantity_remaining
+        vendor_code: vendor_code
+        record_type: record_type
+        material_category: material_category
+        row_number: row_number
+        max_row_number: max_row_number
+      distinct: true     
+
+  - kind: union
+    name: union_pr
+    context_name: filter_one_records_pr
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_more_records_pr_min_row_number
+
+  - kind: add
+    name: add_dq_check_delivery_completion_flag_pr
+    context_name: union_pr
+    params:
+      - column: dq_check_delivery_completion_flag
+        expression: "CASE WHEN delivery_completion_flag = '1' AND delivery_latest_date <= DATE_SUB(current_date(), 1) AND quantity_remaining > 0 THEN '0'
+                     ELSE '1' 
+                     END"
+
+  - kind: add
+    name: add_upper_country
+    context_name: add_dq_check_delivery_completion_flag_pr
+    params:
+     - column: country_code
+       expression: UPPER(country_code)
+       overwrite: true
+
+  - kind: select
+    name: select_final_pr
+    context_name: add_upper_country
+    params:
+      columns:
+        country_code: country_code
+        company_code: company_code
+        plant_code: plant_code
+        business_unit_code: business_unit_code
+        business_unit_description: business_unit_description
+        order_category: order_category
+        purchasing_group_code: purchasing_group_code
+        order_type: order_type
+        order_number: order_number
+        order_item_number: order_item_number
+        delivery_completion_status: delivery_completion_status
+        delivery_completion_flag: delivery_completion_flag
+        delivery_first_date: delivery_first_date
+        delivery_latest_date: delivery_latest_date
+        delivery_count_dates: delivery_count_dates
+        quantity_ordered: quantity_ordered
+        quantity_delivered: quantity_delivered
+        quantity_remaining: quantity_remaining
+        unit_of_measure_code: unit_of_measure_code
+        material_code: material_code
+        material_name: material_name
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        product_hierarchy_name: product_hierarchy_name
+        pack_type_code: pack_type_code
+        pack_size_name: pack_size_name
+        mrp_controller: mrp_controller
+        vendor_code: vendor_code
+        created_by: created_by
+        record_type: record_type
+        material_category: material_category
+        sap_cluster: sap_cluster
+        dq_check_delivery_completion_flag: dq_check_delivery_completion_flag
+      distinct: true   
+
+  - kind: union
+    name: final_du
+    context_name: select_final_pu
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_final_pr
+
+  - kind: checkpoint
+    name: checkpoint_du
+    context_name: final_du
+
+########################################## detailed ######################################
+
+  - kind: add
+    name: add_dq_message_output
+    context_name: checkpoint_du
+    params:
+     - column: dq_message_output
+       expression: "CASE WHEN dq_check_delivery_completion_flag = '1' AND delivery_completion_status = 'DLFL' THEN 'OK, Deleted' 
+                    WHEN dq_check_delivery_completion_flag = '1' THEN 'OK' 
+                    WHEN dq_check_delivery_completion_flag = '0' THEN 'Incomplete' 
+                    END"
+     - column: delivery_count_dates_cast
+       expression: "CAST(delivery_count_dates as DECIMAL(5, 0))" 
+     - column: quantity_delivered_cast
+       expression: "CAST(quantity_delivered as DECIMAL(13, 3))"      
+     - column: quantity_remaining_cast
+       expression: "CAST(quantity_remaining as DECIMAL(13, 3))"      
+     - column: business_unit_code_EG
+       expression: "CASE WHEN company_code = '0477' THEN 'EGX'
+                    ELSE business_unit_code 
+                    END"    
+     - column: business_unit_description_EG
+       expression: "CASE WHEN company_code = '0477' THEN 'Egypt'
+                    ELSE business_unit_description 
+                    END"
+   
+
+  - kind: select
+    name: select_final_du
+    context_name: add_dq_message_output
+    params:
+      columns:
+        country_code: country_code
+        company_code: company_code
+        plant_code: plant_code
+        order_category: order_category
+        purchasing_group_code: purchasing_group_code
+        order_type: order_type
+        order_number: order_number
+        order_item_number: order_item_number
+        delivery_completion_status: delivery_completion_status
+        delivery_completion_flag: delivery_completion_flag
+        delivery_first_date: delivery_first_date
+        delivery_latest_date: delivery_latest_date
+        delivery_count_dates_cast: delivery_count_dates
+        quantity_ordered: quantity_ordered
+        quantity_delivered_cast: quantity_delivered
+        quantity_remaining_cast: quantity_remaining
+        unit_of_measure_code: unit_of_measure_code
+        material_code: material_code
+        material_name: material_name
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        product_hierarchy_name: product_hierarchy_name
+        pack_type_code: pack_type_code
+        pack_size_name: pack_size_name
+        mrp_controller: mrp_controller
+        vendor_code: vendor_code
+        created_by: created_by
+        dq_check_delivery_completion_flag: dq_check_delivery_completion_flag
+        dq_message_output: dq_message_output
+        record_type: record_type
+        material_category: material_category
+        sap_cluster: sap_cluster
+        business_unit_code_EG: business_unit_code
+        business_unit_description_EG: business_unit_description
+      distinct: true   
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: sc_pending_open_orders
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      
+######################################### aggregated ######################################
+
+# completeness
+  - kind: add
+    name: add_completeness_check
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(dq_check_delivery_completion_flag IS NOT NULL AND dq_check_delivery_completion_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: invalid_checks
+        expression: IF(dq_check_delivery_completion_flag = 0, 1, NULL)
+        
+  - kind: group
+    name: group_completeness_check
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - company_code
+        - record_type
+        - material_category
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_completeness_check
+    context_name: group_completeness_check
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_completeness_check
+    params:
+      columns:
+        country_code: country_code
+        company_code: company_code
+        record_type: record_type
+        material_category: material_category
+        quality_category: quality_category
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        total_records: total_records
+        sap_cluster: sap_cluster
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: sc_pending_open_orders
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

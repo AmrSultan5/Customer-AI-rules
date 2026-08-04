@@ -1,0 +1,183 @@
+transform:
+  name: customer_segmentation_accuracy_225_2
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        ccaf_code: ccaf_code
+        natural_person_flag: natural_person_flag
+        central_order_block_code: central_order_block_code
+        red_outlet_flag: red_outlet_flag
+        account_group_code: account_group_code
+        country_code: country_code
+        country_code_from_sap_attribute: country_code_from_sap_attribute
+        country_code_from_customer_code: country_code_from_customer_code
+        customer_activity_cluster_code: customer_activity_cluster_code
+        trade_channel_code: trade_channel_code
+        sub_trade_channel_code: sub_trade_channel_code
+        trade_channel_name: trade_channel_name
+        sub_trade_channel_name: sub_trade_channel_name
+        longitude: longitude
+        latitude: latitude
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dcc_geocoords_extractor_dic_v1
+  - kind: read_dataio
+    name: read_dcc_geocoords_extractor_dic_v1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dcc_geocoords_extractor_dic
+      schema_version: v1
+
+
+  - kind: select
+    name: select_dcc_geocoords_extractor_dic
+    context_name: read_dcc_geocoords_extractor_dic_v1
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        longitude: longitude
+        geocoords_extractor: geocoords_extractor
+
+  - kind: join
+    name: join_data_marts_rcaccu_225_2
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dcc_geocoords_extractor_dic
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          latitude: latitude
+          longitude: longitude
+
+  - kind: add
+    name: add_extractor_fields_rcaccu_225_2
+    context_name: join_data_marts_rcaccu_225_2
+    params:
+      - column: ext_country_code
+        expression: geocoords_extractor.country_code
+      - column: ext_lat
+        expression: cast(geocoords_extractor.latitude as double)
+      - column: ext_long
+        expression: cast(geocoords_extractor.longitude as double)
+
+  - kind: add
+    name: add_checks_rcaccu_225_2
+    context_name: add_extractor_fields_rcaccu_225_2
+    params:
+      - column: lat_valid
+        expression: ext_lat between -90 and 90 and latitude between -90 and 90
+      - column: lon_valid
+        expression: ext_long between -180 and 180 and longitude between -180 and 180
+      - column: coords_valid
+        expression: lat_valid and lon_valid
+      - column: r_latitude
+        expression: case when coords_valid then radians(latitude) else null end
+      - column: r_latitude_ext
+        expression: case when coords_valid then radians(ext_lat) else null end
+      - column: r_longitude
+        expression: case when coords_valid then radians(longitude) else null end
+      - column: r_longitude_ext
+        expression: case when coords_valid then radians(ext_long) else null end
+      - column: difference_latitude
+        expression: case when coords_valid then r_latitude_ext - r_latitude else null end
+      - column: difference_longitude
+        expression: case when coords_valid then r_longitude_ext - r_longitude else null end
+
+      # Haversine helper
+      - column: angle
+        expression: case
+                      when coords_valid then
+                        power(sin(difference_latitude/2),2)
+                        + cos(r_latitude) * cos(r_latitude_ext) * power(sin(difference_longitude/2),2)
+                      else null
+                    end
+
+      - column: central_angle
+        expression: case when coords_valid then 2 * atan2(sqrt(angle), sqrt(1 - angle)) else null end
+
+      - column: earth_radius_m
+        expression: double(6371000)
+      - column: distance_m
+        expression: case when coords_valid then central_angle * earth_radius_m else null end
+
+      # Normalize country codes
+      - column: country_code_norm
+        expression: case
+                      when country_code is null or country_code = '' then null
+                      when upper(country_code) in ('XK','KV') then 'XK'
+                      else upper(country_code)
+                    end
+      - column: ext_country_code_norm
+        expression: case
+                      when ext_country_code is null or ext_country_code = '' then null
+                      when upper(ext_country_code) in ('XK','KV') then 'XK'
+                      else upper(ext_country_code)
+                    end
+
+      # check_status
+      - column: check_status
+        expression: case
+                      when ext_country_code is null or ext_country_code = '' then ''
+                      when ext_country_code_norm = country_code_norm and distance_m <= 10000 then '1'
+                      when (
+                            (ext_country_code_norm = 'CH' and country_code_norm = 'LI') or
+                            (ext_country_code_norm = 'LI' and country_code_norm = 'CH') or
+                            (ext_country_code_norm = 'IT' and country_code_norm in ('SM','VA')) or
+                            (ext_country_code_norm in ('SM','VA') and country_code_norm = 'IT') or
+                            (ext_country_code_norm = 'XK' and country_code_norm = 'XK')
+                           )
+                           and distance_m <= 10000 then '1'
+                      when distance_m > 10000 then ''
+                      else '0'
+                    end
+
+      # checked_value and attribute
+      - column: value_checked
+        expression: country_code_norm||"_"||ext_country_code_norm
+      - column: rule_code
+        expression: '''RCACCU_225.2'''
+      - column: check_date
+        expression: current_timestamp()
+      - column: check_details_message
+        expression: ''''''
+
+  - kind: select
+    name: select_rcaccu_225_2
+    context_name: add_checks_rcaccu_225_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_details_message: check_details_message
+        check_date: check_date
+      distinct: true

@@ -1,0 +1,609 @@
+transform:
+  name: detailed
+  operations:
+
+  - kind: read_dataio
+    name: read_du
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: ipm_indirect_partner
+      schema_version: v1
+
+  - kind: add
+    name: add_group_name
+    context_name: read_du
+    params:
+      - column: group_name
+        expression: "CASE WHEN l4_customer_code = '0000010500' AND customer_group_4_code NOT IN ('IN', 'ZIN') THEN 'Wholesalers' WHEN l4_customer_code != '0000010500' AND customer_group_4_code NOT IN ('IN', 'ZIN') THEN 'Non-Wholesalers' WHEN customer_group_4_code = 'IN' THEN 'Indirect customers' WHEN customer_group_4_code = 'ZIN' THEN 'Dummy customers' ELSE '' END"
+
+  - kind: select
+    name: select_du_old
+    context_name: add_group_name
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_name: l7_customer_name
+        sales_org_code: sales_org_code
+        country_code: country_code
+        l6_customer_code: l6_customer_code
+        l6_customer_name: l6_customer_name
+        l5_customer_code: l5_customer_code
+        l5_customer_name: l5_customer_name
+        l4_customer_code: l4_customer_code
+        l4_customer_name: l4_customer_name
+        l3_customer_code: l3_customer_code
+        l3_customer_name: l3_customer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        trade_channel_code: trade_channel_code
+        trade_channel_name: trade_channel_name
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_name: sub_trade_channel_name
+        output_ccaf_attribute_consistency: output_ccaf_attribute_consistency
+        output_order_block_consistency: output_order_block_consistency
+        output_customer_group_4: output_customer_group_4
+        output_subtrade_channel_consistency: output_subtrade_channel_consistency
+        output_trade_channel_consistency: output_trade_channel_consistency
+        output_customer_hierarchy_l3: output_customer_hierarchy_l3
+        group_name: group_name
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_status_by_columns
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ipm_indirect_partner
+      namespace: golden
+      object_name: detailed_status_by_columns
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+  - kind: filter
+    name: filter_wholesalers
+    context_name: read_du
+    params:
+      - condition:
+          l4_customer_code ='0000010500' AND customer_group_4_code NOT IN ('IN', 'ZIN')
+
+  - kind: add
+    name: add_wholesalers_ccaf
+    context_name: filter_wholesalers
+    params:
+      - column: group_name
+        expression: '''Wholesalers'''
+      - column: quality_rule
+        expression: '''CCAF''' 
+      - column: quality_check_flag
+        expression: "CASE WHEN output_ccaf_attribute_consistency ='OK' THEN '1' WHEN output_ccaf_attribute_consistency != 'OK' THEN '0' ELSE  '' END"               
+      - column: dq_message_output
+        expression: output_ccaf_attribute_consistency
+
+  - kind: add
+    name: add_wholesalers_cg4
+    context_name: filter_wholesalers
+    params:
+      - column: group_name
+        expression: '''Wholesalers'''
+      - column: quality_rule
+        expression: '''Customer Group 4'''
+      - column: quality_check_flag
+        expression: "CASE WHEN output_customer_group_4 ='OK' THEN '1' WHEN output_customer_group_4 != 'OK' THEN '0' ELSE  '' END"            
+      - column: dq_message_output
+        expression: output_customer_group_4
+
+  - kind: add
+    name: add_wholesalers_ob
+    context_name: filter_wholesalers
+    params:
+      - column: group_name
+        expression: '''Wholesalers'''
+      - column: quality_rule
+        expression: '''Order Block'''  
+      - column: quality_check_flag
+        expression: "CASE WHEN output_order_block_consistency = 'OK' THEN '1' WHEN output_order_block_consistency != 'OK' THEN '0' ELSE  '' END"  
+      - column: dq_message_output
+        expression: output_order_block_consistency
+
+  - kind: add
+    name: add_wholesalers_sc
+    context_name: filter_wholesalers
+    params:
+      - column: group_name
+        expression: '''Wholesalers'''
+      - column: quality_rule
+        expression: '''Subtrade Channel'''          
+      - column: quality_check_flag
+        expression: "CASE WHEN output_subtrade_channel_consistency = 'OK' THEN '1' WHEN output_subtrade_channel_consistency != 'OK' THEN '0' ELSE  '' END"  
+      - column: dq_message_output
+        expression: output_subtrade_channel_consistency
+
+  - kind: add
+    name: add_wholesalers_tc
+    context_name: filter_wholesalers
+    params:
+      - column: group_name
+        expression: '''Wholesalers'''
+      - column: quality_rule
+        expression: '''Trade Channel'''   
+      - column: quality_check_flag
+        expression: "CASE WHEN output_trade_channel_consistency  = 'OK' THEN '1' WHEN output_trade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_trade_channel_consistency
+
+  - kind: filter
+    name: filter_nonwholesalers
+    context_name: read_du
+    params:
+      - condition:
+          l4_customer_code !='0000010500' AND customer_group_4_code NOT IN ('IN', 'ZIN')
+
+  - kind: add
+    name: add_nonwholesalers_ccaf
+    context_name: filter_nonwholesalers
+    params:
+      - column: group_name
+        expression: '''Non-Wholesalers'''
+      - column: quality_rule
+        expression: '''CCAF'''      
+      - column: quality_check_flag
+        expression: "CASE WHEN output_ccaf_attribute_consistency ='OK' THEN '1' WHEN output_ccaf_attribute_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_ccaf_attribute_consistency
+
+  - kind: add
+    name: add_nonwholesalers_cg4
+    context_name: filter_nonwholesalers
+    params:
+      - column: group_name
+        expression: '''Non-Wholesalers'''
+      - column: quality_rule
+        expression: '''Customer Group 4''' 
+      - column: quality_check_flag
+        expression: "CASE WHEN output_customer_group_4 ='OK' THEN '1' WHEN output_customer_group_4 != 'OK' THEN '0' ELSE  '' END"   
+      - column: dq_message_output
+        expression: output_customer_group_4
+
+  - kind: add
+    name: add_nonwholesalers_ob
+    context_name: filter_nonwholesalers
+    params:
+      - column: group_name
+        expression: '''Non-Wholesalers'''
+      - column: quality_rule
+        expression: '''Order Block'''  
+      - column: quality_check_flag
+        expression: "CASE WHEN output_order_block_consistency = 'OK' THEN '1' WHEN output_order_block_consistency != 'OK' THEN '0' ELSE  '' END"  
+      - column: dq_message_output
+        expression: output_order_block_consistency
+
+  - kind: add
+    name: add_nonwholesalers_sc
+    context_name: filter_nonwholesalers
+    params:
+      - column: group_name
+        expression: '''Non-Wholesalers'''
+      - column: quality_rule
+        expression: '''Subtrade Channel'''          
+      - column: quality_check_flag
+        expression: "CASE WHEN output_subtrade_channel_consistency = 'OK' THEN '1' WHEN output_subtrade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_subtrade_channel_consistency
+
+  - kind: add
+    name: add_nonwholesalers_tc
+    context_name: filter_nonwholesalers
+    params:
+      - column: group_name
+        expression: '''Non-Wholesalers'''
+      - column: quality_rule
+        expression: '''Trade Channel'''  
+      - column: quality_check_flag
+        expression: "CASE WHEN output_trade_channel_consistency  = 'OK' THEN '1' WHEN output_trade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_trade_channel_consistency
+
+  - kind: filter
+    name: filter_indirect
+    context_name: read_du
+    params:
+      - condition:
+          customer_group_4_code='IN'
+
+  - kind: add
+    name: add_indirect_ccaf
+    context_name: filter_indirect
+    params:
+      - column: group_name
+        expression: '''Indirect customers'''
+      - column: quality_rule
+        expression: '''CCAF'''      
+      - column: quality_check_flag
+        expression: "CASE WHEN output_ccaf_attribute_consistency ='OK' THEN '1' WHEN output_ccaf_attribute_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_ccaf_attribute_consistency
+
+  - kind: add
+    name: add_indirect_ch3
+    context_name: filter_indirect
+    params:
+      - column: group_name
+        expression: '''Indirect customers'''
+      - column: quality_rule
+        expression: '''Customer Hierarchy 3''' 
+      - column: quality_check_flag
+        expression: "CASE WHEN output_customer_hierarchy_l3 ='OK' THEN '1' WHEN output_customer_hierarchy_l3 != 'OK' THEN '0' ELSE  '' END"    
+      - column: dq_message_output
+        expression: output_customer_hierarchy_l3
+
+  - kind: add
+    name: add_indirect_ob
+    context_name: filter_indirect
+    params:
+      - column: group_name
+        expression: '''Indirect customers'''
+      - column: quality_rule
+        expression: '''Order Block'''  
+      - column: quality_check_flag
+        expression: "CASE WHEN output_order_block_consistency = 'OK' THEN '1' WHEN output_order_block_consistency != 'OK' THEN '0' ELSE  '' END"  
+      - column: dq_message_output
+        expression: output_order_block_consistency
+
+  - kind: add
+    name: add_indirect_sc
+    context_name: filter_indirect
+    params:
+      - column: group_name
+        expression: '''Indirect customers'''
+      - column: quality_rule
+        expression: '''Subtrade Channel'''          
+      - column: quality_check_flag
+        expression: "CASE WHEN output_subtrade_channel_consistency = 'OK' THEN '1' WHEN output_subtrade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_subtrade_channel_consistency
+
+  - kind: add
+    name: add_indirect_tc
+    context_name: filter_indirect
+    params:
+      - column: group_name
+        expression: '''Indirect customers'''
+      - column: quality_rule
+        expression: '''Trade Channel'''  
+      - column: quality_check_flag
+        expression: "CASE WHEN output_trade_channel_consistency  = 'OK' THEN '1' WHEN output_trade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_trade_channel_consistency
+
+  - kind: filter
+    name: filter_dummy
+    context_name: read_du
+    params:
+      - condition:
+          customer_group_4_code='ZIN'
+
+  - kind: add
+    name: add_dummy_ccaf
+    context_name: filter_dummy
+    params:
+      - column: group_name
+        expression: '''Dummy customers'''
+      - column: quality_rule
+        expression: '''CCAF'''      
+      - column: quality_check_flag
+        expression: "CASE WHEN output_ccaf_attribute_consistency ='OK' THEN '1' WHEN output_ccaf_attribute_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_ccaf_attribute_consistency
+
+  - kind: add
+    name: add_dummy_ch3
+    context_name: filter_dummy
+    params:
+      - column: group_name
+        expression: '''Dummy customers'''
+      - column: quality_rule
+        expression: '''Customer Hierarchy 3''' 
+      - column: quality_check_flag
+        expression: "CASE WHEN output_customer_hierarchy_l3 ='OK' THEN '1' WHEN output_customer_hierarchy_l3 != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_customer_hierarchy_l3
+
+  - kind: add
+    name: add_dummy_ob
+    context_name: filter_dummy
+    params:
+      - column: group_name
+        expression: '''Dummy customers'''
+      - column: quality_rule
+        expression: '''Order Block'''  
+      - column: quality_check_flag
+        expression: "CASE WHEN output_order_block_consistency = 'OK' THEN '1' WHEN output_order_block_consistency != 'OK' THEN '0' ELSE  '' END"  
+      - column: dq_message_output
+        expression: output_order_block_consistency
+
+  - kind: add
+    name: add_dummy_sc
+    context_name: filter_dummy
+    params:
+      - column: group_name
+        expression: '''Dummy customers'''
+      - column: quality_rule
+        expression: '''Subtrade Channel'''          
+      - column: quality_check_flag
+        expression: "CASE WHEN output_subtrade_channel_consistency = 'OK' THEN '1' WHEN output_subtrade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_subtrade_channel_consistency
+
+  - kind: add
+    name: add_dummy_tc
+    context_name: filter_dummy
+    params:
+      - column: group_name
+        expression: '''Dummy customers'''
+      - column: quality_rule
+        expression: '''Trade Channel''' 
+      - column: quality_check_flag
+        expression: "CASE WHEN output_trade_channel_consistency  = 'OK' THEN '1' WHEN output_trade_channel_consistency != 'OK' THEN '0' ELSE  '' END" 
+      - column: dq_message_output
+        expression: output_trade_channel_consistency
+
+  - kind: union
+    name: union_all
+    context_name: add_wholesalers_ccaf
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_wholesalers_cg4
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_wholesalers_ob
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_wholesalers_sc
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_wholesalers_tc
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_nonwholesalers_ccaf
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_nonwholesalers_cg4
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_nonwholesalers_ob
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_nonwholesalers_sc
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_nonwholesalers_tc     
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_indirect_ccaf
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_indirect_ch3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_indirect_ob
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_indirect_sc
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_indirect_tc   
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dummy_ccaf
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dummy_ch3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dummy_ob
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dummy_sc
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dummy_tc   
+
+  - kind: select
+    name: select_du
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_name: l7_customer_name
+        sales_org_code: sales_org_code
+        country_code: country_code
+        l6_customer_code: l6_customer_code
+        l6_customer_name: l6_customer_name
+        l5_customer_code: l5_customer_code
+        l5_customer_name: l5_customer_name
+        l4_customer_code: l4_customer_code
+        l4_customer_name: l4_customer_name
+        l3_customer_code: l3_customer_code
+        l3_customer_name: l3_customer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        trade_channel_code: trade_channel_code
+        trade_channel_name: trade_channel_name
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_name: sub_trade_channel_name
+        group_name: group_name
+        quality_rule: quality_rule
+        quality_check_flag: quality_check_flag
+        dq_message_output: dq_message_output
+      distinct: true
+
+  - kind: write_dataio
+    name: write_status_by_rows
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ipm_indirect_partner
+      namespace: golden
+      object_name: detailed_status_by_rows
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+## AGGREGATED LAYER
+
+  - kind: add
+    name: add_customer_loading_date
+    context_name: select_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: "CASE WHEN dq_message_output != 'OK' THEN '1' ELSE NULL END" 
+      - column: total_checks
+        expression: CAST(1 AS INT)
+
+  - kind: group
+    name: group_total_invalid_records
+    context_name: add_customer_loading_date
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - loading_date
+        - country_code
+        - group_name
+        - quality_rule
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_records
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+
+  - kind: select
+    name: select_finall
+    context_name: add_new_columns
+    params:
+      columns:
+        country_code: country_code
+        loading_date: loading_date
+        group_name: group_name
+        quality_rule: rule_name
+        invalid_checks: invalid_checks
+        total_checks: total_checks
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ipm_indirect_partner
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

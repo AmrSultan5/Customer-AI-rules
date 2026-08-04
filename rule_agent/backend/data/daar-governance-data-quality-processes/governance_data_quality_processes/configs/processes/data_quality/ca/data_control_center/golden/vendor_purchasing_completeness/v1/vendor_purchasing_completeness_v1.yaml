@@ -1,0 +1,187 @@
+transform:
+  name: vendor_purchasing_completeness
+  operations:
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_purchasing_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        terms_of_payment_code: terms_of_payment_code_vc
+        payment_methods_list: payment_methods_list
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_purchasing_organization
+    context_name: read_dm_vendor_purchasing_organization
+    params:
+      columns:
+        vendor_code: vendor_code
+        terms_of_payment_code_purchasing_org: terms_of_payment_code_po
+      distinct: true
+
+
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_purchasing_organization
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_120_1
+        expression: if(isnull(terms_of_payment_code_po) or terms_of_payment_code_po = '', '0', '1')
+      - column: rcvomp_60_1
+        expression: if(isnull(terms_of_payment_code_vc) or terms_of_payment_code_vc = '', '0', '1')
+      - column: rcvomp_67_1
+        expression: if(isnull(payment_methods_list) or payment_methods_list = '', '0', '1')
+      - column: rule_code_rcvomp_120_1
+        expression: '''RVCOMP_120.1'''
+      - column: rule_code_rcvomp_60_1
+        expression: '''RVCOMP_60.1'''
+      - column: rule_code_rcvomp_67_1
+        expression: '''RVCOMP_67.1'''
+      - column: subdomain
+        expression: '''purchasing_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_120_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_120_1: rule_code
+        rcvomp_120_1: check_status
+        vendor_code: vendor_code
+        terms_of_payment_code_po: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_60_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_60_1: rule_code
+        rcvomp_60_1: check_status
+        vendor_code: vendor_code
+        terms_of_payment_code_vc: value_checked
+        country_code: country_code
+        subdomain: subdomain
+        check_date: check_date
+        
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_67_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_67_1: rule_code
+        rcvomp_67_1: check_status
+        vendor_code: vendor_code
+        payment_methods_list: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_120_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_60_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_67_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

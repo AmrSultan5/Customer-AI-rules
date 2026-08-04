@@ -1,0 +1,189 @@
+transform:
+  name: dm_finance_asset
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read ANLA
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_anla
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: anla
+
+  - kind: filter
+    name: filter_anla
+    params:
+      - condition:
+          spras = 'E' and anln2 = '0000'
+
+  - kind: group
+    name: group_max_aktiv
+    params:
+      - aggs:
+          aktiv: max
+        by:
+        - anln1
+        - txt50
+        - bukrs
+        - anlkl
+        - aktiv
+        - xloev
+        - xspeb
+        - ktogr
+        - anltp
+        - deakt
+        - bstdt
+        - lifnr
+        - vbund
+        - land1
+        - aneqs
+        - spras
+        - sap_cluster
+
+
+  - kind: select
+    name: select_anla
+    params:
+      columns:
+        anln1: anln1
+        txt50: txt50
+        bukrs: bukrs
+        anlkl: anlkl
+        max_aktiv: aktiv
+        xloev: xloev
+        xspeb: xspeb
+        ktogr: ktogr
+        anltp: anltp
+        deakt: deakt
+        bstdt: bstdt
+        lifnr: lifnr
+        vbund: vbund
+        land1: land1
+        aneqs: aneqs
+        spras: spras
+        sap_cluster: sap_cluster_anla
+      distinct: true
+
+
+# Read ANKA
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_anka
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: anka
+
+
+  - kind: select
+    name: select_anka
+    params:
+      columns:
+        anlkl: anlkl
+        meins: meins
+        aimmo: aimmo
+        numkr: numkr
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read TKA02
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tka02
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tka02
+
+  - kind: select
+    name: select_tka02
+    params:
+      columns:
+        bukrs: bukrs
+        kokrs: kokrs
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+  - kind: join
+    name: join_anla_anka_tk2
+    context_name: select_anla
+    params:
+      - other:
+          select_anka
+        how:
+          left
+        columns:
+          anlkl: anlkl
+          sap_cluster_anla: sap_cluster
+      - other:
+          select_tka02
+        how:
+          left
+        columns:
+          bukrs: bukrs
+          sap_cluster_anla: sap_cluster
+
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        anln1: asset_number
+        txt50: asset_number_description
+        bukrs: company_code
+        anlkl: asset_class
+        aktiv: asset_capitalization_date
+        xloev: account_marked_for_deletion_flag
+        xspeb: asset_locked_to_acquisition_postings
+        ktogr: account_determination
+        deakt: deactivation_date
+        meins: base_unit_of_measure
+        aimmo: real_estate_indicator
+        numkr: number_range
+        lifnr: vendor_code
+        vbund: company_id_of_trading_partner
+        land1: country_of_origin
+        aneqs: asset_completeness_indicator
+        kokrs: controlling_area_code
+        sap_cluster_anla: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_asset
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

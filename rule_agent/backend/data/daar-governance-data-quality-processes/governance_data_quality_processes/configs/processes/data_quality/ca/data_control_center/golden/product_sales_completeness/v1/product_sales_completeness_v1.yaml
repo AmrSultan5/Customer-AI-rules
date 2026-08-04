@@ -1,0 +1,970 @@
+transform:
+  name: product_sales_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_product_general
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+
+  - kind: filter
+    name: filter_general
+    params:
+      - condition:
+          is_basic_scope = '1'
+
+#READ dm_product_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+
+  - kind: filter
+    name: filter_sales
+    params:
+      - condition:
+          is_basic_scope = '1'
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_universe
+
+  - kind: select
+    context_name: filter_general
+    name: select_dpg
+    params:
+      columns:
+        material_code: material_code
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        material_description: material_description
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT dpso
+  - kind: select
+    name: select_dpso
+    context_name: filter_sales
+    params:
+      columns:
+        material_code: material_code
+        brand_code: brand_code
+        flavour_code: flavour_code
+        country_code: country_code
+        pack_type_code: pack_type_code
+        pack_size_code: pack_size_code
+        pack_grouping: pack_grouping
+        sales_org_code: sales_org_code
+        sales_unit_code: sales_unit_code
+        distribution_channel_code: distribution_channel_code
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        item_category_group_code: item_category_group_code
+        account_assignment_group_code: account_assignment_group_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#ADD plant sales_org_code
+  - kind: add
+    name: add_pp
+    context_name: select_dpso
+    params:
+      - column: plant_code
+        expression: "''"
+
+#JOIN dpg and dpso
+  - kind: join
+    name: join_dpso_dpg
+    context_name: add_pp
+    params:
+      - other:
+          select_dpg
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dpg_ban
+    context_name: filter_general
+    params:
+      - column: material_code_made_of_ban
+        expression: LPAD(ban_code, 18, '0')
+
+  - kind: select
+    name: select_dpg_ban
+    context_name: add_dpg_ban
+    params:
+      columns:
+        material_code: material_code_ban
+        material_group_code: material_group_code_ban
+        material_code_made_of_ban: material_code_made_of_ban
+        sap_cluster: sap_cluster_ban 
+        ban_code: ban_code_ban
+        material_type_code: material_type_code_ban
+        bpp_code: bpp_code_ban
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_product_universe
+    context_name: read_dm_product_universe
+    params:
+      - condition:
+          country_code != 'BSO'
+
+  - kind: select
+    name: select_dm_product_universe
+    context_name: filter_dm_product_universe
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dpg_dpu
+    context_name: select_dpg
+    params:
+      - other:
+          read_dm_product_universe
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_dm_product_sales_organization
+    context_name: add_pp
+    params:
+      - condition:
+          distribution_channel_code = '01' AND sales_org_code = '0001'
+
+  - kind: select
+    name: select_dpso_f
+    context_name: filter_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code_so
+        sales_org_code: sales_org_code_so
+        country_code: country_code_so
+        brand_code: brand_code_so
+        flavour_code: flavour_code_so
+        pack_type_code: pack_type_code_so
+        pack_size_code: pack_size_code_so
+        sales_unit_code: sales_unit_code_so
+        plant_code: plant_code_so
+        product_hierarchy_code: product_hierarchy_code_so
+        sap_cluster: sap_cluster_so
+      distinct: true
+
+  - kind: join
+    name: join_53_3
+    context_name: select_dpg_ban
+    params:
+      - other:
+          join_dpg_dpu
+        how:
+          inner
+        columns:
+          material_code_made_of_ban: material_code
+          sap_cluster_ban: sap_cluster
+      - other:
+          select_dpso_f
+        how:
+          left
+        columns:
+          material_code_ban: material_code_so
+          sap_cluster_ban: sap_cluster_so
+          country_code: country_code_so
+
+#SELECT rpcomp_30_1
+  - kind: select
+    name: select_rpcomp_30_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        brand_code: brand_code
+        material_code: material_code
+        material_description: material_description
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        pack_type_code: pack_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_30_1
+    context_name: select_rpcomp_30_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_30.1'"
+      - column: check_status
+        expression: "CASE WHEN (((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code = '1001009' AND pack_type_code = 'ZSY') OR (material_type_code = 'ZRW' AND material_group_code IN ('1001004','1001022','1001024')) OR (material_type_code = 'ZNVL' AND material_group_code IN ('1001022','1001024'))) AND (brand_code IS NULL OR brand_code = '')) THEN '0' WHEN (((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code = '1001009' AND pack_type_code = 'ZSY') OR (material_type_code = 'ZRW' AND material_group_code IN ('1001004', '1001022', '1001024')) OR (material_type_code = 'ZNVL' AND material_group_code IN ('1001022','1001024'))) AND brand_code IS NOT NULL) THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_30_1_final
+    context_name: add_rpcomp_30_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        brand_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_30_2
+  - kind: select
+    name: select_rpcomp_30_2
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        brand_code: brand_code
+        material_code: material_code
+        material_type_code: material_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_30_2
+    context_name: select_rpcomp_30_2
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_30.2'"
+      - column: check_status
+        expression: if(material_type_code in ('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') AND (brand_code IS NULL OR brand_code = ''),'0', 
+                    if(material_type_code in ('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') AND brand_code IS NOT NULL AND brand_code != '', '1', 
+                    ''))
+
+  - kind: select
+    name: select_rpcomp_30_2_final
+    context_name: add_rpcomp_30_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        brand_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_65_1
+  - kind: select
+    name: select_rpcomp_65_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        flavour_code: flavour_code
+        material_code: material_code
+        material_description: material_description
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        pack_type_code: pack_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_65_1
+    context_name: select_rpcomp_65_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_65.1'"
+      - column: check_status
+        expression: "CASE WHEN (((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code = '1001009' AND pack_type_code = 'ZSY') OR (material_type_code = 'ZRW' AND material_group_code IN ('1001004','1001022','1001024')) OR (material_type_code = 'ZNVL' AND material_group_code IN ('1001022','1001024'))) AND (flavour_code IS NULL OR flavour_code = '')) THEN '0' WHEN (((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code = '1001009' AND pack_type_code = 'ZSY') OR (material_type_code = 'ZRW' AND material_group_code IN ('1001004', '1001022', '1001024')) OR (material_type_code = 'ZNVL' AND material_group_code IN ('1001022','1001024'))) AND flavour_code is not null) THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_65_1_final
+    context_name: add_rpcomp_65_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        flavour_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_149_1
+  - kind: select
+    name: select_rpcomp_149_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        material_code: material_code
+        sales_org_code: sales_org_code
+        material_description: material_description
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        account_assignment_group_code: account_assignment_group_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_149_1
+    context_name: select_rpcomp_149_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_149.1'"
+      - column: check_status
+        expression: "CASE WHEN material_description LIKE '%ABP%' THEN '' WHEN material_type_code in ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM','ZRE','ZSF','ZSV','ZSTL') AND sales_org_code != '0001' AND material_group_code != '1110000' AND (account_assignment_group_code IS NULL OR account_assignment_group_code = '') THEN '0' WHEN material_type_code in ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM','ZRE','ZSF','ZSV','ZSTL') AND sales_org_code != '0001' AND material_group_code != '1110000' AND account_assignment_group_code IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_149_1_final
+    context_name: add_rpcomp_149_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        account_assignment_group_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_199_1
+  - kind: select
+    name: select_rpcomp_199_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        material_code: material_code
+        item_category_group_code: item_category_group_code
+        material_description: material_description
+        material_type_code: material_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_199_1
+    context_name: select_rpcomp_199_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_199.1'"
+      - column: check_status
+        expression: "CASE WHEN material_description LIKE '%ABP%' THEN '' WHEN material_type_code != 'ZCDS' AND (item_category_group_code IS NULL OR item_category_group_code = '') THEN '0' WHEN material_type_code != 'ZCDS' AND item_category_group_code IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_199_1_final
+    context_name: add_rpcomp_199_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        item_category_group_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_262_1
+  - kind: select
+    name: select_rpcomp_262_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        material_code: material_code
+        pack_type_code: pack_type_code
+        material_description: material_description
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_262_1
+    context_name: select_rpcomp_262_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_262.1'"
+      - column: check_status
+        expression: "CASE WHEN ((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code IN ('1001009','1003012'))) AND (pack_type_code IS NULL OR pack_type_code = '') THEN '0' WHEN ((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code IN ('1001009','1003012'))) AND pack_type_code IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_262_1_final
+    context_name: add_rpcomp_262_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        pack_type_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_262_2
+  - kind: add
+    name: add_rpcomp_262_2
+    context_name: join_53_3
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_262.2'"
+      - column: check_status
+        expression:
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnotnull(pack_type_code_so) and pack_type_code_so != '', '1',
+                    '0'))
+
+  - kind: select
+    name: select_rpcomp_262_2_final
+    context_name: add_rpcomp_262_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        pack_type_code_so: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code_so: plant_code
+        sales_org_code_so: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_263_1
+  - kind: select
+    name: select_rpcomp_263_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        material_code: material_code
+        pack_size_code: pack_size_code
+        material_description: material_description
+        material_type_code: material_type_code
+        material_group_code: material_group_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_263_1
+    context_name: select_rpcomp_263_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_263.1'"
+      - column: check_status
+        expression: "CASE WHEN ((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code IN ('1003012'))) AND (pack_size_code IS NULL OR pack_size_code = '') THEN '0' WHEN ((material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) OR (material_type_code IN ('ZSF','ZNVL') AND material_group_code IN ('1003012'))) AND pack_size_code IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_263_1_final
+    context_name: add_rpcomp_263_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        pack_size_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_263_2
+  - kind: add
+    name: add_rpcomp_263_2
+    context_name: join_53_3
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_263.2'"
+      - column: check_status
+        expression:
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnotnull(pack_size_code_so) and pack_size_code_so != '', '1',
+                    '0'))
+
+  - kind: select
+    name: select_rpcomp_263_2_final
+    context_name: add_rpcomp_263_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        pack_size_code_so: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code_so: plant_code
+        sales_org_code_so: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_264_1
+  - kind: select
+    name: select_rpcomp_264_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        material_code: material_code
+        sales_unit_code: sales_unit_code
+        material_description: material_description
+        material_type_code: material_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_264_1
+    context_name: select_rpcomp_264_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_264.1'"
+      - column: check_status
+        expression: "CASE WHEN (material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) AND (sales_unit_code IS NULL OR sales_unit_code = '') THEN '0' WHEN (material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM')) AND sales_unit_code IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_264_1_final
+    context_name: add_rpcomp_264_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        sales_unit_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_264_2
+  - kind: add
+    name: add_rpcomp_264_2
+    context_name: join_53_3
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_264.2'"
+      - column: check_status
+        expression:
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnotnull(sales_unit_code_so) and sales_unit_code_so != '', '1',
+                    '0'))
+  
+  - kind: select
+    name: select_rpcomp_264_2_final
+    context_name: add_rpcomp_264_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        sales_unit_code_so: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code_so: plant_code
+        sales_org_code_so: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_290_1
+  - kind: select
+    name: select_rpcomp_290_1
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        material_code: material_code
+        product_hierarchy_code: product_hierarchy_code
+        material_description: material_description
+        material_type_code: material_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_290_1
+    context_name: select_rpcomp_290_1
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_290.1'"
+      - column: check_status
+        expression: "CASE WHEN (material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM','ZRW','ZSF')) AND (product_hierarchy_code IS NULL OR product_hierarchy_code = '') THEN '0' WHEN  (material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM','ZNVM','ZRW','ZSF')) AND product_hierarchy_code IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rpcomp_290_1_final
+    context_name: add_rpcomp_290_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        product_hierarchy_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_290_2
+  - kind: select
+    name: select_rpcomp_290_2
+    context_name: join_dpso_dpg
+    params:
+      columns:
+        brand_code: brand_code
+        material_code: material_code
+        material_type_code: material_type_code
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_290_2
+    context_name: select_rpcomp_290_2
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_290.2'"
+      - column: check_status
+        expression: if(material_type_code IN ('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') AND (product_hierarchy_l4_code IS NULL OR product_hierarchy_l4_code = ''),'0', 
+                    if(material_type_code IN ('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') AND product_hierarchy_l4_code IS NOT NULL AND product_hierarchy_l4_code != '', '1', 
+                    ''))
+
+  - kind: select
+    name: select_rpcomp_290_2_final
+    context_name: add_rpcomp_290_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        product_hierarchy_l4_code: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#SELECT rpcomp_290_3
+  - kind: add
+    name: add_rpcomp_290_3
+    context_name: join_53_3
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_290.3'"
+      - column: check_status
+        expression:
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnotnull(product_hierarchy_code_so) and product_hierarchy_code_so != '', '1',
+                    '0'))
+
+  - kind: select
+    name: select_rpcomp_290_3_final
+    context_name: add_rpcomp_290_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        product_hierarchy_code_so: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code_so: plant_code
+        sales_org_code_so: sales_org_code
+      distinct: true
+  
+  - kind: add
+    name: add_rpcomp_30_3
+    context_name: join_53_3
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_30.3'"
+      - column: check_status
+        expression: 
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnotnull(brand_code_so) and brand_code_so != '', '1',
+                    '0'))
+
+  - kind: select
+    name: select_rpcomp_30_3_final
+    context_name: add_rpcomp_30_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        brand_code_so: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code_so: plant_code
+        sales_org_code_so: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_65_2
+    context_name: join_53_3
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_65.2'"
+      - column: check_status
+        expression:
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnotnull(flavour_code_so) and flavour_code_so != '', '1',
+                    '0'))
+
+  - kind: select
+    name: select_rpcomp_65_2_final
+    context_name: add_rpcomp_65_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        flavour_code_so: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code_so: plant_code
+        sales_org_code_so: sales_org_code
+      distinct: true
+
+  - kind: add
+    name: add_rpcomp_382_1
+    context_name: join_dpso_dpg
+    params:
+      - column: rule_code
+        expression: "'RPCOMP_382.1'"
+      - column: check_status
+        expression: 
+                    if(material_type_code NOT IN ('ZFG', 'ZFGS', 'ZFGM', 'ZFGC') OR sales_org_code = '0001' OR distribution_channel_code != '01', '', 
+                    if(pack_grouping IS NOT NULL AND pack_grouping != '', '1',
+                    if(pack_grouping IS NULL OR pack_grouping = '', '0', '0')))
+
+  - kind: select
+    name: select_rpcomp_382_1_final
+    context_name: add_rpcomp_382_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        pack_grouping: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+#Union all
+  - kind: union
+    name: union_product_sales_completeness
+    context_name: select_rpcomp_30_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_65_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_30_2_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_30_3_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_65_2_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_149_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_199_1_final
+      
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_382_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_262_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_262_2_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_263_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_263_2_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_264_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_264_2_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_290_1_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_290_2_final
+
+  - kind: union
+    name: union_product_sales_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rpcomp_290_3_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+        plant_code: plant_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: write_dataio
+    name: write_product_sales_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: product_sales_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

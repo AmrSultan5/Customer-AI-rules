@@ -1,0 +1,491 @@
+transform:
+  name: tccc_indicator
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_brand_information
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_brand_information
+      schema_version: v1
+  
+  - kind: select
+    name: select_dcg_full
+    context_name: read_dm_brand_information
+    params:
+      columns:
+        brand_code: brand_code
+        brand_description: brand_description
+        brand_code_zmd_brand: brand_code_zmd_brand
+        brand_description_zmd_brand: brand_description_zmd_brand
+        tccc_indicator: tccc_indicator
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_cl1
+    context_name: select_dcg_full
+    params:
+      - condition:
+          sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_dcg_cl1
+    context_name: filter_cl1
+    params:
+      columns:
+        brand_code: brand_code_cl1
+        brand_description: brand_description_cl1
+        brand_code_zmd_brand: brand_code_zmd_brand_cl1
+        brand_description_zmd_brand: brand_description_zmd_brand_cl1
+        tccc_indicator: tccc_indicator_cl1
+        sap_cluster: sap_cluster_cl1
+      distinct: true
+
+  - kind: filter
+    name: filter_cl2
+    context_name: select_dcg_full
+    params:
+      - condition:
+          sap_cluster = 'CL2'
+
+  - kind: select
+    name: select_dcg_cl2
+    context_name: filter_cl2
+    params:
+      columns:
+        brand_code: brand_code_cl2
+        brand_description: brand_description_cl2
+        brand_code_zmd_brand: brand_code_zmd_brand_cl2
+        brand_description_zmd_brand: brand_description_zmd_brand_cl2
+        tccc_indicator: tccc_indicator_cl2
+        sap_cluster: sap_cluster_cl2
+      distinct: true
+
+  - kind: join
+    name: join_dcg
+    context_name: select_dcg_full
+    params:
+      - other:
+          select_dcg_cl1
+        how:
+          left
+        columns:
+          brand_code: brand_code_cl1
+      - other:
+          select_dcg_cl2
+        how:
+          left
+        columns:
+          brand_code: brand_code_cl2
+
+  - kind: add
+    name: add_flags
+    params:
+        - column: tcc_accuracy_flag
+          expression: if(tccc_indicator IS NULL OR tccc_indicator = '' OR LEN(tccc_indicator) = 0, '',
+                      if(tccc_indicator NOT IN ('TCCC','non-TCCC'), '0', '1'))
+        - column: zmd_brand_attr_brand_code_completeness_flag
+          expression: if((brand_code_zmd_brand IS NULL OR brand_code_zmd_brand = '') AND ((brand_code IS NOT NULL AND brand_code != '') OR (brand_description IS NOT NULL AND brand_description != '')), '',
+                      if((brand_code_zmd_brand IS NULL OR brand_code_zmd_brand = '') AND (brand_code IS NULL OR brand_code = '') AND (brand_description IS NULL OR brand_description = ''), '0', '1'))
+        - column: tvm1t_brand_description_standard_flag
+          expression: if(brand_description IS NULL OR brand_description = '', '',
+                      if(SUBSTR(brand_description, 0, 1) = UPPER(SUBSTR(brand_description, 0, 1)), '1', '0'))
+        - column: zmd_brand_attr_brand_description_standard_flag
+          expression: if(brand_description_zmd_brand IS NULL OR brand_description_zmd_brand = '', '',
+                      if(SUBSTR(brand_description_zmd_brand, 0, 1) = UPPER(SUBSTR(brand_description_zmd_brand, 0, 1)), '1', '0'))
+        - column: brand_description_compare_flag
+          expression: if(brand_description_zmd_brand IS NULL OR brand_description_zmd_brand = '' OR brand_description IS NULL OR brand_description = '', '',
+                      if(brand_description_zmd_brand = brand_description, '1', '0'))
+        - column: tvm1_brand_code_completeness_flag
+          expression: if((brand_code IS NULL OR brand_code = '') AND ((brand_code_zmd_brand IS NOT NULL AND brand_code_zmd_brand != '') OR (brand_description_zmd_brand IS NOT NULL AND brand_description_zmd_brand != '')), '',
+                      if((brand_code IS NULL OR brand_code = '') AND (brand_code_zmd_brand IS NULL OR brand_code_zmd_brand = '') AND (brand_description_zmd_brand IS NULL OR brand_description_zmd_brand = ''), '0', '1'))
+        - column: tvm1_brand_description_consistency_flag
+          expression: if(brand_description IS NULL OR brand_description = '', '',
+                      if((sap_cluster = 'CL1' AND brand_description != brand_description_cl2) OR (sap_cluster = 'CL2' AND brand_description != brand_description_cl1), '0', '1'))
+        - column: zmd_brand_attr_brand_description_consistency_flag
+          expression: if(brand_description_zmd_brand IS NULL OR brand_description_zmd_brand = '', '',
+                      if((sap_cluster = 'CL1' AND brand_description_zmd_brand != brand_description_zmd_brand_cl2) OR (sap_cluster = 'CL2' AND brand_description_zmd_brand != brand_description_zmd_brand_cl1), '0', '1'))
+        - column: tccc_indicator_cluster_consistency_flag
+          expression: if(tccc_indicator IS NULL OR tccc_indicator = '', '',
+                      if((sap_cluster = 'CL1' AND tccc_indicator != tccc_indicator_cl2) OR (sap_cluster = 'CL2' AND tccc_indicator != tccc_indicator_cl1), '0', '1'))
+        - column: brand_code_compare_flag
+          expression: if(brand_code_zmd_brand IS NULL OR brand_code_zmd_brand = '' OR brand_code IS NULL OR brand_code = '', '0', '1')
+
+  - kind: select
+    name: select_dcg_full
+    context_name: add_flags
+    params:
+      columns:
+        brand_code: brand_in_tvm1_table
+        brand_description: brand_description_in_tvm1_table
+        brand_code_zmd_brand: brand_in_zmd_brand_attr_table
+        brand_description_zmd_brand: brand_description_in_zmd_brand_attr_table
+        tccc_indicator: tccc_indicator_zmd_brand_attr
+        sap_cluster: cluster
+        tcc_accuracy_flag: tcc_accuracy_flag
+        zmd_brand_attr_brand_code_completeness_flag: zmd_brand_attr_brand_code_completeness_flag
+        tvm1t_brand_description_standard_flag: tvm1t_brand_description_standard_flag
+        zmd_brand_attr_brand_description_standard_flag: zmd_brand_attr_brand_description_standard_flag
+        brand_description_compare_flag: brand_description_compare_flag
+        tvm1_brand_code_completeness_flag: tvm1_brand_code_completeness_flag
+        tvm1_brand_description_consistency_flag: tvm1_brand_description_consistency_flag
+        zmd_brand_attr_brand_description_consistency_flag: zmd_brand_attr_brand_description_consistency_flag
+        tccc_indicator_cluster_consistency_flag: tccc_indicator_cluster_consistency_flag
+        brand_code_compare_flag: brand_code_compare_flag
+      distinct: true
+
+# DETAILED
+# calculate checks
+  - kind: add
+    name: completeness_1
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN zmd_brand_attr_brand_code_completeness_flag = 0 THEN 'Missing Brand Key in ZMD_BRAND_ATTR' WHEN zmd_brand_attr_brand_code_completeness_flag ='' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Completeness' as string)
+      - column: rule_name
+        expression: cast('brand_code_zmd_brand_attr' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: zmd_brand_attr_brand_code_completeness_flag
+
+  - kind: add
+    name: completeness_2
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN tvm1_brand_code_completeness_flag = 0 THEN 'Missing Brand Key in TVM1' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Completeness' as string)
+      - column: rule_name
+        expression: cast('brand_code_tvm1' as string)  || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: tvm1_brand_code_completeness_flag
+
+  - kind: add
+    name: accuracy_1
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN tcc_accuracy_flag = '' THEN 'TCCC indicator missing' WHEN tcc_accuracy_flag = 1 THEN 'OK' ELSE 'TCCC indicator misspelled' END
+      - column: quality_category
+        expression: cast('Accuracy' as string)
+      - column: rule_name
+        expression: cast('tccc_indicator' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: tcc_accuracy_flag
+
+  - kind: add
+    name: consistency_1
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN tvm1t_brand_description_standard_flag = 0 THEN 'Brand description contain lower case letters in TVM1T table' WHEN tvm1t_brand_description_standard_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_initial_capital_letters_tvm1' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: tvm1t_brand_description_standard_flag
+
+  - kind: add
+    name: consistency_2
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN zmd_brand_attr_brand_description_standard_flag = 0 THEN 'Brand description contain lower case letters in ZMD_BRAND_ATTR table' WHEN zmd_brand_attr_brand_description_standard_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_initial_capital_letters_zmd_brand_attr' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: zmd_brand_attr_brand_description_standard_flag
+
+  - kind: add
+    name: consistency_3
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN brand_description_compare_flag = 0 THEN 'Mismatched brand descriptions between TVM1 and ZMD_BRAND_ATTR' WHEN brand_description_compare_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_description_compare_zmd_brand_attr_tables' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: brand_description_compare_flag
+      - column: brand_in_tvm1_table
+        expression: cast(NULL as string)
+        overwrite: true
+      - column: brand_description_in_tvm1_table
+        expression: cast(NULL as string)
+        overwrite: true
+
+  - kind: add
+    name: consistency_4
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN brand_description_compare_flag = 0 THEN 'Mismatched brand descriptions between TVM1 and ZMD_BRAND_ATTR' WHEN brand_description_compare_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_description_compare_tvm1_tables' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: brand_description_compare_flag
+      - column: brand_in_zmd_brand_attr_table
+        expression: cast(NULL as string)
+        overwrite: true
+      - column: brand_description_in_zmd_brand_attr_table
+        expression: cast(NULL as string)
+        overwrite: true
+
+  - kind: add
+    name: consistency_5
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN tvm1_brand_description_consistency_flag = 0 THEN 'Mismatched brand descriptions between CL1 and CL2 in TVM1T' WHEN tvm1_brand_description_consistency_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_description_compare_tvm1' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: tvm1_brand_description_consistency_flag
+
+  - kind: add
+    name: consistency_6
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN zmd_brand_attr_brand_description_consistency_flag = 0 THEN 'Mismatched brand descriptions between CL1 and CL2 in ZMD_BRAND_ATTR' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_description_compare_zmd_brand_attr' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: zmd_brand_attr_brand_description_consistency_flag
+
+  - kind: add
+    name: consistency_7
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN tccc_indicator_cluster_consistency_flag = 0 THEN 'Mismatched TCCC between CL1 and CL2 in ZMD_BRAND_ATTR' WHEN tccc_indicator_cluster_consistency_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('tccc_indicator_compare' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: tccc_indicator_cluster_consistency_flag
+
+  - kind: add
+    name: consistency_8
+    context_name: select_dcg_full
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN brand_code_compare_flag = 0 THEN 'Mismatched brand codes between TVM1 and ZMD_BRAND_ATTR' WHEN brand_code_compare_flag = '' THEN 'N/A' ELSE 'OK' END
+      - column: quality_category
+        expression: cast('Consistency' as string)
+      - column: rule_name
+        expression: cast('brand_codes' as string) || '_' || lower(cluster)
+      - column: quality_check_flag
+        expression: brand_code_compare_flag
+
+# union checks
+  - kind: union
+    name: union_completeness_1_completeness_2
+    context_name: completeness_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: completeness_2
+
+  - kind: union
+    name: union_accuracy_1
+    context_name: union_completeness_1_completeness_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: accuracy_1
+
+  - kind: union
+    name: union_consistency_1
+    context_name: union_accuracy_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_1
+
+  - kind: union
+    name: union_consistency_2
+    context_name: union_consistency_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_2
+
+  - kind: union
+    name: union_consistency_3
+    context_name: union_consistency_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_3
+
+  - kind: union
+    name: union_consistency_4
+    context_name: union_consistency_3
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_4
+
+  - kind: union
+    name: union_consistency_5
+    context_name: union_consistency_4
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_5
+
+  - kind: union
+    name: union_consistency_6
+    context_name: union_consistency_5
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_6
+
+  - kind: union
+    name: union_consistency_7
+    context_name: union_consistency_6
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_7
+
+  - kind: union
+    name: union_consistency_8
+    context_name: union_consistency_7
+    params:
+      allow_missing: false
+      by_name: true
+      other: consistency_8
+
+  - kind: select
+    name: select_union_all
+    context_name: union_consistency_8
+    params:
+      columns:
+        brand_in_tvm1_table: brand_in_tvm1_table
+        brand_description_in_tvm1_table: brand_description_in_tvm1_table
+        brand_in_zmd_brand_attr_table: brand_in_zmd_brand_attr_table
+        brand_description_in_zmd_brand_attr_table: brand_description_in_zmd_brand_attr_table
+        tccc_indicator_zmd_brand_attr: tccc_indicator_zmd_brand_attr
+        cluster: cluster
+        dq_message_output: dq_message_output
+        quality_category: quality_category
+        rule_name: rule_name
+        quality_check_flag: quality_check_flag
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tccc_indicator
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+# additional columns and calculations for AGGREGATED
+
+  - kind: add
+    name: add_loading_date_and_tccc_flag
+    context_name: select_union_all
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: quality_check_flag
+        expression: CASE WHEN quality_check_flag = '' THEN NULL ELSE quality_check_flag END
+        overwrite: true
+      - column: quality_check_flag_total
+        expression: quality_check_flag
+
+  - kind: cast
+    name: cast_to_integer
+    context_name: add_loading_date_and_tccc_flag
+    params:
+      - column: quality_check_flag
+        to: integer
+
+  - kind: group
+    name: aggregation_1
+    context_name: cast_to_integer
+    params:
+      - aggs:
+          quality_check_flag: sum
+          quality_check_flag_total: count
+        by:
+        - quality_category
+        - rule_name
+        - cluster
+        - loading_date
+
+  - kind: add
+    name: add_invalid_checks
+    context_name: aggregation_1
+    params:
+      - column: invalid_checks
+        expression: count_quality_check_flag_total - sum_quality_check_flag
+
+  - kind: cast
+    name: cast_to_integer_checks
+    context_name: add_invalid_checks
+    params:
+      - column: invalid_checks
+        to: integer
+      - column: count_quality_check_flag_total
+        to: integer
+
+  - kind: select
+    name: select_aggregated_names
+    context_name: cast_to_integer_checks
+    params:
+      columns:
+        quality_category: quality_category
+        rule_name: rule_name
+        cluster: cluster
+        loading_date: loading_date
+        invalid_checks: invalid_checks
+        count_quality_check_flag_total: total_checks
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tccc_indicator
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

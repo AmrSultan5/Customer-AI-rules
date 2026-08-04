@@ -1,0 +1,428 @@
+transform:
+  name: finance_fixed_assets_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_asset
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_asset_subnumber
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset_subnumber
+
+  - kind: select
+    name: select_dfa
+    context_name: read_dm_finance_asset
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        asset_class: asset_class
+        asset_number_description: asset_number_description
+        controlling_area_code: controlling_area_code
+        asset_capitalization_date: asset_capitalization_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dfca
+    context_name: read_dm_finance_controlling_area
+    params:
+      columns:
+        company_code: company_code_dfca
+        country_code: country_code_dfca
+        controlling_area_code: controlling_area_code_dfca
+        sap_cluster: sap_cluster_dfca
+      distinct: true
+
+  - kind: select
+    name: select_dfas
+    context_name: read_dm_finance_asset_subnumber
+    params:
+      columns:
+        asset_number: asset_number_dfas
+        asset_subnumber: asset_subnumber_dfas
+        company_code: company_code_dfas
+        sap_cluster: sap_cluster_dfas
+      distinct: true
+
+  - kind: join
+    name: join_dfa_dfca
+    context_name: select_dfa
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          company_code: company_code_dfca
+          controlling_area_code: controlling_area_code_dfca
+          sap_cluster: sap_cluster_dfca
+
+  - kind: join
+    name: join_dfa_dfas_dfca
+    context_name: select_dfa
+    params:
+      - other:
+          select_dfas
+        how:
+          inner
+        columns:
+          asset_number: asset_number_dfas
+          company_code: company_code_dfas
+          sap_cluster: sap_cluster_dfas
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          company_code: company_code_dfca
+          controlling_area_code: controlling_area_code_dfca
+          sap_cluster: sap_cluster_dfca
+
+#SELECT RFCOMP_FA_1
+  - kind: select
+    name: select_RFCOMP_FA_1
+    context_name: join_dfa_dfca
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_FA_1
+    context_name: select_RFCOMP_FA_1
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_FA.1'"
+      - column: attribute_name
+        expression: '''Fixed Assets'''
+      - column: check_status
+        expression: 
+                    if(company_code is null OR company_code = '' OR LEN(company_code)>4,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_FA_1_final
+    context_name: add_RFCOMP_FA_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        asset_number: finance_value
+        attribute_name: attribute_name
+        company_code: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_2
+  - kind: select
+    name: select_RFCOMP_FA_2
+    context_name: join_dfa_dfca
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_FA_2
+    context_name: select_RFCOMP_FA_2
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_FA.2'"
+      - column: attribute_name
+        expression: '''Fixed Assets'''
+      - column: value_checked
+        expression: asset_number
+      - column: check_status
+        expression: 
+                    if(asset_number is null OR asset_number = '' OR LEN(asset_number)>12,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_FA_2_final
+    context_name: add_RFCOMP_FA_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        asset_number: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_3
+  - kind: select
+    name: select_RFCOMP_FA_3
+    context_name: join_dfa_dfas_dfca
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        asset_subnumber_dfas: asset_subnumber_dfas
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_FA_3
+    context_name: select_RFCOMP_FA_3
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_FA.3'"
+      - column: attribute_name
+        expression: '''Fixed Assets'''
+      - column: check_status
+        expression: 
+                    if(asset_subnumber_dfas is null OR asset_subnumber_dfas = '' OR LEN(asset_subnumber_dfas)>4,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_FA_3_final
+    context_name: add_RFCOMP_FA_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        asset_number: finance_value
+        attribute_name: attribute_name
+        asset_subnumber_dfas: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_4
+  - kind: select
+    name: select_RFCOMP_FA_4
+    context_name: join_dfa_dfca
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        asset_class: asset_class
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_FA_4
+    context_name: select_RFCOMP_FA_4
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_FA.4'"
+      - column: attribute_name
+        expression: '''Fixed Assets'''
+      - column: check_status
+        expression: 
+                    if(asset_class is null OR asset_class = '' OR LEN(asset_class)>8,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_FA_4_final
+    context_name: add_RFCOMP_FA_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        asset_number: finance_value
+        attribute_name: attribute_name
+        asset_class: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_5
+  - kind: select
+    name: select_RFCOMP_FA_5
+    context_name: join_dfa_dfca
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        asset_number_description: asset_number_description
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_FA_5
+    context_name: select_RFCOMP_FA_5
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_FA.5'"
+      - column: attribute_name
+        expression: '''Fixed Assets'''
+      - column: check_status
+        expression: 
+                    if(asset_number_description is null OR asset_number_description = '' OR LEN(asset_number_description)>50 OR INSTR(asset_number_description,CHR(34))>0,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_FA_5_final
+    context_name: add_RFCOMP_FA_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        asset_number: finance_value
+        attribute_name: attribute_name
+        asset_number_description: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_12
+  - kind: select
+    name: select_RFCOMP_FA_12
+    context_name: join_dfa_dfca
+    params:
+      columns:
+        company_code: company_code
+        asset_number: asset_number
+        asset_capitalization_date: asset_capitalization_date
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_FA_12
+    context_name: select_RFCOMP_FA_12
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_FA.12'"
+      - column: attribute_name
+        expression: '''Fixed Assets'''
+      - column: check_status
+        expression: 
+                    if(asset_capitalization_date is null OR asset_capitalization_date = '','0','1')
+
+  - kind: select
+    name: select_RFCOMP_FA_12_final
+    context_name: add_RFCOMP_FA_12
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        asset_number: finance_value
+        attribute_name: attribute_name
+        asset_capitalization_date: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: union
+    name: union_all
+    context_name: select_RFCOMP_FA_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_FA_2_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_FA_3_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_FA_4_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_FA_5_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_FA_12_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        check_date: check_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_finance_fixed_assets_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: finance_fixed_assets_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

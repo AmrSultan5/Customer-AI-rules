@@ -1,0 +1,148 @@
+transform:
+  name: detailed
+  operations:
+
+  - kind: read_dataio
+    name: read_du
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: tax_number
+      schema_version: v1
+
+
+  - kind: add
+    name: add_du_tax_number
+    params:
+      - column: dq_message_output
+        expression: IF(tax_validity_flag  != '0', 'OK', IF(tax_validity_flag = '0', 'Invalid','NA'))
+      - column: order_block
+        expression: concat_ws(' - ', order_block_code, order_block_name)
+      - column: customer_hier_3
+        expression: concat_ws(' - ', customer_hier_3_code, customer_hier_3_name)
+      - column: customer_group_4
+        expression: concat_ws(' - ', ifnull(customer_group_4_code, ''), ifnull(customer_group_4_name, ''))
+      - column: processing_date
+        expression: cast(current_date() as timestamp)
+
+
+        
+
+  - kind: select
+    name: select_du
+    context_name: add_du_tax_number
+    params:
+      columns:
+        tax_number: tax_number
+        tax_type: tax_type
+        vat_number: vat_number
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        order_block: order_block        
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_hier_3: customer_hier_3
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        country_code: country_code
+        sales_org_code: sales_org_code
+        tax_validity_flag: tax_validity_flag
+        processing_date: processing_date
+        dq_message_output: dq_message_output
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tax_number
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+# ## AGGREGATED LAYER
+
+  - kind: add
+    name: add_customer_loading_date
+    context_name: read_du
+    params:
+      - column: quality_category
+        expression: "'consistency'"
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: IF((tax_validity_flag <> '1'), 1, NULL)
+      - column: total_checks
+        expression: CAST(1 AS INT)
+
+  - kind: group
+    name: group_total_invalid_records
+    context_name: add_customer_loading_date
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - loading_date
+        - country_code
+        - quality_category
+        - customer_group_4_name
+        - customer_group_4_code
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_records
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: customer_group_4
+        expression: concat_ws(' - ', ifnull(customer_group_4_code, ''), ifnull(customer_group_4_name, ''))
+
+  - kind: select
+    name: select_finall
+    context_name: add_new_columns
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4: customer_group_4
+        total_checks: total_checks
+        quality_category: quality_category
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tax_number
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

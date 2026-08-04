@@ -1,0 +1,3057 @@
+transform:
+  name: cross_system_contact_relationship_mdg_d365
+  operations:
+
+########################################################################################
+##d365
+  - kind: read_dataio
+    name: read_d365_account
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: account
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_d365_role
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: cch_contactrole
+      schema_version: v1
+
+
+  - kind: filter
+    name: filter_d365_role
+    context_name: read_d365_role
+    params:
+      - condition: statecode = 0
+
+
+  - kind: read_dataio
+    name: read_d365_ag
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: cch_accountgroup
+      schema_version: v1
+
+
+  - kind: filter
+    name: filter_d365_ag
+    context_name: read_d365_ag
+    params:
+      - condition: statecode = 0
+
+  - kind: select
+    name: select_d365_ag
+    context_name: filter_d365_ag
+    params:
+      columns:
+        id: ag_id
+        cch_name: ag_cch_name
+        cch_code: ag_cch_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_d365_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: contact
+      schema_version: v1
+
+  - kind: select
+    name: select_d365_account
+    context_name: read_d365_account
+    params:
+      columns:
+        cch_orderblockall: cch_orderblockall
+        cch_salesorganizationid: cch_salesorganizationid
+        id: account_id
+        cch_sapid: d_partner
+        cch_accountgroupidname: d_account_group
+        cch_accountgroupid: cch_accountgroupid
+        cch_distributionchannel: cch_distributionchannel
+        cch_division: cch_division
+        statecode: statecode_acc
+        statuscode: statuscode_acc
+      distinct: true
+
+  - kind: select
+    name: select_d365_role
+    context_name: filter_d365_role
+    params:
+      columns:
+        cch_contactrole: cch_contactrole
+        cch_accountid: cch_accountid
+        cch_contactid: cch_contactid
+        cch_telephone: cch_telephone
+        cch_telephone2: cch_telephone2
+        cch_telephone3: cch_telephone3
+        cch_telephone4: cch_telephone4
+        cch_telephone5: cch_telephone5
+        cch_emailaddress: cch_emailaddress
+        cch_emailaddress2: cch_emailaddress2
+        cch_emailaddress3: cch_emailaddress3
+        cch_emailaddress4: cch_emailaddress4
+        cch_emailaddress5: cch_emailaddress5
+        cch_mobilephone: cch_mobilephone
+        cch_mobilephone2: cch_mobilephone2
+        cch_mobilephone3: cch_mobilephone3
+        cch_mobilephone4: cch_mobilephone4
+        cch_mobilephone5: cch_mobilephone5
+        cch_mobilephone_number_default: cch_mobilephone_number_default
+        cch_mobilephone2_number_default: cch_mobilephone2_number_default
+        cch_mobilephone3_number_default: cch_mobilephone3_number_default
+        cch_mobilephone4_number_default: cch_mobilephone4_number_default
+        cch_mobile5_number_default: cch_mobilephone5_number_default
+        cch_telephone_number_default: cch_telephone_number_default
+        cch_telephone2_number_default: cch_telephone2_number_default
+        cch_telephone3_number_default: cch_telephone3_number_default
+        cch_telephone4_number_default: cch_telephone4_number_default
+        cch_telephone5_number_default: cch_telephone5_number_default
+      distinct: true
+
+  - kind: select
+    name: select_d365_contact_prefilter
+    context_name: read_d365_contact
+    params:
+      columns:
+        firstname: firstname
+        lastname: lastname
+        id: contact_id
+        cch_sapcrmcontactpersonbpid: cch_sapcrmcontactpersonbpid
+        cch_sapid: cch_sapid_contact
+        cch_sapcrmguid: guid
+        statecode: statecode
+        statuscode: statuscode
+      distinct: true
+
+
+  - kind: filter
+    name: select_d365_contact
+    context_name: select_d365_contact_prefilter
+    params:
+      - condition: 1 = 1
+##statecode = 0 
+##and statuscode=1
+
+##########################
+
+  - kind: read_dataio
+    name: read_cch_optionsetmapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: cch_optionsetmapping
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cch_optionsetmapping_pfm
+    context_name: read_cch_optionsetmapping
+    params:
+      - condition: cch_entityname = 'cch_contactrole' and cch_attributename = 'cch_contactrole'
+
+  - kind: select
+    name: partner_function_map
+    context_name: filter_cch_optionsetmapping_pfm
+    params:
+      columns:
+        cch_optionsetvalue: pfm_cch_optionsetvalue
+        cch_externalvalue: pfm_cch_externalvalue
+      distinct: true
+    
+    
+#####################################################
+  
+  - kind: filter
+    name: filter_cch_optionsetmapping_cd
+    context_name: read_cch_optionsetmapping
+    params:
+      - condition: cch_entityname = 'account' and cch_attributename = 'cch_division' 
+  
+  - kind: select
+    name: union_cte_division
+    context_name: filter_cch_optionsetmapping_cd
+    params:
+      columns:
+        cch_optionsetvalue: cd_cch_optionsetvalue
+        cch_externalvalue: cd_cch_externalvalue
+      distinct: true
+  
+#####################################################
+##E distributionchannel
+  - kind: filter
+    name: filter_cch_optionsetmapping_dc
+    context_name: read_cch_optionsetmapping
+    params:
+      - condition: cch_entityname = 'account' and cch_attributename = 'cch_distributionchannel'
+  
+  - kind: select
+    name: union_cte_distributionchannel
+    context_name: filter_cch_optionsetmapping_dc
+    params:
+      columns:
+        cch_optionsetvalue: dc_cch_optionsetvalue
+        cch_externalvalue: dc_cch_externalvalue
+      distinct: true
+
+  - kind: read_dataio
+    name: read_d365_territory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: territory
+      schema_version: v1
+
+  - kind: filter
+    name: filter_territory
+    context_name: read_d365_territory
+    params:
+      - condition: 1 = 1
+
+  - kind: select
+    name: select_d365_territory
+    context_name: filter_territory
+    params:
+      columns:
+        cch_sapid: territory_cch_sapid
+        id: territory_id
+      distinct: true        
+#######################################################
+
+
+
+  - kind: filter
+    name: filter_d365_accounts_filtered
+    context_name: select_d365_account
+    params:
+      - condition:
+          d_partner like any ('96%','12%','28%','13%','27%','40%','18%','32%','35%','30%','25%','16%','34%','29%','42%','33%','31%','17%','15%','95%','94%','24%','26%','14%','21%','19%','22%') and (isnull(cch_orderblockall) or length(cch_orderblockall) = 0 or cch_orderblockall not in(311220003, 311220005, 311220008, 311220011, 311220012,311220013, 311220014, 311220015, 311220016, 311220018)) 
+##and statecode_acc = 0 
+##and statuscode_acc = 1
+
+  - kind: join
+    name: join_d365_roles_contacts
+    context_name: filter_d365_accounts_filtered
+    params:
+      - other:
+          select_d365_role
+        how:
+          inner
+        columns:
+          account_id: cch_accountid
+      - other:
+          select_d365_contact
+        how:
+          inner
+        columns:
+          cch_contactid: contact_id
+      - other:
+          select_d365_ag
+        how:
+          left
+        columns:
+          cch_accountgroupid: ag_id
+      - other:
+          partner_function_map
+        how:
+          left
+        columns:
+          cch_contactrole: pfm_cch_optionsetvalue
+      - other:
+          select_d365_territory
+        how:
+          left
+        columns:
+          cch_salesorganizationid: territory_id
+      - other:
+          union_cte_distributionchannel
+        how:
+          left
+        columns:
+          cch_distributionchannel: dc_cch_optionsetvalue
+      - other:
+          union_cte_division
+        how:
+          left
+        columns:
+          cch_division: cd_cch_optionsetvalue
+
+
+  - kind: add
+    name: add_d365_roles_contacts
+    context_name: join_d365_roles_contacts
+    params:
+      - column: d_account_group_code
+        expression: concat(ag_cch_code, ' - ', regexp_replace(ag_cch_name, '\\s+', ' '))
+      - column: initials
+        expression: if(substr(d_partner, 1, 1) = 'P',3 ,
+                    if(substr(d_partner, 1, 3) = '000', 5, 2))
+      - column: d_country
+        expression: CASE 
+                      WHEN initials = 2 THEN 
+                        CASE SUBSTRING(d_partner, 1, 2)
+                          WHEN '96' THEN 'AM'
+                          WHEN '12' THEN 'AT'
+                          WHEN '28' THEN 'BA'
+                          WHEN '13' THEN 'BG'
+                          WHEN '23' THEN 'BY'
+                          WHEN '27' THEN 'CH'
+                          WHEN '18' THEN 'CZ'
+                          WHEN '32' THEN 'EE'
+                          WHEN '35' THEN 'GB'
+                          WHEN '30' THEN 'GR'
+                          WHEN '25' THEN 'HR'
+                          WHEN '16' THEN 'HU'
+                          WHEN '34' THEN 'IE'
+                          WHEN '29' THEN 'IT'
+                          WHEN '42' THEN 'KV'
+                          WHEN '33' THEN 'LT'
+                          WHEN '31' THEN 'LV'
+                          WHEN '17' THEN 'MD'
+                          WHEN '15' THEN 'ME'
+                          WHEN '95' THEN 'MK'
+                          WHEN '94' THEN 'NG'
+                          WHEN '24' THEN 'PL'
+                          WHEN '26' THEN 'RO'
+                          WHEN '38' THEN 'RU'
+                          WHEN '21' THEN 'SI'
+                          WHEN '19' THEN 'SK'
+                          WHEN '14' THEN 'RS'
+                          WHEN '22' THEN 'UA'
+                          WHEN '40' THEN 'CY'
+                          WHEN '47' THEN 'EG'
+                          ELSE NULL
+                        END
+                      WHEN initials = 3 THEN 
+                        CASE SUBSTRING(d_partner, 1, 3)
+                          WHEN 'P96' THEN 'AM'
+                          WHEN 'P11' THEN 'AT'
+                          WHEN 'P86' THEN 'BA'
+                          WHEN 'P49' THEN 'BG'
+                          WHEN 'P23' THEN 'BY'
+                          WHEN 'P55' THEN 'CH'
+                          WHEN 'P51' THEN 'CY'
+                          WHEN 'P45' THEN 'CZ'
+                          WHEN 'P32' THEN 'EE'
+                          WHEN 'P79' THEN 'GB'
+                          WHEN 'P12' THEN 'GR'
+                          WHEN 'P80' THEN 'HR'
+                          WHEN 'P28' THEN 'HU'
+                          WHEN 'P78' THEN 'IE'
+                          WHEN 'P63' THEN 'IT'
+                          WHEN 'P92' THEN 'KV'
+                          WHEN 'P33' THEN 'LT'
+                          WHEN 'P31' THEN 'LV'
+                          WHEN 'P20' THEN 'MD'
+                          WHEN 'P82' THEN 'ME'
+                          WHEN 'P95' THEN 'MK'
+                          WHEN 'P94' THEN 'NG'
+                          WHEN 'P61' THEN 'PL'
+                          WHEN 'P91' THEN 'RO'
+                          WHEN 'P25' THEN 'RS'
+                          WHEN 'P85' THEN 'SI'
+                          WHEN 'P41' THEN 'SK'
+                          WHEN 'P72' THEN 'UA'
+                          WHEN 'P47' THEN 'EG'
+                          WHEN 'E96' THEN 'AM'
+                          WHEN 'E12' THEN 'AT'
+                          WHEN 'E28' THEN 'BA'
+                          WHEN 'E13' THEN 'BG'
+                          WHEN 'E23' THEN 'BY'
+                          WHEN 'E27' THEN 'CH'
+                          WHEN 'E40' THEN 'CY'
+                          WHEN 'E18' THEN 'CZ'
+                          WHEN 'E32' THEN 'EE'
+                          WHEN 'E47' THEN 'EG'
+                          WHEN 'E35' THEN 'GB'
+                          WHEN 'E30' THEN 'GR'
+                          WHEN 'E25' THEN 'HR'
+                          WHEN 'E16' THEN 'HU'
+                          WHEN 'E34' THEN 'IE'
+                          WHEN 'E29' THEN 'IT'
+                          WHEN 'E42' THEN 'KV'
+                          WHEN 'E33' THEN 'LT'
+                          WHEN 'E31' THEN 'LV'
+                          WHEN 'E17' THEN 'MD'
+                          WHEN 'E15' THEN 'ME'
+                          WHEN 'E95' THEN 'MK'
+                          WHEN 'E94' THEN 'NG'
+                          WHEN 'E24' THEN 'PL'
+                          WHEN 'E26' THEN 'RO'
+                          WHEN 'E14' THEN 'RS'
+                          WHEN 'E21' THEN 'SI'
+                          WHEN 'E19' THEN 'SK'
+                          WHEN 'E22' THEN 'UA'
+                          ELSE NULL
+                        END
+                        WHEN initials = 5 THEN 
+                          CASE SUBSTRING(d_partner, 1, 5)
+                            WHEN '00096' THEN 'AM'
+                            WHEN '00012' THEN 'AT'
+                            WHEN '00028' THEN 'BA'
+                            WHEN '00013' THEN 'BG'
+                            WHEN '00023' THEN 'BY'
+                            WHEN '00027' THEN 'CH'
+                            WHEN '00018' THEN 'CZ'
+                            WHEN '00032' THEN 'EE'
+                            WHEN '00035' THEN 'GB'
+                            WHEN '00030' THEN 'GR'
+                            WHEN '00025' THEN 'HR'
+                            WHEN '00016' THEN 'HU'
+                            WHEN '00034' THEN 'IE'
+                            WHEN '00029' THEN 'IT'
+                            WHEN '00042' THEN 'KV'
+                            WHEN '00033' THEN 'LT'
+                            WHEN '00031' THEN 'LV'
+                            WHEN '00017' THEN 'MD'
+                            WHEN '00015' THEN 'ME'
+                            WHEN '00095' THEN 'MK'
+                            WHEN '00094' THEN 'NG'
+                            WHEN '00024' THEN 'PL'
+                            WHEN '00026' THEN 'RO'
+                            WHEN '00038' THEN 'RU'
+                            WHEN '00021' THEN 'SI'
+                            WHEN '00019' THEN 'SK'
+                            WHEN '00014' THEN 'RS'
+                            WHEN '00022' THEN 'UA'
+                            WHEN '00040' THEN 'CY'
+                            WHEN '00047' THEN 'EG'
+                            ELSE NULL
+                          END
+                    END
+      - column: name_last 
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(lastname, '\u00A0', ''), '\\t', ''), '\\n', ''), '\\r', '')))
+      - column: name_first
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(firstname, '\u00A0', ''), '\\t', ''), '\\n', ''), '\\r', '')))
+      - column: d365_pk
+        expression: concat(d_partner,lower(replace(guid, '-', '')))
+      - column: partner_function
+        expression: CAST(cch_contactrole AS string)
+      - column: partner_function_description
+        expression: pfm_cch_externalvalue
+
+  - kind: filter
+    name: filter_d365_attr
+    context_name: add_d365_roles_contacts
+    params:
+      - condition: dc_cch_externalvalue = '01' and cd_cch_externalvalue = '01' and d_account_group_code not like '%NOT AVAILABLE%' and territory_cch_sapid in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+
+  - kind: select
+    name: select_d365_attr
+    context_name: filter_d365_attr
+    params:
+      columns:
+        cch_orderblockall: cch_orderblockall
+        d_partner: d_partner
+        d_account_group_code: d_account_group_code
+        partner_function: partner_function
+        partner_function_description: partner_function_description
+        name_first: name_first
+        name_last: name_last
+        contact_id: contact_id
+        cch_sapcrmcontactpersonbpid: cch_sapcrmcontactpersonbpid
+        cch_sapid_contact: cch_sapid_contact
+        d_country: d_country
+        guid: guid
+        d365_pk: d365_pk
+      distinct: true
+
+## mobile
+
+  - kind: filter
+    name: filter_d365_mobilephone
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_mobilephone)
+
+  - kind: filter
+    name: filter_d365_mobilephone2
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_mobilephone2)
+
+  - kind: filter
+    name: filter_d365_mobilephone3
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_mobilephone3)
+
+  - kind: filter
+    name: filter_d365_mobilephone4
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_mobilephone4)
+
+  - kind: filter
+    name: filter_d365_mobilephone5
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_mobilephone5)
+          
+  - kind: select
+    name: select_d365_mobilephone
+    context_name: filter_d365_mobilephone
+    params:
+      columns:
+        cch_mobilephone: mobilephone
+        d_partner: d_partner
+        guid: guid
+        cch_mobilephone_number_default: default_mobile
+      distinct: true
+
+  - kind: select
+    name: select_d365_mobilephone2
+    context_name: filter_d365_mobilephone2
+    params:
+      columns:
+        cch_mobilephone2: mobilephone
+        d_partner: d_partner
+        guid: guid
+        cch_mobilephone2_number_default: default_mobile
+      distinct: true
+
+  - kind: select
+    name: select_d365_mobilephone3
+    context_name: filter_d365_mobilephone3
+    params:
+      columns:
+        cch_mobilephone3: mobilephone
+        d_partner: d_partner
+        guid: guid
+        cch_mobilephone3_number_default: default_mobile
+      distinct: true
+
+  - kind: select
+    name: select_d365_mobilephone4
+    context_name: filter_d365_mobilephone4
+    params:
+      columns:
+        cch_mobilephone4: mobilephone
+        d_partner: d_partner
+        guid: guid
+        cch_mobilephone4_number_default: default_mobile
+      distinct: true
+      
+  - kind: select
+    name: select_d365_mobilephone5
+    context_name: filter_d365_mobilephone5
+    params:
+      columns:
+        cch_mobilephone5: mobilephone
+        d_partner: d_partner
+        guid: guid
+        cch_mobilephone5_number_default: default_mobile
+      distinct: true
+      
+
+  - kind: union
+    name: union_d365_mobilephone
+    context_name: select_d365_mobilephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_mobilephone2
+
+  - kind: union
+    name: union_d365_mobilephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_mobilephone3
+      
+  - kind: union
+    name: union_d365_mobilephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_mobilephone4
+      
+  - kind: union
+    name: union_d365_mobilephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_mobilephone5
+      
+  - kind: join
+    name: join_d365_mobile
+    context_name: select_d365_attr
+    params:
+      - other:
+          union_d365_mobilephone
+        how:
+          left
+        columns:
+          d_partner: d_partner
+          guid: guid
+
+  - kind: add
+    name: add_d365_mobile
+    context_name: join_d365_mobile
+    params:
+      - column: d365_hash
+        expression: md5(concat(d_partner,coalesce(trim(lower(name_first)),''),coalesce(trim(lower(name_last)),''),coalesce(trim(mobilephone),''),coalesce(trim(partner_function_description),''),lower(replace(guid, '-', '')),coalesce(trim(default_mobile),'')))
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CONTACT RELATIONSHIP'''
+      - column: partner_guid
+        expression: lower(replace(guid, '-', '')) 
+      - column: src_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''telephone'''
+      - column: loading_date
+        expression: current_date()
+      - column: r3_user
+        expression: '''3'''
+      - column: attribute4
+        expression: ''''''
+      - column: attribute10
+        expression: coalesce(trim(default_mobile),'')
+        
+#telephone
+
+  - kind: filter
+    name: filter_d365_telephone
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_telephone)
+
+  - kind: filter
+    name: filter_d365_telephone2
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_telephone2)
+
+  - kind: filter
+    name: filter_d365_telephone3
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_telephone3)
+
+  - kind: filter
+    name: filter_d365_telephone4
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_telephone4)
+
+  - kind: filter
+    name: filter_d365_telephone5
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_telephone5)
+
+  - kind: select
+    name: select_d365_telephone
+    context_name: filter_d365_telephone
+    params:
+      columns:
+        cch_telephone: telephone
+        d_partner: d_partner
+        guid: guid
+        cch_telephone_number_default: default_telephone
+      distinct: true
+
+  - kind: select
+    name: select_d365_telephone2
+    context_name: filter_d365_telephone2
+    params:
+      columns:
+        cch_telephone2: telephone
+        d_partner: d_partner
+        guid: guid
+        cch_telephone2_number_default: default_telephone
+      distinct: true
+
+  - kind: select
+    name: select_d365_telephone3
+    context_name: filter_d365_telephone3
+    params:
+      columns:
+        cch_telephone3: telephone
+        d_partner: d_partner
+        guid: guid
+        cch_telephone3_number_default: default_telephone
+      distinct: true
+
+  - kind: select
+    name: select_d365_telephone4
+    context_name: filter_d365_telephone4
+    params:
+      columns:
+        cch_telephone4: telephone
+        d_partner: d_partner
+        guid: guid
+        cch_telephone4_number_default: default_telephone
+      distinct: true
+
+  - kind: select
+    name: select_d365_telephone5
+    context_name: filter_d365_telephone5
+    params:
+      columns:
+        cch_telephone5: telephone
+        d_partner: d_partner
+        guid: guid
+        cch_telephone5_number_default: default_telephone
+      distinct: true
+
+  - kind: union
+    name: union_d365_telephone
+    context_name: select_d365_telephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_telephone2
+
+  - kind: union
+    name: union_d365_telephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_telephone3
+
+  - kind: union
+    name: union_d365_telephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_telephone4
+
+  - kind: union
+    name: union_d365_telephone
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_telephone5
+
+  - kind: join
+    name: join_d365_telephone
+    context_name: select_d365_attr
+    params:
+      - other:
+          union_d365_telephone
+        how:
+          left
+        columns:
+          d_partner: d_partner
+          guid: guid
+
+  - kind: add
+    name: add_d365_telephone
+    context_name: join_d365_telephone
+    params:
+      - column: d365_hash
+        expression: md5(concat(d_partner,coalesce(trim(lower(name_first)),''),coalesce(trim(lower(name_last)),''),coalesce(trim(telephone),''),coalesce(trim(partner_function_description),''),lower(replace(guid, '-', '')),coalesce(trim(default_telephone),'')))
+      - column: partner_guid
+        expression: lower(replace(guid, '-', '')) 
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CONTACT RELATIONSHIP'''
+      - column: src_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''telephone'''
+      - column: loading_date
+        expression: current_date()
+      - column: r3_user
+        expression: '''1'''
+      - column: attribute4
+        expression: ''''''
+      - column: attribute10
+        expression: coalesce(trim(default_telephone),'')     
+##email
+
+  - kind: filter
+    name: filter_d365_emailaddress
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_emailaddress)
+
+  - kind: filter
+    name: filter_d365_emailaddress2
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_emailaddress2)
+
+  - kind: filter
+    name: filter_d365_emailaddress3
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_emailaddress3)
+
+  - kind: filter
+    name: filter_d365_emailaddress4
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_emailaddress4)
+
+  - kind: filter
+    name: filter_d365_emailaddress5
+    context_name: join_d365_roles_contacts
+    params:
+      - condition:
+          isnotnull(cch_emailaddress5)
+
+  - kind: select
+    name: select_d365_emailaddress
+    context_name: filter_d365_emailaddress
+    params:
+      columns:
+        cch_emailaddress: emailaddress
+        d_partner: d_partner
+        guid: guid
+      distinct: true
+
+  - kind: select
+    name: select_d365_emailaddress2
+    context_name: filter_d365_emailaddress2
+    params:
+      columns:
+        cch_emailaddress2: emailaddress
+        d_partner: d_partner
+        guid: guid
+      distinct: true
+
+  - kind: select
+    name: select_d365_emailaddress3
+    context_name: filter_d365_emailaddress3
+    params:
+      columns:
+        cch_emailaddress3: emailaddress
+        d_partner: d_partner
+        guid: guid
+      distinct: true
+
+  - kind: select
+    name: select_d365_emailaddress4
+    context_name: filter_d365_emailaddress4
+    params:
+      columns:
+        cch_emailaddress4: emailaddress
+        d_partner: d_partner
+        guid: guid
+      distinct: true
+
+  - kind: select
+    name: select_d365_emailaddress5
+    context_name: filter_d365_emailaddress5
+    params:
+      columns:
+        cch_emailaddress5: emailaddress
+        d_partner: d_partner
+        guid: guid
+      distinct: true
+
+  - kind: union
+    name: union_d365_emailaddress
+    context_name: select_d365_emailaddress
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_emailaddress2
+
+  - kind: union
+    name: union_d365_emailaddress
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_emailaddress3
+
+  - kind: union
+    name: union_d365_emailaddress
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_emailaddress4
+
+  - kind: union
+    name: union_d365_emailaddress
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_emailaddress5
+
+  - kind: join
+    name: join_d365_emailaddress
+    context_name: select_d365_attr
+    params:
+      - other:
+          union_d365_emailaddress
+        how:
+          left
+        columns:
+          d_partner: d_partner
+          guid: guid
+
+  - kind: add
+    name: add_d365_emailaddress
+    context_name: join_d365_emailaddress
+    params:
+      - column: d365_hash
+        expression: md5(concat(d_partner,coalesce(trim(lower(name_first)),''),coalesce(trim(lower(name_last)),''),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(emailaddress, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),coalesce(trim(partner_function_description),''),lower(replace(guid, '-', ''))))
+      - column: partner_guid
+        expression: lower(replace(guid, '-', '')) 
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CONTACT RELATIONSHIP'''
+      - column: src_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''email'''
+      - column: loading_date
+        expression: current_date()
+      - column: attribute4
+        expression: ''''''
+      - column: attribute9
+        expression: ''''''
+      - column: attribute10
+        expression: ''''''        
+              
+        
+  - kind: select
+    name: select_d365_mobile
+    context_name: add_d365_mobile
+    params:
+      columns:
+        d_partner: d_partner
+        partner_guid: d_partner_contact
+        name_first: d_name_first
+        name_last: d_name_last
+        partner_function: d_partner_function
+        d_country: d_country
+        d_account_group_code: d_account_group_code
+        partner_function_description: d_partner_function_description
+        mobilephone: d_mobile
+        d365_hash: d365_hash
+        d365_pk: d365_pk
+        attribute10: d365_flg_default_mobile
+      distinct: true
+
+
+  - kind: select
+    name: select_d365_mobile_aggr
+    context_name: select_d365_mobile
+    params:
+      columns:
+        d365_pk: d365_pk 
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_name_first: d_name_first
+        d_name_last: d_name_last
+        d_country: d_country
+        d_partner_function: d_partner_function
+        d_account_group_code: d_account_group_code
+        d_partner_function_description: d_partner_function_description
+      distinct: true
+
+
+  - kind: select
+    name: select_d365_telephone
+    context_name: add_d365_telephone
+    params:
+      columns:
+        d_partner: d_partner
+        partner_guid: d_partner_contact
+        name_first: d_name_first
+        name_last: d_name_last
+        d_country: d_country
+        partner_function: d_partner_function
+        d_account_group_code: d_account_group_code
+        partner_function_description: d_partner_function_description
+        telephone: d_telephone
+        d365_hash: d365_hash
+        d365_pk: d365_pk
+        attribute10: d365_flg_default_telephone
+      distinct: true
+
+
+  - kind: select
+    name: select_d365_telephone_aggr
+    context_name: select_d365_telephone
+    params:
+      columns:
+        d365_pk: d365_pk 
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_name_first: d_name_first
+        d_name_last: d_name_last
+        d_country: d_country
+        d_partner_function: d_partner_function
+        d_account_group_code: d_account_group_code
+        d_partner_function_description: d_partner_function_description
+      distinct: true
+       
+
+      
+  - kind: select
+    name: select_d365_email
+    context_name: add_d365_emailaddress
+    params:
+      columns:
+        d_partner: d_partner
+        partner_guid: d_partner_contact
+        name_first: d_name_first
+        name_last: d_name_last
+        d_country: d_country
+        partner_function: d_partner_function
+        d_account_group_code: d_account_group_code
+        partner_function_description: d_partner_function_description
+        emailaddress: d_email
+        d365_hash: d365_hash
+        d365_pk: d365_pk
+      distinct: true
+
+
+  - kind: select
+    name: select_d365_email_aggr
+    context_name: select_d365_email
+    params:
+      columns:
+        d365_pk: d365_pk      
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_name_first: d_name_first
+        d_name_last: d_name_last
+        d_country: d_country
+        d_partner_function: d_partner_function
+        d_account_group_code: d_account_group_code
+        d_partner_function_description: d_partner_function_description
+      distinct: true
+      
+
+  - kind: union
+    name: union_d365_aggr
+    context_name: select_d365_email_aggr
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_telephone_aggr   
+
+  - kind: union
+    name: union_d365_aggr
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_d365_mobile_aggr   
+
+
+  - kind: checkpoint
+    name: checkpoint_d365_agg
+    context_name: union_d365_aggr
+########################################################################################
+
+
+##mdg
+
+  - kind: read_dataio
+    name: read_mdg_but000_1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_but051_1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: contact_person_relationships
+      object_name: but051
+      schema_version: v1
+
+  - kind: filter
+    name: read_mdg_but051
+    context_name: read_mdg_but051_1
+    params:
+      - condition: reltyp = 'BUR001' and partner1 like any ('96%','12%','28%','13%','27%','40%','18%','32%','35%','30%','25%','16%','34%','29%','42%','33%','31%','17%','15%','95%','94%','24%','26%','14%','21%','19%','22%')
+
+########################################
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_mdg_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+      distinct: true
+
+  - kind: filter
+    name: filter_mdg_kna1_1
+    context_name: select_mdg_kna1
+    params:
+      - condition: ktokd LIKE ANY ('7%','9%') AND aufsd NOT IN ('E','G','S1','S','NH','S3','S4','SY','SP','R','U')
+
+##########
+  - kind: read_dataio
+    name: read_mdg_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_knvv
+    context_name: read_mdg_knvv
+    params:
+      - condition: vtweg = '01' AND spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100)
+  
+  - kind: select
+    name: select_mdg_knvv_checkpoint
+    context_name: filter_knvv
+    params:
+      columns:
+        kunnr: kunnr_knvv
+      distinct: true
+########################################
+  - kind: join
+    name: filter_mdg_kna1
+    context_name: filter_mdg_kna1_1
+    params:
+      - other:
+          select_mdg_knvv_checkpoint
+        how:
+          inner
+        columns:
+          kunnr: kunnr_knvv
+
+########################################
+
+
+  - kind: read_dataio
+    name: read_mdg_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_adr2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr2
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_adr3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr3
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_adr6
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr6
+      schema_version: v1
+
+
+##################################################
+  - kind: filter
+    name: read_mdg_but000
+    context_name: read_mdg_but000_1
+    params:
+      - condition: persnumber <> ''
+##################################################
+  - kind: select
+    name: select_mdg_but000_columns
+    context_name: read_mdg_but000
+    params:
+      columns:
+        partner: partner
+        persnumber: persnumber
+        partner_guid: partner_guid
+        xdele: xdele_mdg_but000_temp
+        name_last: name_last_mdg_but000_temp
+        name_first: name_first_mdg_but000_temp
+        namcountry: namcountry_mdg_but000_temp
+      distinct: true
+
+  - kind: add
+    name: select_mdg_but000_cleanse
+    context_name: select_mdg_but000_columns
+    params:
+      - column: xdele_mdg_but000
+        expression: coalesce(xdele_mdg_but000_temp,'')
+      - column: name_last_mdg_but000
+        expression: coalesce(name_last_mdg_but000_temp,'')
+      - column: name_first_mdg_but000
+        expression: coalesce(name_first_mdg_but000_temp,'')
+      - column: namcountry_mdg_but000
+        expression: coalesce(namcountry_mdg_but000_temp,'')
+        
+  - kind: select
+    name: select_mdg_but000
+    context_name: select_mdg_but000_cleanse
+    params:
+      columns:
+        partner: partner_mdg_but000
+        persnumber: persnumber_mdg_but000
+        partner_guid: partner_guid_mdg_but000
+        xdele_mdg_but000: xdele_mdg_but000
+        name_last_mdg_but000: name_last_mdg_but000
+        name_first_mdg_but000: name_first_mdg_but000
+        namcountry_mdg_but000: namcountry_mdg_but000
+      distinct: true
+##################################################
+
+
+
+
+
+  - kind: select
+    name: select_mdg_but000_lookup_select
+    context_name: read_mdg_but000_1
+    params:
+      columns:
+        partner: partner_mdg_but000_lookup
+        bu_group: bu_group_mdg_but000_lookup
+      distinct: true
+
+
+
+
+##################################################
+  - kind: filter
+    name: select_mdg_but000_lookup
+    context_name: select_mdg_but000_lookup_select
+    params:
+      - condition: bu_group LIKE '7%' OR bu_group LIKE '9%'
+##################################################
+
+  - kind: select
+    name: mdg_but051_select
+    context_name: read_mdg_but051
+    params:
+      columns:
+        relnr: relnr_mdg_but051_temp
+        partner1: partner1
+        partner2: partner2
+        reltyp: reltyp
+        pafkt: pafkt_mdg_but051_temp
+      distinct: true
+
+  - kind: add
+    name: mdg_but051_cleanse
+    context_name: mdg_but051_select
+    params:
+      - column: relnr_mdg_but051
+        expression: coalesce(relnr_mdg_but051_temp,'')
+      - column: pafkt_mdg_but051
+        expression: coalesce(pafkt_mdg_but051_temp,'')
+
+  - kind: select
+    name: mdg_but051
+    context_name: mdg_but051_cleanse
+    params:
+      columns:
+        relnr_mdg_but051: relnr_mdg_but051
+        partner1: partner1_mdg_but051
+        partner2: partner2_mdg_but051
+        reltyp: reltyp_mdg_but051
+        pafkt_mdg_but051: pafkt_mdg_but051
+      distinct: true
+        
+
+###################################################
+  - kind: join
+    name: select_mdg_but051
+    context_name: mdg_but051
+    params:
+      - other:
+          filter_mdg_kna1
+        how:
+          inner
+        columns:
+          partner1_mdg_but051: kunnr
+###################################################
+
+
+
+
+
+  - kind: select
+    name: select_mdg_but020
+    context_name: read_mdg_but020
+    params:
+      columns:
+        partner: partner_mdg_but020
+        addrnumber: addrnumber_mdg_but020
+      distinct: true
+########################################################################
+  - kind: select
+    name: select_mdg_adr2_select
+    context_name: read_mdg_adr2
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        r3_user: r3_user_mdg_adr2_temp
+        telnr_long: telnr_long_mdg_adr2_temp
+        consnumber: consnumber_mdg_adr2_temp
+        flgdefault: flgdefault_mdg_adr2_temp     
+      distinct: true
+
+  - kind: add
+    name: select_mdg_adr2_cleanse
+    context_name: select_mdg_adr2_select
+    params:
+      - column: addrnumber_mdg_adr2
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_mdg_adr2
+        expression: coalesce(persnumber_temp,'')
+      - column: r3_user_mdg_adr2
+        expression: coalesce(r3_user_mdg_adr2_temp,'')
+      - column: telnr_long_mdg_adr2
+        expression: coalesce(telnr_long_mdg_adr2_temp,'')
+      - column: consnumber_mdg_adr2
+        expression: coalesce(consnumber_mdg_adr2_temp,'')
+      - column: flgdefault_mdg_adr2
+        expression: if(r3_user_mdg_adr2_temp='1' or r3_user_mdg_adr2_temp='3', 'true','false')
+        
+  - kind: select
+    name: select_mdg_adr2
+    context_name: select_mdg_adr2_cleanse
+    params:
+      columns:
+        addrnumber_mdg_adr2: addrnumber_mdg_adr2
+        persnumber_mdg_adr2: persnumber_mdg_adr2
+        r3_user_mdg_adr2: r3_user_mdg_adr2
+        telnr_long_mdg_adr2: telnr_long_mdg_adr2
+        consnumber_mdg_adr2: consnumber_mdg_adr2
+        flgdefault_mdg_adr2: flgdefault_mdg_adr2     
+      distinct: true 
+
+##################################################################
+
+  - kind: select
+    name: select_mdg_adr3_select
+    context_name: read_mdg_adr3
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        fax_number: fax_number_mdg_adr3_temp
+        consnumber: consnumber_mdg_adr3_temp
+        flgdefault: flgdefault_mdg_adr3_temp   
+      distinct: true
+
+  - kind: add
+    name: select_mdg_adr3_cleanse
+    context_name: select_mdg_adr3_select
+    params:
+      - column: addrnumber_mdg_adr3
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_mdg_adr3
+        expression: coalesce(persnumber_temp,'')
+      - column: fax_number_mdg_adr3
+        expression: coalesce(fax_number_mdg_adr3_temp,'')
+      - column: consnumber_mdg_adr3
+        expression: coalesce(consnumber_mdg_adr3_temp,'')
+      - column: flgdefault_mdg_adr3
+        expression: coalesce(flgdefault_mdg_adr3_temp,'')
+        
+  - kind: select
+    name: select_mdg_adr3
+    context_name: select_mdg_adr3_cleanse
+    params:
+      columns:
+        addrnumber_mdg_adr3: addrnumber_mdg_adr3
+        persnumber_mdg_adr3: persnumber_mdg_adr3
+        fax_number_mdg_adr3: fax_number_mdg_adr3
+        consnumber_mdg_adr3: consnumber_mdg_adr3
+        flgdefault_mdg_adr3: flgdefault_mdg_adr3
+      distinct: true 
+
+##################################################################
+
+
+
+
+  - kind: select
+    name: select_mdg_adr6_select
+    context_name: read_mdg_adr6
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        smtp_addr: smtp_addr_mdg_adr6_temp
+        consnumber: consnumber_mdg_adr6_temp
+        flgdefault: flgdefault_mdg_adr6_temp
+      distinct: true
+
+  - kind: add
+    name: select_mdg_adr6_cleanse
+    context_name: select_mdg_adr6_select
+    params:
+      - column: addrnumber_mdg_adr6
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_mdg_adr6
+        expression: coalesce(persnumber_temp,'')
+      - column: smtp_addr_mdg_adr6
+        expression: coalesce(lower(smtp_addr_mdg_adr6_temp),'')
+      - column: consnumber_mdg_adr6
+        expression: coalesce(consnumber_mdg_adr6_temp,'')
+      - column: flgdefault_mdg_adr6
+        expression: coalesce(flgdefault_mdg_adr6_temp,'')
+        
+  - kind: select
+    name: select_mdg_adr6
+    context_name: select_mdg_adr6_cleanse
+    params:
+      columns:
+        addrnumber_mdg_adr6: addrnumber_mdg_adr6
+        persnumber_mdg_adr6: persnumber_mdg_adr6
+        smtp_addr_mdg_adr6: smtp_addr_mdg_adr6
+        consnumber_mdg_adr6: consnumber_mdg_adr6
+        flgdefault_mdg_adr6: flgdefault_mdg_adr6
+      distinct: true 
+
+##################################################################
+
+
+
+
+
+  - kind: add
+    name: add_mdg_but051
+    context_name: select_mdg_but051
+    params:
+      - column: initials_mdg_but051
+        expression: if(substr(partner1_mdg_but051, 1, 1) = 'P',3 ,
+                    if(substr(partner1_mdg_but051, 1, 3) = '000', 5, 2))
+      - column: mdg_country_mdg_but051
+        expression: CASE 
+                      WHEN initials_mdg_but051 = 2 THEN 
+                        CASE SUBSTRING(partner1_mdg_but051, 1, 2)
+                          WHEN '96' THEN 'AM'
+                          WHEN '12' THEN 'AT'
+                          WHEN '28' THEN 'BA'
+                          WHEN '13' THEN 'BG'
+                          WHEN '23' THEN 'BY'
+                          WHEN '27' THEN 'CH'
+                          WHEN '18' THEN 'CZ'
+                          WHEN '32' THEN 'EE'
+                          WHEN '35' THEN 'GB'
+                          WHEN '30' THEN 'GR'
+                          WHEN '25' THEN 'HR'
+                          WHEN '16' THEN 'HU'
+                          WHEN '34' THEN 'IE'
+                          WHEN '29' THEN 'IT'
+                          WHEN '42' THEN 'KV'
+                          WHEN '33' THEN 'LT'
+                          WHEN '31' THEN 'LV'
+                          WHEN '17' THEN 'MD'
+                          WHEN '15' THEN 'ME'
+                          WHEN '95' THEN 'MK'
+                          WHEN '94' THEN 'NG'
+                          WHEN '24' THEN 'PL'
+                          WHEN '26' THEN 'RO'
+                          WHEN '38' THEN 'RU'
+                          WHEN '21' THEN 'SI'
+                          WHEN '19' THEN 'SK'
+                          WHEN '14' THEN 'RS'
+                          WHEN '22' THEN 'UA'
+                          WHEN '40' THEN 'CY'
+                          WHEN '47' THEN 'EG'
+                          ELSE NULL
+                        END
+                      WHEN initials_mdg_but051 = 3 THEN 
+                        CASE SUBSTRING(partner1_mdg_but051, 1, 3)
+                          WHEN 'P96' THEN 'AM'
+                          WHEN 'P11' THEN 'AT'
+                          WHEN 'P86' THEN 'BA'
+                          WHEN 'P49' THEN 'BG'
+                          WHEN 'P23' THEN 'BY'
+                          WHEN 'P55' THEN 'CH'
+                          WHEN 'P51' THEN 'CY'
+                          WHEN 'P45' THEN 'CZ'
+                          WHEN 'P32' THEN 'EE'
+                          WHEN 'P79' THEN 'GB'
+                          WHEN 'P12' THEN 'GR'
+                          WHEN 'P80' THEN 'HR'
+                          WHEN 'P28' THEN 'HU'
+                          WHEN 'P78' THEN 'IE'
+                          WHEN 'P63' THEN 'IT'
+                          WHEN 'P92' THEN 'KV'
+                          WHEN 'P33' THEN 'LT'
+                          WHEN 'P31' THEN 'LV'
+                          WHEN 'P20' THEN 'MD'
+                          WHEN 'P82' THEN 'ME'
+                          WHEN 'P95' THEN 'MK'
+                          WHEN 'P94' THEN 'NG'
+                          WHEN 'P61' THEN 'PL'
+                          WHEN 'P91' THEN 'RO'
+                          WHEN 'P25' THEN 'RS'
+                          WHEN 'P85' THEN 'SI'
+                          WHEN 'P41' THEN 'SK'
+                          WHEN 'P72' THEN 'UA'
+                          WHEN 'P47' THEN 'EG'
+                          WHEN 'E96' THEN 'AM'
+                          WHEN 'E12' THEN 'AT'
+                          WHEN 'E28' THEN 'BA'
+                          WHEN 'E13' THEN 'BG'
+                          WHEN 'E23' THEN 'BY'
+                          WHEN 'E27' THEN 'CH'
+                          WHEN 'E40' THEN 'CY'
+                          WHEN 'E18' THEN 'CZ'
+                          WHEN 'E32' THEN 'EE'
+                          WHEN 'E47' THEN 'EG'
+                          WHEN 'E35' THEN 'GB'
+                          WHEN 'E30' THEN 'GR'
+                          WHEN 'E25' THEN 'HR'
+                          WHEN 'E16' THEN 'HU'
+                          WHEN 'E34' THEN 'IE'
+                          WHEN 'E29' THEN 'IT'
+                          WHEN 'E42' THEN 'KV'
+                          WHEN 'E33' THEN 'LT'
+                          WHEN 'E31' THEN 'LV'
+                          WHEN 'E17' THEN 'MD'
+                          WHEN 'E15' THEN 'ME'
+                          WHEN 'E95' THEN 'MK'
+                          WHEN 'E94' THEN 'NG'
+                          WHEN 'E24' THEN 'PL'
+                          WHEN 'E26' THEN 'RO'
+                          WHEN 'E14' THEN 'RS'
+                          WHEN 'E21' THEN 'SI'
+                          WHEN 'E19' THEN 'SK'
+                          WHEN 'E22' THEN 'UA'
+                          ELSE NULL
+                        END
+                        WHEN initials_mdg_but051 = 5 THEN 
+                          CASE SUBSTRING(partner1_mdg_but051, 1, 5)
+                            WHEN '00096' THEN 'AM'
+                            WHEN '00012' THEN 'AT'
+                            WHEN '00028' THEN 'BA'
+                            WHEN '00013' THEN 'BG'
+                            WHEN '00023' THEN 'BY'
+                            WHEN '00027' THEN 'CH'
+                            WHEN '00018' THEN 'CZ'
+                            WHEN '00032' THEN 'EE'
+                            WHEN '00035' THEN 'GB'
+                            WHEN '00030' THEN 'GR'
+                            WHEN '00025' THEN 'HR'
+                            WHEN '00016' THEN 'HU'
+                            WHEN '00034' THEN 'IE'
+                            WHEN '00029' THEN 'IT'
+                            WHEN '00042' THEN 'KV'
+                            WHEN '00033' THEN 'LT'
+                            WHEN '00031' THEN 'LV'
+                            WHEN '00017' THEN 'MD'
+                            WHEN '00015' THEN 'ME'
+                            WHEN '00095' THEN 'MK'
+                            WHEN '00094' THEN 'NG'
+                            WHEN '00024' THEN 'PL'
+                            WHEN '00026' THEN 'RO'
+                            WHEN '00038' THEN 'RU'
+                            WHEN '00021' THEN 'SI'
+                            WHEN '00019' THEN 'SK'
+                            WHEN '00014' THEN 'RS'
+                            WHEN '00022' THEN 'UA'
+                            WHEN '00040' THEN 'CY'
+                            WHEN '00047' THEN 'EG'
+                            ELSE NULL
+                          END
+                    END
+
+  - kind: join
+    name: join_mdg_but051_lookup
+    context_name: add_mdg_but051
+    params:
+      - other:
+          select_mdg_but000_lookup
+        how:
+          left
+        columns:
+          partner1_mdg_but051: partner_mdg_but000_lookup
+
+  - kind: add
+    name: add_mdg_but051_lookup
+    context_name: join_mdg_but051_lookup
+    params:
+      - column: var_d_account_group_code_mdg_but051
+        expression: CASE bu_group_mdg_but000_lookup
+                      WHEN '7012' THEN 'CCHBC Beverage     Vending  AT'
+                      WHEN '7016' THEN 'CCHBC Beverage     Vending  HU'
+                      WHEN '7018' THEN 'CCHBC Beverage     Vending  CZ'
+                      WHEN '7019' THEN 'CCHBC Beverage     Vending  SK'
+                      WHEN '7024' THEN 'CCHBC Beverage     Vending  PL'
+                      WHEN '7025' THEN 'CCHBC Beverage     Vending  HR'
+                      WHEN '7026' THEN 'CCHBC Beverage     Vending  RO'
+                      WHEN '7027' THEN 'CCHBC Beverage   Vending  CH'
+                      WHEN '7029' THEN 'CCHBC Beverage     Vending  IT'
+                      WHEN '7030' THEN 'CCHBC Beverage     Vending  GR'
+                      WHEN '7034' THEN 'CCHBC Beverage     Vending  RI'
+                      WHEN '7035' THEN 'CCHBC Beverage     Vending  NI'
+                      WHEN '7038' THEN 'CCHBC Beverage     Vending  RU'
+                      WHEN '7112' THEN 'CCHBC Cup           Vending AT'
+                      WHEN '7116' THEN 'CCHBC Cup           Vending HU'
+                      WHEN '7118' THEN 'CCHBC Cup           Vending CZ'
+                      WHEN '7119' THEN 'CCHBC Cup           Vending SK'
+                      WHEN '7124' THEN 'CCHBC Cup           Vending PL'
+                      WHEN '7126' THEN 'CCHBC Cup           Vending RO'
+                      WHEN '7127' THEN 'CCHBC Cup           Vending CH'
+                      WHEN '7129' THEN 'CCHBC Cup           Vending IT'
+                      WHEN '7130' THEN 'CCHBC Cup           Vending GR'
+                      WHEN '7134' THEN 'CCHBC Cup           Vending RI'
+                      WHEN '7135' THEN 'CCHBC Cup           Vending NI'
+                      WHEN '7138' THEN 'CCHBC Cup           Vending RU'
+                      WHEN '7212' THEN 'CCHBC Snack         Vending AT'
+                      WHEN '7216' THEN 'CCHBC Snack         Vending HU'
+                      WHEN '7218' THEN 'CCHBC Snack         Vending CZ'
+                      WHEN '7219' THEN 'CCHBC Snack         Vending SK'
+                      WHEN '7229' THEN 'CCHBC Snack         Vending IT'
+                      WHEN '7230' THEN 'CCHBC Snack         Vending GR'
+                      WHEN '7234' THEN 'CCHBC Snack         Vending RI'
+                      WHEN '7235' THEN 'CCHBC Snack         Vending NI'
+                      WHEN '7312' THEN 'CCHBC Combined      Vending AT'
+                      WHEN '7316' THEN 'CCHBC Combined      Vending HU'
+                      WHEN '7318' THEN 'CCHBC Combined      Vending CZ'
+                      WHEN '7319' THEN 'CCHBC Combined      Vending SK'
+                      WHEN '7329' THEN 'CCHBC Combined      Vending IT'
+                      WHEN '7330' THEN 'CCHBC Combined      Vending GR'
+                      WHEN '7334' THEN 'CCHBC Combined      Vending RI'
+                      WHEN '7335' THEN 'CCHBC Combined      Vending NI'
+                      WHEN '9012' THEN 'CCHBC Trade customers AT'
+                      WHEN '9013' THEN 'CCHBC Trade customers BG'
+                      WHEN '9014' THEN 'CCHBC Trade customers RS'
+                      WHEN '9015' THEN 'CCHBC Trade customers ME'
+                      WHEN '9016' THEN 'CCHBC Trade customers HU'
+                      WHEN '9017' THEN 'CCHBC Trade customers MD'
+                      WHEN '9018' THEN 'CCHBC Trade customers CZ'
+                      WHEN '9019' THEN 'CCHBC Trade customers SK'
+                      WHEN '9021' THEN 'CCHBC Trade customers SI'
+                      WHEN '9022' THEN 'CCHBC Trade customers UA'
+                      WHEN '9023' THEN 'CCHBC Trade customers BY'
+                      WHEN '9024' THEN 'CCHBC Trade customers PL'
+                      WHEN '9025' THEN 'CCHBC Trade customers HR'
+                      WHEN '9026' THEN 'CCHBC Trade customers RO'
+                      WHEN '9027' THEN 'CCHBC Trade customers CH'
+                      WHEN '9028' THEN 'CCHBC Trade customers BA'
+                      WHEN '9029' THEN 'CCHBC Trade customers IT'
+                      WHEN '9030' THEN 'CCHBC Trade customers GR'
+                      WHEN '9031' THEN 'CCHBC Trade customers LV'
+                      WHEN '9032' THEN 'CCHBC Trade customers EE'
+                      WHEN '9033' THEN 'CCHBC Trade customers LT'
+                      WHEN '9034' THEN 'CCHBC Trade customers RI'
+                      WHEN '9035' THEN 'CCHBC Trade customers NI'
+                      WHEN '9037' THEN 'CCHBC Trade customers CH Valser'
+                      WHEN '9038' THEN 'CCHBC Trade customers RU'
+                      WHEN '9040' THEN 'CCHBC Trade customers CY'
+                      WHEN '9041' THEN 'CCHBC Trade customers BG SHS'
+                      WHEN '9042' THEN 'CCHBC Trade customers XK'
+                      WHEN '9047' THEN 'CCHBC Trade customers EG'
+                      WHEN '9088' THEN 'CCHBC Trade customers GR HO'
+                      WHEN '9094' THEN 'CCHBC Trade customers NG'
+                      WHEN '9095' THEN 'CCHBC Trade customers MK'
+                      WHEN '9096' THEN 'CCHBC Trade customers AM'
+                      WHEN '9999' THEN 'CCH Sochi Olympics Customers'
+                      ELSE 'NOT AVAILABLE'
+                    END
+      - column: account_group_mdg_but051
+        expression: concat(bu_group_mdg_but000_lookup, ' - ', regexp_replace(var_d_account_group_code_mdg_but051, '\\s+', ' '))
+
+  - kind: filter
+    name: filter_mdg_but051_lookup
+    context_name: add_mdg_but051_lookup
+    params:
+      - condition:
+          mdg_country_mdg_but051 in ('AM', 'BG', 'MD', 'UA','BA','GB','HR','IE','LT','LV','EE','CH','RS','ME','KV','CZ','RO','SI','SK','GR','PL','CY','HU','AT','MK','NG','IT') and account_group_mdg_but051 is not null
+
+  - kind: join
+    name: join_mdg_but051_but000
+    context_name: filter_mdg_but051_lookup
+    params:
+      - other:
+          select_mdg_but000
+        how:
+          inner
+        columns:
+          partner2_mdg_but051: partner_mdg_but000
+
+  - kind: join
+    name: join_mdg_but051_but020
+    context_name: select_mdg_but020
+    params:
+      - other:
+          join_mdg_but051_but000
+        how:
+          inner
+        columns:
+          partner_mdg_but020: partner1_mdg_but051
+
+  - kind: join
+    name: join_mdg_but051_adr2
+    context_name: join_mdg_but051_but020
+    params:
+      - other:
+          select_mdg_adr2
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adr2
+          persnumber_mdg_but000: persnumber_mdg_adr2
+
+
+  - kind: join
+    name: join_mdg_but051_adr3
+    context_name: join_mdg_but051_but020
+    params:
+      - other:
+          select_mdg_adr3
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adr3
+          persnumber_mdg_but000: persnumber_mdg_adr3
+
+  - kind: join
+    name: join_mdg_but051_adr6
+    context_name: join_mdg_but051_but020
+    params:
+      - other:
+          select_mdg_adr6
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adr6
+          persnumber_mdg_but000: persnumber_mdg_adr6
+
+
+  - kind: filter
+    name: join_mdg_but051_adr2_telephone
+    context_name: join_mdg_but051_adr2
+    params:
+      - condition: r3_user_mdg_adr2 = '' or r3_user_mdg_adr2 = '1'
+
+  - kind: filter
+    name: join_mdg_but051_adr2_mobile
+    context_name: join_mdg_but051_adr2
+    params:
+      - condition: r3_user_mdg_adr2 = '2' or r3_user_mdg_adr2 = '3'
+
+  - kind: add
+    name: add_mdg_adr2_telephone
+    context_name: join_mdg_but051_adr2_telephone
+    params:
+      - column: name_last_mdg_but000
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_last_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))
+      - column: name_first_mdg_but000
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_first_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')) )
+      - column: mdg_hash
+        expression: md5(concat(partner1_mdg_but051, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_first_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')) ),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_last_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),coalesce(telnr_long_mdg_adr2,''),coalesce(pafkt_mdg_but051,''), lower(partner_guid_mdg_but000), coalesce(flgdefault_mdg_adr2,'')))
+      - column: mdg_pk
+        expression: concat(partner1_mdg_but051, lower(partner_guid_mdg_but000))
+      - column: telephone
+        expression: coalesce(telnr_long_mdg_adr2,'')
+      - column: mdg_flg_default_telephone
+        expression: coalesce(flgdefault_mdg_adr2,'')
+
+
+  - kind: add
+    name: add_mdg_adr2_mobile
+    context_name: join_mdg_but051_adr2_mobile
+    params:
+      - column: name_last_mdg_but000
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_last_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))
+      - column: name_first_mdg_but000
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_first_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')) )
+      - column: mdg_hash
+        expression: md5(concat(partner1_mdg_but051, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_first_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')) ),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_last_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),coalesce(telnr_long_mdg_adr2,''),coalesce(pafkt_mdg_but051,''), lower(partner_guid_mdg_but000), coalesce(flgdefault_mdg_adr2,'')))
+      - column: mdg_pk
+        expression: concat(partner1_mdg_but051, lower(partner_guid_mdg_but000))
+      - column: mobile
+        expression: coalesce(telnr_long_mdg_adr2,'')
+      - column: mdg_flg_default_mobile
+        expression: coalesce(flgdefault_mdg_adr2,'')
+
+  - kind: add
+    name: add_mdg_but051_adr6
+    context_name: join_mdg_but051_adr6
+    params:
+      - column: name_last_mdg_but000
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_last_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))
+      - column: name_first_mdg_but000
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_first_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')) )
+      - column: mdg_hash
+        expression: md5(concat(partner1_mdg_but051, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_first_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')) ),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(name_last_mdg_but000, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(smtp_addr_mdg_adr6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),coalesce(pafkt_mdg_but051,''), lower(partner_guid_mdg_but000)))
+      - column: mdg_pk
+        expression: concat(partner1_mdg_but051, lower(partner_guid_mdg_but000))
+      - column: mdg_email
+        expression: trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(smtp_addr_mdg_adr6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))
+
+  - kind: select
+    name: select_mdg_adr2_telephone
+    context_name: add_mdg_adr2_telephone
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+      distinct: true
+
+  - kind: select
+    name: select_mdg_adr2_mobile
+    context_name: add_mdg_adr2_mobile
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+      distinct: true
+
+  - kind: select
+    name: select_mdg_but051_adr6
+    context_name: add_mdg_but051_adr6
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+      distinct: true
+
+  - kind: union
+    name: union_mdg_agg
+    context_name: select_mdg_adr2_mobile
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_mdg_adr2_telephone
+
+  - kind: union
+    name: union_mdg_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_mdg_but051_adr6
+
+  - kind: checkpoint
+    name: checkpoint_mdg_agg
+    context_name: union_mdg_agg
+################################################################################
+
+  - kind: join
+    name: join_mdg_d365_predistinct
+    context_name: checkpoint_mdg_agg
+    params:
+      - other:
+          checkpoint_d365_agg
+        how:
+          full
+        columns:
+          mdg_pk: d365_pk
+
+  - kind: select
+    name: join_mdg_d365
+    context_name: join_mdg_d365_predistinct
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country: mdg_country
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_relationship: mdg_relationship
+        mdg_name_last: mdg_name_last
+        mdg_name_first: mdg_name_first
+        mdg_account_group: mdg_account_group
+        d365_pk: d365_pk
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_name_first: d_name_first
+        d_name_last: d_name_last
+        d_country: d_country
+        d_partner_function: d_partner_function
+        d_account_group_code: d_account_group_code
+        d_partner_function_description: d_partner_function_description
+      distinct: true
+          
+  - kind: select
+    name: select_mdg_mobile
+    context_name: add_mdg_adr2_mobile
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        xdele_mdg_but000: mdg_archiving_flag
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+        mdg_flg_default_mobile: mdg_flg_default_mobile
+        mobile: mobile
+      distinct: true
+
+
+  - kind: select
+    name: select_mdg_telephone
+    context_name: add_mdg_adr2_telephone
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        xdele_mdg_but000: mdg_archiving_flag
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+        mdg_flg_default_telephone: mdg_flg_default_telephone
+        telephone: telephone
+      distinct: true
+
+
+  - kind: select
+    name: select_mdg_email
+    context_name: add_mdg_but051_adr6
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        xdele_mdg_but000: mdg_archiving_flag
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+        mdg_email: mdg_email
+        flgdefault_mdg_adr6: mdg_flgdefault
+      distinct: true
+
+
+  - kind: join
+    name: join_mdg_d365_telephone
+    context_name: select_mdg_telephone
+    params:
+      - other:
+          select_d365_telephone
+        how:
+          full
+        columns:
+          mdg_hash: d365_hash
+
+
+
+########not in d365###############
+  - kind: filter
+    name: filter_mdg_telephone
+    context_name: join_mdg_d365_telephone
+    params:
+      - condition:
+          isnull(d365_hash)
+###########not in mdg############
+  - kind: filter
+    name: filter_d365_telephone
+    context_name: join_mdg_d365_telephone
+    params:
+      - condition:
+          isnull(mdg_hash)
+
+  - kind: select
+    name: select_mdg_telephone_prejoin
+    context_name: filter_mdg_telephone
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country: mdg_country
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_relationship: mdg_relationship
+        mdg_name_last: mdg_name_last
+        mdg_name_first: mdg_name_first
+        mdg_account_group: mdg_account_group
+        telephone: mdg_telephone
+      distinct: true
+
+  - kind: select
+    name: select_d365_telephone_prejoin
+    context_name: filter_d365_telephone
+    params:
+      columns:
+        d365_pk: d365_pk
+        d_country: d_country
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_partner_function_description: d_partner_function_description
+        d_name_last: d_name_last
+        d_name_first: d_name_first
+        d_account_group_code: d_account_group_code
+        d_telephone: d_telephone
+      distinct: true
+
+
+  - kind: join
+    name: join_mdg_d365_remaining_telephone
+    context_name: select_mdg_telephone_prejoin
+    params:
+      - other:
+          select_d365_telephone_prejoin
+        how:
+          full
+        columns:
+          mdg_pk: d365_pk
+
+###########################################################
+
+  - kind: join
+    name: join_mdg_d365_mobile
+    context_name: select_mdg_mobile
+    params:
+      - other:
+          select_d365_mobile
+        how:
+          full
+        columns:
+          mdg_hash: d365_hash
+ 
+
+########not in d365###############
+  - kind: filter
+    name: filter_mdg_mobile
+    context_name: join_mdg_d365_mobile
+    params:
+      - condition:
+          isnull(d365_hash)
+###########not in mdg############
+  - kind: filter
+    name: filter_d365_mobile
+    context_name: join_mdg_d365_mobile
+    params:
+      - condition:
+          isnull(mdg_hash) 
+
+  - kind: select
+    name: select_mdg_mobile_prejoin
+    context_name: filter_mdg_mobile
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country: mdg_country
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_relationship: mdg_relationship
+        mdg_name_last: mdg_name_last
+        mdg_name_first: mdg_name_first
+        mdg_account_group: mdg_account_group
+        mobile: mdg_mobile
+      distinct: true
+
+  - kind: select
+    name: select_d365_mobile_prejoin
+    context_name: filter_d365_mobile
+    params:
+      columns:
+        d365_pk: d365_pk
+        d_country: d_country
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_partner_function_description: d_partner_function_description
+        d_name_last: d_name_last
+        d_name_first: d_name_first
+        d_account_group_code: d_account_group_code
+        d_mobile: d_mobile
+      distinct: true
+
+
+  - kind: join
+    name: join_mdg_d365_remaining_mobile
+    context_name: select_mdg_mobile_prejoin
+    params:
+      - other:
+          select_d365_mobile_prejoin
+        how:
+          full
+        columns:
+          mdg_pk: d365_pk
+
+###########################################################
+  - kind: join
+    name: join_mdg_d365_email
+    context_name: select_mdg_email
+    params:
+      - other:
+          select_d365_email
+        how:
+          full
+        columns:
+          mdg_hash: d365_hash
+
+  - kind: filter
+    name: filter_mdg_email
+    context_name: join_mdg_d365_email
+    params:
+      - condition:
+          isnull(d365_hash)
+###########not in mdg############
+  - kind: filter
+    name: filter_d365_email
+    context_name: join_mdg_d365_email
+    params:
+      - condition:
+          isnull(mdg_hash) 
+
+  - kind: select
+    name: select_mdg_email_prejoin
+    context_name: filter_mdg_email
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country: mdg_country
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_relationship: mdg_relationship
+        mdg_name_last: mdg_name_last
+        mdg_name_first: mdg_name_first
+        mdg_account_group: mdg_account_group
+        mdg_email: mdg_email
+      distinct: true
+
+  - kind: select
+    name: select_d365_email_prejoin
+    context_name: filter_d365_email
+    params:
+      columns:
+        d365_pk: d365_pk
+        d_country: d_country
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_partner_function_description: d_partner_function_description
+        d_name_last: d_name_last
+        d_name_first: d_name_first
+        d_account_group_code: d_account_group_code
+        d_email: d_email
+      distinct: true
+
+  - kind: join
+    name: join_mdg_d365_remaining_email
+    context_name: select_mdg_email_prejoin
+    params:
+      - other:
+          select_d365_email_prejoin
+        how:
+          full
+        columns:
+          mdg_pk: d365_pk
+###########################################################
+
+  - kind: union
+    name: join_mdg_d365_remaining
+    context_name: join_mdg_d365_remaining_telephone
+    params:
+      allow_missing: true
+      by_name: true
+      other: join_mdg_d365_remaining_mobile
+
+  - kind: union
+    name: join_mdg_d365_remaining
+    params:
+      allow_missing: true
+      by_name: true
+      other: join_mdg_d365_remaining_email
+
+  - kind: checkpoint
+    name: checkpoint_mdg_d365_remaining
+    context_name: join_mdg_d365_remaining
+    
+    
+############################################################
+    
+  - kind: filter
+    name: filter_name_first
+    context_name: checkpoint_mdg_d365_remaining
+    params:
+      - condition:
+          mdg_pk = d365_pk and coalesce(trim(lower(regexp_replace(mdg_name_first, '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'') <> coalesce(trim(lower(regexp_replace(d_name_first, '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+          
+          
+  - kind: filter
+    name: filter_name_last
+    context_name: checkpoint_mdg_d365_remaining
+    params:
+      - condition:
+          mdg_pk = d365_pk and coalesce(trim(lower(regexp_replace(mdg_name_last, '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'') <> coalesce(trim(lower(regexp_replace(d_name_last, '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+
+  - kind: filter
+    name: filter_relationship
+    context_name: checkpoint_mdg_d365_remaining
+    params:
+      - condition:
+          mdg_pk = d365_pk and mdg_relationship <> d_partner_function_description
+
+
+  - kind: filter
+    name: filter_telnr
+    context_name: checkpoint_mdg_d365_remaining
+    params:
+      - condition: mdg_pk = d365_pk and coalesce(trim(d_telephone),'') <> coalesce(trim(mdg_telephone),'') 
+
+
+  - kind: filter
+    name: filter_mobile
+    context_name: checkpoint_mdg_d365_remaining
+    params:
+      - condition: mdg_pk = d365_pk and coalesce(trim(d_mobile),'') <> coalesce(trim(mdg_mobile),'') 
+      
+      
+  - kind: filter
+    name: filter_email
+    context_name: checkpoint_mdg_d365_remaining
+    params:
+      - condition: mdg_pk = d365_pk and coalesce(trim(lower(mdg_email)),'') <> trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(d_email, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))
+
+
+  - kind: add
+    name: add_name_first
+    context_name: filter_name_first
+    params:
+      - column: attr_name
+        expression: '''First Name'''
+
+  - kind: add
+    name: add_name_last
+    context_name: filter_name_last
+    params:
+      - column: attr_name
+        expression: '''Last Name'''
+
+  - kind: add
+    name: add_telnr
+    context_name: filter_telnr
+    params:
+      - column: attr_name
+        expression: '''Telephone'''
+
+  - kind: add
+    name: add_mobile
+    context_name: filter_mobile
+    params:
+      - column: attr_name
+        expression: '''Mobile Number'''
+
+  - kind: add
+    name: add_email
+    context_name: filter_email
+    params:
+      - column: attr_name
+        expression: '''E-mail'''
+
+
+  - kind: add
+    name: add_relationship
+    context_name: filter_relationship
+    params:
+      - column: attr_name
+        expression: '''Function'''
+
+  - kind: union
+    name: union_attribute_mismatch
+    context_name: add_name_first
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_name_last
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_telnr
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_mobile
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_email
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_relationship
+
+  - kind: filter
+    name: filter_mdg_sap_non_null
+    context_name: join_mdg_d365
+    params:
+      - condition:
+          isnotnull(mdg_pk) and isnotnull(d365_pk)
+
+  - kind: select
+    name: select_mdg_pk
+    context_name: filter_mdg_sap_non_null
+    params:
+      columns:
+        mdg_pk: mdg_pk
+      distinct: true
+
+  - kind: join
+    name: join_mismatched
+    context_name: select_mdg_pk
+    params:
+      - other:
+          union_attribute_mismatch
+        how:
+          inner
+        columns:
+          mdg_pk: mdg_pk
+
+  - kind: add
+    name: add_mismatched_detailed
+    context_name: join_mismatched
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''attributes are mismatching'''
+      - column: partner_function_description
+        expression: CASE mdg_relationship
+                      WHEN 'Z2' THEN 'BY VAT E-invoicing'
+                      WHEN 'F4' THEN 'Cash receipt'
+                      WHEN 'F5' THEN 'Commercial Contract'
+                      WHEN 'Z4' THEN 'Contact Person E & SMS'
+                      WHEN 'Z1' THEN 'Contact Person HHT'
+                      WHEN 'Z3' THEN 'Customer Portal User'
+                      WHEN 'DF' THEN 'Default contact'
+                      WHEN '0001' THEN 'Executive Board'
+                      WHEN 'FX' THEN 'Fax recepient'
+                      WHEN 'F1' THEN 'Finance Contact'
+                      WHEN 'Z5' THEN 'Commercial'
+                      WHEN 'Z6' THEN 'Legal'
+                      WHEN 'Z7' THEN 'Logistics'
+                      WHEN 'F2' THEN 'Finance Contact BalC'
+                      WHEN 'F3' THEN 'Finance Contact BonN'
+                      WHEN '0009' THEN 'Financial Accounting Manager'
+                      WHEN '0004' THEN 'Head of Personnel'
+                      WHEN '0008' THEN 'IT Manager'
+                      WHEN '0010' THEN 'Marketing Manager'
+                      WHEN '0007' THEN 'Personal Assistant'
+                      WHEN '0006' THEN 'Production Manager'
+                      WHEN '0002' THEN 'Purchasing Manager'
+                      WHEN '0005' THEN 'Quality Officer'
+                      WHEN '0003' THEN 'Sales Manager'
+                      ELSE NULL
+                    END
+      - column: loading_date
+        expression: current_date()
+      - column: src_attr_value
+        expression: CASE attr_name
+                      WHEN 'Telephone' THEN concat('Tel Nr ', mdg_telephone)
+                      WHEN 'Mobile Number' THEN concat('Tel Nr ', mdg_mobile)
+                      WHEN 'E-mail' THEN concat('Email ', mdg_email)
+                      WHEN 'First Name' THEN mdg_name_first
+                      WHEN 'Last Name' THEN mdg_name_last
+                      WHEN 'Function' THEN mdg_relationship
+                      ELSE ''
+                      END
+      - column: tgt_attr_value
+        expression: CASE attr_name
+                      WHEN 'Telephone' THEN concat('Tel Nr ', d_telephone)
+                      WHEN 'Mobile Number' THEN concat('Tel Nr ', d_mobile)
+                      WHEN 'E-mail' THEN concat('Email ', d_email)
+                      WHEN 'First Name' THEN d_name_first
+                      WHEN 'Last Name' THEN d_name_last
+                      WHEN 'Function' THEN d_partner_function_description
+                      ELSE ''
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+
+
+  - kind: select
+    name: select_mismatched_detailed
+    context_name: add_mismatched_detailed
+    params:
+      columns:
+        domain: domain      
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        mdg_partner: primary_key_l1
+        mdg_partner_contact: primary_key_src_l2
+        d_partner_contact: primary_key_tgt_l2
+        mdg_account_group: attribute10
+        mdg_relationship: attribute3
+        mdg_country: country
+        attr_name: compared_attribute
+        src_attr_value: compared_src_attr_value
+        tgt_attr_value: compared_tgt_attr_value
+        mdg_name_first: attribute2
+        mdg_name_last: attribute1
+        partner_function_description: attribute4
+        loading_date: loading_date
+      distinct: true
+
+####################################################
+  - kind: filter
+    name: filter_missing_in_mdg
+    context_name: join_mdg_d365
+    params:
+      - condition:
+          isnull(mdg_pk)
+
+  - kind: add
+    name: add_missing_in_mdg_detailed
+    context_name: filter_missing_in_mdg
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''d365'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: dimension_detailed
+        expression: '''data missing from mdg'''
+      - column: attr_name
+        expression: ''''''
+      - column: partner_function_description
+        expression: CASE d_partner_function_description
+                      WHEN 'Z2' THEN 'BY VAT E-invoicing'
+                      WHEN 'F4' THEN 'Cash receipt'
+                      WHEN 'F5' THEN 'Commercial Contract'
+                      WHEN 'Z4' THEN 'Contact Person E & SMS'
+                      WHEN 'Z1' THEN 'Contact Person HHT'
+                      WHEN 'Z3' THEN 'Customer Portal User'
+                      WHEN 'DF' THEN 'Default contact'
+                      WHEN '0001' THEN 'Executive Board'
+                      WHEN 'FX' THEN 'Fax recepient'
+                      WHEN 'F1' THEN 'Finance Contact'
+                      WHEN 'Z5' THEN 'Commercial'
+                      WHEN 'Z6' THEN 'Legal'
+                      WHEN 'Z7' THEN 'Logistics'
+                      WHEN 'F2' THEN 'Finance Contact BalC'
+                      WHEN 'F3' THEN 'Finance Contact BonN'
+                      WHEN '0009' THEN 'Financial Accounting Manager'
+                      WHEN '0004' THEN 'Head of Personnel'
+                      WHEN '0008' THEN 'IT Manager'
+                      WHEN '0010' THEN 'Marketing Manager'
+                      WHEN '0007' THEN 'Personal Assistant'
+                      WHEN '0006' THEN 'Production Manager'
+                      WHEN '0002' THEN 'Purchasing Manager'
+                      WHEN '0005' THEN 'Quality Officer'
+                      WHEN '0003' THEN 'Sales Manager'
+                      ELSE ''
+                    END
+      - column: loading_date
+        expression: current_date()
+      - column: src_attr_value
+        expression: ''''''
+      - column: tgt_attr_value
+        expression: ''''''
+      - column: partner_contact
+        expression: ''''''
+      - column: domain
+        expression: '''CUSTOMER'''
+        
+
+  - kind: select
+    name: select_missing_in_mdg_detailed
+    context_name: add_missing_in_mdg_detailed
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_detailed: dimension
+        d_partner: primary_key_l1
+        partner_contact: primary_key_src_l2
+        d_partner_contact: primary_key_tgt_l2
+        d_account_group_code: attribute10
+        d_partner_function_description: attribute3
+        d_country: country
+        attr_name: compared_attribute
+        src_attr_value: compared_src_attr_value
+        tgt_attr_value: compared_tgt_attr_value
+        d_name_first: attribute2
+        d_name_last: attribute1
+        partner_function_description: attribute4
+        loading_date: loading_date
+      distinct: true
+      
+
+  - kind: add
+    name: add_missing_in_mdg_agg
+    context_name: select_missing_in_mdg_detailed
+    params:
+      - column: mdg
+        expression: concat(primary_key_l1, primary_key_tgt_l2)
+      - column: dimension_aggr
+        expression: '''DATA MISSING FROM MDG'''
+      
+###############################################################      
+
+
+  - kind: filter
+    name: filter_missing_in_d365
+    context_name: join_mdg_d365
+    params:
+      - condition:
+          isnull(d365_pk)    
+
+  - kind: add
+    name: add_missing_in_d365_detailed
+    context_name: filter_missing_in_d365
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''d365'''
+      - column: dimension_detailed
+        expression: '''data missing from d365'''
+      - column: attr_name
+        expression: ''''''
+      - column: partner_function_description
+        expression: CASE mdg_relationship
+                      WHEN 'Z2' THEN 'BY VAT E-invoicing'
+                      WHEN 'F4' THEN 'Cash receipt'
+                      WHEN 'F5' THEN 'Commercial Contract'
+                      WHEN 'Z4' THEN 'Contact Person E & SMS'
+                      WHEN 'Z1' THEN 'Contact Person HHT'
+                      WHEN 'Z3' THEN 'Customer Portal User'
+                      WHEN 'DF' THEN 'Default contact'
+                      WHEN '0001' THEN 'Executive Board'
+                      WHEN 'FX' THEN 'Fax recepient'
+                      WHEN 'F1' THEN 'Finance Contact'
+                      WHEN 'Z5' THEN 'Commercial'
+                      WHEN 'Z6' THEN 'Legal'
+                      WHEN 'Z7' THEN 'Logistics'
+                      WHEN 'F2' THEN 'Finance Contact BalC'
+                      WHEN 'F3' THEN 'Finance Contact BonN'
+                      WHEN '0009' THEN 'Financial Accounting Manager'
+                      WHEN '0004' THEN 'Head of Personnel'
+                      WHEN '0008' THEN 'IT Manager'
+                      WHEN '0010' THEN 'Marketing Manager'
+                      WHEN '0007' THEN 'Personal Assistant'
+                      WHEN '0006' THEN 'Production Manager'
+                      WHEN '0002' THEN 'Purchasing Manager'
+                      WHEN '0005' THEN 'Quality Officer'
+                      WHEN '0003' THEN 'Sales Manager'
+                      ELSE ''
+                    END
+      - column: loading_date
+        expression: current_date()
+      - column: src_attr_value
+        expression: ''''''
+      - column: tgt_attr_value
+        expression: ''''''
+      - column: partner_contact
+        expression: ''''''
+      - column: domain
+        expression: '''CUSTOMER'''                
+
+  - kind: select
+    name: select_missing_in_d365_detailed
+    context_name: add_missing_in_d365_detailed
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_detailed: dimension
+        mdg_partner: primary_key_l1
+        mdg_partner_contact: primary_key_src_l2
+        partner_contact: primary_key_tgt_l2
+        mdg_account_group: attribute10
+        mdg_relationship: attribute3
+        mdg_country: country
+        attr_name: compared_attribute
+        src_attr_value: compared_src_attr_value
+        tgt_attr_value: compared_tgt_attr_value
+        mdg_name_first: attribute2
+        mdg_name_last: attribute1
+        partner_function_description: attribute4
+        loading_date: loading_date
+      distinct: true
+
+  - kind: add
+    name: add_missing_in_d365_agg
+    context_name: select_missing_in_d365_detailed
+    params:
+      - column: d365
+        expression: concat(primary_key_l1, primary_key_src_l2)
+      - column: dimension_aggr
+        expression: '''DATA MISSING FROM D365'''
+        
+        
+###############################################################  
+
+###MISSING IN MDG
+  - kind: group
+    name: group_missing_in_mdg_agg
+    context_name: add_missing_in_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension_aggr
+
+  - kind: add
+    name: add_missing_in_mdg_agg_loading_date
+    context_name: group_missing_in_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_missing_in_mdg_agg
+    context_name: add_missing_in_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_aggr: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+####MISSING IN D365
+
+
+  - kind: group
+    name: group_missing_in_d365_agg
+    context_name: add_missing_in_d365_agg
+    params:
+      - aggs:
+          d365: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension_aggr
+
+  - kind: add
+    name: add_missing_in_d365_agg_loading_date
+    context_name: group_missing_in_d365_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_d365 AS INT)
+
+  - kind: select
+    name: select_missing_in_d365_agg
+    context_name: add_missing_in_d365_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_aggr: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: select
+    name: add_mdg_agg_pre_aggr
+    context_name: checkpoint_mdg_agg
+    params:
+      columns:
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_country: country
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: add_mdg_agg_pre_aggr
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: concat(mdg_partner, mdg_partner_contact)    
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+      
+
+
+
+  - kind: select
+    name: add_d365_agg_pre_aggr
+    context_name: checkpoint_d365_agg
+    params:
+      columns:
+        d_partner: d_partner
+        d_partner_contact: d_partner_contact
+        d_country: country
+      distinct: true
+
+
+  - kind: add
+    name: add_d365_agg
+    context_name: add_d365_agg_pre_aggr
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: d365
+        expression: concat(d_partner, d_partner_contact)    
+
+  - kind: group
+    name: group_d365_agg
+    context_name: add_d365_agg
+    params:
+      - aggs:
+          d365: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_d365_agg_loading_date
+    context_name: group_d365_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_d365 AS INT)
+
+  - kind: select
+    name: select_d365_agg
+    context_name: add_d365_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+
+
+
+
+  - kind: select
+    name: add_mismatched_agg_distinct
+    context_name: join_mismatched
+    params:
+      columns:
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_country: mdg_country
+      distinct: true
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: add_mismatched_agg_distinct
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+      - column: mdg
+        expression: concat(mdg_partner, mdg_partner_contact)
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_mismatched_agg_loading_date
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_mismatched_agg
+    context_name: add_mdg_mismatched_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+
+
+  - kind: union
+    name: union_agg
+    context_name: select_mdg_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_d365_agg
+
+  - kind: union
+    name: union_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mdg_mismatched_agg
+
+  - kind: union
+    name: union_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_mdg_agg
+
+  - kind: union
+    name: union_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_d365_agg
+
+  - kind: write_dataio
+    name: write_aggregated
+    context_name: union_agg
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: partition
+      convert_to_target_schema: True        
+
+
+
+  - kind: union
+    name: union_detailed
+    context_name: select_mismatched_detailed
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_mdg_detailed
+
+  - kind: union
+    name: union_detailed
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_d365_detailed
+
+  - kind: write_dataio
+    name: write_detailed
+    context_name: union_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: partition
+      convert_to_target_schema: True

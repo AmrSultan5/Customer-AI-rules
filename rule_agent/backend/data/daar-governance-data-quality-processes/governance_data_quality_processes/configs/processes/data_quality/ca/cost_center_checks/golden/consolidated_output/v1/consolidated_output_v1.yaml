@@ -1,0 +1,640 @@
+transform:
+  name: cost_center_check
+  operations:
+
+#READ dm_cost_center
+  - kind: read_dataio
+    name: read_dm_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_cost_center
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dm_cost_center
+    context_name: read_dm_cost_center
+    params:
+      - condition:
+          in_scope = '1' and functional_area_code <> 'Z999' and lower(cost_center_name) not like '%dummy%'
+
+  - kind: cast
+    name: cast_to_string
+    context_name: filter_dm_cost_center
+    params:
+      - column: cost_center_valid_to
+        to: string
+
+  - kind: add
+    name: add_dm_cost_center
+    context_name: cast_to_string
+    params:
+      - column: valid_to
+        expression: "substring(cost_center_valid_to,1,10)"
+      - column: cost_center_hierarchy_substr
+        expression: "substring(cost_center_hierarchy,4,20)"
+
+#READ cost_center_functional_area_matrix_v1
+  - kind: read_dataio
+    name: read_cost_center_functional_area_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cost_center_functional_area_matrix
+      schema_version: v1
+
+  - kind: select
+    name: select_ccfam
+    context_name: read_cost_center_functional_area_matrix
+    params:
+      columns:
+        cost_center_group: cost_center_group_cf
+        # cost_center_hierarchy_name: cost_center_hierarchy_name_cf
+        functional_area_code: functional_area_code_template_cf
+        functional_area_name: functional_area_name_cf
+      distinct: true
+
+  # - kind: filter
+  #   name: filter_tkt05
+  #   context_name: read_tkt05
+  #   params:
+  #       - condition: SPRAS = 'E'
+
+#JOIN dm_cost_center
+  - kind: join
+    name: join_du
+    context_name: add_dm_cost_center
+    params:
+      - other:
+          select_ccfam
+        how:
+          left
+        columns:
+          cost_center_hierarchy_substr: cost_center_group_cf
+
+  - kind: add
+    name: add_du
+    context_name: join_du
+    params:
+      - column: functional_area_completeness_flag
+        expression: "CASE WHEN functional_area_code IS NULL OR functional_area_code = '' THEN '2' WHEN functional_area_code_template_cf IS NULL OR functional_area_code_template_cf = '' THEN '0' ELSE '1' END"
+      - column: functional_area_accuracy_flag
+        expression: "CASE WHEN functional_area_code IS NULL OR functional_area_code = '' OR functional_area_code_template_cf IS NULL OR functional_area_code_template_cf = '' THEN '' WHEN functional_area_code = functional_area_code_template_cf THEN '1' ELSE '0' END"
+      - column: company_code_concat
+        expression: "CASE WHEN SUBSTRING(company_code,1,1)='0' THEN SUBSTRING(company_code,2)||'%' ELSE substring(company_code,0,2)||substring(company_code,3,1)||'%' END"
+      - column: cost_center_hierarchy_consistency_flag
+        expression: "CASE WHEN cost_center_hierarchy LIKE company_code_concat  THEN '1' ELSE '0' END"
+      # - column: cost_center_consistency_flag_concat
+      #   expression: "substring(company_code,0,2)||substring(company_code,3,1)||'%'"
+      - column: cost_center_consistency_flag
+        expression: "CASE WHEN cost_center LIKE company_code_concat THEN '1' ELSE '0' END"
+      - column: cost_center_group
+        expression: "'XXX'||substring(cost_center_hierarchy,4,20)"
+
+  - kind: add
+    name: add_detailed_1
+    context_name: add_du
+    params:
+      - column: quality_category
+        expression: "'Completeness'"
+      - column: quality_rule
+        expression: "'Functional Area'"
+      - column: dq_message_output
+        expression: if((controlling_area_code = '0885' and country_code = 'BG')
+                    or (controlling_area_code = '0820' and country_code = 'BG')
+                    or (controlling_area_code = '0818' and country_code = 'AT')
+                    or (controlling_area_code = '0873' and country_code = 'CZ')
+                    or (controlling_area_code = '0873' and country_code = 'SK')
+                    or (controlling_area_code = '0873' and country_code = 'SK')
+                    or (controlling_area_code = '0817' and country_code = 'NL')
+                    or (controlling_area_code = '0822' and country_code = 'NL'), 'N/A',
+                    if(functional_area_completeness_flag = '1', 'OK', 
+                    if(functional_area_completeness_flag = '0', 'Incomplete Off. Template',
+                    if(functional_area_completeness_flag = '2', 'Missing functional area', ''))))
+      - column: quality_check_flag
+        expression: if((controlling_area_code = '0885' and country_code = 'BG')
+                    or (controlling_area_code = '0820' and country_code = 'BG')
+                    or (controlling_area_code = '0818' and country_code = 'AT')
+                    or (controlling_area_code = '0873' and country_code = 'CZ')
+                    or (controlling_area_code = '0873' and country_code = 'SK')
+                    or (controlling_area_code = '0873' and country_code = 'SK')
+                    or (controlling_area_code = '0817' and country_code = 'NL')
+                    or (controlling_area_code = '0822' and country_code = 'NL'), 'N/A', 
+                    if(functional_area_completeness_flag = '1', '1', '0'))
+
+#SELECT detailed_1
+  - kind: select
+    name: select_detailed_1
+    context_name: add_detailed_1
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        country_code: country_code
+        cost_center: cost_center
+        cost_center_hierarchy: cost_center_hierarchy
+        company_code: company_code
+        cost_center_group: cost_center_group
+        functional_area_code: functional_area_code
+        functional_area_code_template_cf: functional_area_code_template
+        functional_area_name: functional_area_name
+        profit_center: profit_center
+        cost_center_name: cost_center_name
+        valid_to: valid_to
+        cost_center_category_code: category_code
+        cost_center_category_name: category_name
+        person_responsible: person_responsible
+        controlling_area_currency_code: currency_code
+        dummy_profit_center: dummy_profit_center
+        quality_category: quality_category
+        quality_rule: quality_rule
+        dq_message_output: dq_message_output
+        quality_check_flag: quality_check_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_detailed_2
+    context_name: add_du
+    params:
+      - column: quality_category
+        expression: "'Accuracy'"
+      - column: quality_rule
+        expression: "'Functional Area'"
+      - column: dq_message_output
+        expression: "CASE WHEN functional_area_accuracy_flag = '' THEN 'Failed at completeness' WHEN functional_area_accuracy_flag = '1' THEN 'OK' ELSE 'FuncA not in accordance with hierarchy' END"
+      - column: quality_check_flag
+        expression: "functional_area_accuracy_flag"
+
+#SELECT detailed_1
+  - kind: select
+    name: select_detailed_2
+    context_name: add_detailed_2
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        country_code: country_code
+        cost_center: cost_center
+        cost_center_hierarchy: cost_center_hierarchy
+        company_code: company_code
+        cost_center_group: cost_center_group
+        functional_area_code: functional_area_code
+        functional_area_code_template_cf: functional_area_code_template
+        functional_area_name: functional_area_name
+        profit_center: profit_center
+        cost_center_name: cost_center_name
+        valid_to: valid_to
+        cost_center_category_code: category_code
+        cost_center_category_name: category_name
+        person_responsible: person_responsible
+        controlling_area_currency_code: currency_code
+        dummy_profit_center: dummy_profit_center
+        quality_category: quality_category
+        quality_rule: quality_rule
+        dq_message_output: dq_message_output
+        quality_check_flag: quality_check_flag
+        sap_cluster: sap_cluster
+      distinct: true
+  
+  - kind: add
+    name: add_detailed_3
+    context_name: add_du
+    params:
+      - column: quality_category
+        expression: "'Consistency'"
+      - column: quality_rule
+        expression: "'Cost Center Hierarchy'"
+      - column: dq_message_output
+        expression: if(cost_center_hierarchy_consistency_flag = '1', 'OK', 'Wrong hierarchy')
+      - column: quality_check_flag
+        expression: "cost_center_hierarchy_consistency_flag"
+
+#SELECT detailed_3
+  - kind: select
+    name: select_detailed_3
+    context_name: add_detailed_3
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        country_code: country_code
+        cost_center: cost_center
+        cost_center_hierarchy: cost_center_hierarchy
+        company_code: company_code
+        cost_center_group: cost_center_group
+        functional_area_code: functional_area_code
+        functional_area_code_template_cf: functional_area_code_template
+        functional_area_name: functional_area_name
+        profit_center: profit_center
+        cost_center_name: cost_center_name
+        valid_to: valid_to
+        cost_center_category_code: category_code
+        cost_center_category_name: category_name
+        person_responsible: person_responsible
+        controlling_area_currency_code: currency_code
+        dummy_profit_center: dummy_profit_center
+        quality_category: quality_category
+        quality_rule: quality_rule
+        dq_message_output: dq_message_output
+        quality_check_flag: quality_check_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_detailed_4
+    context_name: add_du
+    params:
+      - column: quality_category
+        expression: "'Consistency'"
+      - column: quality_rule
+        expression: "'Cost Center'"
+      - column: dq_message_output
+        expression: "CASE WHEN cost_center_consistency_flag = '1' THEN 'OK' ELSE 'Wrong cost center' END"
+      - column: quality_check_flag
+        expression: "cost_center_consistency_flag"
+
+#SELECT detailed_4
+  - kind: select
+    name: select_detailed_4
+    context_name: add_detailed_4
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        country_code: country_code
+        cost_center: cost_center
+        cost_center_hierarchy: cost_center_hierarchy
+        company_code: company_code
+        cost_center_group: cost_center_group
+        functional_area_code: functional_area_code
+        functional_area_code_template_cf: functional_area_code_template
+        functional_area_name: functional_area_name
+        profit_center: profit_center
+        cost_center_name: cost_center_name
+        valid_to: valid_to
+        cost_center_category_code: category_code
+        cost_center_category_name: category_name
+        person_responsible: person_responsible
+        controlling_area_currency_code: currency_code
+        dummy_profit_center: dummy_profit_center
+        quality_category: quality_category
+        quality_rule: quality_rule
+        dq_message_output: dq_message_output
+        quality_check_flag: quality_check_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_detailed
+    context_name: select_detailed_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_detailed_2
+
+  - kind: union
+    name: union_detailed
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_detailed_3
+
+  - kind: union
+    name: union_detailed
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_detailed_4
+
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cost_center_check
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full
+
+#AGGREGATED
+
+  - kind: select
+    name: select_distinct_du
+    context_name: add_du
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        country_code: country_code
+        cost_center: cost_center
+        cost_center_hierarchy: cost_center_hierarchy
+        company_code: company_code
+        cost_center_group: cost_center_group
+        functional_area_code: functional_area_code
+        functional_area_code_template_cf: functional_area_code_template
+        functional_area_name: functional_area_name
+        profit_center: profit_center
+        cost_center_name: cost_center_name
+        valid_to: valid_to
+        cost_center_category_code: category_code
+        cost_center_category_name: category_name
+        person_responsible: person_responsible
+        controlling_area_currency_code: currency_code
+        dummy_profit_center: dummy_profit_center
+        functional_area_completeness_flag: functional_area_completeness_flag
+        functional_area_accuracy_flag: functional_area_accuracy_flag
+        cost_center_hierarchy_consistency_flag: cost_center_hierarchy_consistency_flag
+        cost_center_consistency_flag: cost_center_consistency_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_replace_null_with_blank
+    context_name: select_distinct_du
+    params:
+      - column: functional_area_completeness_flag
+        expression: if(functional_area_completeness_flag is null, '', functional_area_completeness_flag)
+        overwrite: true
+      - column: functional_area_accuracy_flag
+        expression: if(functional_area_accuracy_flag is null, '', functional_area_accuracy_flag)
+        overwrite: true
+      - column: cost_center_hierarchy_consistency_flag
+        expression: if(cost_center_hierarchy_consistency_flag is null, '', cost_center_hierarchy_consistency_flag)
+        overwrite: true
+      - column: cost_center_consistency_flag
+        expression: if(cost_center_consistency_flag is null, '', cost_center_consistency_flag)
+        overwrite: true
+
+  - kind: select
+    name: select_du_1
+    context_name: add_replace_null_with_blank
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        functional_area_completeness_flag: functional_area_completeness_flag
+
+  - kind: add
+    name: add_aggregated_1
+    context_name: select_du_1
+    params:
+      - column: total_checks
+        expression: IF(functional_area_completeness_flag !='', 1, NULL)
+      - column: failed_checks
+        expression: IF(functional_area_completeness_flag = '0', 1, NULL)
+      - column: quality_category
+        expression: '"Completeness"'
+      - column: quality_rule
+        expression: '"Functional Area"'
+
+  - kind: group
+    name: group_aggregated_1
+    context_name: add_aggregated_1
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code
+        - functional_area_code
+        - quality_category
+        - quality_rule
+
+  - kind: select
+    name: select_aggregated_1
+    context_name: group_aggregated_1
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        quality_category: quality_category
+        quality_rule: quality_rule
+      distinct: true
+
+  - kind: select
+    name: select_du_2
+    context_name: add_replace_null_with_blank
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        functional_area_accuracy_flag: functional_area_accuracy_flag
+
+  - kind: add
+    name: add_aggregated_2
+    context_name: select_du_2
+    params:
+      - column: total_checks
+        expression: IF(functional_area_accuracy_flag !='', 1, NULL)
+      - column: failed_checks
+        expression: IF(functional_area_accuracy_flag = '0', 1, NULL)
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: quality_rule
+        expression: '"Functional Area"'
+
+  - kind: group
+    name: group_aggregated_2
+    context_name: add_aggregated_2
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code
+        - functional_area_code
+        - quality_category
+        - quality_rule
+
+  - kind: select
+    name: select_aggregated_2
+    context_name: group_aggregated_2
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        quality_category: quality_category
+        quality_rule: quality_rule
+      distinct: true
+
+  - kind: select
+    name: select_du_3
+    context_name: add_replace_null_with_blank
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        cost_center_hierarchy_consistency_flag: cost_center_hierarchy_consistency_flag
+
+  - kind: add
+    name: add_aggregated_3
+    context_name: select_du_3
+    params:
+      - column: total_checks
+        expression: IF(cost_center_hierarchy_consistency_flag !='', 1, NULL)
+      - column: failed_checks
+        expression: IF(cost_center_hierarchy_consistency_flag = '0', 1, NULL)
+      - column: quality_category
+        expression: '"Consistency"'
+      - column: quality_rule
+        expression: '"Cost Center Hierarchy"'
+
+  - kind: group
+    name: group_aggregated_3
+    context_name: add_aggregated_3
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code
+        - functional_area_code
+        - quality_category
+        - quality_rule
+
+  - kind: select
+    name: select_aggregated_3
+    context_name: group_aggregated_3
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        quality_category: quality_category
+        quality_rule: quality_rule
+      distinct: true
+
+  - kind: select
+    name: select_du_4
+    context_name: add_replace_null_with_blank
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        cost_center_consistency_flag: cost_center_consistency_flag
+
+  - kind: add
+    name: add_aggregated_4
+    context_name: select_du_4
+    params:
+      - column: total_checks
+        expression: IF(cost_center_consistency_flag !='', 1, NULL)
+      - column: failed_checks
+        expression: IF(cost_center_consistency_flag = '0', 1, NULL)
+      - column: quality_category
+        expression: '"Consistency"'
+      - column: quality_rule
+        expression: '"Cost Center"'
+
+  - kind: group
+    name: group_aggregated_4
+    context_name: add_aggregated_4
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code
+        - functional_area_code
+        - quality_category
+        - quality_rule
+
+  - kind: select
+    name: select_aggregated_4
+    context_name: group_aggregated_4
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        quality_category: quality_category
+        quality_rule: quality_rule
+      distinct: true
+
+  - kind: union
+    name: uniont_aggregated
+    context_name: select_aggregated_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_aggregated_2
+
+  - kind: union
+    name: uniont_aggregated
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_aggregated_3
+
+  - kind: union
+    name: uniont_aggregated
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_aggregated_4
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: total_checks
+        to: integer
+      - column: failed_checks
+        to: integer
+
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        country_code: country_code
+        functional_area_code: functional_area_code
+        total_checks: total_checks
+        failed_checks: failed_checks
+        quality_category: quality_category
+        quality_rule: quality_rule
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cost_center_check
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,741 @@
+transform:
+  name: du
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      schema_version: v6
+
+  - kind: select
+    name: select_m1
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code
+        material_type_code: material_type_code
+        general_item_category_group_code: general_item_category_group_code
+        sap_cluster: sap_cluster
+      distinct: true           
+      
+  - kind: filter
+    name: filter_m1
+    context_name: select_m1
+    params:
+      - condition:
+          material_type_code in ('ZFG','ZFGA','ZFGC','ZFGM','ZFGS','ZSF','ZSFT')    
+      
+  - kind: select
+    name: select_m2
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code_m2
+        material_type_code: bom_component_material_type_code
+        sap_cluster: sap_cluster
+      distinct: true     
+      
+  - kind: read_dataio
+    name: read_dm_material_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_plant
+      schema_version: v3
+
+  - kind: filter
+    name: filter_mp
+    context_name: read_dm_material_plant
+    params:
+      - condition:
+          material_status_code NOT IN ('99','Z8','Z9')
+
+  - kind: select
+    name: select_mp
+    context_name: filter_mp
+    params:
+      columns:
+        country_code: country_code
+        material_code: material_code
+        plant_code: plant_code 
+        material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        sap_cluster: sap_cluster        
+      distinct: true 
+
+  - kind: select
+    name: select_mp2
+    context_name: filter_mp
+    params:
+      columns:
+        # country_code: country_code
+        material_code: material_code_mp2
+        plant_code: plant_code_mp2
+        # material_status_code: plant_material_status_code
+        do_not_cost_indicator: bom_component_do_not_cost_indicator
+        sap_cluster: sap_cluster_mp2
+      distinct: true 
+
+
+
+  - kind: read_dataio
+    name: read_dm_bom
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_bom
+      schema_version: v1
+
+  - kind: select
+    name: select_b 
+    context_name: read_dm_bom
+    params:
+      columns:
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        costing_relevant_flag: costing_relevancy_flag
+        distribution_key_code: distribution_key_code
+        material_code: material_code
+        plant_code: plant_code
+        sap_cluster: sap_cluster
+        bom_item_link_deletion_flag: bom_item_link_deletion_flag
+        bom_deletion_flag: bom_deletion_flag
+        component_category: component_category
+      distinct: true        
+
+  - kind: filter
+    name: filter_b
+    context_name: select_b
+    params:
+      - condition:
+          bom_item_link_deletion_flag != 'X' and
+          bom_material_status = 1 and
+          bom_deletion_flag != 'X' and
+          component_category = 'M' and
+          bom_usage IN ( '1', '5') and
+          plant_code != '0000'
+
+  - kind: select
+    name: select_c
+    context_name: read_dm_bom
+    params:
+      columns:
+        material_code: material_code_c
+        bom_usage: bom_usage
+        sap_cluster: sap_cluster
+        plant_code: plant_code_c
+      distinct: true
+
+  - kind: filter
+    name: filter_c
+    context_name: select_c
+    params:
+      - condition:
+          bom_usage = '5' and
+          plant_code_c = '0000'
+
+  - kind: join
+    name: join_mp_m1_m2_b_c
+    context_name: select_mp
+    params:
+      - other:
+          filter_m1
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_b
+        how:
+          inner
+        columns:
+          material_code: material_code
+          plant_code: plant_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_c
+        how:
+          left
+        columns:
+          material_code: material_code_c
+          bom_usage: bom_usage
+          sap_cluster: sap_cluster
+      - other:
+          select_m2
+        how:
+          inner
+        columns:
+          bom_component_material_code: material_code_m2
+          sap_cluster: sap_cluster
+      - other:
+          select_mp2
+        how:
+          inner
+        columns:
+          material_code_m2: material_code_mp2
+          plant_code: plant_code_mp2
+          sap_cluster: sap_cluster_mp2
+          
+  - kind: add
+    name: add_checks
+    context_name: join_mp_m1_m2_b_c
+    params:
+      - column: bom_cost_rel_completeness_check
+        expression: "CASE WHEN bom_usage != '1' THEN '' 
+                    WHEN bom_component_material_type_code IN ('ZMM') AND country_code IN ('BG', 'GR') AND costing_relevancy_flag = 'X' THEN '1'
+                    WHEN bom_component_material_type_code IN ('ZMM') AND country_code IN ('BG', 'GR') AND costing_relevancy_flag != 'X' THEN '0'
+				          	WHEN bom_component_material_type_code IN ('ZMM') AND country_code NOT IN ('BG', 'GR') THEN '2'
+			          		WHEN bom_component_material_type_code IN ('ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag = 'X' THEN '0'
+			          		WHEN bom_component_material_type_code IN ('ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag != 'X' THEN '1'
+			          		WHEN bom_component_material_type_code NOT IN ('ZMM', 'ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag = 'X' THEN '1'
+		          			WHEN bom_component_material_type_code NOT IN ('ZMM', 'ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag != 'X' AND bom_component_do_not_cost_indicator = 'X' THEN '1'
+		          			WHEN bom_component_material_type_code NOT IN ('ZMM', 'ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag != 'X' AND bom_component_do_not_cost_indicator != 'X' THEN '0'
+                    ELSE '' END"
+      - column: bom_dist_key_completeness_check
+        expression: "CASE WHEN bom_usage != '1' THEN '' 
+                    WHEN bom_component_material_type_code = 'ZNVL' THEN '2' 
+                    WHEN distribution_key_code = 'ZDSC' THEN '1' 
+                    ELSE '0'END"
+      - column: bom_cost_rel_accuracy_check
+        expression: "CASE WHEN bom_usage != '1' THEN ''
+                    WHEN bom_component_material_type_code IN ('ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag = 'X' THEN '0'
+                    WHEN bom_component_material_type_code IN ('ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag <> 'X' THEN '1'
+                    WHEN bom_component_material_type_code IN ('ZMM') AND country_code IN ('BG', 'GR') AND costing_relevancy_flag = 'X' AND bom_component_do_not_cost_indicator = 'X'  THEN '0'
+                    WHEN bom_component_material_type_code IN ('ZMM') AND country_code IN ('BG', 'GR') AND costing_relevancy_flag = 'X' AND bom_component_do_not_cost_indicator != 'X' THEN '1'
+                    WHEN bom_component_material_type_code IN ('ZMM') AND country_code IN ('BG', 'GR') AND costing_relevancy_flag != 'X' AND bom_component_do_not_cost_indicator != 'X' THEN '2'
+                    WHEN bom_component_material_type_code IN ('ZMM') AND country_code NOT IN ('BG', 'GR') THEN '2'
+				          	WHEN bom_component_material_type_code NOT IN ('ZMM', 'ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag = 'X' AND bom_component_do_not_cost_indicator = 'X' THEN '0'
+				          	WHEN bom_component_material_type_code NOT IN ('ZMM', 'ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag = 'X' AND bom_component_do_not_cost_indicator != 'X' THEN '1'
+			          		WHEN bom_component_material_type_code NOT IN ('ZMM', 'ZEM', 'ZMMN', 'ZPAL', 'ZNVM', 'ZNVL') AND costing_relevancy_flag != 'X' AND bom_component_do_not_cost_indicator = 'X' THEN '1'
+                    ELSE '' END"
+      - column: sales_bom_accuracy_check
+        expression: "CASE WHEN bom_usage != '5' OR (general_item_category_group_code = 'ZCVP' AND material_type_code = 'ZFGC') THEN ''
+                    WHEN plant_material_status_code NOT IN ('', '98') THEN ''
+                    WHEN (material_code_c IS NULL OR material_code_c = '') THEN '2'
+                    WHEN (distribution_key_code IS NULL OR distribution_key_code = '') AND (costing_relevancy_flag IS NOT NULL AND costing_relevancy_flag != '') THEN '3'
+                    WHEN (distribution_key_code IS NOT NULL AND distribution_key_code != '') AND (costing_relevancy_flag IS NOT NULL AND costing_relevancy_flag != '') THEN '4'
+                    WHEN (distribution_key_code IS NOT NULL AND distribution_key_code != '') AND (costing_relevancy_flag IS NULL OR costing_relevancy_flag = '') THEN '5'
+                    ELSE '1' END"
+
+  - kind: select
+    name: select_final_du 
+    context_name: add_checks
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type_code: material_type_code
+        plant_material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        bom_component_material_type_code: bom_component_material_type_code
+        costing_relevancy_flag: costing_relevancy_flag
+        bom_component_do_not_cost_indicator: bom_component_do_not_cost_indicator
+        distribution_key_code: distribution_key_code
+        bom_cost_rel_completeness_check: bom_cost_rel_completeness_check
+        bom_dist_key_completeness_check: bom_dist_key_completeness_check
+        bom_cost_rel_accuracy_check: bom_cost_rel_accuracy_check 
+        sales_bom_accuracy_check: sales_bom_accuracy_check
+        sap_cluster: sap_cluster
+      distinct: true
+
+### DETAILED
+
+  - kind: add
+    name: add_dq_message_output_sales
+    context_name: select_final_du
+    params:
+      - column: dq_message_output
+        expression: "CASE  WHEN sales_bom_accuracy_check = '' THEN 'N/A' WHEN sales_bom_accuracy_check = '2' THEN 'Not Extended for Dummy Plant' WHEN sales_bom_accuracy_check = '3' THEN 'Costing relevancy should be unticked for Sales Bom' WHEN sales_bom_accuracy_check = '4' THEN 'Costing relevancy and ZDSC should be unticked for Sales Bom' WHEN sales_bom_accuracy_check = '5' THEN 'ZDSC should be unticked for Sales Bom' WHEN sales_bom_accuracy_check = '1' THEN 'OK' END"
+      - column: dq_flag_output
+        expression: " CASE WHEN sales_bom_accuracy_check IN ('2','3','4','5') THEN '0' ELSE sales_bom_accuracy_check END"
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: quality_type
+        expression: '''Sales BOM'''
+
+  - kind: select
+    name: select_detailed_sales
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type_code: material_type_code
+        plant_material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        costing_relevancy_flag: costing_relevancy_flag
+        distribution_key_code: distribution_key_code
+        bom_component_material_type_code: bom_component_material_type_code
+        bom_component_do_not_cost_indicator: bom_component_do_not_cost_indicator
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        quality_category: quality_category
+        quality_type: quality_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dq_message_output_compl
+    context_name: select_final_du
+    params:
+      - column: dq_message_output
+        expression: "CASE WHEN bom_cost_rel_completeness_check = '0' THEN 'Wrong costing relevancy' WHEN bom_cost_rel_completeness_check = '1' THEN 'OK' ELSE 'N/A' END"
+      - column: dq_flag_output
+        expression: " CASE WHEN bom_cost_rel_completeness_check = '2' THEN '1' ELSE bom_cost_rel_completeness_check END"
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: quality_type
+        expression: '''Costing Relevancy'''
+
+  - kind: select
+    name: select_detailed_compl
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type_code: material_type_code
+        plant_material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        costing_relevancy_flag: costing_relevancy_flag
+        distribution_key_code: distribution_key_code
+        bom_component_material_type_code: bom_component_material_type_code
+        bom_component_do_not_cost_indicator: bom_component_do_not_cost_indicator
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        quality_category: quality_category
+        quality_type: quality_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dq_message_output_accu
+    context_name: select_final_du
+    params:
+      - column: dq_message_output
+        expression: " CASE WHEN bom_cost_rel_completeness_check  = '0' THEN 'Failed at completeness' WHEN bom_cost_rel_accuracy_check = '0' THEN 'Incorrect Costing Relevancy' WHEN bom_cost_rel_accuracy_check = '1' THEN 'OK' ELSE 'N/A' END"
+      - column: dq_flag_output
+        expression: "CASE 
+                    WHEN bom_cost_rel_completeness_check  = '0' THEN '' 
+                    WHEN bom_cost_rel_accuracy_check = '2' THEN '1'
+                    ELSE bom_cost_rel_accuracy_check END"
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: quality_type
+        expression: '''Costing Relevancy'''
+
+  - kind: select
+    name: select_detailed_accu
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type_code: material_type_code
+        plant_material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        costing_relevancy_flag: costing_relevancy_flag
+        distribution_key_code: distribution_key_code
+        bom_component_material_type_code: bom_component_material_type_code
+        bom_component_do_not_cost_indicator: bom_component_do_not_cost_indicator
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        quality_category: quality_category
+        quality_type: quality_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dq_message_output_compl_accu
+    context_name: select_final_du
+    params:
+      - column: dq_message_output
+        expression: " CASE WHEN bom_dist_key_completeness_check = '0' THEN 'Missing Distribution Key' WHEN bom_dist_key_completeness_check = '1' THEN'OK' ELSE 'N/A' END"
+      - column: dq_flag_output
+        expression: " CASE WHEN bom_dist_key_completeness_check = '2' THEN '1' ELSE bom_dist_key_completeness_check END"
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: quality_type
+        expression: '''Distribution Key'''
+
+  - kind: select
+    name: select_detailed_compl_accu
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type_code: material_type_code
+        plant_material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        costing_relevancy_flag: costing_relevancy_flag
+        distribution_key_code: distribution_key_code
+        bom_component_material_type_code: bom_component_material_type_code
+        bom_component_do_not_cost_indicator: bom_component_do_not_cost_indicator
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        quality_category: quality_category
+        quality_type: quality_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_compl_accu
+    context_name: select_detailed_compl
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_detailed_accu
+
+  - kind: union
+    name: union_compl_accu_compl_accu
+    context_name: union_compl_accu
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_detailed_compl_accu
+
+  - kind: union
+    name: union_compl_accu_compl_accu_sales
+    context_name: union_compl_accu_compl_accu
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_detailed_sales
+
+  - kind: select
+    name: select_detailed_finall
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type_code: material_type_code
+        plant_material_status_code: plant_material_status_code
+        do_not_cost_indicator: do_not_cost_indicator
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        bom_number: bom_number
+        bom_material_status: bom_material_status
+        bom_component_material_code: bom_component_material_code
+        costing_relevancy_flag: costing_relevancy_flag
+        distribution_key_code: distribution_key_code
+        bom_component_material_type_code: bom_component_material_type_code
+        bom_component_do_not_cost_indicator: bom_component_do_not_cost_indicator
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        quality_category: quality_category
+        quality_type: quality_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: bom
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full
+
+# AGGREGATED LAYER
+
+#GROUP 1 SALES
+
+  - kind: add
+    name: add_aggregated_sales
+    context_name: select_final_du
+    params:
+     - column: total_records
+       expression: IF(material_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(sales_bom_accuracy_check != '', 1, NULL)
+     - column: quality_type
+       expression: '"Sales BOM"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_checks
+       expression: IF(sales_bom_accuracy_check IN ('2','3','4','5'), 1, NULL)
+
+  - kind: group
+    name: group_sales
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - quality_type
+        - sap_cluster
+
+  - kind: select
+    name: select_sales
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_type: quality_type
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+#GROUP 1 COMPLETENESS
+
+  - kind: add
+    name: add_aggregated_completeness
+    context_name: select_final_du
+    params:
+     - column: total_records
+       expression: IF(material_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(bom_cost_rel_completeness_check != '', 1, NULL)
+     - column: quality_type
+       expression: '"Costing Relevancy"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_checks
+       expression: IF(bom_cost_rel_completeness_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - quality_type
+        - sap_cluster
+
+  - kind: select
+    name: select_completeness
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_type: quality_type
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+#GROUP 2 ACCURACY
+
+  - kind: add
+    name: add_aggregated_accuracy
+    context_name: select_final_du
+    params:
+     - column: total_records
+       expression: IF(material_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(bom_cost_rel_accuracy_check != '', 1, NULL)
+     - column: quality_type
+       expression: '"Costing Relevancy"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_checks
+       expression: IF(bom_cost_rel_accuracy_check  = '0', 1, NULL)
+
+  - kind: group
+    name: group_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - quality_type
+        - sap_cluster
+
+  - kind: select
+    name: select_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_type: quality_type
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+#GROUP 2 COMPLETENESS_ACCURACY
+
+  - kind: add
+    name: add_aggregated_completeness_accuracy
+    context_name: select_final_du
+    params:
+     - column: total_records
+       expression: IF(material_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(bom_dist_key_completeness_check != '', 1, NULL)
+     - column: quality_type
+       expression: '"Distribution Key"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_checks
+       expression: IF(bom_dist_key_completeness_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_completeness_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+        - quality_type
+        - sap_cluster
+
+  - kind: select
+    name: select_completeness_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_type: quality_type
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_completeness_and_accuracy
+    context_name: select_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_accuracy
+
+  - kind: union
+    name: union_completeness_and_accuracy_and_compl_accu
+    context_name: union_completeness_and_accuracy
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_completeness_accuracy
+
+  - kind: union
+    name: union_completeness_and_accuracy_and_compl_accu_sales
+    context_name: union_completeness_and_accuracy_and_compl_accu
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_sales
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: total_records
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_finall_agg
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_type: quality_type
+        quality_category: quality_category
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: bom
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

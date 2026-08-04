@@ -1,0 +1,231 @@
+transform:
+  name: f_finance_overview_aggregated
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_check_results
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dim_rules_inventory
+
+  - kind: filter
+    name: filter_dim_rules_inventory
+    params:
+      - condition:
+          is_active = '1'
+
+  - kind: select
+    name: select_dim_rules_inventory
+    params:
+      columns:
+        rule_code: rule_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_finance_check_results
+    context_name: read_dm_finance_check_results
+    params:
+      columns:
+        finance_value: finance_value
+        attribute_name: attribute_name
+        rule_code: rule_code
+        check_status: check_status
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: add
+    name: add_check_status_expression
+    params:
+      - column: check_status_expression
+        expression: IF(check_status = '', '2', check_status)
+      - column: finance_key
+        expression: concat(attribute_name,'-',finance_value)       
+
+  - kind: select
+    name: select_check_status_pre_group
+    params:
+      columns:
+        finance_key: finance_key
+        rule_code: rule_code
+        check_status_expression: check_status_expression
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          check_status_expression: min
+        by:
+        - finance_key
+        - country_code
+        - rule_code
+        - check_date
+        - sap_cluster
+
+  - kind: add
+    name: add_checks_expressions
+    params:
+      - column: failed_checks
+        expression: IF(min_check_status_expression = '0', 1, 0)
+      - column: passed_checks
+        expression: IF(min_check_status_expression = '1', 1, 0)
+      - column: skipped_checks
+        expression: IF(min_check_status_expression = '2', 1, 0)
+
+  - kind: select
+    name: select_counts_pre_group
+    params:
+      columns:
+        country_code: country_code
+        finance_key: finance_key
+        rule_code: rule_code
+        failed_checks: failed_checks
+        passed_checks: passed_checks
+        skipped_checks: skipped_checks
+        check_date: check_date
+        sap_cluster: sap_cluster
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - finance_key
+        - country_code
+        - rule_code
+        - check_date
+        - sap_cluster
+
+  - kind: join
+    name: join_read_dm_finance_check_results_rules_inventory
+    context_name: select_dim_rules_inventory
+    params:
+      - other:
+          group_max_check_status
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+
+
+  - kind: group
+    name: group_f_overview_aggregated
+    params:
+      - aggs:
+          sum_failed_checks: sum
+          sum_passed_checks: sum
+          sum_skipped_checks: sum
+        by:
+        - country_code
+        - rule_code
+        - sap_cluster
+
+  - kind: add
+    name: add_loading_date
+    context_name: group_f_overview_aggregated
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_f_finance_overview_aggregated
+    params:
+      columns:
+        country_code: country_code
+        rule_code: rule_code
+        sum_sum_failed_checks: sum_sum_failed_checks
+        sum_sum_passed_checks: sum_sum_passed_checks
+        sum_sum_skipped_checks: sum_sum_skipped_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_calculations
+    params:
+      - column: total_checks
+        expression: sum_sum_failed_checks + sum_sum_passed_checks
+      - column: total_records
+        expression: sum_sum_failed_checks + sum_sum_passed_checks + sum_sum_skipped_checks
+      - column: domain
+        expression: '''finance'''
+
+  - kind: cast
+    name: cast_integers
+    params:
+      - column: sum_sum_failed_checks
+        to: integer
+      - column: sum_sum_passed_checks
+        to: integer
+      - column: sum_sum_skipped_checks
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: total_records
+        to: integer
+
+  - kind: select
+    name: select_f_finance_overview_aggregated
+    params:
+      columns:
+        country_code: country_code
+        rule_code: rule_code
+        loading_date: loading_date
+        domain: domain
+        sum_sum_failed_checks: failed_checks
+        sum_sum_passed_checks: passed_checks
+        sum_sum_skipped_checks: skipped_checks
+        total_checks: total_checks
+        total_records: total_records
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_overview_aggregated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_overview_aggregated
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

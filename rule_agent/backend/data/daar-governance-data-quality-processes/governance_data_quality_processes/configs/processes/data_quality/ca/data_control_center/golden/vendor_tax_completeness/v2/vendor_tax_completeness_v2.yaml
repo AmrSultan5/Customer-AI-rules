@@ -1,0 +1,158 @@
+transform:
+  name: vendor_tax_completeness
+  operations:
+
+# ── RVCOMP_161.1  Missing Tax Category (excl. 7000 AG)
+# ── RVCOMP_162.1  Missing Tax Number   (excl. 7000 AG)
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_tax
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_account_group_code: vendor_account_group_code
+        country_of_origin: country_of_origin
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_tax
+    context_name: read_dm_vendor_tax
+    params:
+      columns:
+        vendor_code: vendor_code
+        tax_0_type: tax_0_type
+        tax_1_type: tax_1_type
+        tax_2_type: tax_2_type
+        tax_3_type: tax_3_type
+        tax_4_type: tax_4_type
+        tax_5_type: tax_5_type
+        tax_6_type: tax_6_type
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        tax_4_value: tax_4_value
+        tax_5_value: tax_5_value
+        tax_6_value: tax_6_value
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_tax
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_161_1
+        expression: "if(vendor_account_group_code = '7000', '',
+                    if((isnotnull(tax_0_type) and tax_0_type <> '') or (isnotnull(tax_1_type) and tax_1_type <> '') or
+                       (isnotnull(tax_2_type) and tax_2_type <> '') or (isnotnull(tax_3_type) and tax_3_type <> '') or
+                       (isnotnull(tax_4_type) and tax_4_type <> '') or (isnotnull(tax_5_type) and tax_5_type <> '') or
+                       (isnotnull(tax_6_type) and tax_6_type <> ''), '1', '0'))"
+      - column: rcvomp_162_1
+        expression: "if(vendor_account_group_code = '7000', '',
+                    if((isnotnull(tax_0_value) and tax_0_value <> '') or (isnotnull(tax_1_value) and tax_1_value <> '') or
+                       (isnotnull(tax_2_value) and tax_2_value <> '') or (isnotnull(tax_3_value) and tax_3_value <> '') or
+                       (isnotnull(tax_4_value) and tax_4_value <> '') or (isnotnull(tax_5_value) and tax_5_value <> '') or
+                       (isnotnull(tax_6_value) and tax_6_value <> ''), '1', '0'))"
+      - column: tax_type_concat
+        expression: "concat_ws(',', tax_0_type, tax_1_type, tax_2_type, tax_3_type, tax_4_type, tax_5_type, tax_6_type)"
+      - column: tax_value_concat
+        expression: "concat_ws(',', tax_0_value, tax_1_value, tax_2_value, tax_3_value, tax_4_value, tax_5_value, tax_6_value)"
+      - column: rule_code_rcvomp_161_1
+        expression: '''RVCOMP_161.1'''
+      - column: rule_code_rcvomp_162_1
+        expression: '''RVCOMP_162.1'''
+      - column: subdomain
+        expression: '''tax_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_161_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_161_1: rule_code
+        rcvomp_161_1: check_status
+        vendor_code: vendor_code
+        tax_type_concat: value_checked
+        check_date: check_date
+        country_of_origin: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_162_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_162_1: rule_code
+        rcvomp_162_1: check_status
+        vendor_code: vendor_code
+        tax_value_concat: value_checked
+        check_date: check_date
+        country_of_origin: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_161_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_162_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

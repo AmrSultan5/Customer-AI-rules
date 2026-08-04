@@ -1,0 +1,2830 @@
+transform:
+  name: Unloading_Points_data_mdg_s4hana
+  operations:
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          partner_guid: partner_guid_mdg_but000
+          name_last: name_last_mdg_but000
+          name_first: name_first_mdg_but000
+          xpcpt: xpcpt_mdg_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_knva
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knva
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_knva
+      context_name: read_mdg_knva
+      params:
+        columns:
+          KUNNR: PARTNER
+          ABLAD: ABLAD
+          KNFAK: KNFAK
+          DEFAB: DEFAB
+          MOAB1: MOAB1
+          MOAB2: MOAB2
+          DIAB1: DIAB1
+          DIAB2: DIAB2
+          MIAB1: MIAB1
+          MIAB2: MIAB2
+          DOAB1: DOAB1
+          DOAB2: DOAB2
+          FRAB1: FRAB1
+          FRAB2: FRAB2
+          SAAB1: SAAB1
+          SAAB2: SAAB2
+          SOAB1: SOAB1
+          SOAB2: SOAB2
+          MOBI1: MOBI1
+          MOBI2: MOBI2
+          DIBI1: DIBI1
+          DIBI2: DIBI2
+          MIBI1: MIBI1
+          MIBI2: MIBI2
+          DOBI1: DOBI1
+          DOBI2: DOBI2
+          FRBI1: FRBI1
+          FRBI2: FRBI2
+          SABI1: SABI1
+          SABI2: SABI2
+          SOBI1: SOBI1
+          SOBI2: SOBI2
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+
+    - kind: filter
+      name: filter_mdg_knvv
+      context_name: read_mdg_knvv
+      params:
+        - condition: VTWEG = '01' and SPART = '01' and vkorg in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600,4700)
+
+    - kind: select
+      name: select_mdg_knvv_checkpoint
+      context_name: filter_mdg_knvv
+      params:
+        columns:
+          KUNNR: KUNNR_knvv
+          KVGR4: KVGR4_knvv
+          VKORG: VKORG_knvv
+          VTWEG: VTWEG_knvv
+          SPART: SPART_knvv
+        distinct: true
+    
+    - kind: checkpoint
+      name: select_mdg_knvv
+      context_name: select_mdg_knvv_checkpoint
+
+    - kind: join
+      name: join_mdg_but000
+      context_name: select_mdg_knva
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            inner
+          columns:
+            PARTNER: partner_mdg_but000
+        - other:
+            select_mdg_knvv
+          how:
+            inner
+          columns:
+            PARTNER: KUNNR_knvv
+ 
+    - kind: add
+      name: add_mdg_HASH
+      context_name: join_mdg_but000
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(PARTNER,ABLAD,KNFAK,DEFAB,MOAB1,MOAB2,DIAB1,DIAB2,MIAB1,MIAB2,DOAB1,DOAB2,FRAB1,FRAB2,SAAB1,SAAB2,SOAB1,SOAB2,MOBI1,MOBI2,DIBI1,DIBI2,MIBI1,MIBI2,DOBI1,DOBI2,FRBI1,FRBI2,SABI1,SABI2,SOBI1,SOBI2,partner_guid_mdg_but000))
+
+    - kind: filter
+      name: filter_mdg_knva
+      context_name: add_mdg_HASH
+      params:
+        - condition:
+            xpcpt_mdg_but000 <> 'X' AND ABLAD <> '' AND PARTNER like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '14%', '22%','47%')
+
+    - kind: select
+      name: mdg
+      context_name: filter_mdg_knva
+      params:
+        columns:
+          PARTNER: PARTNER_mdg
+          ABLAD: ABLAD_mdg
+          KNFAK: KNFAK_mdg
+          DEFAB: DEFAB_mdg
+          MOAB1: MOAB1_mdg
+          MOAB2: MOAB2_mdg
+          DIAB1: DIAB1_mdg
+          DIAB2: DIAB2_mdg
+          MIAB1: MIAB1_mdg
+          MIAB2: MIAB2_mdg
+          DOAB1: DOAB1_mdg
+          DOAB2: DOAB2_mdg
+          FRAB1: FRAB1_mdg
+          FRAB2: FRAB2_mdg
+          SAAB1: SAAB1_mdg
+          SAAB2: SAAB2_mdg
+          SOAB1: SOAB1_mdg
+          SOAB2: SOAB2_mdg
+          MOBI1: MOBI1_mdg
+          MOBI2: MOBI2_mdg
+          DIBI1: DIBI1_mdg
+          DIBI2: DIBI2_mdg
+          MIBI1: MIBI1_mdg
+          MIBI2: MIBI2_mdg
+          DOBI1: DOBI1_mdg
+          DOBI2: DOBI2_mdg
+          FRBI1: FRBI1_mdg
+          FRBI2: FRBI2_mdg
+          SABI1: SABI1_mdg
+          SABI2: SABI2_mdg
+          SOBI1: SOBI1_mdg
+          SOBI2: SOBI2_mdg
+          name_last_mdg_but000: name_last_mdg
+          name_first_mdg_but000: name_first_mdg
+          partner_guid_mdg_but000: partner_guid_mdg
+          HASH: HASH_mdg
+
+    - kind: read_dataio
+      name: read_s4hana_knva
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: customer
+        object_name: knva
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_knva
+      context_name: read_s4hana_knva
+      params:
+        columns:
+          KUNNR: PARTNER
+          ABLAD: ABLAD
+          KNFAK: KNFAK
+          DEFAB: DEFAB
+          MOAB1: MOAB1
+          MOAB2: MOAB2
+          DIAB1: DIAB1
+          DIAB2: DIAB2
+          MIAB1: MIAB1
+          MIAB2: MIAB2
+          DOAB1: DOAB1
+          DOAB2: DOAB2
+          FRAB1: FRAB1
+          FRAB2: FRAB2
+          SAAB1: SAAB1
+          SAAB2: SAAB2
+          SOAB1: SOAB1
+          SOAB2: SOAB2
+          MOBI1: MOBI1
+          MOBI2: MOBI2
+          DIBI1: DIBI1
+          DIBI2: DIBI2
+          MIBI1: MIBI1
+          MIBI2: MIBI2
+          DOBI1: DOBI1
+          DOBI2: DOBI2
+          FRBI1: FRBI1
+          FRBI2: FRBI2
+          SABI1: SABI1
+          SABI2: SABI2
+          SOBI1: SOBI1
+          SOBI2: SOBI2
+          SAP_CLUSTER: SAP_CLUSTER
+        distinct: true
+
+    - kind: read_dataio
+      name: read_s4hana_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_but000
+      context_name: read_s4hana_but000
+      params:
+        columns:
+          partner: partner_s4hana_but000
+          partner_guid: partner_guid_s4hana_but000
+          name_last: name_last_s4hana_but000
+          name_first: name_first_s4hana_but000
+          xpcpt: xpcpt_s4hana_but000
+          sap_cluster: sap_cluster_s4hana_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_sap_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+
+    - kind: filter
+      name: filter_sap_knvv
+      context_name: read_sap_knvv
+      params:
+        - condition: VTWEG = '01' and SPART = '01' and vkorg in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600,4700)
+
+    - kind: select
+      name: select_sap_knvv
+      context_name: filter_sap_knvv
+      params:
+        columns:
+          KUNNR: KUNNR_knvv
+          KVGR4: KVGR4_knvv
+          VKORG: VKORG_knvv
+          VTWEG: VTWEG_knvv
+          SPART: SPART_knvv
+          sap_cluster: sap_cluster_knvv
+        distinct: true
+
+    - kind: join
+      name: join_s4hana_but000
+      context_name: select_s4hana_knva
+      params:
+        - other:
+            select_s4hana_but000
+          how:
+            inner
+          columns:
+            PARTNER: partner_s4hana_but000
+            sap_cluster: sap_cluster_s4hana_but000
+        - other:
+            select_sap_knvv
+          how:
+            inner
+          columns:
+            PARTNER: KUNNR_knvv
+            sap_cluster: sap_cluster_knvv
+
+    - kind: add
+      name: add_s4hana_HASH
+      context_name: join_s4hana_but000
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(PARTNER,ABLAD,KNFAK,DEFAB,MOAB1,MOAB2,DIAB1,DIAB2,MIAB1,MIAB2,DOAB1,DOAB2,FRAB1,FRAB2,SAAB1,SAAB2,SOAB1,SOAB2,MOBI1,MOBI2,DIBI1,DIBI2,MIBI1,MIBI2,DOBI1,DOBI2,FRBI1,FRBI2,SABI1,SABI2,SOBI1,SOBI2,partner_guid_s4hana_but000))
+
+    - kind: filter
+      name: s4hana_union
+      context_name: add_s4hana_HASH
+      params:
+        - condition: xpcpt_s4hana_but000 <> 'X' AND ABLAD <> '' and if(sap_cluster = 'CL1', partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'), partner like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '14%', '22%','47%'))
+
+    - kind: select
+      name: s4hana
+      context_name: s4hana_union
+      params:
+        columns:
+          PARTNER: PARTNER_s4hana
+          ABLAD: ABLAD_s4hana
+          KNFAK: KNFAK_s4hana
+          DEFAB: DEFAB_s4hana
+          MOAB1: MOAB1_s4hana
+          MOAB2: MOAB2_s4hana
+          DIAB1: DIAB1_s4hana
+          DIAB2: DIAB2_s4hana
+          MIAB1: MIAB1_s4hana
+          MIAB2: MIAB2_s4hana
+          DOAB1: DOAB1_s4hana
+          DOAB2: DOAB2_s4hana
+          FRAB1: FRAB1_s4hana
+          FRAB2: FRAB2_s4hana
+          SAAB1: SAAB1_s4hana
+          SAAB2: SAAB2_s4hana
+          SOAB1: SOAB1_s4hana
+          SOAB2: SOAB2_s4hana
+          MOBI1: MOBI1_s4hana
+          MOBI2: MOBI2_s4hana
+          DIBI1: DIBI1_s4hana
+          DIBI2: DIBI2_s4hana
+          MIBI1: MIBI1_s4hana
+          MIBI2: MIBI2_s4hana
+          DOBI1: DOBI1_s4hana
+          DOBI2: DOBI2_s4hana
+          FRBI1: FRBI1_s4hana
+          FRBI2: FRBI2_s4hana
+          SABI1: SABI1_s4hana
+          SABI2: SABI2_s4hana
+          SOBI1: SOBI1_s4hana
+          SOBI2: SOBI2_s4hana
+          name_last_s4hana_but000: name_last_s4hana
+          name_first_s4hana_but000: name_first_s4hana
+          partner_guid_s4hana_but000: partner_guid_s4hana
+          HASH: HASH_s4hana
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            s4hana
+          how:
+            full
+          columns:
+            HASH_mdg: HASH_s4hana
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_s4hana is null or HASH_s4hana = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          PARTNER_mdg: PARTNER_mdg
+          ABLAD_mdg: ABLAD_mdg
+          KNFAK_mdg: KNFAK_mdg
+          DEFAB_mdg: DEFAB_mdg
+          MOAB1_mdg: MOAB1_mdg
+          MOAB2_mdg: MOAB2_mdg
+          DIAB1_mdg: DIAB1_mdg
+          DIAB2_mdg: DIAB2_mdg
+          MIAB1_mdg: MIAB1_mdg
+          MIAB2_mdg: MIAB2_mdg
+          DOAB1_mdg: DOAB1_mdg
+          DOAB2_mdg: DOAB2_mdg
+          FRAB1_mdg: FRAB1_mdg
+          FRAB2_mdg: FRAB2_mdg
+          SAAB1_mdg: SAAB1_mdg
+          SAAB2_mdg: SAAB2_mdg
+          SOAB1_mdg: SOAB1_mdg
+          SOAB2_mdg: SOAB2_mdg
+          MOBI1_mdg: MOBI1_mdg
+          MOBI2_mdg: MOBI2_mdg
+          DIBI1_mdg: DIBI1_mdg
+          DIBI2_mdg: DIBI2_mdg
+          MIBI1_mdg: MIBI1_mdg
+          MIBI2_mdg: MIBI2_mdg
+          DOBI1_mdg: DOBI1_mdg
+          DOBI2_mdg: DOBI2_mdg
+          FRBI1_mdg: FRBI1_mdg
+          FRBI2_mdg: FRBI2_mdg
+          SABI1_mdg: SABI1_mdg
+          SABI2_mdg: SABI2_mdg
+          SOBI1_mdg: SOBI1_mdg
+          SOBI2_mdg: SOBI2_mdg
+          name_last_mdg: name_last_mdg
+          name_first_mdg: name_first_mdg
+          partner_guid_mdg: partner_guid_mdg
+          HASH_mdg: HASH_mdg
+
+    - kind: filter
+      name: non_matching_s4hana
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_mdg is null or HASH_mdg = ''
+
+    - kind: select
+      name: non_matching_s4hana_select
+      context_name: non_matching_s4hana
+      params:
+        columns:
+          PARTNER_s4hana: PARTNER_s4hana
+          ABLAD_s4hana: ABLAD_s4hana
+          KNFAK_s4hana: KNFAK_s4hana
+          DEFAB_s4hana: DEFAB_s4hana
+          MOAB1_s4hana: MOAB1_s4hana
+          MOAB2_s4hana: MOAB2_s4hana
+          DIAB1_s4hana: DIAB1_s4hana
+          DIAB2_s4hana: DIAB2_s4hana
+          MIAB1_s4hana: MIAB1_s4hana
+          MIAB2_s4hana: MIAB2_s4hana
+          DOAB1_s4hana: DOAB1_s4hana
+          DOAB2_s4hana: DOAB2_s4hana
+          FRAB1_s4hana: FRAB1_s4hana
+          FRAB2_s4hana: FRAB2_s4hana
+          SAAB1_s4hana: SAAB1_s4hana
+          SAAB2_s4hana: SAAB2_s4hana
+          SOAB1_s4hana: SOAB1_s4hana
+          SOAB2_s4hana: SOAB2_s4hana
+          MOBI1_s4hana: MOBI1_s4hana
+          MOBI2_s4hana: MOBI2_s4hana
+          DIBI1_s4hana: DIBI1_s4hana
+          DIBI2_s4hana: DIBI2_s4hana
+          MIBI1_s4hana: MIBI1_s4hana
+          MIBI2_s4hana: MIBI2_s4hana
+          DOBI1_s4hana: DOBI1_s4hana
+          DOBI2_s4hana: DOBI2_s4hana
+          FRBI1_s4hana: FRBI1_s4hana
+          FRBI2_s4hana: FRBI2_s4hana
+          SABI1_s4hana: SABI1_s4hana
+          SABI2_s4hana: SABI2_s4hana
+          SOBI1_s4hana: SOBI1_s4hana
+          SOBI2_s4hana: SOBI2_s4hana
+          name_last_s4hana: name_last_s4hana
+          name_first_s4hana: name_first_s4hana
+          partner_guid_s4hana: partner_guid_s4hana
+          HASH_s4hana: HASH_s4hana
+
+###data missing from mdg
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_s4hana_select
+          how:
+            full
+          columns:
+            PARTNER_mdg: PARTNER_s4hana
+            ABLAD_mdg: ABLAD_s4hana
+            partner_guid_mdg: partner_guid_s4hana
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns_1
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: msg_mdg
+          expression: CASE WHEN PARTNER_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_s4hana
+          expression: CASE WHEN PARTNER_s4hana IS NULL THEN 'data missing from sap' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string)   
+
+    - kind: checkpoint
+      name: data_missing_from_mdg_add_columns
+      context_name: data_missing_from_mdg_add_columns_1
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg_1
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          PARTNER_s4hana: partner
+          ABLAD_s4hana: ABLAD
+          name_first_s4hana: name_first
+          name_last_s4hana: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+    - kind: checkpoint
+      name: final_data_missing_from_mdg
+      context_name: final_data_missing_from_mdg_1
+
+
+# ###data missing from S4HANA
+
+    - kind: filter
+      name: join_data_missing_from_s4hana_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_s4hana is null
+
+    - kind: select
+      name: final_data_missing_from_s4hana_1
+      context_name: join_data_missing_from_s4hana_filter
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_s4hana: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+    - kind: checkpoint
+      name: final_data_missing_from_s4hana
+      context_name: final_data_missing_from_s4hana_1
+
+##mismatching FACTORY CALENDAR
+    - kind: filter
+      name: mismatching_factory_calendar_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND KNFAK_s4hana <> KNFAK_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_factory_calendar
+      context_name: mismatching_factory_calendar_filter
+      params:
+        - column: attr_name_mismatching_factory_calendar
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND KNFAK_s4hana <> KNFAK_mdg THEN concat('UNLOADING POINTS:',' FACTORY CALENDAR') END
+        - column: msg_mismatching_factory_calendar
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND KNFAK_s4hana <> KNFAK_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_factory_calendar_1
+      context_name: add_missing_columns_mismatching_factory_calendar
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_factory_calendar: msg
+          attr_name_mismatching_factory_calendar: attr_name
+          KNFAK_s4hana: tgt_attr
+          KNFAK_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_factory_calendar
+      context_name: final_mismatching_factory_calendar_1
+
+###mismatching DEFAULT INDICATOR
+    - kind: filter
+      name: mismatching_default_indicator_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DEFAB_s4hana <> DEFAB_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_default_indicator
+      context_name: mismatching_default_indicator_filter
+      params:
+        - column: attr_name_mismatching_default_indicator
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DEFAB_s4hana <> DEFAB_mdg THEN concat('UNLOADING POINTS:',' DEFAULT INDICATOR') END
+        - column: msg_mismatching_default_indicator
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DEFAB_s4hana <> DEFAB_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_default_indicator_1
+      context_name: add_missing_columns_mismatching_default_indicator
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_default_indicator: msg
+          attr_name_mismatching_default_indicator: attr_name
+          DEFAB_s4hana: tgt_attr
+          DEFAB_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_default_indicator
+      context_name: final_mismatching_default_indicator_1
+
+##mismatching OPEN MONDAY 1
+    - kind: filter
+      name: mismatching_open_monday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOAB1_s4hana <> MOAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_monday_1
+      context_name: mismatching_open_monday_1_filter
+      params:
+        - column: attr_name_mismatching_open_monday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOAB1_s4hana <> MOAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN MONDAY 1') END
+        - column: msg_mismatching_open_monday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOAB1_s4hana <> MOAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_monday_1_1
+      context_name: add_missing_columns_mismatching_open_monday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_monday_1: msg
+          attr_name_mismatching_open_monday_1: attr_name
+          MOAB1_s4hana: tgt_attr
+          MOAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_monday_1
+      context_name: final_mismatching_open_monday_1_1
+
+###mismatching OPEN MONDAY 2
+    - kind: filter
+      name: mismatching_open_monday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOAB2_s4hana <> MOAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_monday_2
+      context_name: mismatching_open_monday_2_filter
+      params:
+        - column: attr_name_mismatching_open_monday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOAB2_s4hana <> MOAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN MONDAY 2') END
+        - column: msg_mismatching_open_monday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOAB2_s4hana <> MOAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_monday_2_1
+      context_name: add_missing_columns_mismatching_open_monday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_monday_2: msg
+          attr_name_mismatching_open_monday_2: attr_name
+          MOAB2_s4hana: tgt_attr
+          MOAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_monday_2
+      context_name: final_mismatching_open_monday_2_1
+
+###mismatching OPEN TUESDAY 1
+    - kind: filter
+      name: mismatching_open_tuesday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIAB1_s4hana <> DIAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_tuesday_1
+      context_name: mismatching_open_tuesday_1_filter
+      params:
+        - column: attr_name_mismatching_open_tuesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIAB1_s4hana <> DIAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN TUESDAY 1') END
+        - column: msg_mismatching_open_tuesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIAB1_s4hana <> DIAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_tuesday_1_1
+      context_name: add_missing_columns_mismatching_open_tuesday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_tuesday_1: msg
+          attr_name_mismatching_open_tuesday_1: attr_name
+          DIAB1_s4hana: tgt_attr
+          DIAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_tuesday_1
+      context_name: final_mismatching_open_tuesday_1_1
+
+###mismatching OPEN TUESDAY 2
+    - kind: filter
+      name: mismatching_open_tuesday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIAB2_s4hana <> DIAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_tuesday_2
+      context_name: mismatching_open_tuesday_2_filter
+      params:
+        - column: attr_name_mismatching_open_tuesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIAB2_s4hana <> DIAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN TUESDAY 2') END
+        - column: msg_mismatching_open_tuesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIAB2_s4hana <> DIAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_tuesday_2_1
+      context_name: add_missing_columns_mismatching_open_tuesday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_tuesday_2: msg
+          attr_name_mismatching_open_tuesday_2: attr_name
+          DIAB2_s4hana: tgt_attr
+          DIAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_tuesday_2
+      context_name: final_mismatching_open_tuesday_2_1
+
+###mismatching OPEN WEDNESDAY 1
+    - kind: filter
+      name: mismatching_open_wednesday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIAB1_s4hana <> MIAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_wednesday_1
+      context_name: mismatching_open_wednesday_1_filter
+      params:
+        - column: attr_name_mismatching_open_wednesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIAB1_s4hana <> MIAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN WEDNESDAY 1') END
+        - column: msg_mismatching_open_wednesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIAB1_s4hana <> MIAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_wednesday_1_1
+      context_name: add_missing_columns_mismatching_open_wednesday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_wednesday_1: msg
+          attr_name_mismatching_open_wednesday_1: attr_name
+          MIAB1_s4hana: tgt_attr
+          MIAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_wednesday_1
+      context_name: final_mismatching_open_wednesday_1_1
+
+###mismatching OPEN WEDNESDAY 2
+    - kind: filter
+      name: mismatching_open_wednesday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIAB2_s4hana <> MIAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_wednesday_2
+      context_name: mismatching_open_wednesday_2_filter
+      params:
+        - column: attr_name_mismatching_open_wednesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIAB2_s4hana <> MIAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN WEDNESDAY 2') END
+        - column: msg_mismatching_open_wednesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIAB2_s4hana <> MIAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_wednesday_2_1
+      context_name: add_missing_columns_mismatching_open_wednesday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_wednesday_2: msg
+          attr_name_mismatching_open_wednesday_2: attr_name
+          MIAB2_s4hana: tgt_attr
+          MIAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_wednesday_2
+      context_name: final_mismatching_open_wednesday_2_1
+
+###mismatching OPEN THURSDAY 1
+    - kind: filter
+      name: mismatching_open_thursday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOAB1_s4hana <> DOAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_thursday_1
+      context_name: mismatching_open_thursday_1_filter
+      params:
+        - column: attr_name_mismatching_open_thursday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOAB1_s4hana <> DOAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN THURSDAY 1') END
+        - column: msg_mismatching_open_thursday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOAB1_s4hana <> DOAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_thursday_1_1
+      context_name: add_missing_columns_mismatching_open_thursday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_thursday_1: msg
+          attr_name_mismatching_open_thursday_1: attr_name
+          DOAB1_s4hana: tgt_attr
+          DOAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_thursday_1
+      context_name: final_mismatching_open_thursday_1_1
+
+###mismatching OPEN THURSDAY 2
+    - kind: filter
+      name: mismatching_open_thursday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOAB2_s4hana <> DOAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_thursday_2
+      context_name: mismatching_open_thursday_2_filter
+      params:
+        - column: attr_name_mismatching_open_thursday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOAB2_s4hana <> DOAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN THURSDAY 2') END
+        - column: msg_mismatching_open_thursday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOAB2_s4hana <> DOAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_thursday_2_1
+      context_name: add_missing_columns_mismatching_open_thursday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_thursday_2: msg
+          attr_name_mismatching_open_thursday_2: attr_name
+          DOAB2_s4hana: tgt_attr
+          DOAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_thursday_2
+      context_name: final_mismatching_open_thursday_2_1
+
+###mismatching OPEN FRIDAY 1
+    - kind: filter
+      name: mismatching_open_friday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRAB1_s4hana <> FRAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_friday_1
+      context_name: mismatching_open_friday_1_filter
+      params:
+        - column: attr_name_mismatching_open_friday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRAB1_s4hana <> FRAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN FRIDAY 1') END
+        - column: msg_mismatching_open_friday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRAB1_s4hana <> FRAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_friday_1_1
+      context_name: add_missing_columns_mismatching_open_friday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_friday_1: msg
+          attr_name_mismatching_open_friday_1: attr_name
+          FRAB1_s4hana: tgt_attr
+          FRAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_friday_1
+      context_name: final_mismatching_open_friday_1_1
+
+###mismatching OPEN FRIDAY 2
+    - kind: filter
+      name: mismatching_open_friday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRAB2_s4hana <> FRAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_friday_2
+      context_name: mismatching_open_friday_2_filter
+      params:
+        - column: attr_name_mismatching_open_friday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRAB2_s4hana <> FRAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN FRIDAY 2') END
+        - column: msg_mismatching_open_friday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRAB2_s4hana <> FRAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_friday_2_1
+      context_name: add_missing_columns_mismatching_open_friday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_friday_2: msg
+          attr_name_mismatching_open_friday_2: attr_name
+          FRAB2_s4hana: tgt_attr
+          FRAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_friday_2
+      context_name: final_mismatching_open_friday_2_1
+
+###mismatching OPEN SATURDAY 1
+    - kind: filter
+      name: mismatching_open_saturday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SAAB1_s4hana <> SAAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_saturday_1
+      context_name: mismatching_open_saturday_1_filter
+      params:
+        - column: attr_name_mismatching_open_saturday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SAAB1_s4hana <> SAAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN SATURDAY 1') END
+        - column: msg_mismatching_open_saturday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SAAB1_s4hana <> SAAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_saturday_1_1
+      context_name: add_missing_columns_mismatching_open_saturday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_saturday_1: msg
+          attr_name_mismatching_open_saturday_1: attr_name
+          SAAB1_s4hana: tgt_attr
+          SAAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_saturday_1
+      context_name: final_mismatching_open_saturday_1_1
+
+###mismatching OPEN SATURDAY 2
+    - kind: filter
+      name: mismatching_open_saturday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SAAB2_s4hana <> SAAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_saturday_2
+      context_name: mismatching_open_saturday_2_filter
+      params:
+        - column: attr_name_mismatching_open_saturday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SAAB2_s4hana <> SAAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN SATURDAY 2') END
+        - column: msg_mismatching_open_saturday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SAAB2_s4hana <> SAAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_saturday_2_1
+      context_name: add_missing_columns_mismatching_open_saturday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_saturday_2: msg
+          attr_name_mismatching_open_saturday_2: attr_name
+          SAAB2_s4hana: tgt_attr
+          SAAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_saturday_2
+      context_name: final_mismatching_open_saturday_2_1
+
+###mismatching OPEN SUNDAY 1
+    - kind: filter
+      name: mismatching_open_sunday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOAB1_s4hana <> SOAB1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_sunday_1
+      context_name: mismatching_open_sunday_1_filter
+      params:
+        - column: attr_name_mismatching_open_sunday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOAB1_s4hana <> SOAB1_mdg THEN concat('UNLOADING POINTS:',' OPEN SUNDAY 1') END
+        - column: msg_mismatching_open_sunday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOAB1_s4hana <> SOAB1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_sunday_1_1
+      context_name: add_missing_columns_mismatching_open_sunday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_sunday_1: msg
+          attr_name_mismatching_open_sunday_1: attr_name
+          SOAB1_s4hana: tgt_attr
+          SOAB1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_sunday_1
+      context_name: final_mismatching_open_sunday_1_1
+
+###mismatching OPEN SUNDAY 2
+    - kind: filter
+      name: mismatching_open_sunday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOAB2_s4hana <> SOAB2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_open_sunday_2
+      context_name: mismatching_open_sunday_2_filter
+      params:
+        - column: attr_name_mismatching_open_sunday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOAB2_s4hana <> SOAB2_mdg THEN concat('UNLOADING POINTS:',' OPEN SUNDAY 2') END
+        - column: msg_mismatching_open_sunday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOAB2_s4hana <> SOAB2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_open_sunday_2_1
+      context_name: add_missing_columns_mismatching_open_sunday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_open_sunday_2: msg
+          attr_name_mismatching_open_sunday_2: attr_name
+          SOAB2_s4hana: tgt_attr
+          SOAB2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_open_sunday_2
+      context_name: final_mismatching_open_sunday_2_1
+
+##mismatching CLOSE MONDAY 1
+    - kind: filter
+      name: mismatching_close_monday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOBI1_s4hana <> MOBI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_monday_1
+      context_name: mismatching_close_monday_1_filter
+      params:
+        - column: attr_name_mismatching_close_monday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOBI1_s4hana <> MOBI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE MONDAY 1') END
+        - column: msg_mismatching_close_monday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOBI1_s4hana <> MOBI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_monday_1_1
+      context_name: add_missing_columns_mismatching_close_monday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_monday_1: msg
+          attr_name_mismatching_close_monday_1: attr_name
+          MOBI1_s4hana: tgt_attr
+          MOBI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_monday_1
+      context_name: final_mismatching_close_monday_1_1
+
+###mismatching CLOSE MONDAY 2
+    - kind: filter
+      name: mismatching_close_monday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOBI2_s4hana <> MOBI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_monday_2
+      context_name: mismatching_close_monday_2_filter
+      params:
+        - column: attr_name_mismatching_close_monday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOBI2_s4hana <> MOBI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE MONDAY 2') END
+        - column: msg_mismatching_close_monday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MOBI2_s4hana <> MOBI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_monday_2_1
+      context_name: add_missing_columns_mismatching_close_monday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_monday_2: msg
+          attr_name_mismatching_close_monday_2: attr_name
+          MOBI2_s4hana: tgt_attr
+          MOBI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_monday_2
+      context_name: final_mismatching_close_monday_2_1
+
+###mismatching CLOSE TUESDAY 1
+    - kind: filter
+      name: mismatching_close_tuesday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIBI1_s4hana <> DIBI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_tuesday_1
+      context_name: mismatching_close_tuesday_1_filter
+      params:
+        - column: attr_name_mismatching_close_tuesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIBI1_s4hana <> DIBI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE TUESDAY 1') END
+        - column: msg_mismatching_close_tuesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIBI1_s4hana <> DIBI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_tuesday_1_1
+      context_name: add_missing_columns_mismatching_close_tuesday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_tuesday_1: msg
+          attr_name_mismatching_close_tuesday_1: attr_name
+          DIBI1_s4hana: tgt_attr
+          DIBI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_tuesday_1
+      context_name: final_mismatching_close_tuesday_1_1
+
+###mismatching CLOSE TUESDAY 2
+    - kind: filter
+      name: mismatching_close_tuesday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIBI2_s4hana <> DIBI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_tuesday_2
+      context_name: mismatching_close_tuesday_2_filter
+      params:
+        - column: attr_name_mismatching_close_tuesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIBI2_s4hana <> DIBI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE TUESDAY 2') END
+        - column: msg_mismatching_close_tuesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DIBI2_s4hana <> DIBI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_tuesday_2_1
+      context_name: add_missing_columns_mismatching_close_tuesday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_tuesday_2: msg
+          attr_name_mismatching_close_tuesday_2: attr_name
+          DIBI2_s4hana: tgt_attr
+          DIBI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_tuesday_2
+      context_name: final_mismatching_close_tuesday_2_1
+
+###mismatching CLOSE WEDNESDAY 1
+    - kind: filter
+      name: mismatching_close_wednesday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIBI1_s4hana <> MIBI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_wednesday_1
+      context_name: mismatching_close_wednesday_1_filter
+      params:
+        - column: attr_name_mismatching_close_wednesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIBI1_s4hana <> MIBI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE WEDNESDAY 1') END
+        - column: msg_mismatching_close_wednesday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIBI1_s4hana <> MIBI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_wednesday_1_1
+      context_name: add_missing_columns_mismatching_close_wednesday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_wednesday_1: msg
+          attr_name_mismatching_close_wednesday_1: attr_name
+          MIBI1_s4hana: tgt_attr
+          MIBI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_wednesday_1
+      context_name: final_mismatching_close_wednesday_1_1
+
+###mismatching CLOSE WEDNESDAY 2
+    - kind: filter
+      name: mismatching_close_wednesday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIBI2_s4hana <> MIBI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_wednesday_2
+      context_name: mismatching_close_wednesday_2_filter
+      params:
+        - column: attr_name_mismatching_close_wednesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIBI2_s4hana <> MIBI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE WEDNESDAY 2') END
+        - column: msg_mismatching_close_wednesday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND MIBI2_s4hana <> MIBI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_wednesday_2_1
+      context_name: add_missing_columns_mismatching_close_wednesday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_wednesday_2: msg
+          attr_name_mismatching_close_wednesday_2: attr_name
+          MIBI2_s4hana: tgt_attr
+          MIBI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_wednesday_2
+      context_name: final_mismatching_close_wednesday_2_1
+
+###mismatching CLOSE THURSDAY 1
+    - kind: filter
+      name: mismatching_close_thursday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOBI1_s4hana <> DOBI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_thursday_1
+      context_name: mismatching_close_thursday_1_filter
+      params:
+        - column: attr_name_mismatching_close_thursday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOBI1_s4hana <> DOBI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE THURSDAY 1') END
+        - column: msg_mismatching_close_thursday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOBI1_s4hana <> DOBI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_thursday_1_1
+      context_name: add_missing_columns_mismatching_close_thursday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_thursday_1: msg
+          attr_name_mismatching_close_thursday_1: attr_name
+          DOBI1_s4hana: tgt_attr
+          DOBI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_thursday_1
+      context_name: final_mismatching_close_thursday_1_1
+
+###mismatching CLOSE THURSDAY 2
+    - kind: filter
+      name: mismatching_close_thursday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOBI2_s4hana <> DOBI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_thursday_2
+      context_name: mismatching_close_thursday_2_filter
+      params:
+        - column: attr_name_mismatching_close_thursday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOBI2_s4hana <> DOBI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE THURSDAY 2') END
+        - column: msg_mismatching_close_thursday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND DOBI2_s4hana <> DOBI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_thursday_2_1
+      context_name: add_missing_columns_mismatching_close_thursday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_thursday_2: msg
+          attr_name_mismatching_close_thursday_2: attr_name
+          DOBI2_s4hana: tgt_attr
+          DOBI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_thursday_2
+      context_name: final_mismatching_close_thursday_2_1
+
+###mismatching CLOSE FRIDAY 1
+    - kind: filter
+      name: mismatching_close_friday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRBI1_s4hana <> FRBI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_friday_1
+      context_name: mismatching_close_friday_1_filter
+      params:
+        - column: attr_name_mismatching_close_friday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRBI1_s4hana <> FRBI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE FRIDAY 1') END
+        - column: msg_mismatching_close_friday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRBI1_s4hana <> FRBI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_friday_1_1
+      context_name: add_missing_columns_mismatching_close_friday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_friday_1: msg
+          attr_name_mismatching_close_friday_1: attr_name
+          FRBI1_s4hana: tgt_attr
+          FRBI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_friday_1
+      context_name: final_mismatching_close_friday_1_1
+
+###mismatching CLOSE FRIDAY 2
+    - kind: filter
+      name: mismatching_close_friday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRBI2_s4hana <> FRBI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_friday_2
+      context_name: mismatching_close_friday_2_filter
+      params:
+        - column: attr_name_mismatching_close_friday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRBI2_s4hana <> FRBI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE FRIDAY 2') END
+        - column: msg_mismatching_close_friday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND FRBI2_s4hana <> FRBI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_friday_2_1
+      context_name: add_missing_columns_mismatching_close_friday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_friday_2: msg
+          attr_name_mismatching_close_friday_2: attr_name
+          FRBI2_s4hana: tgt_attr
+          FRBI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_friday_2
+      context_name: final_mismatching_close_friday_2_1
+
+###mismatching CLOSE SATURDAY 1
+    - kind: filter
+      name: mismatching_close_saturday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SABI1_s4hana <> SABI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_saturday_1
+      context_name: mismatching_close_saturday_1_filter
+      params:
+        - column: attr_name_mismatching_close_saturday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SABI1_s4hana <> SABI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE SATURDAY 1') END
+        - column: msg_mismatching_close_saturday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SABI1_s4hana <> SABI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_saturday_1_1
+      context_name: add_missing_columns_mismatching_close_saturday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_saturday_1: msg
+          attr_name_mismatching_close_saturday_1: attr_name
+          SABI1_s4hana: tgt_attr
+          SABI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_saturday_1
+      context_name: final_mismatching_close_saturday_1_1
+
+###mismatching CLOSE SATURDAY 2
+    - kind: filter
+      name: mismatching_close_saturday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SABI2_s4hana <> SABI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_saturday_2
+      context_name: mismatching_close_saturday_2_filter
+      params:
+        - column: attr_name_mismatching_close_saturday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SABI2_s4hana <> SABI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE SATURDAY 2') END
+        - column: msg_mismatching_close_saturday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SABI2_s4hana <> SABI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_saturday_2_1
+      context_name: add_missing_columns_mismatching_close_saturday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_saturday_2: msg
+          attr_name_mismatching_close_saturday_2: attr_name
+          SABI2_s4hana: tgt_attr
+          SABI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_saturday_2
+      context_name: final_mismatching_close_saturday_2_1
+
+###mismatching CLOSE SUNDAY 1
+    - kind: filter
+      name: mismatching_close_sunday_1_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOBI1_s4hana <> SOBI1_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_sunday_1
+      context_name: mismatching_close_sunday_1_filter
+      params:
+        - column: attr_name_mismatching_close_sunday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOBI1_s4hana <> SOBI1_mdg THEN concat('UNLOADING POINTS:',' CLOSE SUNDAY 1') END
+        - column: msg_mismatching_close_sunday_1
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOBI1_s4hana <> SOBI1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_sunday_1_1
+      context_name: add_missing_columns_mismatching_close_sunday_1
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_sunday_1: msg
+          attr_name_mismatching_close_sunday_1: attr_name
+          SOBI1_s4hana: tgt_attr
+          SOBI1_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_sunday_1
+      context_name: final_mismatching_close_sunday_1_1
+
+###mismatching CLOSE SUNDAY 2
+    - kind: filter
+      name: mismatching_close_sunday_2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOBI2_s4hana <> SOBI2_mdg
+
+    - kind: add
+      name: add_missing_columns_mismatching_close_sunday_2
+      context_name: mismatching_close_sunday_2_filter
+      params:
+        - column: attr_name_mismatching_close_sunday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOBI2_s4hana <> SOBI2_mdg THEN concat('UNLOADING POINTS:',' CLOSE SUNDAY 2') END
+        - column: msg_mismatching_close_sunday_2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND ABLAD_mdg = ABLAD_s4hana AND partner_guid_mdg = partner_guid_s4hana AND SOBI2_s4hana <> SOBI2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_mismatching_close_sunday_2_1
+      context_name: add_missing_columns_mismatching_close_sunday_2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          ABLAD_mdg: ABLAD
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mismatching_close_sunday_2: msg
+          attr_name_mismatching_close_sunday_2: attr_name
+          SOBI2_s4hana: tgt_attr
+          SOBI2_mdg: src_attr
+
+    - kind: checkpoint
+      name: final_mismatching_close_sunday_2
+      context_name: final_mismatching_close_sunday_2_1
+
+    - kind: union
+      name: union_comparison
+      context_name: final_data_missing_from_mdg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_s4hana
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_factory_calendar
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_default_indicator
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_monday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_monday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_tuesday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_tuesday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_wednesday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_wednesday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_thursday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_thursday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_friday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_friday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_saturday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_saturday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_sunday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_sunday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_monday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_monday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_tuesday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_tuesday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_wednesday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_wednesday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_thursday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_thursday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_friday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_friday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_saturday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_saturday_2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_sunday_1
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_sunday_2
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            inner
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_mdg_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: KUNNR_knvv
+        - other:
+            select_tvv4t
+          how:
+            inner
+          columns:
+            KVGR4_knvv: KVGR4_tvv4t
+
+    - kind: filter
+      name: filter_comp_partner
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('UNLOADING POINTS' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(KVGR4_knvv,' - ',BEZEI_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          name_first: attribute1
+          name_last: attribute2
+          ABLAD: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          VKORG_knvv: attribute6
+          VTWEG_knvv: attribute7
+          SPART_knvv: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+
+    - kind: write_dataio
+      name: write_unloading_points_data
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: full
+        convert_to_target_schema: True
+
+## agg ##
+### mdg ###
+    - kind: join
+      name: join_mdg_agg
+      context_name: mdg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_mdg: kunnr_kna1
+
+    - kind: filter
+      name: filter_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_mdg_agg
+      context_name: filter_mdg_agg
+      params:
+        columns:
+          PARTNER_mdg: PARTNER_mdg
+          HASH_mdg: HASH_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            HASH_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### s4hana ###
+    - kind: join
+      name: join_s4hana_agg
+      context_name: s4hana
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_s4hana: kunnr_kna1
+
+    - kind: filter
+      name: filter_s4hana_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_s4hana_agg
+      context_name: filter_s4hana_agg
+      params:
+        columns:
+          PARTNER_s4hana: PARTNER_s4hana
+          HASH_s4hana: HASH_s4hana
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_s4hana_agg
+      context_name: select_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_s4hana, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_s4hana_agg
+      context_name: add_missing_columns_s4hana_agg
+      params:
+        - aggs:
+            HASH_s4hana: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_s4hana_agg_final
+      context_name: group_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_s4hana: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_mdg ###
+    - kind: join
+      name: join_missing_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: filter_missing_mdg_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_s4hana ###
+    - kind: join
+      name: join_missing_s4hana_agg
+      context_name: final_data_missing_from_s4hana
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_s4hana_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_missing_from_s4hana_agg
+      context_name: filter_missing_s4hana_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_s4hana_agg
+      context_name: select_data_missing_from_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM SAP' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_s4hana_agg
+      context_name: add_missing_columns_data_missing_from_s4hana_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_s4hana_final
+      context_name: group_data_missing_from_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### mismatch ###
+    - kind: union
+      name: union_comparison_agg
+      context_name: final_mismatching_factory_calendar
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_default_indicator
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_monday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_monday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_tuesday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_tuesday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_wednesday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_wednesday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_thursday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_thursday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_friday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_friday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_saturday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_saturday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_sunday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_open_sunday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_monday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_monday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_tuesday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_tuesday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_wednesday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_wednesday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_thursday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_thursday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_friday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_friday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_saturday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_saturday_2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_sunday_1
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_mismatching_close_sunday_1
+
+    - kind: join
+      name: join_final_agg
+      context_name: union_comparison_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            inner
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_mdg_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: KUNNR_knvv
+        - other:
+            select_tvv4t
+          how:
+            inner
+          columns:
+            KVGR4_knvv: KVGR4_tvv4t
+
+    - kind: filter
+      name: filter_comp_partner_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: filter_comp_partner_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true  
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_s4hana_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_mdg_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_s4hana_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_mismatch_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: full

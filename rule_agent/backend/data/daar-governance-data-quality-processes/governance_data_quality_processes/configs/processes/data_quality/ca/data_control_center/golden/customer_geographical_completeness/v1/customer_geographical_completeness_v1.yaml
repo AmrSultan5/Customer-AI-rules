@@ -1,0 +1,370 @@
+transform:
+  name: customer_geographical_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: select
+    context_name: read_dm_customer_sales_organization
+    name: select_cso
+    params:
+      columns:
+        customer_code: customer_code
+        sales_office_code: sales_office_code
+        sales_group_code: sales_group_code
+        sap_cluster: sap_cluster
+      distinct: true        
+
+#READ dm_customer_general
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        industry_code: industry_code
+        industry_code1: industry_code1
+        sap_cluster: sap_cluster
+        central_order_block_code: central_order_block_code
+      distinct: true        
+
+#READ dm_customer_territory
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_territory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_territory
+
+  - kind: select
+    context_name: read_dm_customer_territory
+    name: select_dct
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        territory_code: territory_code
+        sap_cluster: sap_cluster
+      distinct: true 
+
+#JOIN rccomp_142_1 rccomp_143_1
+  - kind: join
+    name: join_cso_dcg
+    context_name: select_cso
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#SELECT rccomp_142_1
+  - kind: select
+    name: select_rccomp_142_1
+    context_name: join_cso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sales_office_code: sales_office_code
+      distinct: true   
+
+  - kind: add
+    name: add_rccomp_142_1
+    context_name: select_rccomp_142_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_142.1'"
+      - column: check_status
+        expression: "CASE WHEN sales_office_code is null OR sales_office_code='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_142_1_final
+    context_name: add_rccomp_142_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_office_code: value_checked
+      distinct: true  
+
+#SELECT rccomp_143_1
+  - kind: select
+    name: select_rccomp_143_1
+    context_name: join_cso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sales_group_code: sales_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rccomp_143_1
+    context_name: select_rccomp_143_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_143.1'"
+      - column: check_status
+        expression: "CASE WHEN sales_group_code is null OR sales_group_code='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_143_1_final
+    context_name: add_rccomp_143_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_group_code: value_checked
+      distinct: true 
+
+#JOIN rccomp_363_1 rccomp_366_1
+  - kind: join
+    name: join_dct_dcg
+    context_name: select_dcg
+    params:
+      - other:
+          select_dct
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#SELECT rccomp_363_1
+  - kind: select
+    name: select_rccomp_363_1
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        central_order_block_code: central_order_block_code
+      distinct: true   
+
+  - kind: add
+    name: add_rccomp_363_1
+    context_name: select_rccomp_363_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_363.1'"
+      - column: check_status
+        expression: "CASE WHEN central_order_block_code IN ('PR', 'NR', 'M') THEN '' WHEN territory_type is null OR territory_type='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_363_1_final
+    context_name: add_rccomp_363_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        territory_type: value_checked
+      distinct: true  
+
+#SELECT rccomp_366_1
+  - kind: select
+    name: select_rccomp_366_1
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_code: territory_code
+        central_order_block_code: central_order_block_code
+      distinct: true   
+
+  - kind: add
+    name: add_rccomp_366_1
+    context_name: select_rccomp_366_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_366.1'"
+      - column: check_status
+        expression: "CASE WHEN central_order_block_code IN ('PR', 'NR', 'M') THEN '' WHEN (territory_code is null OR territory_code='') THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_366_1_final
+    context_name: add_rccomp_366_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        territory_code: value_checked
+      distinct: true  
+
+#SELECT rccomp_69_1
+  - kind: select
+    name: select_rccomp_69_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        industry_code: industry_code
+      distinct: true   
+
+  - kind: add
+    name: add_rccomp_69_1
+    context_name: select_rccomp_69_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_69.1'"
+      - column: check_status
+        expression: "CASE WHEN industry_code is null OR industry_code='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_69_1_final
+    context_name: add_rccomp_69_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        industry_code: value_checked
+      distinct: true  
+
+#SELECT rccomp_70_1
+  - kind: select
+    name: select_rccomp_70_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        industry_code1: industry_code1
+      distinct: true   
+
+  - kind: add
+    name: add_rccomp_70_1
+    context_name: select_rccomp_70_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_70.1'"
+      - column: check_status
+        expression: "CASE WHEN industry_code1 is null OR industry_code1='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_70_1_final
+    context_name: add_rccomp_70_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        industry_code1: value_checked
+      distinct: true  
+
+  - kind: union
+    name: union_customer_geographical_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_142_1_final
+
+  - kind: union
+    name: union_customer_geographical_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_143_1_final
+
+  - kind: union
+    name: union_customer_geographical_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_363_1_final
+
+  - kind: union
+    name: union_customer_geographical_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_366_1_final
+
+  - kind: union
+    name: union_customer_geographical_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_69_1_final
+
+  - kind: union
+    name: union_customer_geographical_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_70_1_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_geographical_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_geographical_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

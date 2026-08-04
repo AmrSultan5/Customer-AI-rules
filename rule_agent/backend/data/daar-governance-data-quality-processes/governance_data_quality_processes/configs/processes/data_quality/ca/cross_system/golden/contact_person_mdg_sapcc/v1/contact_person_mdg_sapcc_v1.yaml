@@ -1,0 +1,1197 @@
+transform:
+  name: cp2_mdg
+  operations:
+    - kind: read_dataio
+      name: read_customer_md
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: cch_cp2
+        namespace: md
+        object_name: customer
+        schema_version: v1
+
+    - kind: filter
+      name: filter_customer_md
+      context_name: read_customer_md
+      params:
+        - condition: p_active = 1 and (p_sapbackenduuid is not null or p_sapbackenduuid <> '')
+
+    - kind: select
+      name: select_customer_md
+      context_name: filter_customer_md
+      params:
+        columns:
+          b2b_units: partner_customer_md
+          p_sapbackenduuid: p_sapbackenduuid_customer_md
+          first_name: first_name_customer_md
+          last_name: last_name_customer_md
+          mobile_phone_number: mobile_phone_number_customer_md
+          landline_phone_number: landline_phone_number_customer_md
+          email: email_customer_md
+          country: country_customer_md
+
+    - kind: read_dataio
+      name: read_conf_mobile_phone
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: data_quality
+        namespace: data_control_center
+        object_name: conf_mobile_phone
+        schema_version: v1
+
+    - kind: select
+      name: select_conf_mobile_phone
+      context_name: read_conf_mobile_phone
+      params:
+        columns:
+          country_code: country_code_conf
+          prefix_number_of_digits: prefix_number_of_digits_conf
+          min_number_of_digits: min_number_of_digits_conf
+          country_prefix: country_prefix_conf
+
+    - kind: join
+      name: join_sap_cc
+      context_name: select_customer_md
+      params:
+        - other:
+            select_conf_mobile_phone
+          how:
+            inner
+          columns:
+            country_customer_md: country_code_conf
+  
+    - kind: add
+      name: add_sap_cc_columns
+      context_name: join_sap_cc
+      params:
+      - column: mobile_telnr_long_sap_cc
+        expression: coalesce(mobile_phone_number_customer_md,'')
+      - column: mobile_number_sap_cc
+        expression: if(substr(coalesce(trim(mobile_phone_number_customer_md),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(mobile_phone_number_customer_md),''),concat('\\+',country_prefix_conf),''),coalesce(trim(mobile_phone_number_customer_md),''))
+      - column: landline_telnr_long_sap_cc
+        expression: coalesce(landline_phone_number_customer_md,'')
+      - column: country_sap_cc
+        expression: upper(country_customer_md)
+      - column: smtp_addr_sap_cc
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(email_customer_md,'\t',''),'\n',''),'\r', ''),'[\u00A0\u2000-\u200B\u202F\u205F\u3000]',''))),'')
+      - column: landline_number_sap_cc
+        expression: if(substr(coalesce(trim(landline_phone_number_customer_md),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(landline_phone_number_customer_md),''),concat('\\+',country_prefix_conf),''), coalesce(trim(landline_phone_number_customer_md),''))
+      - column: first_name_sap_cc
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(first_name_customer_md,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: last_name_sap_cc
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(last_name_customer_md,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: hash_sap_cc
+        expression: md5(concat(p_sapbackenduuid_customer_md,coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(first_name_customer_md,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(last_name_customer_md,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),if(substr(coalesce(trim(mobile_phone_number_customer_md),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(mobile_phone_number_customer_md),''),concat('\\+',country_prefix_conf),''),coalesce(trim(mobile_phone_number_customer_md),'')) ,if(substr(coalesce(trim(landline_phone_number_customer_md),''),0,prefix_number_of_digits_conf+1)=concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(landline_phone_number_customer_md),''),concat('\\+',country_prefix_conf),''),coalesce(trim(landline_phone_number_customer_md),'')),coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(email_customer_md,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]',''))),''),upper(country_customer_md)))
+
+    - kind: select
+      name: select_sap_cc
+      context_name: add_sap_cc_columns
+      params:
+        columns:
+          min_number_of_digits_conf: min_number_of_digits_sap_cc
+          partner_customer_md: partner_sap_cc
+          p_sapbackenduuid_customer_md: partner_guid_sap_cc
+          first_name_sap_cc: first_name_sap_cc
+          last_name_sap_cc: last_name_sap_cc
+          mobile_telnr_long_sap_cc: mobile_telnr_long_sap_cc
+          mobile_number_sap_cc: mobile_number_sap_cc
+          landline_telnr_long_sap_cc: landline_telnr_long_sap_cc
+          landline_number_sap_cc: landline_number_sap_cc
+          smtp_addr_sap_cc: smtp_addr_sap_cc
+          country_sap_cc: country_sap_cc
+          hash_sap_cc: hash_sap_cc
+        distinct: true
+
+## MDG
+    - kind: read_dataio
+      name: read_mdg_but051_1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: contact_person_relationships
+        object_name: but051
+        schema_version: v1
+
+    - kind: filter
+      name: filter_mdg_but051_1
+      context_name: read_mdg_but051_1
+      params:
+        - condition: reltyp = 'BUR001' AND pafkt = 'Z3' and partner1 like any('12%','13%','40%','18%','30%','16%','29%','17%','24%','26%','21%','19%','96%','28%','27%','32%','35%','25%','34%','42%','33%','31%','15%','95%','94%','14%','22%','47%')
+
+    - kind: select
+      name: select_mdg_but051_1
+      context_name: filter_mdg_but051_1
+      params:
+        columns:
+          partner1: partner1_but051
+          partner2: partner2_but051
+
+    - kind: read_dataio
+      name: read_mdg_but000_1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: filter
+      name: filter_mdg_but000_1
+      context_name: read_mdg_but000_1
+      params:
+        - condition: type = 1 AND bu_group = 'CONT'
+
+    - kind: select
+      name: select_mdg_but000_1
+      context_name: filter_mdg_but000_1
+      params:
+        columns:
+          partner: partner_but000
+          persnumber: persnumber_but000
+          partner_guid: partner_guid_but000
+          name_first: name_first_but000
+          name_last: name_last_but000
+
+    - kind: read_dataio
+      name: read_mdg_but020
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but020
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but020
+      context_name: read_mdg_but020
+      params:
+        columns:
+          partner: partner_but020
+          addrnumber: addrnumber_but020
+
+    - kind: read_dataio
+      name: read_mdg_adr2
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: address_and_communication_data
+        object_name: adr2
+        schema_version: v1
+
+    - kind: filter
+      name: filter_mdg_adr2_mobile
+      context_name: read_mdg_adr2
+      params:
+        - condition: r3_user = 3
+
+    - kind: select
+      name: select_mdg_adr2_mobile
+      context_name: filter_mdg_adr2_mobile
+      params:
+        columns:
+          addrnumber: addrnumber_adr2_mobile
+          persnumber: persnumber_adr2_mobile
+          telnr_long: telnr_long_adr2_mobile
+
+    - kind: filter
+      name: filter_mdg_adr2_landline
+      context_name: read_mdg_adr2
+      params:
+        - condition: r3_user = 1
+
+    - kind: select
+      name: select_mdg_adr2_landline
+      context_name: filter_mdg_adr2_landline
+      params:
+        columns:
+          addrnumber: addrnumber_adr2_landline
+          persnumber: persnumber_adr2_landline
+          telnr_long: telnr_long_adr2_landline
+  
+    - kind: read_dataio
+      name: read_mdg_adr6
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: address_and_communication_data
+        object_name: adr6
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_adr6_email
+      context_name: read_mdg_adr6
+      params:
+        columns:
+          addrnumber: addrnumber_adr6_email
+          persnumber: persnumber_adr6_email
+          smtp_addr: smtp_addr_adr6_email
+
+    - kind: read_dataio
+      name: read_mdg_adrc
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: address_and_communication_data
+        object_name: adrc
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_adrc
+      context_name: read_mdg_adrc
+      params:
+        columns:
+          addrnumber: addrnumber_adrc
+          country: country_adrc
+
+    - kind: join
+      name: join_mdg
+      context_name: select_mdg_but051_1
+      params:
+        - other:
+            select_mdg_but000_1
+          how:
+            inner
+          columns:
+            partner2_but051: partner_but000
+        - other:
+            select_mdg_but020
+          how:
+            inner
+          columns:
+            partner1_but051: partner_but020
+        - other:
+            select_mdg_adr2_mobile
+          how:
+            left
+          columns:
+            addrnumber_but020: addrnumber_adr2_mobile
+            persnumber_but000: persnumber_adr2_mobile
+        - other:
+            select_mdg_adr2_landline
+          how:
+            left
+          columns:
+            addrnumber_but020: addrnumber_adr2_landline
+            persnumber_but000: persnumber_adr2_landline
+        - other:
+            select_mdg_adr6_email
+          how:
+            left
+          columns:
+            addrnumber_but020: addrnumber_adr6_email
+            persnumber_but000: persnumber_adr6_email
+        - other:
+            select_mdg_adrc
+          how:
+            left
+          columns:
+            addrnumber_but020: addrnumber_adrc
+        - other:
+            select_conf_mobile_phone
+          how:
+            inner
+          columns:
+            country_adrc: country_code_conf
+
+    - kind: add
+      name: add_mdg_columns
+      context_name: join_mdg
+      params:
+      - column: first_name_mdg
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(name_first_but000,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: last_name_mdg
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(name_last_but000,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: mobile_number_mdg
+        expression: if(substr(coalesce(trim(telnr_long_adr2_mobile),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(telnr_long_adr2_mobile),''),concat('\\+',country_prefix_conf),''),coalesce(trim(telnr_long_adr2_mobile),''))
+      - column: landline_number_mdg
+        expression: if(substr(coalesce(trim(telnr_long_adr2_landline),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(telnr_long_adr2_landline),''),concat('\\+',country_prefix_conf),''),coalesce(trim(telnr_long_adr2_landline),''))
+      - column: smtp_addr_mdg
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(smtp_addr_adr6_email,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: country_mdg
+        expression: coalesce(trim(upper(regexp_replace(regexp_replace(regexp_replace(regexp_replace(country_adrc,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      # - column: hash_mdg
+      #   expression: md5(concat(partner_guid_but000,coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(name_first_but000,'\t',''),'\n',''),'\r',''),'[\u00A0\u2000-\u200B\u202F\u205F\u3000]',''))),''),coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(name_last_but000,'\t',''),'\n',''),'\r',''),'[\u00A0\u2000-\u200B\u202F\u205F\u3000]',''))),''),if(substr(coalesce(trim(telnr_long_adr2_mobile),''),0,prefix_number_of_digits_conf+1)=concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(telnr_long_adr2_mobile),''),concat('\\+',country_prefix_conf),''),coalesce(trim(telnr_long_adr2_mobile),'')),if(substr(coalesce(trim(telnr_long_adr2_landline),''),0,prefix_number_of_digits_conf+1)=concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(telnr_long_adr2_landline),''),concat('\\+',country_prefix_conf),''),coalesce(trim(telnr_long_adr2_landline),'')),coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(smtp_addr_adr6_email,'\t',''),'\n',''),'\r',''),'[\u00A0\u2000-\u200B\u202F\u205F\u3000]',''))),''),coalesce(country_adrc,'') ))
+      - column: hash_mdg
+        expression: md5(concat(partner_guid_but000,coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(name_first_but000,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'') ,coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(name_last_but000,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'') ,if(substr(coalesce(trim(telnr_long_adr2_mobile),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(telnr_long_adr2_mobile),''),concat('\\+',country_prefix_conf),''),coalesce(trim(telnr_long_adr2_mobile),'')),if(substr(coalesce(trim(telnr_long_adr2_landline),''),0,prefix_number_of_digits_conf+1)= concat('\+',country_prefix_conf),regexp_replace(coalesce(trim(telnr_long_adr2_landline),''),concat('\\+',country_prefix_conf),''),coalesce(trim(telnr_long_adr2_landline),'')),coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(smtp_addr_adr6_email,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'') ,coalesce(country_adrc,'') ))
+      - column: landline_telnr_long_mdg
+        expression: coalesce(telnr_long_adr2_landline,'')
+      - column: mobile_telnr_long_mdg
+        expression: coalesce(telnr_long_adr2_mobile ,'')
+
+    - kind: select
+      name: select_mdg
+      context_name: add_mdg_columns
+      params:
+        columns:
+          min_number_of_digits_conf: min_number_of_digits_mdg
+          partner1_but051: partner_mdg
+          partner_guid_but000: partner_guid_mdg
+          first_name_mdg: first_name_mdg
+          last_name_mdg: last_name_mdg
+          mobile_number_mdg: mobile_number_mdg
+          landline_number_mdg: landline_number_mdg
+          smtp_addr_mdg: smtp_addr_mdg
+          country_mdg: country_mdg
+          landline_telnr_long_mdg: landline_telnr_long_mdg
+          mobile_telnr_long_mdg: mobile_telnr_long_mdg
+          hash_mdg: hash_mdg
+        distinct: true
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: select_mdg
+      params:
+        - other:
+            select_sap_cc
+          how:
+            full
+          columns:
+            hash_mdg: hash_sap_cc
+  
+    - kind: filter
+      name: filter_non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition:
+            hash_sap_cc IS NULL or hash_sap_cc = ''
+  
+    - kind: join
+      name: join_non_matching_sap_cc
+      context_name: select_mdg
+      params:
+        - other:
+            select_sap_cc
+          how:
+            full
+          columns:
+            hash_mdg: hash_sap_cc
+  
+    - kind: filter
+      name: filter_non_matching_sap_cc
+      context_name: join_non_matching_mdg
+      params:
+        - condition:
+            hash_mdg IS NULL or hash_mdg = ''
+
+    - kind: select
+      name: select_non_matching_mdg
+      context_name: filter_non_matching_mdg
+      params:
+        columns:
+          min_number_of_digits_mdg: min_number_of_digits_mdg
+          partner_mdg: partner_mdg
+          partner_guid_mdg: partner_guid_mdg
+          first_name_mdg: first_name_mdg
+          last_name_mdg: last_name_mdg
+          mobile_number_mdg: mobile_number_mdg
+          landline_number_mdg: landline_number_mdg
+          smtp_addr_mdg: smtp_addr_mdg
+          country_mdg: country_mdg
+          landline_telnr_long_mdg: landline_telnr_long_mdg
+          mobile_telnr_long_mdg: mobile_telnr_long_mdg
+          hash_mdg: hash_mdg
+        distinct: true
+
+    - kind: select
+      name: select_non_matching_sap_cc
+      context_name: filter_non_matching_sap_cc
+      params:
+        columns:
+          min_number_of_digits_sap_cc: min_number_of_digits_sap_cc
+          partner_sap_cc: partner_sap_cc
+          partner_guid_sap_cc: partner_guid_sap_cc
+          first_name_sap_cc: first_name_sap_cc
+          last_name_sap_cc: last_name_sap_cc
+          mobile_telnr_long_sap_cc: mobile_telnr_long_sap_cc
+          mobile_number_sap_cc: mobile_number_sap_cc
+          landline_telnr_long_sap_cc: landline_telnr_long_sap_cc
+          landline_number_sap_cc: landline_number_sap_cc
+          smtp_addr_sap_cc: smtp_addr_sap_cc
+          country_sap_cc: country_sap_cc
+          hash_sap_cc: hash_sap_cc
+        distinct: true
+
+    - kind: join
+      name: join_non_matching
+      context_name: select_non_matching_sap_cc
+      params:
+        - other:
+            select_non_matching_mdg
+          how:
+            full
+          columns:
+            partner_guid_sap_cc: partner_guid_mdg
+            partner_sap_cc: partner_mdg
+
+###first name
+  
+    - kind: filter
+      name: filter_first_name
+      context_name: join_non_matching
+      params:
+        - condition:
+            partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND first_name_sap_cc<>first_name_mdg
+
+    - kind: add
+      name: add_first_name_columns
+      context_name: filter_first_name
+      params:
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('sap cc' as string)
+      - column: src_id
+        expression: partner_guid_mdg
+      - column: tgt_id
+        expression: partner_guid_sap_cc
+      - column: msg
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND first_name_sap_cc<>first_name_mdg THEN "attributes are mismatching" END 
+      - column: attr_name
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND first_name_sap_cc<>first_name_mdg THEN concat('MDG SAP CC :', ' First Name') END
+      - column: src_attr
+        expression: first_name_mdg
+      - column: tgt_attr
+        expression: first_name_sap_cc
+
+    - kind: select
+      name: select_first_name
+      context_name: add_first_name_columns
+      params:
+        columns:
+          partner_mdg: partner
+          src_system: src_system
+          tgt_system: tgt_system
+          src_id: src_id
+          tgt_id: tgt_id
+          msg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+        distinct: true
+
+###last name
+  
+    - kind: filter
+      name: filter_last_name
+      context_name: join_non_matching
+      params:
+        - condition:
+            partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND last_name_sap_cc<>last_name_mdg
+
+    - kind: add
+      name: add_last_name_columns
+      context_name: filter_last_name
+      params:
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('sap cc' as string)
+      - column: src_id
+        expression: partner_guid_mdg
+      - column: tgt_id
+        expression: partner_guid_sap_cc
+      - column: msg
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND last_name_sap_cc<>last_name_mdg THEN "attributes are mismatching" END 
+      - column: attr_name
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND last_name_sap_cc<>last_name_mdg THEN concat('MDG SAP CC :', ' Last Name') END
+      - column: src_attr
+        expression: last_name_mdg
+      - column: tgt_attr
+        expression: last_name_sap_cc
+
+    - kind: select
+      name: select_last_name
+      context_name: add_last_name_columns
+      params:
+        columns:
+          partner_mdg: partner
+          src_system: src_system
+          tgt_system: tgt_system
+          src_id: src_id
+          tgt_id: tgt_id
+          msg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+        distinct: true
+
+###Mobile Number
+    - kind: filter
+      name: filter_mobile_number
+      context_name: join_non_matching
+      params:
+        - condition:
+            partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND if (mobile_number_sap_cc=mobile_number_mdg,1,if(length(mobile_number_mdg)>=min_number_of_digits_mdg AND length(mobile_number_sap_cc) >= min_number_of_digits_sap_cc and (instr(mobile_number_sap_cc,mobile_number_mdg)>0 or instr(mobile_number_sap_cc,mobile_number_mdg)>0), 1, 0))<>1
+
+    - kind: add
+      name: add_mobile_number_columns
+      context_name: filter_mobile_number
+      params:
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('sap cc' as string)
+      - column: src_id
+        expression: partner_guid_mdg
+      - column: tgt_id
+        expression: partner_guid_sap_cc
+      - column: msg
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND if (mobile_number_sap_cc=mobile_number_mdg,1,if(length(mobile_number_mdg)>=min_number_of_digits_mdg AND length(mobile_number_sap_cc) >= min_number_of_digits_sap_cc and (instr(mobile_number_sap_cc,mobile_number_mdg)>0 or instr(mobile_number_sap_cc,mobile_number_mdg)>0), 1, 0))<>1 THEN "attributes are mismatching" END 
+      - column: attr_name
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND if (mobile_number_sap_cc=mobile_number_mdg,1,if(length(mobile_number_mdg)>=min_number_of_digits_mdg AND length(mobile_number_sap_cc) >= min_number_of_digits_sap_cc and (instr(mobile_number_sap_cc,mobile_number_mdg)>0 or instr(mobile_number_sap_cc,mobile_number_mdg)>0), 1, 0))<>1 THEN concat('MDG SAP CC :', ' Mobile Number') END
+      - column: src_attr
+        expression: mobile_telnr_long_mdg
+      - column: tgt_attr
+        expression: mobile_telnr_long_sap_cc
+
+    - kind: select
+      name: select_mobile_number
+      context_name: add_mobile_number_columns
+      params:
+        columns:
+          partner_mdg: partner
+          src_system: src_system
+          tgt_system: tgt_system
+          src_id: src_id
+          tgt_id: tgt_id
+          msg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+        distinct: true
+
+###Landline Number
+    - kind: filter
+      name: filter_landline_number
+      context_name: join_non_matching
+      params:
+        - condition:
+            partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND if (landline_number_sap_cc=landline_number_mdg,1,if(length(landline_number_mdg)>=min_number_of_digits_mdg AND length(landline_number_sap_cc) >= min_number_of_digits_sap_cc and (instr(landline_number_sap_cc,landline_number_mdg)>0 or instr(landline_number_sap_cc,landline_number_mdg)>0), 1, 0))<>1
+
+    - kind: add
+      name: add_landline_number_columns
+      context_name: filter_landline_number
+      params:
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('sap cc' as string)
+      - column: src_id
+        expression: partner_guid_mdg
+      - column: tgt_id
+        expression: partner_guid_sap_cc
+      - column: msg
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND if (landline_number_sap_cc=landline_number_mdg,1,if(length(landline_number_mdg)>=min_number_of_digits_mdg AND length(landline_number_sap_cc) >= min_number_of_digits_sap_cc and (instr(landline_number_sap_cc,landline_number_mdg)>0 or instr(landline_number_sap_cc,landline_number_mdg)>0), 1, 0))<>1 THEN "attributes are mismatching" END 
+      - column: attr_name
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND if (landline_number_sap_cc=landline_number_mdg,1,if(length(landline_number_mdg)>=min_number_of_digits_mdg AND length(landline_number_sap_cc) >= min_number_of_digits_sap_cc and (instr(landline_number_sap_cc,landline_number_mdg)>0 or instr(landline_number_sap_cc,landline_number_mdg)>0), 1, 0))<>1 THEN concat('MDG SAP CC :', ' Landline Number') END
+      - column: src_attr
+        expression: landline_telnr_long_mdg
+      - column: tgt_attr
+        expression: landline_telnr_long_sap_cc
+
+    - kind: select
+      name: select_landline_number
+      context_name: add_landline_number_columns
+      params:
+        columns:
+          partner_mdg: partner
+          src_system: src_system
+          tgt_system: tgt_system
+          src_id: src_id
+          tgt_id: tgt_id
+          msg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+        distinct: true
+
+###smtp_addr
+    - kind: filter
+      name: filter_smtp_addr
+      context_name: join_non_matching
+      params:
+        - condition:
+            partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND smtp_addr_sap_cc<>smtp_addr_mdg
+
+    - kind: add
+      name: add_smtp_addr_columns
+      context_name: filter_smtp_addr
+      params:
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('sap cc' as string)
+      - column: src_id
+        expression: partner_guid_mdg
+      - column: tgt_id
+        expression: partner_guid_sap_cc
+      - column: msg
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND smtp_addr_sap_cc<>smtp_addr_mdg THEN "attributes are mismatching" END 
+      - column: attr_name
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND smtp_addr_sap_cc<>smtp_addr_mdg THEN concat('MDG SAP CC :', ' E-Mail') END
+      - column: src_attr
+        expression: smtp_addr_mdg
+      - column: tgt_attr
+        expression: smtp_addr_sap_cc
+
+    - kind: select
+      name: select_smtp_addr
+      context_name: add_smtp_addr_columns
+      params:
+        columns:
+          partner_mdg: partner
+          src_system: src_system
+          tgt_system: tgt_system
+          src_id: src_id
+          tgt_id: tgt_id
+          msg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+        distinct: true
+
+###country
+    - kind: filter
+      name: filter_country
+      context_name: join_non_matching
+      params:
+        - condition:
+            partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND country_sap_cc<>country_mdg
+
+    - kind: add
+      name: add_country_columns
+      context_name: filter_country
+      params:
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('sap cc' as string)
+      - column: src_id
+        expression: partner_guid_mdg
+      - column: tgt_id
+        expression: partner_guid_sap_cc
+      - column: msg
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND country_sap_cc<>country_mdg THEN "attributes are mismatching" END 
+      - column: attr_name
+        expression: CASE WHEN partner_guid_sap_cc = partner_guid_mdg and partner_sap_cc = partner_mdg AND country_sap_cc<>country_mdg THEN concat('MDG SAP CC :', ' Country') END
+      - column: src_attr
+        expression: country_mdg
+      - column: tgt_attr
+        expression: country_sap_cc
+
+    - kind: select
+      name: select_country
+      context_name: add_country_columns
+      params:
+        columns:
+          partner_mdg: partner
+          src_system: src_system
+          tgt_system: tgt_system
+          src_id: src_id
+          tgt_id: tgt_id
+          msg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+        distinct: true
+
+    - kind: union
+      name: union_comparison
+      context_name: select_first_name
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_last_name
+  
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_mobile_number
+  
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_landline_number
+  
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_smtp_addr
+  
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_country
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+  
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+  
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+  
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition:
+            spras = 'E' and sap_cluster = 'CL1'
+  
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+  
+    - kind: read_dataio
+      name: read_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+  
+    - kind: filter
+      name: filter_knvv
+      params:
+        - condition:
+            vtweg = '01' and spart = '01'
+  
+    - kind: select
+      name: select_knvv
+      context_name: filter_knvv
+      params:
+        columns:
+          kunnr: kunnr_knvv
+          vkorg: vkorg_knvv
+          kvgr4: kvgr4_knvv
+          vtweg: vtweg_knvv
+          spart: spart_knvv
+  
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+  
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition:
+           sap_cluster = 'CL1' and spras = 'E'
+  
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: kunnr_knvv
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            kvgr4_knvv: kvgr4_tvv4t
+  
+    - kind: filter
+      name: filter_final
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') and vkorg_knvv in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: add
+      name: add_final_columns
+      context_name: filter_final
+      params:
+        - column: attribute10
+          expression: concat(ktokd_kna1, ' - ', txt30_t077x)
+        - column: attribute5
+          expression: concat(kvgr4_knvv, ' - ', bezei_tvv4t)
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+                           WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+                           WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+                           WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+                           WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+                           WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+                           WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+                           WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+                           WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+                           WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+                           WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+                           WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+                           WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+                           WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+                           WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+                           WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+                           WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+                           WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+                           WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+                           WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+                           WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+                           WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+                           WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+                           WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+                           WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+                           WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+                           WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+                           WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+                           WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: domain
+          expression: '''CUSTOMER'''
+        - column: table_name
+          expression: '''MDG SAP CC'''
+        - column: null_value
+          expression: cast(NULL as string)
+        - column: loading_date
+          expression: current_date()
+        - column: attribute3
+          expression: src_id
+
+    - kind: select
+      name: select_final
+      context_name: add_final_columns
+      params:
+        columns:
+          domain: domain
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          src_id: primary_key_src_l2
+          tgt_id: primary_key_tgt_l2
+          null_value: primary_key_src_l3
+          null_value: primary_key_tgt_l3
+          null_value: attribute1
+          null_value: attribute2
+          attribute3: attribute3
+          aufsd_kna1: attribute4
+          attribute5: attribute5
+          vkorg_knvv: attribute6
+          vtweg_knvv: attribute7
+          spart_knvv: attribute8
+          null_value: attribute9
+          attribute10: attribute10
+          country: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          loading_date: loading_date
+
+    - kind: write_dataio
+      name: write_shipping_data
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+## agg ##
+### mdg ###
+    - kind: select
+      name: select_mdg_agg
+      context_name: select_mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          partner_guid_mdg: partner_guid_mdg
+          country_mdg: country_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: table_name
+          expression: cast('MDG SAP CC' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: src_system
+          expression: cast('sap cc' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+        - column: partner_guid_concat
+          expression: concat(partner_mdg,partner_guid_mdg)
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            partner_guid_concat: count
+          by:
+          - country_mdg
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner_guid_concat: cnt
+          country_mdg: country
+          loading_date: loading_date
+        distinct: true
+### sap_cc ###
+    - kind: select
+      name: select_sap_cc_agg
+      context_name: select_sap_cc
+      params:
+        columns:
+          partner_sap_cc: partner_sap_cc
+          partner_guid_sap_cc: partner_guid_sap_cc
+          country_sap_cc: country_sap_cc
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_sap_cc_agg
+      context_name: select_sap_cc_agg
+      params:
+        - column: table_name
+          expression: cast('MDG SAP CC' as string)
+        - column: tgt_system
+          expression: cast('sap cc' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+        - column: partner_guid_concat
+          expression: concat(partner_sap_cc,partner_guid_sap_cc)
+
+    - kind: group
+      name: group_sap_cc_agg
+      context_name: add_missing_columns_sap_cc_agg
+      params:
+        - aggs:
+            partner_guid_concat: count
+          by:
+          - country_sap_cc
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_sap_cc_agg_final
+      context_name: group_sap_cc_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner_guid_concat: cnt
+          country_sap_cc: country
+          loading_date: loading_date
+        distinct: true
+## mismatch ###
+
+    - kind: select
+      name: select_mismatch_agg
+      context_name: select_final
+      params:
+        columns:
+          primary_key_l1: primary_key_l1
+          primary_key_src_l2: primary_key_src_l2
+          country: country
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mismatch_agg
+      context_name: select_mismatch_agg
+      params:
+        - column: table_name
+          expression: cast('MDG SAP CC' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: src_system
+          expression: cast('sap cc' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+        - column: partner_guid_concat
+          expression: concat(primary_key_l1,primary_key_src_l2)
+
+    - kind: group
+      name: group_mismatch_agg
+      context_name: add_missing_columns_mismatch_agg
+      params:
+        - aggs:
+            partner_guid_concat: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mismatch_agg_final
+      context_name: group_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner_guid_concat: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_sap_cc_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_mismatch_agg_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

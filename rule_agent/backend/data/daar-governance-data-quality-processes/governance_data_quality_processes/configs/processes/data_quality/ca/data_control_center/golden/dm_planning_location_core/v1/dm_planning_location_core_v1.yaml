@@ -1,0 +1,189 @@
+transform:
+  name: dm_planning_location_core
+  operations:
+
+  # Read O4H_OSLC_PARAM (planning location master)
+  - kind: read_dataio
+    name: read_o4h_oslc_param
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: data_quality
+      object_name: o4h_oslc_param
+      schema_version: v1
+
+  # Read ZOS4_OSLC_CUSTSA (custom extension)
+  - kind: read_dataio
+    name: read_zos4_oslc_custsa
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: data_quality
+      object_name: zos4_oslc_custsa
+      schema_version: v1
+
+  # Select and rename columns from O4H_OSLC_PARAM
+  - kind: select
+    name: select_o4h_oslc_param
+    context_name: read_o4h_oslc_param
+    params:
+      columns:
+        location: location
+        operation: operation
+        role: role
+        sap_cluster: sap_cluster
+        sap_read_timestamp: sap_read_timestamp
+        process_run_id: process_run_id
+        calid: calid
+        calweek: calweek
+        lot_cu_kzreg: lot_cu_kzreg
+        lot_cu_kzplp: lot_cu_kzplp
+        lot_cu_kzpit: lot_cu_kzpit
+        lot_po_voorwag: lot_po_voorwag
+        lot_po_twplus: lot_po_twplus
+        lot_cu_hlp_req: lot_cu_hlp_req
+        lot_cu_spec_lc: lot_cu_spec_lc
+        lot_pr_ldprofid: lot_pr_ldprofid
+        lot_cu_einhe: lot_cu_einhe
+        lot_cu_fbdwe: lot_cu_fbdwe
+        lot_cu_fedwe: lot_cu_fedwe
+        lot_xd_distrstr: lot_xd_distrstr
+        lot_xd_profilid: lot_xd_profilid
+        lot_xd_cstdlvzp: lot_xd_cstdlvzp
+        lot_sc_ul_spref: lot_sc_ul_spref
+        lot_sc_dist_mod: lot_sc_dist_mod
+        lot_sc_fr_zone: lot_sc_fr_zone
+        zz_crgrp: zz_crgrp
+        zz_ulgrp: zz_ulgrp
+        zz_opexzone: zz_opexzone
+        zz_col_cust_pal: zz_col_cust_pal
+        zz_sep_pal_deliv: zz_sep_pal_deliv
+        zz_pal_ticket: zz_pal_ticket
+        lot_cu_sortr: lot_cu_sortr
+        lot_po_mxsth: lot_po_mxsth
+        lot_def_le_pa: lot_def_le_pa
+        lot_cpa_id_pa: lot_cpa_id_pa
+        lot_cpa_id_ca: lot_cpa_id_ca
+      distinct: true
+
+  # Select and rename columns from ZOS4_OSLC_CUSTSA
+  - kind: select
+    name: select_zos4_oslc_custsa
+    context_name: read_zos4_oslc_custsa
+    params:
+      columns:
+        location: location
+        operation: operation
+        role: role
+        sap_cluster: sap_cluster
+        entity: entity
+        vtweg: vtweg
+        spart: spart
+        lot_cu_cust02: lot_cu_cust02
+        lot_cu_cust09: lot_cu_cust09
+        lot_cu_cust10: lot_cu_cust10
+        lot_cu_cust07: lot_cu_cust07
+        lot_cu_cust08: lot_cu_cust08
+        lot_cu_cust13: lot_cu_cust13
+      distinct: true
+
+  # Join O4H_OSLC_PARAM with ZOS4_OSLC_CUSTSA
+  - kind: join
+    context_name: select_o4h_oslc_param
+    name: join_planning_location
+    params:
+      - other:
+          select_zos4_oslc_custsa
+        how: left
+        columns:
+          location: location
+          operation: operation
+          role: role
+          sap_cluster: sap_cluster
+
+  # Add type casting for decimal and integer columns
+  - kind: add
+    name: add_type_casts
+    context_name: join_planning_location
+    params:
+      - column: fix_load_duration_cast
+        expression: cast(coalesce(lot_cu_fbdwe, 0) as decimal(38,18))
+      - column: fix_unload_duration_cast
+        expression: cast(coalesce(lot_cu_fedwe, 0) as decimal(38,18))
+      - column: maximum_footprint_height_load_cast
+        expression: cast(coalesce(lot_po_mxsth, 0) as integer)
+
+  # Select and rename columns for final datamart schema (matching target schema order)
+  - kind: select
+    name: select_dm_planning_location_core
+    context_name: add_type_casts
+    params:
+      columns:
+        location: planning_location
+        operation: operation
+        role: location_role
+        sap_cluster: sap_cluster
+        sap_read_timestamp: sap_read_timestamp
+        calid: factory_calendar
+        calweek: working_week
+        lot_cu_kzreg: leo_region
+        lot_cu_kzplp: planning_priority
+        lot_cu_kzpit: position_in_route
+        lot_po_voorwag: position_in_loading_space
+        lot_po_twplus: allowed_exceeding_delivery_time_window
+        lot_cu_hlp_req: helper_needed
+        lot_cu_spec_lc: customer_specific_loading_unit
+        lot_pr_ldprofid: time_profile
+        lot_cu_einhe: time_unit_of_measure
+        fix_load_duration_cast: fix_load_duration
+        fix_unload_duration_cast: fix_unload_duration
+        lot_xd_distrstr: cross_docking_distribution_strategy
+        lot_xd_profilid: cross_docking_scenario_profile
+        lot_xd_cstdlvzp: desired_arrival_time_at_location
+        lot_sc_ul_spref: unload_side_preference
+        lot_sc_dist_mod: distribution_mode
+        lot_sc_fr_zone: freight_zone
+        zz_crgrp: customer_rate_group
+        zz_ulgrp: unloading_group
+        zz_opexzone: opex_zone
+        zz_col_cust_pal: column_picking_customer_specific_pallet
+        zz_sep_pal_deliv: separate_pallet_per_delivery
+        zz_pal_ticket: pallet_tickets_text
+        lot_cu_sortr: single_material_mode
+        maximum_footprint_height_load_cast: maximum_footprint_height_load
+        lot_def_le_pa: material_number_default_pick_pallet_type
+        lot_cpa_id_pa: pallet_assortment
+        lot_cpa_id_ca: carton_assortment
+        entity: associated_sap_entity
+        vtweg: distribution_channel
+        spart: division
+        lot_cu_cust02: regional_customer_flag
+        lot_cu_cust09: add_pallet_plates
+        lot_cu_cust10: delivery_note_type
+        lot_cu_cust07: check_material_sled
+        lot_cu_cust08: sled_is_must
+        lot_cu_cust13: minimum_sled_percentage
+      distinct: true
+
+  # Write to golden datamart
+  - kind: write_dataio
+    name: write_dm_planning_location_core
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_planning_location_core
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,2319 @@
+transform:
+  name: business_hours_mdg_crm
+  operations:
+
+  - kind: read_dataio
+    name: read_mdg_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_but000
+    context_name: read_mdg_but000
+    params:
+      - condition:
+          partner not like '000%' and xpcpt <> 'X' and partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', 
+          '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%')
+
+  - kind: select
+    name: select_mdg_but000
+    context_name: filter_mdg_but000
+    params:
+      columns:
+        partner: partner_mdg_but000
+        name_last: name_last_mdg_but000
+        name_first: name_first_mdg_but000
+        partner_guid: partner_guid_mdg_but000
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_crmm_but_frg0061
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: crmm_but_frg0061
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_crmm_but_frg0061
+    context_name: read_mdg_crmm_but_frg0061
+    params:
+      - condition:
+          valid_to = '99991231235959'
+
+  - kind: select
+    name: select_mdg_crmm_but_frg0061
+    context_name: filter_mdg_crmm_but_frg0061
+    params:
+      columns:
+        rule_id: rule_id_mdg_crmm_but_frg0061
+        schedule_type: schedule_type_mdg_crmm_but_frg0061
+        valid_from: valid_from_mdg_crmm_but_frg0061
+        valid_to: valid_to_mdg_crmm_but_frg0061
+        partner_guid: partner_guid_mdg_crmm_but_frg0061
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_scrules
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: scrules
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_scrules
+    context_name: read_mdg_scrules
+    params:
+      - condition:
+          type = 'W'
+
+  - kind: select
+    name: select_mdg_scrules
+    context_name: filter_mdg_scrules
+    params:
+      columns:
+        rule_id: rule_id_mdg_scrules
+        rule: rule_mdg_scrules
+      distinct: true
+
+  - kind: join
+    name: join_mdg
+    context_name: select_mdg_but000
+    params:
+      - other:
+          select_mdg_crmm_but_frg0061
+        how:
+          inner
+        columns:
+          partner_guid_mdg_but000: partner_guid_mdg_crmm_but_frg0061
+      - other:
+          select_mdg_scrules
+        how:
+          inner
+        columns:
+          rule_id_mdg_crmm_but_frg0061: rule_id_mdg_scrules
+
+  - kind: read_dataio
+    name: read_crm_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_crm_but000
+    context_name: read_crm_but000
+    params:
+      - condition:
+          partner not like '000%' and xpcpt <> 'X' and if(sap_cluster = 'CL1', partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'),
+          partner like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%'))
+
+  - kind: select
+    name: select_crm_but000
+    context_name: filter_crm_but000
+    params:
+      columns:
+        partner: partner_crm_but000
+        name_last: name_last_crm_but000
+        name_first: name_first_crm_but000
+        partner_guid: partner_guid_crm_but000
+      distinct: true
+
+  - kind: read_dataio
+    name: read_crm_crmm_but_frg0061
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: customer
+      object_name: crmm_but_frg0061
+      schema_version: v1
+
+  - kind: filter
+    name: filter_crm_crmm_but_frg0061
+    context_name: read_crm_crmm_but_frg0061
+    params:
+      - condition:
+          valid_to = '99991231235959'
+
+  - kind: select
+    name: select_crm_crmm_but_frg0061
+    context_name: filter_crm_crmm_but_frg0061
+    params:
+      columns:
+        rule_id: rule_id_crm_crmm_but_frg0061
+        schedule_type: schedule_type_crm_crmm_but_frg0061
+        valid_from: valid_from_crm_crmm_but_frg0061
+        valid_to: valid_to_crm_crmm_but_frg0061
+        partner_guid: partner_guid_crm_crmm_but_frg0061
+      distinct: true
+
+  - kind: read_dataio
+    name: read_crm_scrules
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: customer
+      object_name: scrules
+      schema_version: v1
+
+  - kind: filter
+    name: filter_crm_scrules
+    context_name: read_crm_scrules
+    params:
+      - condition:
+          type = 'W'
+
+  - kind: select
+    name: select_crm_scrules
+    context_name: filter_crm_scrules
+    params:
+      columns:
+        rule_id: rule_id_crm_scrules
+        rule: rule_crm_scrules
+      distinct: true
+
+  - kind: join
+    name: join_crm
+    context_name: select_crm_but000
+    params:
+      - other:
+          select_crm_crmm_but_frg0061
+        how:
+          inner
+        columns:
+          partner_guid_crm_but000: partner_guid_crm_crmm_but_frg0061
+      - other:
+          select_crm_scrules
+        how:
+          inner
+        columns:
+          rule_id_crm_crmm_but_frg0061: rule_id_crm_scrules
+
+  - kind: add
+    name: add_mdg
+    context_name: join_mdg
+    params:
+      - column: hash_mdg
+        expression: md5(concat(
+                    partner_mdg_but000, 
+                    partner_guid_mdg_but000,
+                    schedule_type_mdg_crmm_but_frg0061, 
+                    valid_from_mdg_crmm_but_frg0061, 
+                    valid_to_mdg_crmm_but_frg0061, 
+                    rule_mdg_scrules))
+
+  - kind: checkpoint
+    name: checkpoint_mdg
+    context_name: add_mdg
+
+  - kind: add
+    name: add_crm
+    context_name: join_crm
+    params:
+      - column: hash_crm
+        expression: md5(concat(
+                    partner_crm_but000, 
+                    partner_guid_crm_but000,
+                    schedule_type_crm_crmm_but_frg0061, 
+                    valid_from_crm_crmm_but_frg0061, 
+                    valid_to_crm_crmm_but_frg0061, 
+                    rule_crm_scrules))
+
+  - kind: checkpoint
+    name: checkpoint_crm
+    context_name: add_crm
+
+  - kind: join
+    name: join_non_matching_mdg
+    context_name: checkpoint_mdg
+    params:
+      - other:
+          checkpoint_crm
+        how:
+          full
+        columns:
+          hash_mdg: hash_crm
+
+  - kind: filter
+    name: filter_non_matching_mdg
+    context_name: join_non_matching_mdg
+    params:
+      - condition:
+          isnull(hash_crm) or hash_crm = ''
+
+  - kind: join
+    name: join_non_matching_crm
+    context_name: checkpoint_crm
+    params:
+      - other:
+          checkpoint_mdg
+        how:
+          full
+        columns:
+          hash_crm: hash_mdg
+
+  - kind: filter
+    name: filter_non_matching_crm
+    context_name: join_non_matching_crm
+    params:
+      - condition:
+          isnull(hash_mdg) or hash_mdg = ''
+
+  - kind: select
+    name: select_non_matching_mdg
+    context_name: filter_non_matching_mdg
+    params:
+      columns:
+        partner_mdg_but000: partner_mdg
+        partner_guid_mdg_but000: partner_guid_mdg
+        schedule_type_mdg_crmm_but_frg0061: schedule_type_mdg
+        rule_mdg_scrules: rule_mdg
+        valid_from_mdg_crmm_but_frg0061: valid_from_mdg
+        valid_to_mdg_crmm_but_frg0061: valid_to_mdg
+        name_last_mdg_but000: name_last_mdg
+        name_first_mdg_but000: name_first_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: select
+    name: select_non_matching_crm
+    context_name: filter_non_matching_crm
+    params:
+      columns:
+        partner_crm_but000: partner_crm
+        partner_guid_crm_but000: partner_guid_crm
+        schedule_type_crm_crmm_but_frg0061: schedule_type_crm
+        rule_crm_scrules: rule_crm
+        valid_from_crm_crmm_but_frg0061: valid_from_crm
+        valid_to_crm_crmm_but_frg0061: valid_to_crm
+        name_last_crm_but000: name_last_crm
+        name_first_crm_but000: name_first_crm
+        hash_crm: hash_crm
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_mdg
+    context_name: select_non_matching_mdg
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_crm
+    context_name: select_non_matching_crm
+
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E' and sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+
+  - kind: filter
+    name: filter_knvv
+    params:
+      - condition:
+          vtweg = '01' and spart = '01'
+
+  - kind: select
+    name: select_knvv
+    context_name: filter_knvv
+    params:
+      columns:
+        kunnr: kunnr
+        vkorg: vkorg
+        kvgr4: kvgr4
+        vtweg: vtweg
+        spart: spart
+
+  - kind: read_dataio
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvv4t
+    params:
+      - condition:
+         sap_cluster = 'CL1' and spras = 'E'
+
+  - kind: select
+    name: select_tvv4t
+    params:
+      columns:
+        kvgr4: kvgr4
+        bezei: bezei
+      distinct: true
+
+  - kind: join
+    name: join_non_matching
+    context_name: checkpoint_non_matching_mdg
+    params:
+      - other:
+          checkpoint_non_matching_crm
+        how:
+          full
+        columns:
+          partner_mdg: partner_crm
+          schedule_type_mdg: schedule_type_crm
+          partner_guid_mdg: partner_guid_crm
+
+
+  - kind: join
+    name: join_missing_from_mdg
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_crm: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_mdg
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','') and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+  - kind: join
+    name: join_missing_from_crm
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_mdg: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+
+  - kind: filter
+    name: join_missing_from_crm
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','') and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+## data missing from mdg
+
+  - kind: filter
+    name: filter_missing_from_mdg
+    context_name: join_missing_from_mdg
+    params:
+      - condition:
+          isnull(partner_mdg)
+
+  - kind: add
+    name: add_missing_from_mdg
+    context_name: filter_missing_from_mdg
+    params:
+      - column: msg
+        expression: if(isnull(partner_mdg), 'data missing from mdg', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_crm, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''crm'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: loading_date
+        expression: current_date()
+
+## data missing from crm
+
+  - kind: filter
+    name: filter_missing_from_crm
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          isnull(partner_crm)
+
+  - kind: add
+    name: add_missing_from_crm
+    context_name: filter_missing_from_crm
+    params:
+      - column: msg
+        expression: if(isnull(partner_crm), 'data missing from crm', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# start date of validity
+
+  - kind: filter
+    name: filter_start_date_of_validity
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and valid_from_crm <> valid_from_mdg
+
+  - kind: add
+    name: add_start_date_of_validity
+    context_name: filter_start_date_of_validity
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and valid_from_crm <> valid_from_mdg, 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and valid_from_crm <> valid_from_mdg, concat('BUSINESS APPOINTMENT:', ' Start date of validity'), '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+
+# end date of validity
+
+  - kind: filter
+    name: filter_end_date_of_validity
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and valid_to_crm <> valid_to_mdg
+
+  - kind: add
+    name: add_end_date_of_validity
+    context_name: filter_end_date_of_validity
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and valid_to_crm <> valid_to_mdg, 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and valid_to_crm <> valid_to_mdg, concat('BUSINESS APPOINTMENT:', ' End date of validity'), '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# frequency
+
+  - kind: filter
+    name: filter_frequency
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and cast(substr(rule_crm, 1, 2) as int) <> cast(substr(rule_mdg, 1, 2) as int)
+
+  - kind: add
+    name: add_frequency
+    context_name: filter_frequency
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and substr(rule_crm, 1, 2) <> substr(rule_mdg, 1, 2), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and substr(rule_crm, 1, 2) <> substr(rule_mdg, 1, 2), concat('BUSINESS APPOINTMENT:', ' FREQUENCY'), '-')
+      - column: tgt_attr
+        expression: substr(rule_crm, 1, 2)
+      - column: src_attr
+        expression: substr(rule_mdg, 1, 2)
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# monday
+
+  - kind: filter
+    name: filter_monday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and (substr(rule_crm, 3, 1) <> substr(rule_mdg, 3, 1) 
+          or substr(rule_crm, 10, 6) <> substr(rule_mdg, 10, 6) 
+          or substr(rule_crm, 52, 6) <> substr(rule_mdg, 52, 6))
+
+  - kind: add
+    name: add_monday
+    context_name: filter_monday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 3, 1) <> substr(rule_mdg, 3, 1) 
+                    or substr(rule_crm, 10, 6) <> substr(rule_mdg, 10, 6) 
+                    or substr(rule_crm, 52, 6) <> substr(rule_mdg, 52, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 3, 1) <> substr(rule_mdg, 3, 1) 
+                    or substr(rule_crm, 10, 6) <> substr(rule_mdg, 10, 6) 
+                    or substr(rule_crm, 52, 6) <> substr(rule_mdg, 52, 6)), concat('BUSINESS APPOINTMENT:', ' MONDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 3, 1), 
+                    ' From ', substr(rule_crm, 10, 2), 
+                    ':', substr(rule_crm, 12, 2), 
+                    ':', substr(rule_crm, 14, 2), 
+                    ' To ', substr(rule_crm, 52, 2), 
+                    ':', substr(rule_crm, 54, 2), 
+                    ':', substr(rule_crm, 56, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 3, 1), 
+                    ' From ', substr(rule_mdg, 10, 2), 
+                    ':', substr(rule_mdg, 12, 2), 
+                    ':', substr(rule_mdg, 14, 2), 
+                    ' To ', substr(rule_mdg, 52, 2), 
+                    ':', substr(rule_mdg, 54, 2), 
+                    ':', substr(rule_mdg, 56, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# tuesday
+
+  - kind: filter
+    name: filter_tuesday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and (substr(rule_crm, 4, 1) <> substr(rule_mdg, 4, 1) 
+          or substr(rule_crm, 16, 6) <> substr(rule_mdg, 16, 6) 
+          or substr(rule_crm, 58, 6) <> substr(rule_mdg, 58, 6))
+
+  - kind: add
+    name: add_tuesday
+    context_name: filter_tuesday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 4, 1) <> substr(rule_mdg, 4, 1) 
+                    or substr(rule_crm, 16, 6) <> substr(rule_mdg, 16, 6) 
+                    or substr(rule_crm, 58, 6) <> substr(rule_mdg, 58, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 4, 1) <> substr(rule_mdg, 4, 1) 
+                    or substr(rule_crm, 16, 6) <> substr(rule_mdg, 16, 6) 
+                    or substr(rule_crm, 58, 6) <> substr(rule_mdg, 58, 6)), concat('BUSINESS APPOINTMENT:', ' TUESDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 4, 1), 
+                    ' From ', substr(rule_crm, 16, 2), 
+                    ':', substr(rule_crm, 18, 2), 
+                    ':', substr(rule_crm, 20, 2), 
+                    ' To ', substr(rule_crm, 58, 2), 
+                    ':', substr(rule_crm, 60, 2), 
+                    ':', substr(rule_crm, 62, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 4, 1), 
+                    ' From ', substr(rule_mdg, 16, 2), 
+                    ':', substr(rule_mdg, 18, 2), 
+                    ':', substr(rule_mdg, 20, 2), 
+                    ' To ', substr(rule_mdg, 58, 2), 
+                    ':', substr(rule_mdg, 60, 2), 
+                    ':', substr(rule_mdg, 62, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# wednesday
+
+  - kind: filter
+    name: filter_wednesday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg 
+          and (substr(rule_crm, 5, 1) <> substr(rule_mdg, 5, 1) 
+          or substr(rule_crm, 22, 6) <> substr(rule_mdg, 22, 6) 
+          or substr(rule_crm, 64, 6) <> substr(rule_mdg, 64, 6))
+
+  - kind: add
+    name: add_wednesday
+    context_name: filter_wednesday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 5, 1) <> substr(rule_mdg, 5, 1) 
+                    or substr(rule_crm, 22, 6) <> substr(rule_mdg, 22, 6) 
+                    or substr(rule_crm, 64, 6) <> substr(rule_mdg, 64, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 5, 1) <> substr(rule_mdg, 5, 1) 
+                    or substr(rule_crm, 22, 6) <> substr(rule_mdg, 22, 6) 
+                    or substr(rule_crm, 64, 6) <> substr(rule_mdg, 64, 6)), concat('BUSINESS APPOINTMENT:', ' WEDNESDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 5, 1), 
+                    ' From ', substr(rule_crm, 22, 2), 
+                    ':', substr(rule_crm, 24, 2), 
+                    ':', substr(rule_crm, 26, 2), 
+                    ' To ', substr(rule_crm, 64, 2), 
+                    ':', substr(rule_crm, 66, 2), 
+                    ':', substr(rule_crm, 68, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 5, 1), 
+                    ' From ', substr(rule_mdg, 22, 2), 
+                    ':', substr(rule_mdg, 24, 2), 
+                    ':', substr(rule_mdg, 26, 2), 
+                    ' To ', substr(rule_mdg, 64, 2), 
+                    ':', substr(rule_mdg, 66, 2), 
+                    ':', substr(rule_mdg, 68, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# thursday
+
+  - kind: filter
+    name: filter_thursday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and (substr(rule_crm, 6, 1) <> substr(rule_mdg, 6, 1) 
+          or substr(rule_crm, 28, 6) <> substr(rule_mdg, 28, 6) 
+          or substr(rule_crm, 70, 6) <> substr(rule_mdg, 70, 6))
+
+  - kind: add
+    name: add_thursday
+    context_name: filter_thursday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 6, 1) <> substr(rule_mdg, 6, 1) 
+                    or substr(rule_crm, 28, 6) <> substr(rule_mdg, 28, 6) 
+                    or substr(rule_crm, 70, 6) <> substr(rule_mdg, 70, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 6, 1) <> substr(rule_mdg, 6, 1) 
+                    or substr(rule_crm, 28, 6) <> substr(rule_mdg, 28, 6) 
+                    or substr(rule_crm, 70, 6) <> substr(rule_mdg, 70, 6)), concat('BUSINESS APPOINTMENT:', ' THURSDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 6, 1), 
+                    ' From ', substr(rule_crm, 28, 2), 
+                    ':', substr(rule_crm, 30, 2), 
+                    ':', substr(rule_crm, 32, 2), 
+                    ' To ', substr(rule_crm, 70, 2), 
+                    ':', substr(rule_crm, 72, 2), 
+                    ':', substr(rule_crm, 74, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 6, 1), 
+                    ' From ', substr(rule_mdg, 28, 2), 
+                    ':', substr(rule_mdg, 30, 2), 
+                    ':', substr(rule_mdg, 32, 2), 
+                    ' To ', substr(rule_mdg, 70, 2), 
+                    ':', substr(rule_mdg, 72, 2), 
+                    ':', substr(rule_mdg, 74, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# friday
+
+  - kind: filter
+    name: filter_friday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and (substr(rule_crm, 7, 1) <> substr(rule_mdg, 7, 1) 
+          or substr(rule_crm, 34, 6) <> substr(rule_mdg, 34, 6) 
+          or substr(rule_crm, 76, 6) <> substr(rule_mdg, 76, 6))
+
+  - kind: add
+    name: add_friday
+    context_name: filter_friday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 7, 1) <> substr(rule_mdg, 7, 1) 
+                    or substr(rule_crm, 34, 6) <> substr(rule_mdg, 34, 6) 
+                    or substr(rule_crm, 76, 6) <> substr(rule_mdg, 76, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 7, 1) <> substr(rule_mdg, 7, 1) 
+                    or substr(rule_crm, 34, 6) <> substr(rule_mdg, 34, 6) 
+                    or substr(rule_crm, 76, 6) <> substr(rule_mdg, 76, 6)), concat('BUSINESS APPOINTMENT:', ' FRIDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 7, 1), 
+                    ' From ', substr(rule_crm, 34, 2), 
+                    ':', substr(rule_crm, 36, 2), 
+                    ':', substr(rule_crm, 38, 2), 
+                    ' To ', substr(rule_crm, 76, 2), 
+                    ':', substr(rule_crm, 78, 2), 
+                    ':', substr(rule_crm, 80, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 7, 1), 
+                    ' From ', substr(rule_mdg, 34, 2), 
+                    ':', substr(rule_mdg, 36, 2), 
+                    ':', substr(rule_mdg, 38, 2), 
+                    ' To ', substr(rule_mdg, 76, 2), 
+                    ':', substr(rule_mdg, 78, 2), 
+                    ':', substr(rule_mdg, 80, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# saturday
+
+  - kind: filter
+    name: filter_saturday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg
+          and (substr(rule_crm, 8, 1) <> substr(rule_mdg, 8, 1) 
+          or substr(rule_crm, 40, 6) <> substr(rule_mdg, 40, 6) 
+          or substr(rule_crm, 82, 6) <> substr(rule_mdg, 82, 6))
+
+  - kind: add
+    name: add_saturday
+    context_name: filter_saturday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 8, 1) <> substr(rule_mdg, 8, 1) 
+                    or substr(rule_crm, 40, 6) <> substr(rule_mdg, 40, 6) 
+                    or substr(rule_crm, 82, 6) <> substr(rule_mdg, 82, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 8, 1) <> substr(rule_mdg, 8, 1) 
+                    or substr(rule_crm, 40, 6) <> substr(rule_mdg, 40, 6) 
+                    or substr(rule_crm, 82, 6) <> substr(rule_mdg, 82, 6)), concat('BUSINESS APPOINTMENT:', ' SATURDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 8, 1), 
+                    ' From ', substr(rule_crm, 40, 2), 
+                    ':', substr(rule_crm, 42, 2), 
+                    ':', substr(rule_crm, 44, 2), 
+                    ' To ', substr(rule_crm, 82, 2), 
+                    ':', substr(rule_crm, 84, 2), 
+                    ':', substr(rule_crm, 86, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 8, 1), 
+                    ' From ', substr(rule_mdg, 40, 2), 
+                    ':', substr(rule_mdg, 42, 2), 
+                    ':', substr(rule_mdg, 44, 2), 
+                    ' To ', substr(rule_mdg, 82, 2), 
+                    ':', substr(rule_mdg, 84, 2), 
+                    ':', substr(rule_mdg, 86, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+# sunday
+
+  - kind: filter
+    name: filter_sunday
+    context_name: join_missing_from_crm
+    params:
+      - condition:
+          partner_crm = partner_mdg
+          and schedule_type_crm = schedule_type_mdg 
+          and (substr(rule_crm, 9, 1) <> substr(rule_mdg, 9, 1) 
+          or substr(rule_crm, 46, 6) <> substr(rule_mdg, 46, 6) 
+          or substr(rule_crm, 88, 6) <> substr(rule_mdg, 88, 6))
+
+  - kind: add
+    name: add_sunday
+    context_name: filter_sunday
+    params:
+      - column: msg
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 9, 1) <> substr(rule_mdg, 9, 1) 
+                    or substr(rule_crm, 46, 6) <> substr(rule_mdg, 46, 6) 
+                    or substr(rule_crm, 88, 6) <> substr(rule_mdg, 88, 6)), 'attributes are mismatching', '-')
+      - column: attr_name
+        expression: if(partner_crm = partner_mdg 
+                    and schedule_type_crm = schedule_type_mdg 
+                    and (substr(rule_crm, 9, 1) <> substr(rule_mdg, 9, 1) 
+                    or substr(rule_crm, 46, 6) <> substr(rule_mdg, 46, 6) 
+                    or substr(rule_crm, 88, 6) <> substr(rule_mdg, 88, 6)), concat('BUSINESS APPOINTMENT:', ' SUNDAY'), '-')
+      - column: tgt_attr
+        expression: concat('Allowed:', ' ', substr(rule_crm, 9, 1), 
+                    ' From ', substr(rule_crm, 46, 2), 
+                    ':', substr(rule_crm, 48, 2), 
+                    ':', substr(rule_crm, 50, 2), 
+                    ' To ', substr(rule_crm, 88, 2), 
+                    ':', substr(rule_crm, 90, 2), 
+                    ':', substr(rule_crm, 92, 2))
+      - column: src_attr
+        expression: concat('Allowed:', ' ', substr(rule_mdg, 9, 1), 
+                    ' From ', substr(rule_mdg, 46, 2), 
+                    ':', substr(rule_mdg, 48, 2), 
+                    ':', substr(rule_mdg, 50, 2), 
+                    ' To ', substr(rule_mdg, 88, 2), 
+                    ':', substr(rule_mdg, 90, 2), 
+                    ':', substr(rule_mdg, 92, 2))
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: loading_date
+        expression: current_date()
+##
+  - kind: select
+    name: select_missing_from_mdg
+    context_name: add_missing_from_mdg
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_crm: primary_key_l1
+        name_first_crm: attribute1
+        name_last_crm: attribute2
+        schedule_type_crm: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_missing_from_crm
+    context_name: add_missing_from_crm
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_start_date_of_validity
+    context_name: add_start_date_of_validity
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        valid_from_mdg: compared_src_attr_value
+        valid_from_crm: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_end_date_of_validity
+    context_name: add_end_date_of_validity
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        valid_to_mdg: compared_src_attr_value
+        valid_to_crm: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_frequency
+    context_name: add_frequency
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_monday
+    context_name: add_monday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_tuesday
+    context_name: add_tuesday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_wednesday
+    context_name: add_wednesday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_thursday
+    context_name: add_thursday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_friday
+    context_name: add_friday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_saturday
+    context_name: add_saturday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_sunday
+    context_name: add_sunday
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        schedule_type_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name: compared_attribute
+        src_attr: compared_src_attr_value
+        tgt_attr: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_business_hours
+    context_name: select_missing_from_mdg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_from_crm
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_start_date_of_validity
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_end_date_of_validity
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_frequency
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_monday
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_tuesday
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_wednesday
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_thursday
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_friday
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_saturday
+
+  - kind: union
+    name: union_business_hours
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_sunday
+
+  - kind: write_dataio
+    name: write_business_hours
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True
+
+##agg
+
+  - kind: select
+    name: select_mdg
+    context_name: checkpoint_mdg
+    params:
+      columns:
+        partner_mdg_but000: partner_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: select_mdg
+    params:
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: hash_mdg
+      - column: mdg_country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''crm'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##total crm
+  - kind: select
+    name: select_crm
+    context_name: checkpoint_crm
+    params:
+      columns:
+        partner_crm_but000: partner_crm
+        hash_crm: hash_crm
+      distinct: true
+
+  - kind: add
+    name: add_crm_agg
+    context_name: select_crm
+    params:
+      - column: table_name
+        expression: '''BUSINESS HOURS'''
+      - column: src_system
+        expression: '''crm'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: crm
+        expression: hash_crm
+      - column: crm_country
+        expression: CASE substr(partner_crm, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_crm_agg
+    context_name: add_crm_agg
+    params:
+      - aggs:
+          crm: count
+        by:
+        - crm_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_crm_agg_loading_date
+    context_name: group_crm_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_crm AS INT)
+
+  - kind: select
+    name: select_crm_agg
+    context_name: add_crm_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        crm_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from mdg
+
+  - kind: group
+    name: group_missing_from_mdg_agg
+    context_name: add_missing_from_mdg
+    params:
+      - aggs:
+          hash_crm: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_mdg_agg
+    context_name: group_missing_from_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_hash_crm AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM MDG'''
+
+  - kind: select
+    name: select_missing_from_mdg_agg
+    context_name: add_missing_from_mdg_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from crm
+
+  - kind: group
+    name: group_missing_from_crm_agg
+    context_name: add_missing_from_crm
+    params:
+      - aggs:
+          hash_mdg: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_crm_agg
+    context_name: group_missing_from_crm_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''crm'''
+      - column: cnt
+        expression: CAST(count_hash_mdg AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM CRM'''
+
+  - kind: select
+    name: select_missing_from_crm_agg
+    context_name: add_missing_from_crm_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##mismatched
+
+  - kind: filter
+    name: filter_mismatched_agg
+    context_name: union_business_hours
+    params:
+      - condition:
+          dimension = 'attributes are mismatching'
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: filter_mismatched_agg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''crm'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+
+  - kind: select
+    name: select_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

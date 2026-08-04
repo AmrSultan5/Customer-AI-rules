@@ -1,0 +1,357 @@
+transform:
+  name: du_fsm004_customer_md
+  operations:
+  ## fsm004_customer_md_aggregated
+  ### red_outlet_suppressed_check
+  - kind: read_dataio
+    name: read_du_fsm004_customer_md
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      namespace: l2
+      country: ca
+      module: red
+      object_name: du_fsm004_customer_md
+      schema_version: v1
+
+  - kind: select
+    name: select_ca_du_fsm004_customer
+    params:
+      columns:
+        report_code: report_code
+        report_name: report_name
+        red_outlet: red_outlet
+        country_code: country_code
+        customer_code: customer_code
+        sales_office: sales_office
+        sales_group: sales_group
+        customer_description: customer_description
+        sales_org_code: sales_org_code
+        sales_org_description: sales_org_description
+        order_block_code: order_block_code
+        order_block_description: order_block_description
+        cpl_code: cpl_code
+        cpl_description: cpl_description
+        trade_channel_code: trade_channel_code
+        trade_channel_description: trade_channel_description
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_description: sub_trade_channel_description
+        ccaf_code: ccaf_code
+        ccaf_description: ccaf_description
+        bdaa_segment_code: bdaa_segment_code
+        bdaa_segment_description: bdaa_segment_description
+        cde_target_doors_code: cde_target_doors_code
+        cde_target_doors_description: cde_target_doors_description
+        bp_territory_id: bp_territory_id
+        customer_incentive: customer_incentive
+        bd_employee: bd_employee
+        red_pos: red_pos
+        fiscal_period: fiscal_period
+        red_outlet_suppressed_check: red_outlet_suppressed_check
+        red_outlet_with_microsegment_check: red_outlet_with_microsegment_check
+        microsegment_with_red_outlet_check: microsegment_with_red_outlet_check
+        red_outlet_cde_doors_check: red_outlet_cde_doors_check
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_red_outlet_suppressed_check
+    context_name: select_ca_du_fsm004_customer
+    params:
+      columns:
+        report_code: report
+        report_name: name
+        country_code: country_code
+        fiscal_period: period
+        red_outlet_suppressed_check: red_outlet_suppressed_check
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_red_outlet_suppressed_check
+    params:
+      - column: check_name
+        expression: '"RED outlets with Suppression Check"'
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: total_checks
+        expression: IF(red_outlet_suppressed_check IS NOT NULL, 1, NULL)
+      - column: failed_checks
+        expression: IF(red_outlet_suppressed_check = '0', 1, NULL)
+      - column: report_name
+        expression: concat(report, '-', name)
+
+  - kind: drop
+    name: drop_red_outlet_suppressed_check
+    params:
+      - column: red_outlet_suppressed_check
+      - column: report
+      - column: name
+
+  - kind: group
+    name: group_red_outlet_suppressed_check
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+          period: max
+        by:
+        - country_code
+        - report_name
+        - check_name
+        - quality_category
+
+  - kind: select
+    name: select_red_outlet_suppressed_check_aggregated
+    params:
+      columns:
+        country_code: country_code
+        report_name: report_name
+        check_name: check_name
+        quality_category: quality_category
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        max_period: period
+
+### red_outlet_with_microsegment_check
+
+  - kind: select
+    name: select_red_outlet_with_microsegment_check
+    context_name: select_ca_du_fsm004_customer
+    params:
+      columns:
+        report_code: report
+        report_name: name
+        country_code: country_code
+        fiscal_period: period
+        red_outlet_with_microsegment_check: red_outlet_with_microsegment_check
+      distinct: true
+    skip_next: false
+
+
+  - kind: add
+    name: add_red_outlet_with_microsegment_check
+    params:
+      - column: check_name
+        expression: '"RED PicoS mapping available for RED flagged outlets Check"'
+      - column: quality_category
+        expression: '"Consistency"'
+      - column: total_checks
+        expression: IF(red_outlet_with_microsegment_check IS NOT NULL, 1, NULL)
+      - column: failed_checks
+        expression: IF(red_outlet_with_microsegment_check = '0', 1, NULL)
+      - column: report_name
+        expression: concat(report, '-', name)
+
+  - kind: drop
+    name: drop_red_outlet_with_microsegment_check
+    params:
+      - column: red_outlet_with_microsegment_check
+      - column: report
+      - column: name
+
+  - kind: group
+    name: group_red_outlet_with_microsegment_check
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+          period: max
+        by:
+        - country_code
+        - report_name
+        - check_name
+        - quality_category
+
+  - kind: select
+    name: select_red_outlet_with_microsegment_check_aggregated
+    params:
+      columns:
+        country_code: country_code
+        report_name: report_name
+        check_name: check_name
+        quality_category: quality_category
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        max_period: period
+
+  - kind: union
+    name: union_suppressed_red_outlet_with_micro_aggregated
+    context_name: select_red_outlet_with_microsegment_check_aggregated
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_red_outlet_suppressed_check_aggregated
+
+
+### microsegment_with_red_outlet_check
+
+  - kind: select
+    name: select_microsegment_with_red_outlet_check
+    context_name: select_ca_du_fsm004_customer
+    params:
+      columns:
+        report_code: report
+        report_name: name
+        country_code: country_code
+        fiscal_period: period
+        microsegment_with_red_outlet_check: microsegment_with_red_outlet_check
+      distinct: true
+    skip_next: false
+
+
+  - kind: add
+    name: add_microsegment_with_red_outlet_check
+    params:
+      - column: check_name
+        expression: '"Outlets matching RED PicoS mapping Check"'
+      - column: quality_category
+        expression: '"Consistency"'
+      - column: total_checks
+        expression: IF(microsegment_with_red_outlet_check IS NOT NULL, 1, NULL)
+      - column: failed_checks
+        expression: IF(microsegment_with_red_outlet_check = '0', 1, NULL)
+      - column: report_name
+        expression: concat(report, '-', name)
+
+  - kind: drop
+    name: drop_microsegment_with_red_outlet_check
+    params:
+      - column: microsegment_with_red_outlet_check
+      - column: report
+      - column: name
+
+  - kind: group
+    name: group_microsegment_with_red_outlet_check
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+          period: max
+        by:
+        - country_code
+        - report_name
+        - check_name
+        - quality_category
+
+  - kind: select
+    name: select_microsegment_with_red_outlet_check_aggregated
+    params:
+      columns:
+        country_code: country_code
+        report_name: report_name
+        check_name: check_name
+        quality_category: quality_category
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        max_period: period
+
+  - kind: union
+    name: union_suppressed_red_outlet_with_micro_microsegment_red_outlet_aggregated
+    context_name: union_suppressed_red_outlet_with_micro_aggregated
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_microsegment_with_red_outlet_check_aggregated
+
+
+
+### red_outlet_cde_doors_check
+
+
+  - kind: select
+    name: select_red_outlet_cde_doors_check
+    context_name: select_ca_du_fsm004_customer
+    params:
+      columns:
+        report_code: report
+        report_name: name
+        country_code: country_code
+        fiscal_period: period
+        red_outlet_cde_doors_check : red_outlet_cde_doors_check
+      distinct: true
+    skip_next: false
+
+
+  - kind: add
+    name: add_red_outlet_cde_doors_check
+    params:
+      - column: check_name
+        expression: '"RED outlets with CDE Target door maintained Check"'
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: total_checks
+        expression: IF(red_outlet_cde_doors_check  IS NOT NULL, 1, NULL)
+      - column: failed_checks
+        expression: IF(red_outlet_cde_doors_check  = '0', 1, NULL)
+      - column: report_name
+        expression: concat(report, '-', name)
+
+  - kind: drop
+    name: drop_red_outlet_cde_doors_check
+    params:
+      - column: red_outlet_cde_doors_check
+      - column: report
+      - column: name
+
+  - kind: group
+    name: group_red_outlet_cde_doors_check
+    params:
+      - aggs:
+          total_checks: count
+          failed_checks: count
+          period: max
+        by:
+        - country_code
+        - report_name
+        - check_name
+        - quality_category
+
+  - kind: select
+    name: select_red_outlet_cde_doors_check_aggregated
+    params:
+      columns:
+        country_code: country_code
+        report_name: report_name
+        check_name: check_name
+        quality_category: quality_category
+        count_total_checks: total_checks
+        count_failed_checks: failed_checks
+        max_period: period
+
+  - kind: union
+    name: union_suppressed_red_outlet_with_micro_microsegment_red_outlet_cde_doors_aggregated
+    context_name: union_suppressed_red_outlet_with_micro_microsegment_red_outlet_aggregated
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_red_outlet_cde_doors_check_aggregated
+
+
+### the last step
+  - kind: cast
+    name: cast_fsm004_customer_md_aggregated
+    params:
+      - column: failed_checks
+        to: integer
+      - column: total_checks
+        to: integer
+
+  - kind: write_dataio
+    name: write_red_aggregated
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: red
+      namespace: golden
+      object_name: red_aggregated
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: append

@@ -1,0 +1,30 @@
+transform:
+  name: Customer Uniqueness Check Results
+  operations:
+    - name: initialize_schema_configuration
+      kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+      params:
+        module_name: governance_data_quality_processes
+        config_name: dcc_schema_versions
+    - name: Generate Customer Uniqueness Report
+      kind: nested_process
+      condition: "{{is_first_week_of_quarter}}"
+      params:
+        config_path: "processes/data_quality/ca/data_control_center/golden/dm_customer_check_results_uniqueness/v1/generate_customer_uniqueness_report_v1.yaml"
+        module: "governance_data_quality_processes.configs"
+        jinja_params:
+          dataio:
+            ad_id: '{{dataio.ad_id}}'
+            storage_id: '{{dataio.storage_id}}'
+          process_run_id: "{{process_run_id}}"
+
+    - name: Feedback Based False Positives Exclusion
+      kind: nested_process
+      params:
+        config_path: "processes/data_quality/ca/data_control_center/golden/dm_customer_check_results_uniqueness/v1/feedback_based_exclusion_v1.yaml"
+        module: "governance_data_quality_processes.configs"
+        jinja_params:
+          dataio:
+            ad_id: '{{dataio.ad_id}}'
+            storage_id: '{{dataio.storage_id}}'
+          process_run_id: "{{process_run_id}}"

@@ -1,0 +1,223 @@
+transform:
+  name: dm_delivery_shippment
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_vttp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana    
+      namespace: transactional_data
+      object_name: vttp
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_vttk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana     
+      namespace: transactional_data
+      object_name: vttk
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_likp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana     
+      namespace: transactional_data
+      object_name: likp
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lips
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana     
+      namespace: transactional_data
+      object_name: lips
+
+  - kind: select
+    name: select_vttp
+    context_name: read_vttp
+    params:
+      columns:
+        vbeln: vbeln_vp
+        tknum: tknum_vp
+        tpnum: tpnum_vp
+        sap_cluster: sap_cluster_vp
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_vttk
+    context_name: read_vttk
+    params:
+      columns:
+        tknum: tknum_vk
+        stabf: stabf_vk
+        sttrg: sttrg_vk
+        shtyp: shtyp_vk
+        ternr: ternr_vk
+        sap_cluster: sap_cluster_vk
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_likp
+    context_name: read_likp
+    params:
+      columns:
+        vbeln: vbeln_lp
+        kunag: kunag_lp
+        kunnr: kunnr_lp
+        vkorg: vkorg_lp
+        vbtyp: vbtyp_lp
+        lfdat: lfdat_lp
+        vsart: vsart_lp
+        lfart: lfart_lp
+        erdat: erdat_lp
+        sap_cluster: sap_cluster_lp
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_lips
+    context_name: read_lips
+    params:
+      columns:
+        matnr: matnr_ls
+        vbeln: vbeln_ls
+        werks: werks_ls
+        posnr: posnr_ls
+        erdat: erdat_ls
+        sap_cluster: sap_cluster_ls
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_lips_left_werks
+    params:
+      - column: lips_left_werks
+        expression: left(werks_ls, 2)
+
+# Read plant_code_mapping
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_all
+    context_name: select_likp
+    params:
+      - other:
+          select_vttp
+        how:
+          left
+        columns:
+          vbeln_lp: vbeln_vp
+          sap_cluster_lp: sap_cluster_vp
+      - other:
+          select_vttk
+        how:
+          inner
+        columns:
+          tknum_vp: tknum_vk
+          sap_cluster_vp: sap_cluster_vk
+      - other:
+          add_lips_left_werks
+        how:
+          left
+        columns:
+          vbeln_lp: vbeln_ls
+          sap_cluster_lp: sap_cluster_ls
+      - other:
+          select_pcm
+        how:
+          left
+        columns:
+          lips_left_werks: plant_code_short
+          sap_cluster_ls: sap_cluster
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        kunnr_lp: customer_code
+        kunag_lp: customer_sold_to_code
+        vbeln_lp: delivery_document_number
+        vkorg_lp: sales_org_code
+        lfart_lp: delivery_type_code
+        vbtyp_lp: delivery_document_category
+        lfdat_lp: delivery_date
+        vsart_lp: shipping_type_code
+        tknum_vp: shippment_document_number
+        tpnum_vp: shippment_item_number
+        stabf_vk: shippment_completion_status
+        sttrg_vk: shippment_transportation_status
+        shtyp_vk: shipping_subtype_code
+        ternr_vk: shippment_order_number
+        sap_cluster_lp: sap_cluster
+        matnr_ls: material_code
+        country_code: country_code
+        werks_ls: plant_code
+        posnr_ls: delivery_item_number
+        erdat_lp: delivery_creation_date
+        erdat_ls: delivery_item_creation_date
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_delivery_shippment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_delivery_shippment
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

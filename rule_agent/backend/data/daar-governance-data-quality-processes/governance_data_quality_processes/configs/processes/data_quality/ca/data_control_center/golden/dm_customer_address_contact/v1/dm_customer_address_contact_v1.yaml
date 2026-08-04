@@ -1,0 +1,616 @@
+transform:
+  name: dm_customer_address_contact
+  operations:
+
+# Read BUT020
+
+  - kind: read_dataio
+    name: read_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  - kind: select
+    name: select_b
+    params:
+      columns:
+        partner: partner
+        addrnumber: addrnumber
+        addr_valid_to: addr_valid_to
+        sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_b
+    params:
+      - condition:
+          addr_valid_to = '99991231235959'
+
+  - kind: select
+    name: select_b_finall
+    params:
+      columns:
+        partner: customer_code
+        addrnumber: address_number
+        addr_valid_to: addr_valid_to
+        sap_cluster: sap_cluster
+
+# Read T005
+
+  - kind: read_dataio
+    name: read_t005
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t005
+      schema_version: v1
+
+  - kind: select
+    name: select_r
+    params:
+      columns:
+        land1: land1
+        sap_cluster: sap_cluster
+
+
+# Read ADR2_S4
+
+  - kind: read_dataio
+    name: read_adr2_s4
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: adr2
+      schema_version: v1
+
+  - kind: add
+    name: add_a2_s
+    params:
+      - column: contact_medium_type
+        expression: "CASE WHEN r3_user = '1' THEN 'fixed_tel_number' WHEN r3_user = '3' THEN 'mobile_tel_number' ELSE '' END"
+      - column: source
+        expression: '''s4'''
+
+  - kind: filter
+    name: filter_r3_user
+    params:
+      - condition: "r3_user IN('1', '3')"
+
+  - kind: select
+    name: select_a2_s
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        tel_number: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+
+  - kind: join
+    name: join_b_a2_s
+    context_name: select_a2_s
+    params:
+      - other:
+          select_r
+        how:
+          left
+        columns:
+          country_code: land1
+          sap_cluster: sap_cluster
+      - other:
+          select_b_finall
+        how:
+          inner
+        columns:
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_is_allowed_country_code
+    params:
+      - column: is_allowed_country_code
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_a2_s_finall
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+# Read ADR2_CRM
+
+  - kind: read_dataio
+    name: read_adr2_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: address_and_communication_data
+      object_name: adr2
+      schema_version: v1
+
+  - kind: add
+    name: add_a2_c
+    params:
+      - column: contact_medium_type
+        expression: "CASE WHEN r3_user = '1' THEN 'fixed_tel_number' WHEN r3_user = '3' THEN 'mobile_tel_number' ELSE '' END"
+      - column: source
+        expression: '''crm'''
+
+  - kind: filter
+    name: filter_r3_user
+    params:
+      - condition: "r3_user IN('1', '3')"
+
+  - kind: select
+    name: select_a2_c
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        tel_number: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_b_a2_c
+    context_name: select_a2_c
+    params:
+      - other:
+          select_r
+        how:
+          left
+        columns:
+          country_code: land1
+          sap_cluster: sap_cluster
+      - other:
+          select_b_finall
+        how:
+          inner
+        columns:
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_is_allowed_country_code
+    params:
+      - column: is_allowed_country_code
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_a2_c_finall
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+
+# Read ADR3_S4
+
+  - kind: read_dataio
+    name: read_adr3_s4
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: adr3
+      schema_version: v1
+
+  - kind: add
+    name: add_contact_medium_type
+    params:
+      - column: contact_medium_type
+        expression: '''fax_number'''
+      - column: source
+        expression: '''s4'''
+
+  - kind: select
+    name: select_a3_s
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        fax_number: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_b_a3_s
+    context_name: select_a3_s
+    params:
+      - other:
+          select_r
+        how:
+          left
+        columns:
+          country_code: land1
+          sap_cluster: sap_cluster
+      - other:
+          select_b_finall
+        how:
+          inner
+        columns:
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_is_allowed_country_code
+    params:
+      - column: is_allowed_country_code
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_a3_s_finall
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+# Read ADR3_CRM
+
+  - kind: read_dataio
+    name: read_adr3_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: address_and_communication_data
+      object_name: adr3
+      schema_version: v1
+
+  - kind: add
+    name: add_contact_medium_type
+    params:
+      - column: contact_medium_type
+        expression: '''fax_number'''
+      - column: source
+        expression: '''crm'''
+
+  - kind: select
+    name: select_a3_c
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        fax_number: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_b_a3_c
+    context_name: select_a3_c
+    params:
+      - other:
+          select_r
+        how:
+          left
+        columns:
+          country_code: land1
+          sap_cluster: sap_cluster
+      - other:
+          select_b_finall
+        how:
+          inner
+        columns:
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_is_allowed_country_code
+    params:
+      - column: is_allowed_country_code
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_a3_c_finall
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+# Read ADR6_S4
+
+  - kind: read_dataio
+    name: read_adr6_s4
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: adr6
+      schema_version: v1
+
+  - kind: add
+    name: add_contact_medium_type
+    params:
+      - column: contact_medium_type
+        expression: '''email_address'''
+      - column: country_code
+        expression: cast(NULL as string)
+      - column: source
+        expression: '''s4'''
+
+  - kind: select
+    name: select_a6_s
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country_code: country_code
+        contact_medium_type: contact_medium_type
+        smtp_addr: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_b_a6_s
+    context_name: select_a6_s
+    params:
+      - other:
+          select_r
+        how:
+          left
+        columns:
+          country_code: land1
+          sap_cluster: sap_cluster
+      - other:
+          select_b_finall
+        how:
+          inner
+        columns:
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_is_allowed_country_code
+    params:
+      - column: is_allowed_country_code
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_a6_s_finall
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+# Read ADR6_CRM
+
+  - kind: read_dataio
+    name: read_adr6_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: address_and_communication_data
+      object_name: adr6
+      schema_version: v1
+
+  - kind: add
+    name: add_contact_medium_type
+    params:
+      - column: contact_medium_type
+        expression: '''email_address'''
+      - column: country_code
+        expression: cast(NULL as string)
+      - column: source
+        expression: '''crm'''
+
+  - kind: select
+    name: select_a6_c
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country_code: country_code
+        contact_medium_type: contact_medium_type
+        smtp_addr: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+
+
+  - kind: join
+    name: join_b_a6_c
+    context_name: select_a6_c
+    params:
+      - other:
+          select_r
+        how:
+          left
+        columns:
+          country_code: land1
+          sap_cluster: sap_cluster
+      - other:
+          select_b_finall
+        how:
+          inner
+        columns:
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_is_allowed_country_code
+    params:
+      - column: is_allowed_country_code
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_a6_c_finall
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+  - kind: union
+    name: union_a2_s_a2_c
+    context_name: select_a2_s_finall
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_a2_c_finall
+
+  - kind: union
+    name: union_a2_a3_s
+    context_name: union_a2_s_a2_c
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_a3_s_finall
+
+  - kind: union
+    name: union_a2_a3
+    context_name: union_a2_a3_s
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_a3_c_finall
+
+  - kind: union
+    name: union_a2_a3_a6_s
+    context_name: union_a2_a3
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_a6_s_finall
+
+  - kind: union
+    name: union_a2_a3_a6
+    context_name: union_a2_a3_a6_s
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_a6_c_finall
+
+  - kind: select
+    name: select_dm_customer_address_contact
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        valid_to: valid_to
+        source: source
+        sap_cluster: sap_cluster
+
+
+  - kind: write_dataio
+    name: write_dm_customer_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_contact
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

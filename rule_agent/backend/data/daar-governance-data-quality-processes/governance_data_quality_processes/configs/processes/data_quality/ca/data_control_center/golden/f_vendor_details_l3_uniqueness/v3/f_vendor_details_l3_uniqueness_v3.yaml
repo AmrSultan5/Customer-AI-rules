@@ -1,0 +1,441 @@
+transform:
+  name: f_vendor_details_l3_uniqueness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_check_results_uniqueness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results_uniqueness
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness
+    context_name: read_dm_vendor_check_results_uniqueness
+    params:
+      columns:
+        vendor_code: vendor_code
+        rule_code: rule_code
+        check_status: check_status
+        duplicated_vendor_code: duplicated_vendor_code
+        country_code: country_code
+        vat_number: vat_number
+        tax_number_1: tax_number_1
+        tax_number_2: tax_number_2
+        tax_number_3: tax_number_3
+        tax_number_4: tax_number_4
+        tax_number_5: tax_number_5
+        bank_country_code: bank_country_code
+        bank_key: bank_key
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+        iban: iban
+        duplicated_vat_number: duplicated_vat_number
+        duplicated_tax_number_1: duplicated_tax_number_1
+        duplicated_tax_number_2: duplicated_tax_number_2
+        duplicated_tax_number_3: duplicated_tax_number_3
+        duplicated_tax_number_4: duplicated_tax_number_4
+        duplicated_tax_number_5: duplicated_tax_number_5
+        duplicated_bank_country_code: duplicated_bank_country_code
+        duplicated_bank_key: duplicated_bank_key
+        duplicated_bank_account_number: duplicated_bank_account_number
+        duplicated_bank_control_key: duplicated_bank_control_key
+        duplicated_iban: duplicated_iban
+        message_output: message_output
+      distinct: true      
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: add
+    name: add_company_code_ifnull
+    context_name: read_dm_vendor_company
+    params:
+      - column: company_code_vp_ifnull
+        expression: ifnull(company_code, 'null')
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: add_company_code_ifnull
+    params:
+      columns:
+        vendor_code: vendor_code_vp
+        company_code_vp_ifnull: company_code_vp_ifnull
+        country_code: country_code_vp
+      distinct: true 
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_vendor_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_vendor_classification
+
+  - kind: add
+    name: add_vc_columns
+    context_name: read_dim_vendor_classification
+    params:
+      - column: account_group_code_vc_ifnull
+        expression: ifnull(account_group_code, 'null') 
+      - column: company_code_vc_ifnull
+        expression: ifnull(company_code, 'null') 
+      - column: purchasing_organization_code_vc_ifnull
+        expression: ifnull(purchasing_organization_code, 'null')  
+
+  - kind: select
+    name: select_dim_vendor_classification
+    context_name: add_vc_columns
+    params:
+      columns:
+        account_group_code_vc_ifnull: account_group_code_vc_ifnull
+        company_code_vc_ifnull: company_code_vc_ifnull
+        vend_class_id: vend_class_id_vc
+        purchasing_organization_code_vc_ifnull: purchasing_organization_code_vc_ifnull
+        preferred_vendor: preferred_vendor_vc
+      distinct: true       
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: add
+    name: add_vendor_account_group_code_vg_ifnull
+    context_name: read_dm_vendor_general
+    params:
+      - column: vendor_account_group_code_vg_ifnull
+        expression: ifnull(vendor_account_group_code, 'null')
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: add_vendor_account_group_code_vg_ifnull
+    params:
+      columns:
+        vendor_code: vendor_code_vg
+        vendor_account_group_code_vg_ifnull : vendor_account_group_code_vg_ifnull
+        vendor_name1: vendor_name1_vg
+      distinct: true   
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_purchasing_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+
+  - kind: add
+    name: add_preferred_vendor_po
+    params:
+      - column: preferred_vendor_po_ifnull
+        expression: if(isnull(preferred_vendor) or preferred_vendor= '', '0', '1')  
+      - column: purchasing_organization_code_po_ifnull
+        expression: ifnull(purchasing_organization_code, 'null')          
+
+  - kind: select
+    name: select_dm_vendor_purchasing_organization
+    context_name: add_preferred_vendor_po
+    params:
+      columns:
+        vendor_code : vendor_code_po
+        purchasing_organization_code_po_ifnull: purchasing_organization_code_po_ifnull
+        preferred_vendor_po_ifnull: preferred_vendor_po_ifnull
+      distinct: true  
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company_vp1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: add
+    name: add_company_code_vp1_ifnull
+    context_name: read_dm_vendor_company_vp1
+    params:
+      - column: company_code_vp1_ifnull
+        expression: ifnull(company_code, 'null')
+
+  - kind: select
+    name: select_dm_vendor_company_vp1
+    context_name: add_company_code_vp1_ifnull
+    params:
+      columns:
+        vendor_code: vendor_code_vp1
+        company_code_vp1_ifnull: company_code_vp1_ifnull
+        country_code: country_code_vp1
+      distinct: true 
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_vendor_classification_vc1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_vendor_classification
+
+  - kind: add
+    name: add_vc1_columns
+    context_name: read_dim_vendor_classification_vc1
+    params:
+      - column: account_group_code_vc1_ifnull
+        expression: ifnull(account_group_code, 'null') 
+      - column: company_code_vc1_ifnull
+        expression: ifnull(company_code, 'null') 
+      - column: purchasing_organization_code_vc1_ifnull
+        expression: ifnull(purchasing_organization_code, 'null') 
+
+  - kind: select
+    name: select_dim_vendor_classification_vc1
+    context_name: add_vc1_columns
+    params:
+      columns:
+        account_group_code_vc1_ifnull: account_group_code_vc1_ifnull
+        company_code_vc1_ifnull: company_code_vc1_ifnull
+        vend_class_id: vend_class_id_vc1
+        purchasing_organization_code_vc1_ifnull: purchasing_organization_code_vc1_ifnull
+        preferred_vendor: preferred_vendor_vc1
+      distinct: true       
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general_vg1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: add
+    name: add_vendor_account_group_code_vg1_ifnull
+    context_name: read_dm_vendor_general_vg1
+    params:
+      - column: vendor_account_group_code_vg1_ifnull
+        expression: ifnull(vendor_account_group_code, 'null')
+
+  - kind: select
+    name: select_dm_vendor_general_vg1
+    context_name: add_vendor_account_group_code_vg1_ifnull
+    params:
+      columns:
+        vendor_code: vendor_code_vg1
+        vendor_account_group_code_vg1_ifnull : vendor_account_group_code_vg1_ifnull
+        vendor_name1: vendor_name1_vg1
+      distinct: true  
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_purchasing_organization_po1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+
+  - kind: add
+    name: add_preferred_vendor_po1
+    params:
+      - column: preferred_vendor_po1_ifnull
+        expression: if(isnull(preferred_vendor) or preferred_vendor= '', '0', '1')  
+      - column: purchasing_organization_code_po1_ifnull
+        expression: ifnull(purchasing_organization_code, 'null')            
+
+  - kind: select
+    name: select_dm_vendor_purchasing_organization_po1
+    context_name: add_preferred_vendor_po1
+    params:
+      columns:
+        vendor_code : vendor_code_po1
+        purchasing_organization_code_po1_ifnull: purchasing_organization_code_po1_ifnull
+        preferred_vendor_po1_ifnull: preferred_vendor_po1_ifnull
+      distinct: true  
+
+  - kind: join
+    name: join_vendor
+    context_name: select_dm_vendor_check_results_uniqueness
+    params:
+      - other:
+          select_dm_vendor_general
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code_vg
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code_vp
+          country_code: country_code_vp
+      - other:
+          select_dm_vendor_purchasing_organization
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code_po         
+      - other:
+          select_dm_vendor_general_vg1
+        how:
+          inner
+        columns:
+          duplicated_vendor_code: vendor_code_vg1             
+      - other:
+          select_dm_vendor_company_vp1
+        how:
+          inner
+        columns:
+          duplicated_vendor_code: vendor_code_vp1
+          country_code: country_code_vp1
+      - other:
+          select_dm_vendor_purchasing_organization_po1
+        how:
+          inner
+        columns:
+          duplicated_vendor_code: vendor_code_po1                  
+      - other:
+          select_dim_vendor_classification
+        how:
+          left
+        columns:
+          vendor_account_group_code_vg_ifnull: account_group_code_vc_ifnull
+          company_code_vp_ifnull: company_code_vc_ifnull     
+          purchasing_organization_code_po_ifnull: purchasing_organization_code_vc_ifnull
+          preferred_vendor_po_ifnull: preferred_vendor_vc  
+      - other:
+          select_dim_vendor_classification_vc1
+        how:
+          left
+        columns:
+          vendor_account_group_code_vg1_ifnull: account_group_code_vc1_ifnull
+          company_code_vp1_ifnull: company_code_vc1_ifnull     
+          purchasing_organization_code_po1_ifnull: purchasing_organization_code_vc1_ifnull
+          preferred_vendor_po1_ifnull: preferred_vendor_vc1
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+
+  - kind: select
+    name: select_f_vendor_details_l3_uniqueness
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        loading_date: loading_date
+        vendor_code: vendor_code
+        vendor_name1_vg: vendor_name
+        vend_class_id_vc: vend_class_id
+        duplicated_vendor_code: duplicated_vendor_code
+        vendor_name1_vg1: duplicated_vendor_name
+        vend_class_id_vc1: duplicated_vend_class_id
+        country_code: country_code
+        vat_number: vat_number
+        tax_number_1: tax_number_1
+        tax_number_2: tax_number_2
+        tax_number_3: tax_number_3
+        tax_number_4: tax_number_4
+        tax_number_5: tax_number_5
+        bank_country_code: bank_country_code
+        bank_key: bank_key
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+        iban: iban
+        duplicated_vat_number: duplicated_vat_number
+        duplicated_tax_number_1: duplicated_tax_number_1
+        duplicated_tax_number_2: duplicated_tax_number_2
+        duplicated_tax_number_3: duplicated_tax_number_3
+        duplicated_tax_number_4: duplicated_tax_number_4
+        duplicated_tax_number_5: duplicated_tax_number_5
+        duplicated_bank_country_code: duplicated_bank_country_code
+        duplicated_bank_key: duplicated_bank_key
+        duplicated_bank_account_number: duplicated_bank_account_number
+        duplicated_bank_control_key: duplicated_bank_control_key
+        duplicated_iban: duplicated_iban
+        message_output: message_output
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_vendor_details_l3_uniqueness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_vendor_details_l3_uniqueness
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

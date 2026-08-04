@@ -1,0 +1,1077 @@
+transform:
+  name: finance_general_ledger_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_general_ledger
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_general_ledger
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_element
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_element
+
+  - kind: select
+    name: select_dfgl
+    context_name: read_dm_finance_general_ledger
+    params:
+      columns:
+        company_code: company_code
+        planning_level: planning_level
+        commitment_item: commitment_item
+        g_l_account_type: g_l_account_type
+        chart_of_accounts: chart_of_accounts
+        g_l_account_number: g_l_account_number
+        field_status_group: field_status_group
+        layout_rule_sort_key: layout_rule_sort_key
+        line_item_management: line_item_management
+        g_l_account_currency: g_l_account_currency
+        g_l_account_group_code: g_l_account_group_code
+        g_l_account_short_text: g_l_account_short_text
+        relevant_cash_flow_ind: relevant_cash_flow_ind
+        balance_sheet_account_ind: balance_sheet_account_ind
+        open_items_management_ind: open_items_management_ind
+        reconciliation_account_ind: reconciliation_account_ind
+        balances_in_local_currency: balances_in_local_currency
+        tolerance_group_for_accounts: tolerance_group_for_accounts
+        exchange_rate_difference_key: exchange_rate_difference_key
+        is_chart_of_accounts_allowed: is_chart_of_accounts_allowed
+        g_l_account_number_description: g_l_account_number_description
+        is_layout_rule_sort_key_allowed: is_layout_rule_sort_key_allowed
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dfca
+    context_name: read_dm_finance_controlling_area
+    params:
+      columns:
+        company_code: company_code_dfca
+        country_code: country_code_dfca
+        chart_of_accounts: chart_of_accounts_dfca
+        controlling_area_code: controlling_area_code_dfca
+        sap_cluster: sap_cluster_dfca
+      distinct: true
+
+  - kind: select
+    name: select_dfce
+    context_name: read_dm_finance_cost_element
+    params:
+      columns:
+        cost_element: cost_element_dfce
+        controlling_area_code: controlling_area_code_dfce
+        cost_element_subcategory: cost_element_subcategory_dfce
+        cost_element_attributes: cost_element_attributes_dfce
+        is_cost_element_subcategory_allowed: is_cost_element_subcategory_allowed_dfce
+        chart_of_accounts: chart_of_accounts_dfce
+        sap_cluster: sap_cluster_dfce
+      distinct: true
+
+  - kind: join
+    name: join_dfgl_dfca
+    context_name: select_dfgl
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          company_code: company_code_dfca
+          chart_of_accounts: chart_of_accounts_dfca
+          sap_cluster: sap_cluster_dfca
+
+  - kind: join
+    name: join_dfgl_dfca_dfce
+    context_name: select_dfgl
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          company_code: company_code_dfca
+          chart_of_accounts: chart_of_accounts_dfca
+          sap_cluster: sap_cluster_dfca
+      - other:
+          select_dfce
+        how:
+          inner
+        columns:
+          controlling_area_code_dfca: controlling_area_code_dfce
+          chart_of_accounts: chart_of_accounts_dfce
+          g_l_account_number: cost_element_dfce
+          sap_cluster: sap_cluster_dfce
+
+#SELECT RFCOMP_FA_7
+  - kind: select
+    name: select_RFCOMP_GL_7
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        chart_of_accounts: chart_of_accounts
+        g_l_account_number: g_l_account_number
+        is_chart_of_accounts_allowed: is_chart_of_accounts_allowed
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_7
+    context_name: select_RFCOMP_GL_7
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.7'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(chart_of_accounts IS NULL OR chart_of_accounts = '' OR (chart_of_accounts IS NOT NULL AND chart_of_accounts != '' AND (is_chart_of_accounts_allowed IS NULL OR is_chart_of_accounts_allowed = '')),'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_7_final
+    context_name: add_RFCOMP_GL_7
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        chart_of_accounts: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_8
+  - kind: select
+    name: select_RFCOMP_GL_8
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_short_text: g_l_account_short_text
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_8
+    context_name: select_RFCOMP_GL_8
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.8'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_short_text IS NULL OR g_l_account_short_text = '' OR LEN(g_l_account_short_text) > 20,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_8_final
+    context_name: add_RFCOMP_GL_8
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        g_l_account_short_text: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_9
+  - kind: select
+    name: select_RFCOMP_GL_9
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_number_description: g_l_account_number_description
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_9
+    context_name: select_RFCOMP_GL_9
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.9'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_number_description IS NULL OR g_l_account_number_description = '' OR LEN(g_l_account_number_description) > 50,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_9_final
+    context_name: add_RFCOMP_GL_9
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        g_l_account_number_description: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_10
+  - kind: select
+    name: select_RFCOMP_GL_10
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_currency: g_l_account_currency
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_10
+    context_name: select_RFCOMP_GL_10
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.10'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_currency IS NULL OR g_l_account_currency = '' OR LEN(g_l_account_currency) > 5,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_10_final
+    context_name: add_RFCOMP_GL_10
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        g_l_account_currency: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_11
+  - kind: select
+    name: select_RFCOMP_GL_11
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        balance_sheet_account_ind: balance_sheet_account_ind
+        balances_in_local_currency: balances_in_local_currency
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_11
+    context_name: select_RFCOMP_GL_11
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.11'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_group_code NOT IN ('AS','MAT') ,'',
+                    if(g_l_account_group_code IN ('AS','MAT') AND balance_sheet_account_ind = 'X' AND balances_in_local_currency IS NOT NULL AND balances_in_local_currency != '', '1'
+                    ,'0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_11_final
+    context_name: add_RFCOMP_GL_11
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        balances_in_local_currency: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_12
+  - kind: select
+    name: select_RFCOMP_GL_12
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        exchange_rate_difference_key: exchange_rate_difference_key
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_12
+    context_name: select_RFCOMP_GL_12
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.12'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_group_code NOT IN ('GL','CASH') AND exchange_rate_difference_key IS NOT NULL AND exchange_rate_difference_key != '','',
+                    if(g_l_account_group_code IN ('GL','CASH') AND exchange_rate_difference_key IS NOT NULL AND exchange_rate_difference_key != '', '1'
+                    ,'0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_12_final
+    context_name: add_RFCOMP_GL_12
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        exchange_rate_difference_key: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_15
+  - kind: select
+    name: select_RFCOMP_GL_15
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        reconciliation_account_ind: reconciliation_account_ind
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_15
+    context_name: select_RFCOMP_GL_15
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.15'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_group_code NOT IN ('RECN','AS'),'',
+                    if(reconciliation_account_ind IS NULL OR reconciliation_account_ind = '' OR LEN(reconciliation_account_ind) > 1, '0'
+                    ,'1'))
+
+  - kind: select
+    name: select_RFCOMP_GL_15_final
+    context_name: add_RFCOMP_GL_15
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        reconciliation_account_ind: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_17
+  - kind: select
+    name: select_RFCOMP_GL_17
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        tolerance_group_for_accounts: tolerance_group_for_accounts
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_17
+    context_name: select_RFCOMP_GL_17
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.17'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_number = '0213020000' AND company_code='0403' AND (tolerance_group_for_accounts = 'RU01' OR tolerance_group_for_accounts IS NULL OR tolerance_group_for_accounts = ''),'1',
+                    if(g_l_account_number = '0213020000' AND company_code='0307' AND (tolerance_group_for_accounts = 'RU02' OR tolerance_group_for_accounts IS NULL OR tolerance_group_for_accounts = ''),'1',
+                    if(g_l_account_number = '0213040241' AND company_code='0594' AND (tolerance_group_for_accounts = 'IT01' OR tolerance_group_for_accounts IS NULL OR tolerance_group_for_accounts = ''),'1',
+                    if(g_l_account_number = '0213040241' AND company_code='0595' AND (tolerance_group_for_accounts = 'IT02' OR tolerance_group_for_accounts IS NULL OR tolerance_group_for_accounts = ''),'1',
+                    if(g_l_account_number = '0170000010' AND company_code='0550' AND (tolerance_group_for_accounts = 'BY01' OR tolerance_group_for_accounts IS NULL OR tolerance_group_for_accounts = ''),'1',
+                    if(tolerance_group_for_accounts IS NULL OR tolerance_group_for_accounts = '','1','0'))))))
+
+  - kind: select
+    name: select_RFCOMP_GL_17_final
+    context_name: add_RFCOMP_GL_17
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        tolerance_group_for_accounts: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_18
+  - kind: select
+    name: select_RFCOMP_GL_18
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        open_items_management_ind: open_items_management_ind
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_18
+    context_name: select_RFCOMP_GL_18
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.18'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_group_code = 'CASH' AND SUBSTR(g_l_account_number,-1,1) != '0' AND open_items_management_ind IS NOT NULL AND open_items_management_ind != '','1',
+                    if(g_l_account_group_code <>'CASH' AND open_items_management_ind = '','1','0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_18_final
+    context_name: add_RFCOMP_GL_18
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        open_items_management_ind: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_19
+  - kind: select
+    name: select_RFCOMP_GL_19
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        line_item_management: line_item_management
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_19
+    context_name: select_RFCOMP_GL_19
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.19'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(line_item_management IS NULL OR line_item_management = '' OR line_item_management <> 'X' ,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_19_final
+    context_name: add_RFCOMP_GL_19
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        line_item_management: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_20
+  - kind: select
+    name: select_RFCOMP_GL_20
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        layout_rule_sort_key: layout_rule_sort_key
+        is_layout_rule_sort_key_allowed: is_layout_rule_sort_key_allowed
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_20
+    context_name: select_RFCOMP_GL_20
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.20'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(layout_rule_sort_key IS NULL OR layout_rule_sort_key = '' OR (layout_rule_sort_key IS NOT NULL AND layout_rule_sort_key != '' AND (is_layout_rule_sort_key_allowed IS NULL OR is_layout_rule_sort_key_allowed = '')) OR LEN(layout_rule_sort_key) > 3,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_20_final
+    context_name: add_RFCOMP_GL_20
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        layout_rule_sort_key: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_21
+  - kind: select
+    name: select_RFCOMP_GL_21
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        field_status_group: field_status_group
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_21
+    context_name: select_RFCOMP_GL_21
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.21'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(field_status_group IS NULL OR field_status_group = '' OR LEN(field_status_group)> 4,'0','1')
+
+  - kind: select
+    name: select_RFCOMP_GL_21_final
+    context_name: add_RFCOMP_GL_21
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        field_status_group: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_24
+  - kind: select
+    name: select_RFCOMP_GL_24
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        planning_level: planning_level
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_24
+    context_name: select_RFCOMP_GL_24
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.24'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_group_code <> 'CASH' AND  (planning_level IS NULL OR planning_level = ''),'1',
+                    if(g_l_account_group_code = 'CASH' AND  planning_level IS NOT NULL AND planning_level != '', '1', '0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_24_final
+    context_name: add_RFCOMP_GL_24
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        planning_level: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_25
+  - kind: select
+    name: select_RFCOMP_GL_25
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        relevant_cash_flow_ind: relevant_cash_flow_ind
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_25
+    context_name: select_RFCOMP_GL_25
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.25'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_group_code = 'CASH' AND relevant_cash_flow_ind IS NOT NULL AND relevant_cash_flow_ind != '','1',
+                    if(g_l_account_group_code <> 'CASH' AND (relevant_cash_flow_ind IS  NULL OR relevant_cash_flow_ind = '') , '1', '0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_25_final
+    context_name: add_RFCOMP_GL_25
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        relevant_cash_flow_ind: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_26
+  - kind: select
+    name: select_RFCOMP_GL_26
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        commitment_item: commitment_item
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_26
+    context_name: select_RFCOMP_GL_26
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.26'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(commitment_item IS NULL OR commitment_item = '', '0', '1')
+
+  - kind: select
+    name: select_RFCOMP_GL_26_final
+    context_name: add_RFCOMP_GL_26
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        commitment_item: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_27
+  - kind: select
+    name: select_RFCOMP_GL_27
+    context_name: join_dfgl_dfca_dfce
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_type: g_l_account_type
+        cost_element_dfce: cost_element_dfce
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_27
+    context_name: select_RFCOMP_GL_27
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.27'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_type NOT IN ('P','S') , '',
+                    if(g_l_account_type IN ('P','S') AND cost_element_dfce IS NOT NULL AND cost_element_dfce != '', '1', '0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_27_final
+    context_name: add_RFCOMP_GL_27
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        cost_element_dfce: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_28
+  - kind: select
+    name: select_RFCOMP_GL_28
+    context_name: join_dfgl_dfca_dfce
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        cost_element_dfce: cost_element_dfce
+        cost_element_subcategory_dfce: cost_element_subcategory_dfce
+        is_cost_element_subcategory_allowed_dfce: is_cost_element_subcategory_allowed_dfce
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_28
+    context_name: select_RFCOMP_GL_28
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.28'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(cost_element_dfce IS NULL OR cost_element_dfce = '' OR g_l_account_number IS NULL OR g_l_account_number = '', '',
+                    if(cost_element_subcategory_dfce IS NOT NULL AND cost_element_subcategory_dfce !='' AND is_cost_element_subcategory_allowed_dfce IS NOT NULL AND is_cost_element_subcategory_allowed_dfce != '', '1', '0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_28_final
+    context_name: add_RFCOMP_GL_28
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        cost_element_subcategory_dfce: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_29
+  - kind: select
+    name: select_RFCOMP_GL_29
+    context_name: join_dfgl_dfca_dfce
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        cost_element_dfce: cost_element_dfce
+        cost_element_attributes_dfce: cost_element_attributes_dfce
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_29
+    context_name: select_RFCOMP_GL_29
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.29'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(cost_element_dfce IS NULL OR cost_element_dfce = '' OR g_l_account_number IS NULL OR g_l_account_number = '', '',
+                    if(cost_element_attributes_dfce IS NOT NULL AND cost_element_attributes_dfce != '', '1', '0'))
+
+  - kind: select
+    name: select_RFCOMP_GL_29_final
+    context_name: add_RFCOMP_GL_29
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        cost_element_attributes_dfce: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCOMP_FA_32
+  - kind: select
+    name: select_RFCOMP_GL_32
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        company_code: company_code
+        g_l_account_number: g_l_account_number
+        g_l_account_type: g_l_account_type
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCOMP_GL_32
+    context_name: select_RFCOMP_GL_32
+    params:
+      - column: rule_code
+        expression: "'RFCOMP_GL.32'"
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: check_status
+        expression: 
+                    if(g_l_account_type IS NULL OR g_l_account_type = '' OR LEN(g_l_account_type) > 1, '0', '1')
+
+  - kind: select
+    name: select_RFCOMP_GL_32_final
+    context_name: add_RFCOMP_GL_32
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        g_l_account_number: finance_value
+        attribute_name: attribute_name
+        g_l_account_type: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_RFCOMP_GL_7_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_8_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_9_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_10_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_11_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_12_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_15_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_17_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_18_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_19_final
+
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_20_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_21_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_24_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_25_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_26_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_27_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_28_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_29_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCOMP_GL_32_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        check_date: check_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_finance_general_ledger_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: finance_general_ledger_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

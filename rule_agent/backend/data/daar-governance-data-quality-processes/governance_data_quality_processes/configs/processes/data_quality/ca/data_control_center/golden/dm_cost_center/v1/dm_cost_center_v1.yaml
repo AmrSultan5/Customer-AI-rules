@@ -1,0 +1,274 @@
+transform:
+  name: dm_cost_center
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read CSKS
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_csks
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: csks
+
+  - kind: filter
+    name: filter_csks
+    params:
+      - condition:
+          DATBI >= current_date
+
+#SELECT CSKS
+  - kind: select
+    name: select_csks
+    context_name: filter_csks
+    params:
+      columns:
+        kostl: kostl_cs
+        bukrs: bukrs_cs
+        kosar: kosar_cs
+        khinr: khinr_cs
+        datab: datab_cs
+        datbi: datbi_cs
+        verak: verak_cs
+        prctr: prctr_cs
+        kokrs: kokrs_cs
+        func_area: func_area_cs
+        objnr: objnr_cs
+        waers: waers_cs
+        sap_cluster: sap_cluster_cs
+      distinct: true
+
+# Read TKT05
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tkt05
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tkt05
+
+  - kind: filter
+    name: filter_tkt05
+    context_name: read_tkt05
+    params:
+        - condition: SPRAS = 'E'
+
+#SELECT TKT05
+  - kind: select
+    name: select_tkt05
+    context_name: filter_tkt05
+    params:
+      columns:
+        kosar: kosar_t5
+        ktext: ktext_t5
+        sap_cluster: sap_cluster_t5
+      distinct: true
+
+# Read TFKBT
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tfkbt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tfkbt
+
+  - kind: filter
+    name: filter_tfkbt
+    context_name: read_tfkbt
+    params:
+        - condition: SPRAS = 'E'
+
+#SELECT TFKBT
+  - kind: select
+    name: select_tfkbt
+    context_name: filter_tfkbt
+    params:
+      columns:
+        fkber: fkber_tf
+        fkbtx: fkbtx_tf
+        sap_cluster: sap_cluster_tf
+      distinct: true
+
+# Read CSKT
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cskt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: cskt
+
+  - kind: filter
+    name: filter_cskt
+    context_name: read_cskt
+    params:
+        - condition: SPRAS = 'E'
+
+#SELECT CSKT
+  - kind: select
+    name: select_cskt
+    context_name: filter_cskt
+    params:
+      columns:
+        kokrs: kokrs_cst
+        kostl: kostl_cst
+        datbi: datbi_cst
+        ltext: ltext_cst
+        sap_cluster: sap_cluster_cst
+      distinct: true
+
+# Read TKA01
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tka01
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tka01
+
+#SELECT TKA01
+  - kind: select
+    name: select_tka01
+    context_name: read_tka01
+    params:
+      columns:
+        kokrs: kokrs_tk1
+        dprct: dprct_tk1
+        bezei: bezei_tk1
+        waers: waers_tk1
+        sap_cluster: sap_cluster_tk1
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_company_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: company_code_mapping
+
+#SELECT company_code_mapping
+  - kind: select
+    name: select_company_code_mapping
+    context_name: read_company_code_mapping
+    params:
+      columns:
+        country_code: country_code_ccm
+        company_code: company_code_ccm
+      distinct: true
+
+#JOIN dm_cost_center
+  - kind: join
+    name: join_dm_cost_center
+    context_name: select_csks
+    params:
+      - other:
+          select_tfkbt
+        how:
+          left
+        columns:
+          func_area_cs: fkber_tf
+          sap_cluster_cs: sap_cluster_tf
+      - other:
+          select_cskt
+        how:
+          left
+        columns:
+          kokrs_cs: kokrs_cst
+          kostl_cs: kostl_cst
+          datbi_cs: datbi_cst
+          sap_cluster_cs: sap_cluster_cst
+      - other:
+          select_tkt05
+        how:
+          left
+        columns:
+          kosar_cs: kosar_t5
+          sap_cluster_cs: sap_cluster_t5
+      - other:
+          select_tka01
+        how:
+          left
+        columns:
+          kokrs_cs: kokrs_tk1
+          sap_cluster_cs: sap_cluster_tk1
+      - other:
+          select_company_code_mapping
+        how:
+          inner
+        columns:
+          bukrs_cs: company_code_ccm
+
+#SELECT company_code_mapping
+  - kind: select
+    name: select_dm_cost_center
+    context_name: join_dm_cost_center
+    params:
+      columns:
+        kostl_cs: cost_center
+        ltext_cst: cost_center_name
+        bukrs_cs: company_code
+        country_code_ccm: country_code
+        kosar_cs: cost_center_category_code
+        ktext_t5: cost_center_category_name
+        khinr_cs: cost_center_hierarchy
+        datab_cs: cost_center_valid_from
+        datbi_cs: cost_center_valid_to
+        verak_cs: person_responsible
+        prctr_cs: profit_center
+        dprct_tk1: dummy_profit_center
+        kokrs_cs: controlling_area_code
+        bezei_tk1: controlling_area_name
+        waers_tk1: controlling_area_currency_code
+        func_area_cs: functional_area_code
+        fkbtx_tf: functional_area_name
+        objnr_cs: object_number
+        waers_cs: profit_center_currency_code
+        sap_cluster_cs: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_cost_center
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

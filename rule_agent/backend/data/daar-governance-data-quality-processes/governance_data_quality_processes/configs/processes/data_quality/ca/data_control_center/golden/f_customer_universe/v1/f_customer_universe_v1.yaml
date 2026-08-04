@@ -1,0 +1,314 @@
+transform:
+  name: f_customer_universe
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read dm_customer_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+# Read dm_customer_sales_organization
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+# Read dm_customer_hierarchy
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+# Read dim_customer_classification
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_customer_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_customer_classification
+
+  #Select dm_customer_general
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code_cg
+        central_order_block_code: central_order_block_code
+        account_group_code: account_group_code
+        country_code: country_code_cg
+        sap_cluster: sap_cluster_cg
+        customer_visits_flag: customer_visits_flag
+      distinct: true
+
+#Select dm_customer_sales_organization
+
+  - kind: select
+    name: select_dm_customer_sales_organization
+    context_name: read_dm_customer_sales_organization
+    params:
+      columns:
+        customer_code: customer_code_so
+        customer_group_4_code: customer_group_4_code
+        payer_partner_function_flag: payer_partner_function_flag_so
+        sap_cluster: sap_cluster_so
+      distinct: true
+
+#Select dm_customer_hierarchy
+
+  - kind: select
+    name: select_dm_customer_hierarchy
+    context_name: read_dm_customer_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code_ch
+        l3_customer_code: customer_hierarchy_3_code
+        l4_customer_code: customer_hierarchy_4_code
+        sap_cluster: sap_cluster_ch
+      distinct: true
+
+
+#Select dim_customer_classification
+
+  - kind: add
+    name: add_dim_customer_classification
+    context_name: read_dim_customer_classification
+    params:
+      - column: payer_partner_function_flag_cc
+        expression: "CASE WHEN(payer_partner_function_flag IS NULL) THEN 'null' ELSE payer_partner_function_flag END"
+      - column: order_block_code_cc
+        expression:  "CASE WHEN(order_block_code IS NULL) THEN 'null' ELSE order_block_code END"
+      - column: account_group_code_cc
+        expression: "CASE WHEN(account_group_code IS NULL) THEN 'null' ELSE account_group_code END"
+      - column: customer_group_4_code_cc
+        expression: "CASE WHEN(customer_group_4_code IS NULL) THEN 'null' ELSE customer_group_4_code END"
+      - column: customer_hierarchy_3_code_cc
+        expression: "CASE WHEN(customer_hierarchy_3_code IS NULL) THEN 'null' ELSE customer_hierarchy_3_code END"
+      - column: customer_hierarchy_4_code_cc
+        expression: "CASE WHEN(customer_hierarchy_4_code IS NULL) THEN 'null' ELSE customer_hierarchy_4_code END"
+      - column: customer_visits_flag_cc
+        expression: "CASE WHEN(customer_visits_flag IS NULL) THEN 'null' ELSE customer_visits_flag END"
+
+  - kind: select
+    name: select_dim_customer_classification
+    context_name: add_dim_customer_classification
+    params:
+      columns:
+        order_block_code_cc: order_block_code_cc
+        account_group_code_cc: account_group_code_cc
+        customer_group_4_code_cc: customer_group_4_code_cc
+        customer_hierarchy_3_code_cc: customer_hierarchy_3_code_cc
+        customer_hierarchy_4_code_cc: customer_hierarchy_4_code_cc
+        cust_class_id: cust_class_id_cc
+        payer_partner_function_flag_cc: payer_partner_function_flag_cc
+        customer_visits_flag_cc: customer_visits_flag_cc
+      distinct: true
+
+  - kind: join
+    name: join_cg_cp_so_ch
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          left
+        columns:
+          customer_code_cg: customer_code_so
+          sap_cluster_cg: sap_cluster_so
+      - other:
+          select_dm_customer_hierarchy
+        how:
+          left
+        columns:
+          customer_code_cg: l7_customer_code_ch
+          sap_cluster_cg: sap_cluster_ch
+
+  - kind: add
+    name: add_cg_cp_so_ch_qc
+    context_name: join_cg_cp_so_ch
+    params:
+      - column: payer_partner_function_flag_so1
+        expression: "CASE WHEN(payer_partner_function_flag_so IS NULL) THEN 'null' ELSE payer_partner_function_flag_so END"
+      - column: central_order_block_code_cg
+        expression: "CASE WHEN(central_order_block_code IS NULL) THEN 'null' ELSE central_order_block_code END"
+      - column: account_group_code_cg
+        expression: "CASE WHEN(account_group_code IS NULL) THEN 'null' ELSE account_group_code END"
+      - column: customer_group_4_code_so
+        expression: "CASE WHEN(customer_group_4_code IS NULL ) THEN 'null' ELSE customer_group_4_code END"
+      - column: customer_hierarchy_3_code_ch
+        expression: "CASE WHEN(customer_hierarchy_3_code IS NULL) THEN 'null' ELSE customer_hierarchy_3_code END"
+      - column: customer_hierarchy_4_code_ch
+        expression: "CASE WHEN(customer_hierarchy_4_code IS NULL) THEN 'null' ELSE customer_hierarchy_4_code END"
+      - column: customer_visits_flag_cg
+        expression: "CASE WHEN(customer_visits_flag IS NULL) THEN 'null' ELSE customer_visits_flag END"
+
+  - kind: join
+    name: join_cg_cp_so_ch_cc
+    context_name: add_cg_cp_so_ch_qc
+    params:
+      - other:
+          select_dim_customer_classification
+        how:
+          left
+        columns:
+          payer_partner_function_flag_so1: payer_partner_function_flag_cc
+          central_order_block_code_cg: order_block_code_cc
+          account_group_code_cg: account_group_code_cc
+          customer_group_4_code_so: customer_group_4_code_cc
+          customer_hierarchy_3_code_ch: customer_hierarchy_3_code_cc
+          customer_hierarchy_4_code_ch: customer_hierarchy_4_code_cc
+          customer_visits_flag_cg: customer_visits_flag_cc
+
+
+
+  - kind: select
+    name: select_f_customer_universe_cust_class_id
+    params:
+      columns:
+        country_code_cg: country_code
+        cust_class_id_cc: cust_class_id
+        customer_code_cg: customer_code
+
+
+  - kind: select
+    name: select_f_customer_universe_count_customer
+    context_name: join_cg_cp_so_ch_cc
+    params:
+      columns:
+        country_code_cg: country_code
+        customer_code_cg: customer_code
+      distinct: true
+
+
+  - kind: group
+    name: group_customer_code
+    context_name: select_f_customer_universe_count_customer
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - country_code
+
+  - kind: add
+    name: add_cust_class_id
+    context_name: group_customer_code
+    params:
+      - column: cust_class_id
+        expression: '''-1'''
+
+  - kind: select
+    name: select_cust_class_id
+    params:
+      columns:
+        country_code: country_code
+        cust_class_id: cust_class_id
+        count_customer_code: no_of_customers
+
+  - kind: group
+    name: group_cust_class_id
+    context_name: select_f_customer_universe_cust_class_id
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - country_code
+        - cust_class_id
+
+  - kind: select
+    name: select_concat
+    params:
+      columns:
+        country_code: country_code
+        cust_class_id: cust_class_id
+        count_customer_code: no_of_customers
+
+  - kind: union
+    name: union_count
+    context_name: select_concat
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_cust_class_id
+
+  - kind: add
+    name: add_cust_class_id
+    params:
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+
+  - kind: cast
+    name: cast_no_of_customers
+    params:
+      - column: no_of_customers
+        to: integer
+
+  - kind: select
+    name: select_f_customer_universe
+    params:
+      columns:
+        country_code: country_code
+        cust_class_id: cust_class_id
+        loading_date: loading_date
+        no_of_customers: no_of_customers
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_customer_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_customer_universe
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

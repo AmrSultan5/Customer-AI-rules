@@ -1,0 +1,786 @@
+ transform:
+  name: customer_geographical_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+        account_group_code: account_group_code
+        global_customer_code: global_customer_code
+        global_customer_standard_name: global_customer_standard_name
+        trading_standard_name: trading_standard_name
+        trading_group_code: trading_group_code
+        is_allowed_trading_group_code: is_allowed_trading_group_code
+        is_industry_sub_demand_area_allowed: is_industry_sub_demand_area_allowed
+        industry_code: industry_code
+        industry_code1: industry_code1
+        industry_name: industry_name
+        industry_code1_map_flag: industry_code1_map_flag
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+      distinct: true
+      
+
+#READ dm_customer_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: select
+    context_name: read_dm_customer_sales_organization
+    name: select_dcso
+    params:
+      columns:
+        customer_code: customer_code
+        customer_price_group_code: customer_price_group_code
+        customer_price_group_name: customer_price_group_name
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        sales_office_code: sales_office_code
+        sales_office_name: sales_office_name
+        is_sales_group_allowed: is_sales_group_allowed
+        is_sales_group_office_allowed: is_sales_group_office_allowed
+        sales_group_code: sales_group_code
+        sap_cluster: sap_cluster
+      distinct: true     
+
+
+#READ dm_customer_territory
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_territory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_territory
+
+  - kind: select
+    context_name: read_dm_customer_territory
+    name: select_dct
+    params:
+      columns:
+        territory_code: territory_code
+        territory_type: territory_type
+        is_territory_mapping_allowed: is_territory_mapping_allowed
+        territory_assignment_description: territory_assignment_description
+        is_territory_code_allowed: is_territory_code_allowed
+        is_territory_type_allowed: is_territory_type_allowed
+        customer_code: customer_code
+        territory_validity_from: territory_validity_from
+        territory_validity_to: territory_validity_to
+        sap_cluster: sap_cluster
+      distinct: true 
+
+  - kind: filter
+    name: filter_territory_type 
+    context_name: read_dm_customer_territory
+    params:
+      - condition:
+          territory_type  = 'BD'
+
+  - kind: select
+    name: select_dct_left
+    params:
+      columns:
+        territory_code: territory_code
+        territory_type: territory_type
+        is_territory_mapping_allowed: is_territory_mapping_allowed
+        territory_assignment_description: territory_assignment_description
+        is_territory_code_allowed: is_territory_code_allowed
+        is_territory_type_allowed: is_territory_type_allowed
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true 
+
+
+
+#JOIN dcg and dcso
+  - kind: join
+    name: join_dcso_dcg
+    context_name: select_dcso
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dct
+  - kind: join
+    name: join_dct_dcg
+    context_name: select_dct
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dct LEFT
+  - kind: join
+    name: join_dct_dcg_left
+    context_name: select_dcg
+    params:
+      - other:
+          select_dct_left
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#RULE 69.2
+  - kind: select
+    name: select_rcconf_69_2
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        industry_code1: industry_code1
+        industry_name: industry_name
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_69_2
+    context_name: select_rcconf_69_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_69.2'"
+      - column: check_status
+        expression: if(isnull(industry_code1) or industry_code1 = '', '', 
+                    if(isnull(industry_name) or industry_name = '', '0', '1'))
+      - column: value_checked
+        expression: industry_name
+
+
+  - kind: select
+    name: select_rcconf_69_2_final
+    context_name: add_rcconf_69_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 69.5
+  - kind: select
+    name: select_rcconf_69_5
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        industry_code: industry_code
+        industry_code1: industry_code1
+        is_industry_sub_demand_area_allowed: is_industry_sub_demand_area_allowed
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_69_5
+    context_name: select_rcconf_69_5
+    params:
+      - column: rule_code
+        expression: "'RCCONF_69.5'"
+      - column: check_status
+        expression: "CASE WHEN (industry_code IS NULL OR industry_code ='') OR (industry_code1 IS NULL OR industry_code1 ='') THEN '' WHEN is_industry_sub_demand_area_allowed = '1' THEN '1' ELSE '0' END"
+      - column: value_checked
+        expression: "CONCAT(industry_code,'_',industry_code1)"
+
+
+  - kind: select
+    name: select_rcconf_69_5_final
+    context_name: add_rcconf_69_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 70.1
+  - kind: select
+    name: select_rcconf_70_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        industry_code1: industry_code1
+        industry_code1_map_flag: industry_code1_map_flag
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_70_1
+    context_name: select_rcconf_70_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_70.1'"
+      - column: check_status
+        expression: if(isnull(industry_code1) or industry_code1 = '', '', 
+                    if(industry_code1_map_flag = '1', '1', '0'))
+      - column: value_checked
+        expression: industry_code1
+
+
+  - kind: select
+    name: select_rcconf_70_1_final
+    context_name: add_rcconf_70_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 142.1
+  - kind: select
+    name: select_rcconf_142_1
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sales_office_code: sales_office_code
+        sales_office_name: sales_office_name
+        account_group_code: account_group_code
+      distinct: true
+
+
+  - kind: add
+    name: add_rcconf_142_1
+    context_name: select_rcconf_142_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_142.1'"
+      - column: check_status
+        expression: if(isnull(sales_office_code) OR sales_office_code = '', '',
+                    if(isnull(sales_office_name) or sales_office_name = '' 
+                    or sales_office_name like '%DO NOT USE%', '0', '1')) 
+
+  - kind: select
+    name: select_rcconf_142_1_final
+    context_name: add_rcconf_142_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_office_name: value_checked
+      distinct: true
+
+#RULE 142.3
+  - kind: select
+    name: select_rcconf_142_3
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sales_office_code: sales_office_code
+        account_group_code: account_group_code
+      distinct: true
+
+
+  - kind: add
+    name: add_rcconf_142_3
+    context_name: select_rcconf_142_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_142.3'"
+      - column: check_status
+        expression: "CASE WHEN (sales_office_code IS NULL OR sales_office_code = '') AND SUBSTRING(account_group_code,0, 2) NOT IN ('70', '71', '72', '73', '90') THEN '' WHEN (sales_office_code IS NULL OR sales_office_code = '') THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_142_3_final
+    context_name: add_rcconf_142_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_office_code: value_checked
+      distinct: true
+
+#RULE 143.1
+  - kind: select
+    name: select_rcconf_143_1
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sales_group_code: sales_group_code
+        is_sales_group_allowed: is_sales_group_allowed
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_143_1
+    context_name: select_rcconf_143_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_143.1'"
+      - column: check_status
+        expression: "CASE WHEN (sales_group_code IS NULL OR sales_group_code = '') THEN '' WHEN is_sales_group_allowed = '1' THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_143_1_final
+    context_name: add_rcconf_143_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_group_code: value_checked
+      distinct: true
+
+#RULE 143.3
+  - kind: select
+    name: select_rcconf_143_3
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        sales_group_code: sales_group_code
+        customer_code: customer_code
+        account_group_code: account_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_143_3
+    context_name: select_rcconf_143_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_143.3'"
+      - column: check_status
+        expression: "CASE WHEN SUBSTRING(account_group_code,0, 2)  IN ('70', '71', '72', '73', '90') AND (sales_group_code IS NULL OR sales_group_code = '')  THEN '0' WHEN SUBSTRING(account_group_code,0, 2)  IN ('70', '71', '72', '73', '90') AND (sales_group_code IS NOT NULL OR sales_group_code !='') THEN '1' ELSE '' END"
+        
+  - kind: select
+    name: select_rcconf_143_3_final
+    context_name: add_rcconf_143_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_group_code: value_checked
+      distinct: true
+
+#RULE 143.7
+  - kind: select
+    name: select_rcconf_143_7
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sales_group_code: sales_group_code
+        is_sales_group_office_allowed: is_sales_group_office_allowed
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_143_7
+    context_name: select_rcconf_143_7
+    params:
+      - column: rule_code
+        expression: "'RCCONF_143.7'"
+      - column: check_status
+        expression: "CASE WHEN (sales_group_code IS NULL OR sales_group_code = '') THEN '' WHEN is_sales_group_office_allowed  = '1' THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_143_7_final
+    context_name: add_rcconf_143_7
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sales_group_code: value_checked
+      distinct: true
+
+
+#RULE 363.1.1
+  - kind: select
+    name: select_rcconf_363_1_1
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        territory_code: territory_code
+        territory_assignment_description: territory_assignment_description
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_363_1_1
+    context_name: select_rcconf_363_1_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_363.1.1'"
+      - column: check_status
+        expression: "CASE WHEN (territory_type IS NULL OR territory_type = '')  OR (territory_code IS NULL OR territory_code = '') OR central_order_block_code IN ('PR', 'NR', 'M') THEN '' WHEN territory_assignment_description LIKE 'DO NOT USE%'  THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CONCAT(territory_type,'_',territory_code)"
+        overwrite: true
+
+  - kind: select
+    name: select_rcconf_363_1_1_final
+    context_name: add_rcconf_363_1_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+
+#RULE 363.1.2
+  - kind: select
+    name: select_rcconf_363_1_2
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        is_territory_type_allowed: is_territory_type_allowed
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_363_1_2
+    context_name: select_rcconf_363_1_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_363.1.2'"
+      - column: check_status
+        expression: "CASE WHEN (territory_type IS NULL OR territory_type = '') OR central_order_block_code IN ('PR', 'NR', 'M') THEN '' WHEN is_territory_type_allowed = '1' THEN '1' ELSE '0' END"
+
+
+  - kind: select
+    name: select_rcconf_363_1_2_final
+    context_name: add_rcconf_363_1_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        territory_type: value_checked
+      distinct: true
+
+
+#RULE 363.1.3
+  - kind: select
+    name: select_rcconf_363_1_3
+    context_name: join_dct_dcg_left
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_363_1_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_363.1.3'"
+      - column: check_status
+        expression: "CASE WHEN country_code = 'EG' THEN '' WHEN (account_group_code NOT LIKE '9%' OR central_order_block_code IN ('PR', 'NR', 'M')) THEN '' WHEN territory_type = 'BD' THEN '1' ELSE '0' END"
+
+
+  - kind: select
+    name: select_rcconf_363_1_3_final
+    context_name: add_rcconf_363_1_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        territory_type: value_checked
+      distinct: true
+
+
+#RULE 363.3
+  - kind: select
+    name: select_rcconf_363_3
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        territory_code: territory_code
+        is_territory_mapping_allowed: is_territory_mapping_allowed
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_363_3
+    context_name: select_rcconf_363_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_363.3'"
+      - column: check_status
+        expression: "CASE WHEN (territory_type IS NULL OR territory_type = '')  OR (territory_code IS NULL OR territory_code = '') OR central_order_block_code IN ('PR', 'NR', 'M') THEN '' WHEN is_territory_mapping_allowed  = '0'  THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CONCAT(territory_type,'_',territory_code)"
+        overwrite: true
+
+  - kind: select
+    name: select_rcconf_363_3_final
+    context_name: add_rcconf_363_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+
+#RULE 366.1
+  - kind: select
+    name: select_rcconf_366_1
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        territory_code: territory_code
+        is_territory_code_allowed: is_territory_code_allowed
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_366_1
+    context_name: select_rcconf_366_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_366.1'"
+      - column: check_status
+        expression: "CASE WHEN (territory_code IS NULL OR territory_code = '')  OR central_order_block_code IN ('PR', 'NR', 'M')  THEN '' WHEN is_territory_code_allowed  = '1'  THEN '1' ELSE '0' END"
+
+
+  - kind: select
+    name: select_rcconf_366_1_final
+    context_name: add_rcconf_366_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        territory_code: value_checked
+      distinct: true
+
+#RULE 367.1
+  - kind: select
+    name: select_rcconf_367_1
+    context_name: join_dct_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        territory_code: territory_code
+        territory_validity_from: territory_validity_from
+        territory_validity_to: territory_validity_to
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_367_1
+    context_name: select_rcconf_367_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_367.1'"
+      - column: check_status
+        expression: "CASE WHEN country_code = 'EG' THEN ''
+                     WHEN (territory_code IS NULL OR territory_code = '')  OR central_order_block_code IN ('PR', 'NR', 'M') THEN '' 
+                     WHEN territory_validity_to = '9999-12-31' AND territory_validity_from = '1000-01-01' THEN '1' 
+                     WHEN territory_validity_to = '9999-12-31' AND (territory_validity_from IS NULL OR territory_validity_from != '1000-01-01') THEN '0' 
+                     ELSE '' END"
+      - column: value_checked
+        expression: territory_validity_from
+
+
+  - kind: select
+    name: select_rcconf_367_1_final
+    context_name: add_rcconf_367_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+
+#Union all
+  - kind: union
+    name: union_customer_geographical_conformity
+    context_name: select_rcconf_69_2_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_69_5_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_70_1_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_142_1_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_142_3_final
+
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_143_1_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_143_3_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_143_7_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_363_1_1_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_363_1_2_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_363_1_3_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_363_3_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_366_1_final
+
+  - kind: union
+    name: union_customer_geographical_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_367_1_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_geographical_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_geographical_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

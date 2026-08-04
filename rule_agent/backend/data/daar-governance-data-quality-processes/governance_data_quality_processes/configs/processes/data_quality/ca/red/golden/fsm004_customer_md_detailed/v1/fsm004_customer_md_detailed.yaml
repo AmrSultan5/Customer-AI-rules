@@ -1,0 +1,133 @@
+## fsm004_customer_md_detailed
+transform:
+  name: du_fsm004_customer_md
+  operations:
+  - kind: read_dataio
+    name: read_du_fsm004_customer_md
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      namespace: l2
+      country: ca
+      module: red
+      object_name: du_fsm004_customer_md
+      schema_version: v1
+
+  - kind: select
+    name: select_ca_du_fsm004_customer_detailed
+    params:
+      columns:
+        red_outlet: red_outlet
+        report_code: report_code
+        report_name: report_name
+        country_code: country_code
+        customer_code: customer_code
+        customer_description: customer_description
+        sales_org_code: sales_org_code
+        sales_org_description: sales_org_description
+        order_block_code: order_block_code
+        order_block_description: order_block_description
+        cpl_code: cpl_code
+        cpl_description: cpl_description
+        trade_channel_code: trade_channel_code
+        trade_channel_description: trade_channel_description
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_description: sub_trade_channel_description
+        ccaf_code: ccaf_code
+        ccaf_description: ccaf_description
+        bdaa_segment_code: bdaa_segment_code
+        bdaa_segment_description: bdaa_segment_description
+        cde_target_doors_code: cde_target_doors_code
+        cde_target_doors_description: cde_target_doors_description
+        bp_territory_id: business_partner_territory_id
+        bd_employee: business_developer_employee
+        red_pos: red_picos_id
+        sales_office: sales_office
+        sales_group: sales_group
+        customer_incentive: customer_incentive
+        fiscal_period: fiscal_period
+        red_outlet_suppressed_check: red_outlet_suppressed_check
+        red_outlet_with_microsegment_check: red_outlet_with_microsegment_check
+        microsegment_with_red_outlet_check: microsegment_with_red_outlet_check
+        red_outlet_cde_doors_check: red_outlet_cde_doors_check
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_du_fsm004_customer_md
+    params:
+      - condition:
+          (red_outlet_suppressed_check = 0 OR red_outlet_with_microsegment_check = 0 OR microsegment_with_red_outlet_check = 0 OR red_outlet_cde_doors_check = 0)
+
+  - kind: add
+    name: add_fsm004_customer_md_detailed
+    params:
+      - column: openhub
+        expression: '''fsm004_customer'''
+      - column: red_outlets_with_supression_check
+        expression: "CASE WHEN red_outlet_suppressed_check = '1' THEN 'OK' WHEN red_outlet_suppressed_check = '0' THEN 'Suppressed RED Outlet' ELSE 'N/A' END"
+      - column: red_picos_mapping_available_for_red_flagged_outlets_check
+        expression: "CASE WHEN red_outlet_with_microsegment_check = '1' THEN 'OK' WHEN red_outlet_with_microsegment_check = '0' THEN 'RED Outlet Without Segmentation' ELSE 'N/A' END"
+      - column: outlets_matching_red_picos_mapping_check
+        expression: "CASE WHEN microsegment_with_red_outlet_check = '1' THEN 'OK' WHEN microsegment_with_red_outlet_check = '0' THEN 'Segementation for non RED Outlet' ELSE 'N/A' END"
+      - column: red_outlets_with_cde_target_door_maintained_check
+        expression: "CASE WHEN red_outlet_cde_doors_check = '1' THEN 'OK' WHEN red_outlet_cde_doors_check = '0' THEN 'Incorrect CDE Doors' ELSE 'N/A' END"
+
+  - kind: select
+    name: select_ca_fsm004_customer_detailed
+    params:
+      columns:
+        red_outlet: red_outlet
+        report_name: report_name
+        country_code: country_code
+        customer_code: customer_code
+        customer_description: customer_description
+        sales_org_code: sales_org_code
+        sales_org_description: sales_org_description
+        order_block_code: order_block_code
+        order_block_description: order_block_description
+        cpl_code: cpl_code
+        cpl_description: cpl_description
+        trade_channel_code: trade_channel_code
+        trade_channel_description: trade_channel_description
+        sub_trade_channel_code: sub_trade_channel_code
+        sub_trade_channel_description: sub_trade_channel_description
+        ccaf_code: ccaf_code
+        ccaf_description: ccaf_description
+        bdaa_segment_code: bdaa_segment_code
+        bdaa_segment_description: bdaa_segment_description
+        cde_target_doors_code: cde_target_doors_code
+        cde_target_doors_description: cde_target_doors_description
+        business_partner_territory_id: business_partner_territory_id
+        business_developer_employee: business_developer_employee
+        red_picos_id: red_picos_id
+        sales_office: sales_office
+        sales_group: sales_group
+        customer_incentive: customer_incentive
+        red_outlets_with_supression_check: red_outlets_with_supression_check
+        red_picos_mapping_available_for_red_flagged_outlets_check: red_picos_mapping_available_for_red_flagged_outlets_check
+        outlets_matching_red_picos_mapping_check: outlets_matching_red_picos_mapping_check
+        red_outlets_with_cde_target_door_maintained_check: red_outlets_with_cde_target_door_maintained_check
+        openhub: openhub
+      distinct: true
+    skip_next: false
+
+
+
+  - kind: write_dataio
+    name: write_fsm004_customer_md_detailed
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: red
+      namespace: golden
+      object_name: fsm004_customer_md_detailed
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1

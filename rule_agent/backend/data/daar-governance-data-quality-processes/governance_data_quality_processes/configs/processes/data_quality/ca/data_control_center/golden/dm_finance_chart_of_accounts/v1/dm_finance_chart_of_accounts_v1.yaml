@@ -1,0 +1,139 @@
+transform:
+  name: dm_finance_chart_of_accounts
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read SKA1
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ska1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: ska1
+
+
+  - kind: select
+    name: select_ska1
+    params:
+      columns:
+        ktopl: ktopl
+        saknr: saknr
+        xbilk: xbilk
+        bilkt: bilkt
+        sap_cluster: sap_cluster_sa
+      distinct: true
+
+
+# Read T004T
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t004t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t004t
+
+  - kind: filter
+    name: filter_t004t
+    params:
+      - condition:
+          (spras = 'E')
+
+  - kind: select
+    name: select_t004t
+    params:
+      columns:
+        ktopl: ktopl
+        spras: spras
+        ktplt: ktplt
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+# Read T004
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t004
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t004
+
+  - kind: select
+    name: select_t004
+    params:
+      columns:
+        ktopl: ktopl
+        kktpl: kktpl
+        sakln: sakln
+        dspra: dspra
+        xsper: xsper
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_sa_t4t_t4_tk1
+    context_name: select_ska1
+    params:
+      - other:
+          select_t004t
+        how:
+          left
+        columns:
+          ktopl: ktopl
+          sap_cluster_sa: sap_cluster
+      - other:
+          select_t004
+        how:
+          left
+        columns:
+          ktopl: ktopl
+          sap_cluster_sa: sap_cluster
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        saknr: g_l_account_number
+        sakln: g_l_account_number_lenght
+        ktopl: chart_of_accounts
+        ktplt: chart_of_accounts_description
+        dspra: chart_of_accounts_maintenance_language
+        sap_cluster_sa: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_chart_of_accounts
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_chart_of_accounts
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

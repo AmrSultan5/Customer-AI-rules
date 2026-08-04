@@ -1,0 +1,50 @@
+transform:
+  name: Feedback Based False Positives Exclusion
+  operations:
+
+  - kind: read_dataio
+    name: df_customer_uniqueness_report
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_check_results_uniqueness
+      schema_version: v5
+
+  - name: df_feedback
+    kind: read_dataio
+    params:
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: feedback
+      object_name: customer_details_feedback
+      schema_version: v1
+      dataio:
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+        ad_id: '{{dataio.ad_id}}'
+
+  - name: dm_customer_check_results_uniqueness
+    kind: governance_data_quality_processes.custom_operations.data_quality.data_control_center.dm_customer_uniqueness.exclude_false_positive_duplicates.ExcludeFalsePositiveDuplicatesOperation
+
+  - kind: write_dataio
+    name: write_dm_customer_check_results_uniqueness
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_check_results_uniqueness
+      process_run_id: "{{process_run_id}}"
+      schema_version: v5
+      refresh_mode: full

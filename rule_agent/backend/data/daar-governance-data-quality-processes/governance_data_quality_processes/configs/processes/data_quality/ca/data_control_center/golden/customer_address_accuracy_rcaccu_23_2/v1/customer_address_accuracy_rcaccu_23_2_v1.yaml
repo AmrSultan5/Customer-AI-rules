@@ -1,0 +1,147 @@
+transform:
+  name: postal_country_accuracy
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        city: city
+        post_code: post_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dcc_post_code_extractor_dic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dcc_post_code_extractor_dic
+      schema_version: v1
+
+  - kind: select
+    context_name: read_dcc_post_code_extractor_dic
+    name: select_dcc_dcc_post_code_extractor_dic
+    params:
+      columns:
+        country_code: country_code
+        city: city
+        value_checked: value_checked
+        enriched_value: enriched_value
+        valid_country: valid_country
+        location_info: location_info
+      distinct: false
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dcc_dcc_post_code_extractor_dic
+        how:
+          left
+        columns:
+          country_code: country_code
+          post_code: value_checked
+          city: city
+
+  - kind: select
+    name: select_fields
+    context_name: join_data_marts
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        post_code: post_code
+        city: city
+        value_checked: value_checked
+        enriched_value: enriched_value
+        valid_country: valid_country
+        location_info: location_info
+      distinct: false
+
+  - kind: governance_data_quality_processes.custom_operations.city_standarization.postal_country_conformity.PostalCountryConformityOperation
+    name: postal_country_conformity
+    config_kind: governance_data_quality_processes.custom_operation_configs.city_standarization.postal_country_conformity_config.PostalCountryConformityOperationConfig
+    context_name: select_fields
+    params:
+        customer_code: customer_code
+        country_code: country_code
+        post_code: post_code
+        city: city
+        value_checked: value_checked
+        enriched_value: enriched_value
+        valid_country: valid_country
+        location_info: location_info
+
+  - kind: add
+    name: add_loading_date
+    context_name: postal_country_conformity
+    params:
+      - column: check_date
+        expression: current_timestamp()
+      - column: rule_code
+        expression: "'RCACCU_23.2'"
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        advanced_message: check_details_message
+        check_date: check_date
+      distinct: true

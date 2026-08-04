@@ -1,0 +1,1608 @@
+transform:
+  name: tax_data_mdg_d365
+  operations:
+
+  - kind: read_dataio
+    name: read_mdg_dfkkbptaxnum
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: dfkkbptaxnum
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_dfkkbptaxnum
+    context_name: read_mdg_dfkkbptaxnum
+    params:
+      - condition:
+          partner not like '000%' and (taxtype like '%0'
+          or taxtype like '%1'
+          or taxtype like '%2'
+          or taxtype like '%3'
+          or taxtype like '%4'
+          or taxtype like '%5')
+          and partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '14%', '22%')
+
+  - kind: add
+    name: add_mdg_dfkkbptaxnum
+    context_name: filter_mdg_dfkkbptaxnum
+    params:
+      - column: taxnum0
+        expression: if(taxtype like '%0', taxnum, '')
+      - column: taxnum1
+        expression: if(taxtype like '%1', taxnum, '')
+      - column: taxnum2
+        expression: if(taxtype like '%2', taxnum, '')
+      - column: taxnum3
+        expression: if(taxtype like '%3', taxnum, '')
+      - column: taxnum4
+        expression: if(taxtype like '%4', taxnum, '')
+      - column: taxnum5
+        expression: if(taxtype like '%5', taxnum, '')
+      - column: taxtype0
+        expression: cast (NULL as string)
+      - column: taxtype1
+        expression: cast (NULL as string)
+      - column: taxtype2
+        expression: cast (NULL as string)
+      - column: taxtype3
+        expression: cast (NULL as string)
+      - column: taxtype4
+        expression: cast (NULL as string)
+      - column: taxtype5
+        expression: cast (NULL as string)
+
+
+  - kind: group
+    name: group_mdg_dfkkbptaxnum
+    context_name: add_mdg_dfkkbptaxnum
+    params:
+      - aggs:
+          taxnum0: max
+          taxnum1: max
+          taxnum2: max
+          taxnum3: max
+          taxnum4: max
+          taxnum5: max
+          taxtype0: max
+          taxtype1: max
+          taxtype2: max
+          taxtype3: max
+          taxtype4: max
+          taxtype5: max
+        by:
+        - partner
+
+
+  - kind: rename
+    name: rename_mdg_dfkkbptaxnum
+    context_name: group_mdg_dfkkbptaxnum
+    params:
+      - column: partner
+        to: partner_mdg
+      - column: max_taxnum0
+        to: taxnum0_mdg
+      - column: max_taxnum1
+        to: taxnum1_mdg
+      - column: max_taxnum2
+        to: taxnum2_mdg
+      - column: max_taxnum3
+        to: taxnum3_mdg
+      - column: max_taxnum4
+        to: taxnum4_mdg
+      - column: max_taxnum5
+        to: taxnum5_mdg
+      - column: max_taxtype0
+        to: taxtype0_mdg
+      - column: max_taxtype1
+        to: taxtype1_mdg
+      - column: max_taxtype2
+        to: taxtype2_mdg
+      - column: max_taxtype3
+        to: taxtype3_mdg
+      - column: max_taxtype4
+        to: taxtype4_mdg
+      - column: max_taxtype5
+        to: taxtype5_mdg
+
+  - kind: add
+    name: add_mdg
+    context_name: rename_mdg_dfkkbptaxnum
+    params:
+      - column: hash_mdg
+        expression: md5(concat_ws('',
+                    partner_mdg, 
+                    taxnum0_mdg, 
+                    taxnum1_mdg, 
+                    taxnum2_mdg, 
+                    taxnum3_mdg,
+                    taxnum4_mdg,
+                    taxnum5_mdg))
+
+
+
+  - kind: read_dataio
+    name: read_mdg_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+
+  - kind: filter
+    name: filter_knvv
+    context_name: read_mdg_knvv
+    params:
+      - condition: vtweg = '01' AND spart = '01' and vkorg in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+
+  - kind: select
+    name: select_mdg_knvv_checkpoint
+    context_name: filter_knvv
+    params:
+      columns:
+        kunnr: kunnr
+        kvgr4: kvgr4
+        vkorg: vkorg
+        vtweg: vtweg
+        spart: spart
+      distinct: true
+
+  - kind: checkpoint
+    name: select_knvv
+    context_name: select_mdg_knvv_checkpoint
+
+
+  - kind: join
+    name: join_mdg
+    context_name: add_mdg
+    params:
+      - other:
+          select_knvv
+        how:
+          inner
+        columns:
+          partner_mdg: kunnr
+
+  - kind: checkpoint
+    name: checkpoint_mdg
+    context_name: join_mdg
+
+
+############################################
+
+  # Read D365 account data
+  - kind: read_dataio
+    name: read_d365_account
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: account
+      schema_version: v1
+
+  # Filter D365 account data
+  - kind: filter
+    name: filter_d365_account
+    context_name: read_d365_account
+    params:
+      - condition:
+          cch_sapid like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '14%', '22%')
+
+  # Select required columns from D365 account
+  - kind: select
+    name: select_d365_account
+    context_name: filter_d365_account
+    params:
+      columns:
+        cch_sapid: partner_d365
+        cch_vatregistrationno: cch_vatregistrationno_temp
+        cch_taxnumber1: cch_taxnumber1_temp
+        cch_taxnumber2: cch_taxnumber2_temp
+        cch_taxnumber3: cch_taxnumber3_temp
+        cch_taxnumber4: cch_taxnumber4_temp
+        cch_taxnumber5: cch_taxnumber5_temp
+        cch_distributionchannel: cch_distributionchannel
+        cch_division: cch_division
+        cch_salesorganizationid: cch_salesorganizationid
+      distinct: true
+
+  - kind: add
+    name: add_d365_account
+    context_name: select_d365_account
+    params:
+      - column: taxnum0_d365
+        expression: coalesce(cch_vatregistrationno_temp,'')
+      - column: taxnum1_d365
+        expression: coalesce(cch_taxnumber1_temp,'')
+      - column: taxnum2_d365
+        expression: coalesce(cch_taxnumber2_temp,'')
+      - column: taxnum3_d365
+        expression: coalesce(cch_taxnumber3_temp,'')
+      - column: taxnum4_d365
+        expression: coalesce(cch_taxnumber4_temp,'')
+      - column: taxnum5_d365
+        expression: coalesce(cch_taxnumber5_temp,'')
+
+  - kind: add
+    name: add_d365_hash
+    context_name: add_d365_account
+    params:
+      - column: hash_d365
+        expression: md5(concat(partner_d365,taxnum0_d365,taxnum1_d365,taxnum2_d365,taxnum3_d365,taxnum4_d365,taxnum5_d365))
+
+  - kind: select
+    name: select_d365
+    context_name: add_d365_hash
+    params:
+      columns:
+        partner_d365: partner_d365
+        taxnum0_d365: taxnum0_d365
+        taxnum1_d365: taxnum1_d365
+        taxnum2_d365: taxnum2_d365
+        taxnum3_d365: taxnum3_d365
+        taxnum4_d365: taxnum4_d365
+        taxnum5_d365: taxnum5_d365
+        cch_distributionchannel: cch_distributionchannel
+        cch_division: cch_division
+        cch_salesorganizationid: cch_salesorganizationid
+        hash_d365: hash_d365
+      distinct: true
+
+
+#   ###################################################
+  - kind: read_dataio
+    name: read_optionsetmapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: cch_optionsetmapping
+      schema_version: v1   
+
+      
+  - kind: filter
+    name: filter_cch_optionsetmapping_cd
+    context_name: read_optionsetmapping
+    params:
+      - condition: cch_entityname = 'account' and cch_attributename = 'cch_division' 
+  
+  - kind: select
+    name: union_cte_division
+    context_name: filter_cch_optionsetmapping_cd
+    params:
+      columns:
+        cch_optionsetvalue: cd_cch_optionsetvalue
+        cch_externalvalue: cd_cch_externalvalue
+      distinct: true
+  
+# ###################################################
+#  distributionchannel
+  - kind: filter
+    name: filter_cch_optionsetmapping_dc
+    context_name: read_optionsetmapping
+    params:
+      - condition: cch_entityname = 'account' and cch_attributename = 'cch_distributionchannel'
+  
+  - kind: select
+    name: union_cte_distributionchannel
+    context_name: filter_cch_optionsetmapping_dc
+    params:
+      columns:
+        cch_optionsetvalue: dc_cch_optionsetvalue
+        cch_externalvalue: dc_cch_externalvalue
+      distinct: true
+
+  - kind: read_dataio
+    name: read_d365_territory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: territory
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_territory
+    context_name: read_d365_territory
+    params:
+      - condition: 1 = 1
+  
+  - kind: select
+    name: select_d365_territory
+    context_name: filter_territory
+    params:
+      columns:
+        cch_sapid: territory_cch_sapid
+        id: territory_id
+      distinct: true
+###########################
+  - kind: join
+    name: join_d365
+    context_name: select_d365
+    params:
+      - other:
+          union_cte_distributionchannel
+        how:
+          inner
+        columns:
+          cch_distributionchannel: dc_cch_optionsetvalue
+      - other:
+          union_cte_division
+        how:
+          inner
+        columns:
+          cch_division: cd_cch_optionsetvalue
+      - other:
+          select_d365_territory
+        how:
+          left
+        columns:
+          cch_salesorganizationid: territory_id
+          
+  - kind: filter
+    name: filter_d365
+    context_name: join_d365
+    params:
+      - condition: dc_cch_externalvalue = '01' and cd_cch_externalvalue = '01' and territory_cch_sapid in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+
+  - kind: checkpoint
+    name: checkpoint_d365
+    context_name: filter_d365
+##################################################
+
+  - kind: join
+    name: join_non_matching_mdg
+    context_name: checkpoint_mdg
+    params:
+      - other:
+          checkpoint_d365
+        how:
+          full
+        columns:
+          hash_mdg: hash_d365
+
+  - kind: filter
+    name: filter_non_matching_mdg
+    context_name: join_non_matching_mdg
+    params:
+      - condition:
+          isnull(hash_d365) or hash_d365 = ''
+
+  - kind: join
+    name: join_non_matching_d365
+    context_name: checkpoint_d365
+    params:
+      - other:
+          checkpoint_mdg
+        how:
+          full
+        columns:
+          hash_d365: hash_mdg
+
+  - kind: filter
+    name: filter_non_matching_d365
+    context_name: join_non_matching_d365
+    params:
+      - condition:
+          isnull(hash_mdg) or hash_mdg = ''
+
+  - kind: select
+    name: select_non_matching_mdg
+    context_name: filter_non_matching_mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        taxnum0_mdg: taxnum0_mdg
+        taxnum1_mdg: taxnum1_mdg
+        taxnum2_mdg: taxnum2_mdg
+        taxnum3_mdg: taxnum3_mdg
+        taxnum4_mdg: taxnum4_mdg
+        taxnum5_mdg: taxnum5_mdg
+        taxtype0_mdg: taxtype0_mdg
+        taxtype1_mdg: taxtype1_mdg
+        taxtype2_mdg: taxtype2_mdg
+        taxtype3_mdg: taxtype3_mdg
+        taxtype4_mdg: taxtype4_mdg
+        taxtype5_mdg: taxtype5_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: select
+    name: select_non_matching_d365
+    context_name: filter_non_matching_d365
+    params:
+      columns:
+        partner_d365: partner_d365
+        taxnum0_d365: taxnum0_d365
+        taxnum1_d365: taxnum1_d365
+        taxnum2_d365: taxnum2_d365
+        taxnum3_d365: taxnum3_d365
+        taxnum4_d365: taxnum4_d365
+        taxnum5_d365: taxnum5_d365
+        hash_d365: hash_d365
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_mdg
+    context_name: select_non_matching_mdg
+    
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_d365
+    context_name: select_non_matching_d365
+
+
+
+
+####################################
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E' and sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+
+  - kind: filter
+    name: filter_knvv
+    params:
+      - condition:
+          vtweg = '01' and spart = '01'
+
+  - kind: select
+    name: select_knvv
+    context_name: filter_knvv
+    params:
+      columns:
+        kunnr: kunnr
+        vkorg: vkorg
+        kvgr4: kvgr4
+        vtweg: vtweg
+        spart: spart
+
+  - kind: read_dataio
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvv4t
+    params:
+      - condition:
+         sap_cluster = 'CL1' and spras = 'E'
+
+  - kind: select
+    name: select_tvv4t
+    params:
+      columns:
+        kvgr4: kvgr4
+        bezei: bezei
+      distinct: true
+
+  - kind: join
+    name: join_non_matching
+    context_name: checkpoint_non_matching_mdg
+    params:
+      - other:
+          checkpoint_non_matching_d365
+        how:
+          full
+        columns:
+          partner_mdg: partner_d365
+
+  - kind: join
+    name: join_missing_from_mdg_to_filter
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_d365: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_mdg
+    context_name: join_missing_from_mdg_to_filter
+    params:
+      - condition:
+         aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+  - kind: join
+    name: join_missing_from_d365_to_filter
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_mdg: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_d365
+    context_name: join_missing_from_d365_to_filter
+    params:
+      - condition:
+         aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+## data missing from mdg
+
+  - kind: filter
+    name: filter_missing_from_mdg
+    context_name: join_missing_from_mdg
+    params:
+      - condition:
+          isnull(partner_mdg)
+
+  - kind: add
+    name: add_missing_from_mdg
+    context_name: filter_missing_from_mdg
+    params:
+      - column: msg
+        expression: if(isnull(partner_mdg), 'data missing from mdg', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_d365, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''TAX DATA'''
+      - column: src_system
+        expression: '''d365'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: loading_date
+        expression: current_date()
+
+## data missing from D365
+
+  - kind: filter
+    name: filter_missing_from_d365
+    context_name: join_missing_from_d365
+    params:
+      - condition:
+          isnull(partner_d365)
+
+  - kind: add
+    name: add_missing_from_d365
+    context_name: filter_missing_from_d365
+    params:
+      - column: msg
+        expression: if(isnull(partner_d365), 'data missing from d365', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''TAX DATA'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''d365'''
+      - column: loading_date
+        expression: current_date()
+
+
+
+
+
+
+
+##################################################
+# attributes are mismatching
+
+  - kind: filter
+    name: filter_mismatched
+    context_name: join_missing_from_d365
+    params:
+      - condition:
+          partner_d365 = partner_mdg
+          and (taxnum0_d365 <> taxnum0_mdg
+          or taxnum1_d365 <> taxnum1_mdg
+          or taxnum2_d365 <> taxnum2_mdg
+          or taxnum3_d365 <> taxnum3_mdg
+          or taxnum4_d365 <> taxnum4_mdg
+          or taxnum5_d365 <> taxnum5_mdg)
+
+  - kind: add
+    name: add_mismatched
+    context_name: filter_mismatched
+    params:
+      - column: msg_taxnum0
+        expression: if(partner_d365 = partner_mdg 
+                    and trim(regexp_replace(taxnum0_d365, '[^a-zA-Z0-9 ]', '')) <> regexp_replace(trim(taxnum0_mdg), '[^a-zA-Z0-9 ]', ''), 'attributes are mismatching', '-')
+      - column: msg_taxnum1
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum1_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum1_mdg), '[^a-zA-Z0-9 ]', ''), 'attributes are mismatching', '-')
+      - column: msg_taxnum2
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum2_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum2_mdg), '[^a-zA-Z0-9 ]', ''), 'attributes are mismatching', '-')
+      - column: msg_taxnum3
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum3_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum3_mdg), '[^a-zA-Z0-9 ]', ''), 'attributes are mismatching', '-')
+      - column: msg_taxnum4
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum4_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum4_mdg), '[^a-zA-Z0-9 ]', ''), 'attributes are mismatching', '-')
+      - column: msg_taxnum5
+        expression: if(partner_d365 = partner_mdg
+                    and regexp_replace(trim(taxnum5_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum5_mdg), '[^a-zA-Z0-9 ]', ''), 'attributes are mismatching', '-')
+      - column: attr_name_taxnum0
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum0_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum0_mdg), '[^a-zA-Z0-9 ]', ''), concat('TAX DATA:', ' ', ' VAT Reg.No.'), '-')
+      - column: attr_name_taxnum1
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum1_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum1_mdg), '[^a-zA-Z0-9 ]', ''), concat('TAX DATA:', ' ', ' Tax Number 1'), '-')
+      - column: attr_name_taxnum2
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum2_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum2_mdg), '[^a-zA-Z0-9 ]', ''), concat('TAX DATA:', ' ', ' Tax Number 2'), '-')
+      - column: attr_name_taxnum3
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum3_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum3_mdg), '[^a-zA-Z0-9 ]', ''), concat('TAX DATA:', ' ', ' Tax Number 3'), '-')
+      - column: attr_name_taxnum4
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum4_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum4_mdg), '[^a-zA-Z0-9 ]', ''), concat('TAX DATA:', ' ', ' Tax Number 4'), '-')
+      - column: attr_name_taxnum5
+        expression: if(partner_d365 = partner_mdg 
+                    and regexp_replace(trim(taxnum5_d365), '[^a-zA-Z0-9 ]', '') <> regexp_replace(trim(taxnum5_mdg), '[^a-zA-Z0-9 ]', ''), concat('TAX DATA:', ' ', ' Tax Number 5'), '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''TAX DATA'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''d365'''
+      - column: loading_date
+        expression: current_date()
+
+##############################################################
+  - kind: select
+    name: select_missing_from_mdg
+    context_name: add_missing_from_mdg
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_d365: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_missing_from_d365
+    context_name: add_missing_from_d365
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_taxnum0
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_taxnum0 <> '-'
+
+  - kind: select
+    name: select_mismatched_taxnum0
+    context_name: filter_mismatched_taxnum0
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_taxnum0: dimension
+        partner_mdg: primary_key_l1
+        taxtype0_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_taxnum0: compared_attribute
+        taxnum0_mdg: compared_src_attr_value
+        taxnum0_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_taxnum1
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_taxnum1 <> '-'
+
+  - kind: select
+    name: select_mismatched_taxnum1
+    context_name: filter_mismatched_taxnum1
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_taxnum1: dimension
+        partner_mdg: primary_key_l1
+        taxtype1_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_taxnum1: compared_attribute
+        taxnum1_mdg: compared_src_attr_value
+        taxnum1_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_taxnum2
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_taxnum2 <> '-'
+
+  - kind: select
+    name: select_mismatched_taxnum2
+    context_name: filter_mismatched_taxnum2
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_taxnum2: dimension
+        partner_mdg: primary_key_l1
+        taxtype2_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_taxnum2: compared_attribute
+        taxnum2_mdg: compared_src_attr_value
+        taxnum2_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_taxnum3
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_taxnum3 <> '-'
+
+  - kind: select
+    name: select_mismatched_taxnum3
+    context_name: filter_mismatched_taxnum3
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_taxnum3: dimension
+        partner_mdg: primary_key_l1
+        taxtype3_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_taxnum3: compared_attribute
+        taxnum3_mdg: compared_src_attr_value
+        taxnum3_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_taxnum4
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_taxnum4 <> '-'
+
+  - kind: select
+    name: select_mismatched_taxnum4
+    context_name: filter_mismatched_taxnum4
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_taxnum4: dimension
+        partner_mdg: primary_key_l1
+        taxtype4_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_taxnum4: compared_attribute
+        taxnum4_mdg: compared_src_attr_value
+        taxnum4_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_taxnum5
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_taxnum5 <> '-'
+
+  - kind: select
+    name: select_mismatched_taxnum5
+    context_name: filter_mismatched_taxnum5
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_taxnum5: dimension
+        partner_mdg: primary_key_l1
+        taxtype5_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_taxnum5: compared_attribute
+        taxnum5_mdg: compared_src_attr_value
+        taxnum5_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+########################################################
+
+  - kind: union
+    name: union_tax_data_mismatched
+    context_name: select_mismatched_taxnum0
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_taxnum1
+
+  - kind: union
+    name: union_tax_data_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_taxnum2
+
+  - kind: union
+    name: union_tax_data_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_taxnum3
+
+  - kind: union
+    name: union_tax_data_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_taxnum4
+
+  - kind: union
+    name: union_tax_data_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_taxnum5
+
+  - kind: select
+    name: select_mismatched
+    context_name: union_tax_data_mismatched
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        primary_key_l1: primary_key_l1
+        attribute3: attribute3
+        attribute4: attribute4
+        attribute5: attribute5
+        attribute6: attribute6
+        attribute7: attribute7
+        attribute8: attribute8
+        attribute10: attribute10
+        country: country
+        compared_attribute: compared_attribute
+        compared_src_attr_value: compared_src_attr_value
+        compared_tgt_attr_value: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_tax_data
+    context_name: select_missing_from_mdg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_from_d365
+
+  - kind: union
+    name: union_tax_data
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched
+
+
+
+  - kind: write_dataio
+    name: write_tax_data
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True
+
+##agg
+
+  - kind: select
+    name: select_mdg
+    context_name: checkpoint_mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: select_mdg
+    params:
+      - column: table_name
+        expression: '''TAX DATA'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: hash_mdg
+      - column: mdg_country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+
+
+##total d365
+  - kind: select
+    name: select_d365
+    context_name: checkpoint_d365
+    params:
+      columns:
+        partner_d365: partner_d365
+        hash_d365: hash_d365
+      distinct: true
+
+  - kind: add
+    name: add_d365_agg
+    context_name: select_d365
+    params:
+      - column: table_name
+        expression: '''TAX DATA'''
+      - column: src_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: d365
+        expression: hash_d365
+      - column: d365_country
+        expression: CASE substr(partner_d365, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_d365_agg
+    context_name: add_d365_agg
+    params:
+      - aggs:
+          d365: count
+        by:
+        - d365_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_d365_agg_loading_date
+    context_name: group_d365_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_d365 AS INT)
+
+  - kind: select
+    name: select_d365_agg
+    context_name: add_d365_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        d365_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from mdg
+
+  - kind: group
+    name: group_missing_from_mdg_agg
+    context_name: select_missing_from_mdg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_mdg_agg
+    context_name: group_missing_from_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM MDG'''
+
+  - kind: select
+    name: select_missing_from_mdg_agg
+    context_name: add_missing_from_mdg_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from D365
+
+  - kind: group
+    name: group_missing_from_d365_agg
+    context_name: select_missing_from_d365
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_d365_agg
+    context_name: group_missing_from_d365_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM D365'''
+
+  - kind: select
+    name: select_missing_from_d365_agg
+    context_name: add_missing_from_d365_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##mismatched
+
+  - kind: filter
+    name: filter_mismatched_agg
+    context_name: union_tax_data
+    params:
+      - condition:
+          dimension = 'attributes are mismatching'
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: filter_mismatched_agg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+
+  - kind: select
+    name: select_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

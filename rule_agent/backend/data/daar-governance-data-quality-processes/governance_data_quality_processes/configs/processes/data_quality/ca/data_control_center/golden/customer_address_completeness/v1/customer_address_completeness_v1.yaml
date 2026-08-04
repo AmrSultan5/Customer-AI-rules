@@ -1,0 +1,721 @@
+transform:
+  name: customer_address_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_address_v2
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        street_1_name: street_1_name
+        street_2_name: street_2_name
+        street_3_name: street_3_name
+        street_4_name: street_4_name
+        street_5_name: street_5_name
+        house_number: house_number
+        post_code: post_code
+        city: city
+        country_code: country_code
+        region_code: region_code
+        district: district
+        city_billing: city_billing 
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dm_customer_address_contact_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_contact
+  
+  - kind: filter
+    context_name: read_dm_customer_address_contact
+    name: filter_dcac
+    params:
+      - condition:
+          contact_medium_type = 'fixed_tel_number' and source = 's4'
+
+  - kind: select
+    context_name: filter_dcac
+    name: select_dcac
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        country_code: country_code
+        source: source
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        latitude: latitude
+        account_group_code: account_group_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#JOIN dcg and dca
+  - kind: join
+    name: join_dca_dcg
+    context_name: select_dca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dcac
+  - kind: join
+    name: join_dcac_dcg
+    context_name: select_dcac
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#SELECT rccomp_18_1
+  - kind: select
+    name: select_rccomp_18_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        street_1_name: street_1_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_18_1
+    context_name: select_rccomp_18_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_18.1'"
+      - column: check_status
+        expression: "CASE WHEN street_1_name is null OR street_1_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_18_1_final
+    context_name: add_rccomp_18_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        street_1_name: value_checked
+      distinct: true
+
+#SELECT rccomp_19_1
+  - kind: select
+    name: select_rccomp_19_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        house_number: house_number
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_19_1
+    context_name: select_rccomp_19_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_19.1'"
+      - column: check_status
+        expression: "CASE WHEN house_number is null OR house_number ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_19_1_final
+    context_name: add_rccomp_19_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        house_number: value_checked
+      distinct: true
+
+#SELECT rccomp_21_1
+  - kind: select
+    name: select_rccomp_21_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        post_code: post_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_21_1
+    context_name: select_rccomp_21_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_21.1'"
+      - column: check_status
+        expression: "CASE WHEN post_code is null OR post_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_21_1_final
+    context_name: add_rccomp_21_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        post_code: value_checked
+      distinct: true
+
+#SELECT rccomp_22_1
+  - kind: select
+    name: select_rccomp_22_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        city: city
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_22_1
+    context_name: select_rccomp_22_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_22.1'"
+      - column: check_status
+        expression: "CASE WHEN city is null OR city ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_22_1_final
+    context_name: add_rccomp_22_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        city: value_checked
+      distinct: true
+
+#SELECT rccomp_23_1
+  - kind: select
+    name: select_rccomp_23_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_23_1
+    context_name: select_rccomp_23_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_23.1'"
+      - column: check_status
+        expression: "CASE WHEN country_code is null OR country_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_23_1_final
+    context_name: add_rccomp_23_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        country_code: value_checked
+      distinct: true
+
+#SELECT rccomp_24_1
+  - kind: select
+    name: select_rccomp_24_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        region_code: region_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_24_1
+    context_name: select_rccomp_24_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_24.1'"
+      - column: check_status
+        expression: "CASE WHEN region_code is null OR region_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_24_1_final
+    context_name: add_rccomp_24_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        region_code: value_checked
+      distinct: true
+
+#SELECT rccomp_31_1
+  - kind: select
+    name: select_rccomp_31_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        street_2_name: street_2_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_31_1
+    context_name: select_rccomp_31_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_31.1'"
+      - column: check_status
+        expression: "CASE WHEN street_2_name is null OR street_2_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_31_1_final
+    context_name: add_rccomp_31_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        street_2_name: value_checked
+      distinct: true
+
+#SELECT rccomp_32_1
+  - kind: select
+    name: select_rccomp_32_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        street_3_name: street_3_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_32_1
+    context_name: select_rccomp_32_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_32.1'"
+      - column: check_status
+        expression: "CASE WHEN street_3_name is null OR street_3_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_32_1_final
+    context_name: add_rccomp_32_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        street_3_name: value_checked
+      distinct: true
+
+#SELECT rccomp_33_1
+  - kind: select
+    name: select_rccomp_33_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        street_4_name: street_4_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_33_1
+    context_name: select_rccomp_33_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_33.1'"
+      - column: check_status
+        expression: "CASE WHEN street_4_name is null OR street_4_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_33_1_final
+    context_name: add_rccomp_33_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        street_4_name: value_checked
+      distinct: true
+
+#SELECT rccomp_34_1
+  - kind: select
+    name: select_rccomp_34_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        street_5_name: street_5_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_34_1
+    context_name: select_rccomp_34_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_34.1'"
+      - column: check_status
+        expression: "CASE WHEN street_5_name is null OR street_5_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_34_1_final
+    context_name: add_rccomp_34_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        street_5_name: value_checked
+      distinct: true
+
+#SELECT rccomp_35_1
+  - kind: select
+    name: select_rccomp_35_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        district: district
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_35_1
+    context_name: select_rccomp_35_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_35.1'"
+      - column: check_status
+        expression: "CASE WHEN district is null OR district ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_35_1_final
+    context_name: add_rccomp_35_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        district: value_checked
+      distinct: true
+
+#SELECT rccomp_36_1
+  - kind: select
+    name: select_rccomp_36_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        city_billing: city_billing
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_36_1
+    context_name: select_rccomp_36_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_36.1'"
+      - column: check_status
+        expression: "CASE WHEN city_billing is null OR city_billing ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_36_1_final
+    context_name: add_rccomp_36_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        city_billing: value_checked
+      distinct: true
+
+#SELECT rccomp_372_1
+  - kind: select
+    name: select_rccomp_372_1
+    context_name: join_dcac_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_372_1
+    context_name: select_rccomp_372_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_372.1'"
+      - column: check_status
+        expression: "CASE WHEN country_code is null OR country_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_372_1_final
+    context_name: add_rccomp_372_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        country_code: value_checked
+      distinct: true
+
+#SELECT rccomp_383_1
+  - kind: select
+    name: select_rccomp_383_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        account_group_code: account_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_383_1
+    context_name: select_rccomp_383_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_383.1'"
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' THEN '' WHEN longitude is null OR longitude ='' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rccomp_383_1_final
+    context_name: add_rccomp_383_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        longitude: value_checked
+      distinct: true
+
+#SELECT rccomp_384_1
+  - kind: select
+    name: select_rccomp_384_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        account_group_code: account_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_384_1
+    context_name: select_rccomp_384_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_384.1'"
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' THEN '' WHEN latitude is null OR latitude ='' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rccomp_384_1_final
+    context_name: add_rccomp_384_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        latitude: value_checked
+      distinct: true
+
+#Union all
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_18_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_19_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_21_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_22_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_23_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_24_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_31_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_32_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_33_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_34_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_35_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_36_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_372_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_383_1_final
+
+  - kind: union
+    name: union_customer_address_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_384_1_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_address_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_address_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

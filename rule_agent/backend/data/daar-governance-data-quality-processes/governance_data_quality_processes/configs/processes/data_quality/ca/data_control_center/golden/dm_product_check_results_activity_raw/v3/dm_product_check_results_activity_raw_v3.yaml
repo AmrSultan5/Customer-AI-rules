@@ -1,0 +1,1698 @@
+transform:
+  name: dm_product_check_results_activity_raw
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#read dm_product_plant
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_plant
+
+#Stock check
+
+  - kind: select
+    name: select_dm_product_plant_sales_check
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        stock_in_transit_quantity: stock_in_transit_quantity
+        stock_in_transfer_quantity: stock_in_transfer_quantity
+        stock_unrestricted_quantity: stock_unrestricted_quantity
+        stock_blocked_quantity: stock_blocked_quantity
+        stock_quality_inspection_quantity: stock_quality_inspection_quantity
+        stock_vendor_quantity: stock_vendor_quantity
+        stock_customer_unrestricted_use_quantity: stock_customer_unrestricted_use_quantity
+        stock_supplier_quantity: stock_supplier_quantity
+        stock_batch: stock_batch
+        stock_vendor_flag: stock_vendor_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dm_product_plant_sales_check
+    params:
+      - aggs:
+          stock_in_transit_quantity: sum
+          stock_in_transfer_quantity: sum
+          stock_unrestricted_quantity: sum
+          stock_blocked_quantity: sum
+          stock_quality_inspection_quantity: sum
+          stock_vendor_quantity: sum
+          stock_customer_unrestricted_use_quantity: sum
+          stock_supplier_quantity: sum
+          stock_batch: max
+          stock_vendor_flag: max
+        by:
+        - material_code
+        - country_code
+        - sap_cluster
+
+  - kind: add
+    name: add_dm_product_plant_stock_check
+    params:
+      - column: stock_check
+        expression: "CASE WHEN (ifnull(sum_stock_in_transit_quantity, 0) + ifnull(sum_stock_in_transfer_quantity, 0) + ifnull(sum_stock_unrestricted_quantity, 0) + ifnull(sum_stock_blocked_quantity, 0) + ifnull(sum_stock_quality_inspection_quantity, 0) + ifnull(sum_stock_vendor_quantity, 0) + ifnull(sum_stock_customer_unrestricted_use_quantity, 0) + ifnull(sum_stock_supplier_quantity, 0)) > 0 OR (max_stock_batch != '' AND max_stock_batch is not null) THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_dm_product_plant_stock_check_final
+    params:
+      columns:
+        material_code: material_code_pl
+        country_code: country_code_pl
+        sap_cluster: sap_cluster_pl
+        stock_check: stock_check
+
+#read dm_purchase_orders
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_purchase_orders
+
+#Purchase Orders check
+  - kind: select
+    context_name: read_dm_purchase_orders  
+    name: select_dm_purchase_orders_production_orders_check
+    params:
+      columns:
+        material_code: material_code_po
+        country_code: country_code_po
+        sap_cluster: sap_cluster_po
+        purchase_document_date: purchase_document_date
+      distinct: true
+
+  - kind: group
+    name: group_dm_purchase_orders_production_orders_check
+    params:
+      - aggs:
+          purchase_document_date: max
+        by:
+        - material_code_po
+        - country_code_po
+        - sap_cluster_po
+
+  - kind: add
+    name: add_dm_purchase_orders_production_orders_check
+    params:
+      - column: purchase_order_check 
+        expression: "CASE WHEN(material_code_po is null) THEN '0' ELSE '1' END"
+
+
+  - kind: select
+    name: select_dm_purchase_orders_production_orders_check_final
+    params:
+      columns:
+        material_code_po: material_code_po
+        country_code_po: country_code_po
+        sap_cluster_po: sap_cluster_po
+        purchase_order_check: purchase_order_check
+        max_purchase_document_date: purchase_document_last_date
+      distinct: true
+
+#read dm_production_orders
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_production_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_production_orders
+
+#Production orders check
+
+  - kind: select
+    name: select_dm_production_orders_check
+    params:
+      columns:
+        material_code: material_code_o
+        country_code: country_code_o
+        sap_cluster: sap_cluster_o
+        delivery_finish_date: finish_date
+      distinct: true
+
+  - kind: group
+    name: group_dm_production_orders_check
+    params:
+      - aggs:
+          finish_date: max
+        by:
+        - material_code_o
+        - country_code_o
+        - sap_cluster_o
+
+  - kind: add
+    name: add_dm_production_orders_check
+    params:
+      - column: production_order_check  
+        expression: "CASE WHEN(material_code_o is null) THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_dm_production_orders_check_final
+    params:
+      columns:
+        material_code_o: material_code_o
+        country_code_o: country_code_o
+        sap_cluster_o: sap_cluster_o
+        production_order_check: production_order_check
+        max_finish_date: production_document_last_date
+      distinct: true
+      
+#read dm_product_general
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+
+  - kind: filter
+    name: filter_dm_product_general
+    context_name: read_dm_product_general
+    params:
+      - condition:
+          material_type_code IN ('ZRW', 'ZRWT', 'ZEM', 'ZPAL', 'ZSF', 'ZSFT')
+
+#Creation date check
+
+  - kind: select
+    name: select_dm_product_general_creation_date_check
+    context_name: filter_dm_product_general
+    params:
+      columns:
+        material_code: material_code
+        creation_date: creation_date 
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_dm_product_plant_creation_date_check_ext_date
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        country_code: country_code
+        material_code: material_code
+        plant_extension_date: plant_extension_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dm_product_plant_creation_date_check
+    params:
+      - aggs:
+          plant_extension_date: max
+        by:
+        - country_code
+        - material_code
+        - sap_cluster
+
+
+  - kind: join
+    name: join_dm_product_plant_general_creation_date_check
+    context_name: group_dm_product_plant_creation_date_check
+    params:
+      - other:
+          select_dm_product_general_creation_date_check
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dm_product_general_creation_date_check
+    params:
+      - column: creation_date_check_with_null
+        expression: "CASE WHEN(to_date(creation_date) >= add_months(to_date(current_date()), -12) and max_plant_extension_date is null and max_plant_extension_date!='') OR (to_date(max_plant_extension_date) >= add_months(to_date(current_date()), -12)) THEN '1' ELSE '0' END"
+  
+  - kind: add
+    name: add_dm_product_general_creation_date_check_if_null
+    params:
+      - column: creation_date_check
+        expression: "CASE WHEN(creation_date_check_with_null is null) THEN '0' ELSE creation_date_check_with_null END"
+
+  - kind: select
+    name: select_dm_product_general_creation_date_check_final
+    params:
+      columns:
+        material_code: material_code_pg
+        country_code: country_code_pg
+        sap_cluster: sap_cluster_pg
+        max_plant_extension_date: max_plant_extension_date
+        creation_date_check: creation_date_check
+      distinct: true
+
+#Plant status check
+
+  - kind: select
+    name: select_dm_product_plant_status_check_za
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        material_status_code: material_status_code_org
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dm_product_plant_matarial_status_code
+    params:
+      - column: material_status_code 
+        expression: IF(material_status_code_org = '02', '', material_status_code_org)
+
+  - kind: add
+    name: add_dm_product_plant_status_check_if
+    params:
+      - column: plant_status_check_za 
+        expression: IF(material_status_code='ZA', 1, 0)
+      - column: plant_status_check_97 
+        expression: IF(material_status_code='97', 1, 0)
+      - column: plant_status_check_97_s
+        expression: IF(material_status_code='97', 1, 0)
+      - column: plant_status_check_98 
+        expression: IF(material_status_code='98', 1, 0)
+      - column: plant_status_check_99 
+        expression: IF(material_status_code='99', 1, 0)   
+      - column: plant_status_check_99_s
+        expression: IF(material_status_code='99', 1, 0)  
+      - column: plant_status_check_98_s
+        expression: IF(material_status_code='98', 1, 0)                 
+      - column: plant_status_check_not_99 
+        expression: IF(material_status_code!='99', 1, 0)  
+      - column: plant_status_check_null
+        expression: IF(material_status_code is null or material_status_code='', 1, 0)                                     
+      - column: plant_status_check_null_not_98
+        expression: IF(material_status_code!='98' and (material_status_code is null or material_status_code=''), 1, 0)  
+      - column: plant_status_all
+        expression: CAST(1 as INT)                                
+
+  - kind: group
+    name: group_dm_product_plant_status_check
+    params:
+      - aggs:
+          plant_status_check_za: max
+          plant_status_check_97: max
+          plant_status_check_97_s: sum
+          plant_status_check_98: max
+          plant_status_check_99: max
+          plant_status_check_99_s: sum
+          plant_status_check_98_s: sum
+          plant_status_check_not_99: max
+          plant_status_check_null_not_98: sum
+          plant_status_check_null: sum
+          plant_status_all: sum
+        by:
+        - material_code
+        - country_code
+        - sap_cluster
+
+  - kind: add
+    name: add_dm_product_plant_status_check
+    params:
+      - column: plant_status_check
+        expression: "CASE WHEN(max_plant_status_check_za = 1) THEN 'at least one ZA'  WHEN sum_plant_status_check_97_s = sum_plant_status_all THEN '97 only' WHEN (max_plant_status_check_97 = 1) THEN 'at least one 97'  WHEN sum_plant_status_check_99_s = sum_plant_status_all THEN '99 only' WHEN sum_plant_status_check_98_s = sum_plant_status_all THEN '98 only' WHEN (max_plant_status_check_98 = 1 and sum_plant_status_check_null_not_98 = 0) THEN 'at least one 98' WHEN max_plant_status_check_99 = 1 AND max_plant_status_check_not_99 = 1 THEN 'at least one 99' WHEN sum_plant_status_check_null = sum_plant_status_all THEN 'no blocks' ELSE 'some blocks' END"
+
+  - kind: select
+    name: select_dm_product_plant_status_check_final
+    params:
+      columns:
+        material_code: material_code_pppl
+        country_code: country_code_pppl
+        sap_cluster: sap_cluster_pppl
+        plant_status_check: plant_status_check
+      distinct: true
+
+#read dm_sales_documents
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_sales_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_sales_documents
+
+#sales date check
+
+  - kind: select
+    name: select_dm_sales_documents_sales_order_check
+    context_name: read_dm_sales_documents
+    params:
+      columns:
+        material_code: material_code
+        item_creation_date: item_creation_date
+        country_code: country_code_sd
+        sap_cluster: sap_cluster
+      distinct: true    
+
+  - kind: select
+    name: select_dm_product_plant_sales_order_check
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        country_code: country_code_ppl
+        material_code: material_code_ppl
+        plant_extension_date: plant_extension_date_ppl
+        sap_cluster: sap_cluster_ppl
+      distinct: true
+
+  - kind: group
+    name: group_dm_product_plant_sales_order_check
+    params:
+      - aggs:
+          plant_extension_date_ppl: max
+        by:
+        - country_code_ppl
+        - material_code_ppl
+        - sap_cluster_ppl
+
+
+  - kind: join
+    name: join_dm_product_plant_sales_documents_sales_order_check
+    context_name: group_dm_product_plant_sales_order_check
+    params:
+      - other:
+          select_dm_sales_documents_sales_order_check
+        how:
+          inner
+        columns:
+          material_code_ppl: material_code
+          country_code_ppl: country_code_sd
+          sap_cluster_ppl: sap_cluster
+
+  - kind: select
+    name: select_dm_product_plant_sales_order_check_before_max
+    params:
+      columns:
+        country_code_ppl: country_code
+        material_code_ppl: material_code
+        item_creation_date: item_creation_date
+        sap_cluster_ppl: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dm_product_plant_sales_documents_sales_order_check
+    context_name: select_dm_product_plant_sales_order_check_before_max
+    params:
+      - aggs:
+          item_creation_date: max
+        by:
+        - country_code
+        - material_code
+        - sap_cluster
+
+  - kind: add
+    name: add_dm_sales_documents_sales_order_check
+    params:
+      - column: item_creation_date_check_with_null
+        expression: "CASE WHEN(to_date(max_item_creation_date) >= add_months(to_date(current_date()), -36)) THEN '1' ELSE '0' END"
+  
+  - kind: add
+    name: add_dm_sales_documents_item_creation_date_check_if_null
+    params:
+      - column: sales_order_flag
+        expression: "CASE WHEN(item_creation_date_check_with_null is null) THEN '0' ELSE item_creation_date_check_with_null END"
+
+  - kind: select
+    name: select_dm_sales_doocuments_item_creation_date_check_final
+    params:
+      columns:
+        material_code: material_code_sd
+        country_code: country_code_sd
+        sap_cluster: sap_cluster_sd
+        max_item_creation_date: sales_order_last_date
+        sales_order_flag: sales_order_flag
+      distinct: true
+
+
+#read dm_billing_documents
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_billing_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_billing_documents
+
+#billing_documents_check
+  - kind: select
+    name: select_dm_billing_documents_billing_documents_check
+    context_name: read_dm_billing_documents
+    params:
+      columns:
+        material_code: material_code
+        item_creation_date: item_creation_date
+        country_code: country_code_bd
+        sap_cluster: sap_cluster
+      distinct: true    
+
+  - kind: select
+    name: select_dm_product_plant_billing_documents_check
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        country_code: country_code_ppl
+        material_code: material_code_ppl
+        plant_extension_date: plant_extension_date_ppl
+        sap_cluster: sap_cluster_ppl
+      distinct: true
+
+
+  - kind: group
+    name: group_dm_product_plant_billing_documents_check
+    params:
+      - aggs:
+          plant_extension_date_ppl: max
+        by:
+        - country_code_ppl
+        - material_code_ppl
+        - sap_cluster_ppl
+
+
+  - kind: join
+    name: join_dm_product_plant_billing_documents_check
+    context_name: group_dm_product_plant_billing_documents_check
+    params:
+      - other:
+          select_dm_billing_documents_billing_documents_check
+        how:
+          inner
+        columns:
+          material_code_ppl: material_code
+          country_code_ppl: country_code_bd
+          sap_cluster_ppl: sap_cluster
+
+  - kind: select
+    name: select_dm_product_plant_billing_documents_check_before_max
+    params:
+      columns:
+        country_code_ppl: country_code
+        material_code_ppl: material_code
+        item_creation_date: item_creation_date
+        sap_cluster_ppl: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dm_product_plant_billing_documents_sales_order_check
+    context_name: select_dm_product_plant_billing_documents_check_before_max
+    params:
+      - aggs:
+          item_creation_date: max
+        by:
+        - country_code
+        - material_code
+        - sap_cluster
+
+  - kind: add
+    name: add_dm_delivery_documents_billing_documents_check
+    params:
+      - column: item_creation_date_check_with_null
+        expression: "CASE WHEN(to_date(max_item_creation_date) >= add_months(to_date(current_date()), -36)) THEN '1' ELSE '0' END"
+  
+  - kind: add
+    name: add_dm_billing_documents_item_creation_date_check_if_null
+    params:
+      - column: billing_document_flag
+        expression: "CASE WHEN(item_creation_date_check_with_null is null) THEN '0' ELSE item_creation_date_check_with_null END"
+
+  - kind: select
+    name: select_dm_billing_documents_item_creation_date_check_final
+    params:
+      columns:
+        material_code: material_code_bd
+        country_code: country_code_bd
+        sap_cluster: sap_cluster_bd
+        max_item_creation_date: billing_document_last_date
+        billing_document_flag: billing_document_flag
+      distinct: true
+
+#read dm_delivery_shippment
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_delivery_shippment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_delivery_shippment
+
+#delivery_documents_check
+  - kind: select
+    name: select_dm_delivery_shippment_delivery_documents_check
+    context_name: read_dm_delivery_shippment
+    params:
+      columns:
+        material_code: material_code
+        delivery_item_creation_date: delivery_item_creation_date
+        country_code: country_code_ds
+        sap_cluster: sap_cluster
+      distinct: true    
+
+  - kind: select
+    name: select_dm_product_plant_delivery_documents_check
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        country_code: country_code_ppl
+        material_code: material_code_ppl
+        plant_extension_date: plant_extension_date_ppl
+        sap_cluster: sap_cluster_ppl
+      distinct: true
+
+
+  - kind: group
+    name: group_dm_product_plant_delivery_documents_check
+    params:
+      - aggs:
+          plant_extension_date_ppl: max
+        by:
+        - country_code_ppl
+        - material_code_ppl
+        - sap_cluster_ppl
+
+
+  - kind: join
+    name: join_dm_product_plant_delivery_documents_check
+    context_name: group_dm_product_plant_delivery_documents_check
+    params:
+      - other:
+          select_dm_delivery_shippment_delivery_documents_check
+        how:
+          inner
+        columns:
+          material_code_ppl: material_code
+          country_code_ppl: country_code_ds
+          sap_cluster_ppl: sap_cluster
+
+  - kind: select
+    name: select_dm_product_plant_delivery_documents_check_before_max
+    params:
+      columns:
+        country_code_ppl: country_code
+        material_code_ppl: material_code
+        delivery_item_creation_date: delivery_item_creation_date
+        sap_cluster_ppl: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dm_product_plant_delivery_documents_sales_order_check
+    context_name: select_dm_product_plant_delivery_documents_check_before_max
+    params:
+      - aggs:
+          delivery_item_creation_date: max
+        by:
+        - country_code
+        - material_code
+        - sap_cluster
+
+  - kind: add
+    name: add_dm_delivery_documents_delivery_documents_check
+    params:
+      - column: delivery_item_creation_date_check_with_null
+        expression: "CASE WHEN(to_date(max_delivery_item_creation_date) >= add_months(to_date(current_date()), -36)) THEN '1' ELSE '0' END"
+  
+  - kind: add
+    name: add_dm_delivery_documents_item_creation_date_check_if_null
+    params:
+      - column: delivery_document_flag
+        expression: "CASE WHEN(delivery_item_creation_date_check_with_null is null) THEN '0' ELSE delivery_item_creation_date_check_with_null END"
+
+  - kind: select
+    name: select_dm_delivery_documents_item_creation_date_check_final
+    params:
+      columns:
+        material_code: material_code_dc
+        country_code: country_code_dc
+        sap_cluster: sap_cluster_dc
+        max_delivery_item_creation_date: delivery_document_last_date
+        delivery_document_flag: delivery_document_flag
+      distinct: true
+
+#read dm_bill_of_material
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_bill_of_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_bill_of_material
+
+  - kind: filter
+    name: filter_dm_bill_of_material
+    context_name: read_dm_bill_of_material
+    params:
+      - condition:
+          (bom_item_link_deletion_flag = '' or bom_item_link_deletion_flag is null) and bom_material_status = '1' and (bom_deletion_flag IS NULL or bom_deletion_flag = '') and (bom_deletion_indicator IS NULL or bom_deletion_indicator = '')
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_iteration_1
+    context_name: filter_dm_bill_of_material
+    params:
+      columns:
+        bom_component_material_number: bom_component_material_number_bom_it_1
+        country_code: country_code_bom_it_1
+        sap_cluster: sap_cluster_bom_it_1
+        bom_item_link_deletion_flag : bom_item_link_deletion_flag_bom_it_1
+        bom_deletion_flag: bom_deletion_flag_it_1
+        bom_deletion_indicator: bom_deletion_indicator_it_1
+        bom_number: bom_number_bom_it_1
+        bom_material_status: bom_material_status_bom_it_1
+        material_code: material_code_bom_it_1
+        plant_code: plant_code_bom_it_1
+      distinct: true
+
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_iteration_2
+    context_name: filter_dm_bill_of_material
+    params:
+      columns:
+        bom_component_material_number: bom_component_material_number_bom_it_2
+        country_code: country_code_bom_it_2
+        sap_cluster: sap_cluster_bom_it_2
+        bom_item_link_deletion_flag : bom_item_link_deletion_flag_bom_it_2
+        bom_deletion_flag: bom_deletion_flag_it_2
+        bom_deletion_indicator: bom_deletion_indicator_it_2
+        bom_number: bom_number_bom_it_2
+        bom_material_status: bom_material_status_bom_it_2
+        material_code: material_code_bom_it_2
+        plant_code: plant_code_bom_it_2
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_general_bom_check
+    context_name: filter_dm_product_general
+    params:
+      columns:
+        material_code: material_code_pg
+        material_type_code: material_type_code_pg
+        sap_cluster: sap_cluster_pg
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_general_bom_check_2
+    context_name: read_dm_product_general
+    params:
+      columns:
+        material_code: material_code_pg_2
+        material_type_code: material_type_code_pg_2
+        sap_cluster: sap_cluster_pg_2
+      distinct: true
+
+  - kind: filter
+    name: filter_material_status_code
+    context_name: read_dm_product_plant
+    params:
+      - condition:
+          material_status_code!='99'
+
+  - kind: select
+    name: select_dm_product_plant_bom_check
+    context_name: filter_material_status_code
+    params:
+      columns:
+        material_code: material_code_pl
+        material_status_code: material_status_code_pl
+        plant_code: plant_code_pl
+        sap_cluster: sap_cluster_pl
+      distinct: true
+
+  - kind: join
+    name: join_bom_check
+    context_name: select_dm_product_general_bom_check
+    params:
+      - other:
+          select_dm_bill_of_material_bom_check_iteration_1
+        how:
+          inner
+        columns:
+          material_code_pg: bom_component_material_number_bom_it_1
+          sap_cluster_pg: sap_cluster_bom_it_1         
+      - other:
+          select_dm_product_plant_bom_check
+        how:
+          inner
+        columns:
+          material_code_bom_it_1: material_code_pl
+          plant_code_bom_it_1: plant_code_pl
+          sap_cluster_bom_it_1: sap_cluster_pl
+      - other:
+          select_dm_bill_of_material_bom_check_iteration_2
+        how:
+          left
+        columns:
+          material_code_bom_it_1: bom_component_material_number_bom_it_2
+          country_code_bom_it_1: country_code_bom_it_2
+          sap_cluster_bom_it_1: sap_cluster_bom_it_2
+      - other:
+          select_dm_product_general_bom_check_2
+        how:
+          left
+        columns:
+          material_code_bom_it_1: material_code_pg_2
+          sap_cluster_bom_it_1: sap_cluster_pg_2            
+
+
+#ITERATION 1
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_it_1
+    context_name: join_bom_check
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_1
+        country_code_bom_it_1: country_code_bom_it_1
+        sap_cluster_bom_it_1: sap_cluster_bom_it_1
+        bom_item_link_deletion_flag_bom_it_1: bom_item_link_deletion_flag_bom_it_1
+        bom_deletion_flag_it_1: bom_deletion_flag_it_1
+        bom_deletion_indicator_it_1: bom_deletion_indicator_it_1
+        bom_number_bom_it_1: bom_number_bom_it_1
+        bom_material_status_bom_it_1: bom_material_status_bom_it_1
+        material_code_bom_it_1: material_code_bom_it_1
+        material_type_code_pg: material_type_code_pg_it_1
+      distinct: true
+
+  - kind: add
+    name: add_bom_trim
+    context_name: select_dm_bill_of_material_bom_check_it_1
+    params:
+      - column: bom_number_bom_trim_it_1
+        expression: ltrim('0',bom_number_bom_it_1)    
+      - column: material_code_bom_trim_it_1
+        expression: ltrim('0',material_code_bom_it_1)                 
+
+
+  - kind: group
+    name: group_dm_bill_of_material_iteration_1
+    context_name: add_bom_trim
+    params:
+      - aggs:
+          bom_number_bom_trim_it_1 : collect_set
+          material_code_bom_trim_it_1: collect_set
+        by:
+        - bom_component_material_number_bom_it_1
+        - country_code_bom_it_1
+        - sap_cluster_bom_it_1
+        - material_type_code_pg_it_1
+
+  - kind: add
+    name: add_dm_bill_of_material_bom_check_sort_set
+    context_name: group_dm_bill_of_material_iteration_1
+    params:
+      - column: bom_number_sorted_array_it_1
+        expression: sort_array(collect_set_bom_number_bom_trim_it_1)
+      - column: material_code_sorted_array_it_1
+        expression: sort_array(collect_set_material_code_bom_trim_it_1)
+
+  - kind: add
+    name: add_dm_bill_of_material_bom_check_iteration_1
+    context_name: add_dm_bill_of_material_bom_check_sort_set
+    params:
+      - column: bom_number_array_concat_it_1
+        expression: concat_ws(',', bom_number_sorted_array_it_1)
+      - column: material_code_array_concat_it_1
+        expression: concat_ws(',', material_code_sorted_array_it_1)
+
+  - kind: add
+    name: add_dm_bill_of_material_bom_check
+    context_name: add_dm_bill_of_material_bom_check_iteration_1
+    params:
+      - column: bom_number_array_it_1
+        expression: IF(length(bom_number_array_concat_it_1)<4001, bom_number_array_concat_it_1, substr(bom_number_array_concat_it_1,1,4000))
+      - column: material_code_array_it_1
+        expression: IF(length(material_code_array_concat_it_1)<4001, material_code_array_concat_it_1, substr(material_code_array_concat_it_1,1,4000))
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_iteration_1
+    context_name: add_dm_bill_of_material_bom_check
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_1
+        country_code_bom_it_1: country_code_bom_it_1
+        sap_cluster_bom_it_1: sap_cluster_bom_it_1
+        bom_number_array_it_1: bom_number_array_it_1
+        material_code_array_it_1: material_code_array_it_1
+        material_type_code_pg_it_1: material_type_code_pg_it_1
+      distinct: true
+
+  - kind: add
+    name: add_subchecks_it_1
+    context_name: select_dm_bill_of_material_bom_check_iteration_1
+    params:
+      - column: empty_bom_component_material_flag_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1='ZEM' AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN '1' ELSE '' END"
+      - column: empty_bom_number_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1='ZEM' AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN bom_number_array_it_1 ELSE '' END"        
+      - column: empty_bom_material_code_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1='ZEM' AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN material_code_array_it_1 ELSE '' END" 
+      - column: fg_bom_component_material_flag_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZPAL') AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN '1' ELSE '' END" 
+      - column: fg_bom_number_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZPAL') AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN bom_number_array_it_1 ELSE '' END" 
+      - column: fg_bom_material_code_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZPAL') AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN material_code_array_it_1 ELSE '' END"  
+      - column: semi_fg_bom_component_material_flag_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZSF', 'ZSFT', 'ZRW', 'ZRWT') AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN '1' ELSE '' END" 
+      - column: semi_fg_bom_number_it_1
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZSF', 'ZSFT', 'ZRW', 'ZRWT') AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN bom_number_array_it_1 ELSE '' END" 
+      - column: semi_fg_bom_material_code_it_1 
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZSF', 'ZSFT', 'ZRW', 'ZRWT') AND (bom_component_material_number_bom_it_1 is not null AND bom_component_material_number_bom_it_1!='')) THEN material_code_array_it_1 ELSE '' END"   
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_iteration_1_final
+    context_name: add_subchecks_it_1
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_1
+        country_code_bom_it_1: country_code_bom_it_1
+        sap_cluster_bom_it_1: sap_cluster_bom_it_1
+        empty_bom_component_material_flag_it_1: empty_bom_component_material_flag_it_1
+        empty_bom_number_it_1: empty_bom_number_it_1
+        empty_bom_material_code_it_1: empty_bom_material_code_it_1
+        fg_bom_component_material_flag_it_1: fg_bom_component_material_flag_it_1
+        fg_bom_number_it_1: fg_bom_number_it_1
+        fg_bom_material_code_it_1: fg_bom_material_code_it_1
+        semi_fg_bom_component_material_flag_it_1: semi_fg_bom_component_material_flag_it_1
+        semi_fg_bom_number_it_1: semi_fg_bom_number_it_1
+        semi_fg_bom_material_code_it_1: semi_fg_bom_material_code_it_1
+        material_type_code_pg_it_1: material_type_code_pg_it_1
+      distinct: true
+
+#ITERATION 2
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_it_2
+    context_name: join_bom_check
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_1
+        country_code_bom_it_1: country_code_bom_it_1
+        sap_cluster_bom_it_1: sap_cluster_bom_it_1
+        bom_number_bom_it_2: bom_number_bom_it_2
+        material_code_bom_it_2: material_code_bom_it_2
+        material_type_code_pg: material_type_code_pg_it_1
+      distinct: true
+
+  - kind: add
+    name: add_bom_trim_it_2
+    context_name: select_dm_bill_of_material_bom_check_it_2
+    params:
+      - column: bom_number_bom_trim_it_2
+        expression: ltrim('0',bom_number_bom_it_2)    
+      - column: material_code_bom_trim_it_2
+        expression: ltrim('0',material_code_bom_it_2)                 
+
+  - kind: group
+    name: group_dm_bill_of_material_iteration_2
+    context_name: add_bom_trim_it_2
+    params:
+      - aggs:
+          bom_number_bom_trim_it_2 : collect_set
+          material_code_bom_trim_it_2: collect_set
+        by:
+        - bom_component_material_number_bom_it_1
+        - country_code_bom_it_1
+        - sap_cluster_bom_it_1
+        - material_type_code_pg_it_1
+
+  - kind: add
+    name: add_dm_bill_of_material_bom_check_sort_set_it_2
+    context_name: group_dm_bill_of_material_iteration_2
+    params:
+      - column: bom_number_sorted_array_it_2
+        expression: sort_array(collect_set_bom_number_bom_trim_it_2)
+      - column: material_code_sorted_array_it_2
+        expression: sort_array(collect_set_material_code_bom_trim_it_2)
+
+  - kind: add
+    name: add_dm_bill_of_material_bom_check_iteration_2
+    context_name: add_dm_bill_of_material_bom_check_sort_set_it_2
+    params:
+      - column: bom_number_array_concat_it_2
+        expression: concat_ws(',', bom_number_sorted_array_it_2)
+      - column: material_code_array_concat_it_2
+        expression: concat_ws(',', material_code_sorted_array_it_2)
+
+  - kind: add
+    name: add_dm_bill_of_material_bom_check_it_2
+    context_name: add_dm_bill_of_material_bom_check_iteration_2
+    params:
+      - column: bom_number_array_it_2
+        expression: IF(length(bom_number_array_concat_it_2)<4001, bom_number_array_concat_it_2, substr(bom_number_array_concat_it_2,1,4000))
+      - column: material_code_array_it_2
+        expression: IF(length(material_code_array_concat_it_2)<4001, material_code_array_concat_it_2, substr(material_code_array_concat_it_2,1,4000))
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_iteration_2
+    context_name: add_dm_bill_of_material_bom_check_it_2
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_1
+        country_code_bom_it_1: country_code_bom_it_1
+        sap_cluster_bom_it_1: sap_cluster_bom_it_1
+        bom_number_array_it_2: bom_number_array_it_2
+        material_code_array_it_2: material_code_array_it_2
+        material_type_code_pg_it_1: material_type_code_pg_it_1
+      distinct: true
+
+  - kind: add
+    name: add_subchecks_it_2
+    context_name: select_dm_bill_of_material_bom_check_iteration_2
+    params:
+      - column: fg_bom_component_material_flag_it_2
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZEM', 'ZSF', 'ZSFT', 'ZRW', 'ZRWT') AND (bom_number_array_it_2 is not null AND bom_number_array_it_2!='')) THEN '1' ELSE '' END" 
+      - column: fg_bom_number_it_2
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZEM', 'ZSF', 'ZSFT', 'ZRW', 'ZRWT') AND (bom_number_array_it_2 is not null AND bom_number_array_it_2!='')) THEN bom_number_array_it_2 ELSE '' END" 
+      - column: fg_bom_material_code_it_2
+        expression: "CASE WHEN(material_type_code_pg_it_1 IN('ZEM', 'ZSF', 'ZSFT', 'ZRW', 'ZRWT') AND (material_code_array_it_2 is not null AND material_code_array_it_2!='')) THEN material_code_array_it_2 ELSE '' END"   
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_iteration_2_final
+    context_name: add_subchecks_it_2
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_2
+        country_code_bom_it_1: country_code_bom_it_2
+        sap_cluster_bom_it_1: sap_cluster_bom_it_2
+        fg_bom_component_material_flag_it_2: fg_bom_component_material_flag_it_2
+        fg_bom_number_it_2: fg_bom_number_it_2
+        fg_bom_material_code_it_2: fg_bom_material_code_it_2
+      distinct: true
+
+#ITERTION 1 AND 2 JOIN
+  - kind: join
+    name: join_bom_check_iterations
+    context_name: select_dm_bill_of_material_bom_check_iteration_1_final
+    params:
+      - other:
+          select_dm_bill_of_material_bom_check_iteration_2_final
+        how:
+          left
+        columns:
+          bom_component_material_number_bom_it_1: bom_component_material_number_bom_it_2
+          country_code_bom_it_1: country_code_bom_it_2
+          sap_cluster_bom_it_1: sap_cluster_bom_it_2    
+
+  - kind: add
+    name: add_final_checks
+    context_name: join_bom_check_iterations
+    params:
+      - column: fg_bom_component_material_flag_it1_it2
+        expression: "CASE WHEN(fg_bom_component_material_flag_it_1!='') THEN fg_bom_component_material_flag_it_1 ELSE fg_bom_component_material_flag_it_2 END" 
+      - column: fg_bom_number_it1_it2
+        expression: "CASE WHEN(fg_bom_number_it_1!='') THEN fg_bom_number_it_1 ELSE fg_bom_number_it_2 END" 
+      - column: fg_bom_material_code_it1_it2
+        expression: "CASE WHEN(fg_bom_material_code_it_1!='') THEN fg_bom_material_code_it_1 ELSE fg_bom_material_code_it_2 END"         
+      - column: bom_check
+        expression: "CASE WHEN(empty_bom_component_material_flag_it_1='1' OR fg_bom_component_material_flag_it1_it2='1' OR semi_fg_bom_component_material_flag_it_1='1') THEN '1' ELSE '0' END" 
+
+  - kind: select
+    name: select_dm_bill_of_material_bom_check_final
+    context_name: add_final_checks
+    params:
+      columns:
+        bom_component_material_number_bom_it_1: bom_component_material_number_bom
+        country_code_bom_it_1: country_code_bom
+        sap_cluster_bom_it_1: sap_cluster_bom
+        empty_bom_component_material_flag_it_1: empty_bom_component_material_flag
+        empty_bom_number_it_1: empty_bom_number
+        empty_bom_material_code_it_1: empty_bom_material_code
+        fg_bom_component_material_flag_it1_it2: fg_bom_component_material_flag
+        fg_bom_number_it1_it2: fg_bom_number
+        fg_bom_material_code_it1_it2: fg_bom_material_code
+        semi_fg_bom_component_material_flag_it_1: semi_fg_bom_component_material_flag
+        semi_fg_bom_number_it_1: semi_fg_bom_number
+        semi_fg_bom_material_code_it_1: semi_fg_bom_material_code
+        bom_check: bom_check
+      distinct: true
+
+#read dm_product_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+
+  - kind: filter
+    name: filter_dm_product_sales_organization_org
+    context_name: read_dm_product_sales_organization
+    params:
+      - condition:
+          country_code!= 'BSO'
+
+  - kind: filter
+    name: filter_dm_product_sales_organization
+    context_name: filter_dm_product_sales_organization_org
+    params:
+      - condition:
+          country_code!= 'BSO' and distribution_channel_code in ('01', '02')
+
+  - kind: group
+    name: aggregation_dm_product_sales_organization_distr_ch
+    context_name: filter_dm_product_sales_organization
+    params:
+      - aggs:
+          distribution_channel_code: min
+        by:
+        - material_code
+        - sales_org_code
+        - country_code
+        - sap_cluster
+
+  - kind: join
+    name: join_dm_product_sales_organization_distr_ch
+    context_name: filter_dm_product_sales_organization
+    params:
+      - other:
+          aggregation_dm_product_sales_organization_distr_ch
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sales_org_code: sales_org_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+          distribution_channel_code: min_distribution_channel_code
+
+#Sales status check
+
+  - kind: select
+    name: select_dm_product_sales_organization_sales_status_check
+    context_name: join_dm_product_sales_organization_distr_ch
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        material_status_code: material_status_code
+        min_distribution_channel_code: _min_distribution_channel_code
+        material_sales_valid_from: material_sales_valid_from
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_material_status_code
+    params:
+      - column: material_status_code_03_check
+        expression: "CASE WHEN(material_status_code='03') THEN 1 ELSE 0 END"
+      - column: material_status_code_all
+        expression: CAST(1 AS INT)       
+
+  - kind: group
+    name: group_dm_product_sales_organization_sales_status_check
+    params:
+      - aggs:
+          material_status_code_03_check: sum
+          material_status_code_all: sum
+          material_sales_valid_from: max
+        by:
+        - material_code
+        - country_code
+        - min_distribution_channel_code
+        - sap_cluster
+
+  - kind: add
+    name: add_dm_product_sales_organization_product_plant_sales_status_check
+    params:
+      - column: sales_status_check  
+        expression: "CASE WHEN(sum_material_status_code_03_check = sum_material_status_code_all) THEN '0' ELSE '1' END"
+      - column: material_sales_valid_from_final  
+        expression: "CASE WHEN(sales_status_check='0') THEN max_material_sales_valid_from ELSE '' END"
+
+  - kind: select
+    name: select_dm_sales_organization_status_check_final
+    params:
+      columns:
+        material_code: material_code_so
+        country_code: country_code_so
+        min_distribution_channel_code: min_distribution_channel_code
+        sap_cluster: sap_cluster_so
+        sales_status_check: sales_status_check
+        material_sales_valid_from_final: sales_block_date
+      distinct: true
+
+#join product_general, product_sales_org, product_plan - for correctly establishing material extendedness
+#part 1 - pg_pp
+  - kind: join
+    name: join_pg_pp
+    context_name: filter_dm_product_general
+    params:
+      - other:
+          select_dm_product_plant_stock_check_final
+        how:
+          inner
+        columns:
+          material_code: material_code_pl
+          sap_cluster: sap_cluster_pl
+
+  - kind: add
+    name: add_join_pg_pp
+    context_name: join_pg_pp
+    params:
+      - column: country_code
+        expression: country_code_pl
+
+  - kind: select
+    name: select_join_pg_pp
+    context_name: add_join_pg_pp
+    params:
+      columns:
+        material_code: material_code
+        material_type_code: material_type_code
+        country_code: country_code
+        country_code_pl: country_code_pl
+        sap_cluster: sap_cluster
+        material_code_pl: material_code_pl
+        sap_cluster_pl: sap_cluster_pl
+        stock_check: stock_check
+      distinct: true
+
+
+#part 2 - pso_pg_pp
+  - kind: select
+    name: select_dm_product_sales_org
+    context_name: read_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code_so
+        country_code: country_code_so
+        sap_cluster: sap_cluster_so
+      distinct: true
+
+  - kind: join
+    name: join_pg_pp_pso_left
+    context_name: select_dm_product_sales_org
+    params:
+      - other:
+          select_join_pg_pp
+        how:
+          left
+        columns:
+          material_code_so: material_code_pl
+          sap_cluster_so: sap_cluster_pl
+          country_code_so: country_code
+
+  - kind: join
+    name: join_pg_pp_pso_full
+    context_name: select_dm_product_sales_org
+    params:
+      - other:
+          select_join_pg_pp
+        how:
+          full
+        columns:
+          material_code_so: material_code_pl
+          sap_cluster_so: sap_cluster_pl
+          country_code_so: country_code
+
+  - kind: add
+    name: add_join_pg_pp_pso_for_group
+    context_name: join_pg_pp_pso_full
+    params:
+      - column: material_code_out
+        expression: "CASE WHEN material_code_so is null THEN material_code_pl ELSE material_code_so END"
+      - column: sap_cluster_out  
+        expression: "CASE WHEN sap_cluster_so is null THEN sap_cluster_pl ELSE sap_cluster_so END"
+      - column: country_code_out  
+        expression: "CASE WHEN country_code_so is null THEN country_code_pl ELSE country_code_so END"
+
+  - kind: group
+    name: agg_pso_max_mat_code
+    context_name: add_join_pg_pp_pso_for_group
+    params:
+      - aggs:
+          material_code_pl: max
+        by:
+        - material_code_out
+        - country_code_out
+        - sap_cluster_out
+
+  - kind: join
+    name: join_pg_pp_pso_mat_code_max
+    context_name: join_pg_pp_pso_left
+    params:
+      - other:
+          agg_pso_max_mat_code
+        how:
+          inner
+        columns:
+          material_code_so: material_code_out
+          country_code_so: country_code_out
+          sap_cluster_so: sap_cluster_out
+
+  - kind: filter
+    name: filter_join_pg_pp_pso_mat_code_max
+    context_name: join_pg_pp_pso_mat_code_max
+    params:
+      - condition:
+          country_code_so != 'BSO' and max_material_code_pl is null
+
+  - kind: select
+    name: select_dm_product_sales_org_prep_1
+    context_name: filter_join_pg_pp_pso_mat_code_max
+    params:
+      columns:
+        material_code_so: material_code_so
+        country_code_so: country_code_so
+        sap_cluster_so: sap_cluster_so
+        material_code_pl: material_code_pl
+        sap_cluster_pl: sap_cluster_pl
+      distinct: true
+
+  - kind: join
+    name: join_dm_product_sales_org_prep_1_pg
+    context_name: select_dm_product_sales_org_prep_1
+    params:
+      - other:
+          filter_dm_product_general
+        how:
+          inner
+        columns:
+          material_code_so: material_code
+          sap_cluster_so: sap_cluster
+
+  - kind: add
+    name: add_join_dm_product_sales_org_prep_1_pg
+    context_name: join_dm_product_sales_org_prep_1_pg
+    params:
+      - column: country_code_pl
+        expression: "cast (null as string)"
+      - column: stock_check
+        expression: "cast (0 as integer)"        
+
+  - kind: select
+    name: select_dm_product_sales_org_prep_2
+    context_name: add_join_dm_product_sales_org_prep_1_pg
+    params:
+      columns:
+        material_code: material_code
+        material_type_code: material_type_code
+        country_code_so: country_code
+        country_code_pl: country_code_pl
+        sap_cluster: sap_cluster
+        material_code_pl: material_code_pl
+        sap_cluster_pl: sap_cluster_pl
+        stock_check: stock_check
+      distinct: true
+
+#union parts
+  - kind: union
+    name: union_pg_pp_pso
+    context_name: select_join_pg_pp
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_dm_product_sales_org_prep_2
+
+#read dm_material_activeness_user_status
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_material_activeness_user_status
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dm_mat_activeness_user_status
+
+  - kind: group
+    name: group_material_country
+    params:
+      - aggs:
+          status_added_when: max
+        by:
+        - material_code
+        - country_code
+
+  - kind: join
+    name: join_dm
+    context_name: read_dm_material_activeness_user_status
+    params:
+      - other:
+          group_material_country
+        how:
+          inner
+        columns:
+          material_code: material_code
+          country_code: country_code
+          status_added_when: max_status_added_when
+
+  - kind: select
+    name: select_dm_material_activeness_user_status
+    params:
+      columns:
+        material_code: material_code_dmaus
+        country_code: country_code_dmaus
+        status: status_dmaus
+        status_added_by: status_added_by_dmaus
+        status_added_when: status_added_when_dmaus
+      distinct: true
+
+#join final
+  - kind: join
+    name: join_all
+    context_name: union_pg_pp_pso
+    params:
+      - other:
+          select_dm_purchase_orders_production_orders_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_po
+          country_code: country_code_po
+          sap_cluster: sap_cluster_po           
+      - other:
+          select_dm_production_orders_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_o
+          country_code: country_code_o
+          sap_cluster: sap_cluster_o 
+      - other:
+          select_dm_product_general_creation_date_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_pg
+          country_code: country_code_pg
+          sap_cluster: sap_cluster_pg
+      - other:
+          select_dm_product_plant_status_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_pppl
+          country_code: country_code_pppl
+          sap_cluster: sap_cluster_pppl
+      - other:
+          select_dm_sales_doocuments_item_creation_date_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_sd
+          country_code: country_code_sd
+          sap_cluster: sap_cluster_sd
+      - other:
+          select_dm_billing_documents_item_creation_date_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_bd
+          country_code: country_code_bd
+          sap_cluster: sap_cluster_bd
+      - other:
+          select_dm_delivery_documents_item_creation_date_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_dc
+          country_code: country_code_dc
+          sap_cluster: sap_cluster_dc
+      - other:
+          select_dm_bill_of_material_bom_check_final
+        how:
+          left
+        columns:
+          material_code: bom_component_material_number_bom
+          country_code: country_code_bom
+          sap_cluster: sap_cluster_bom 
+      - other:
+          select_dm_sales_organization_status_check_final
+        how:
+          left
+        columns:
+          material_code: material_code_so
+          country_code: country_code_so
+          sap_cluster: sap_cluster_so
+      - other:
+          select_dm_material_activeness_user_status
+        how:
+          left
+        columns:
+          material_code: material_code_dmaus
+          country_code: country_code_dmaus
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        material_code: material_code
+        material_type_code: material_type_code
+        material_code_pl: material_code_pl
+        country_code: country_code
+        country_code_pl: country_code_pl
+        country_code_so: country_code_so
+        min_distribution_channel_code: distribution_channel_code
+        sap_cluster: sap_cluster
+        stock_check: stock_check
+        purchase_order_check: purchase_order_check
+        purchase_document_last_date: purchase_document_last_date
+        production_order_check: production_order_check
+        production_document_last_date: production_document_last_date
+        max_plant_extension_date: max_plant_extension_date
+        creation_date_check: creation_date_check
+        plant_status_check: plant_status_check
+        sales_order_last_date: sales_order_last_date
+        sales_order_flag: sales_order_flag
+        billing_document_last_date: billing_document_last_date
+        billing_document_flag: billing_document_flag
+        delivery_document_last_date: delivery_document_last_date
+        delivery_document_flag: delivery_document_flag
+        empty_bom_component_material_flag: empty_bom_component_material_flag
+        empty_bom_number: empty_bom_number
+        empty_bom_material_code: empty_bom_material_code
+        fg_bom_component_material_flag: fg_bom_component_material_flag
+        fg_bom_number: fg_bom_number
+        fg_bom_material_code: fg_bom_material_code
+        semi_fg_bom_component_material_flag: semi_fg_bom_component_material_flag
+        semi_fg_bom_number: semi_fg_bom_number
+        semi_fg_bom_material_code: semi_fg_bom_material_code
+        bom_check: bom_check
+        sales_status_check: sales_status_check
+        sales_block_date: sales_block_date
+        status_dmaus: user_manual_message
+      distinct: true
+
+  - kind: add
+    name: add_check_status
+    params:
+      - column: check_status
+        expression: IF(user_manual_message is not null and user_manual_message != '', '1',  
+                    IF((material_code_pl IS NULL OR material_code_pl = ''), '',
+                    IF(plant_status_check = '99 only' ,'1',
+                    IF(plant_status_check != '99 only' AND creation_date_check = '1','1',
+                    IF(plant_status_check = '98 only','1',
+                    IF(plant_status_check ='97 only','1',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from billing_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from sales_order_last_date) = extract(YEAR from current_date())) AND (stock_check = '1'),'1',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date())) AND (stock_check = '1'),'1',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from billing_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from sales_order_last_date) = extract(YEAR from current_date())),'1',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date())),'1',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 1) AND (stock_check = '1'),'1',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1) AND (stock_check = '1'),'1',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 1),'1',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1),'1',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 2) AND (stock_check = '1'),'1',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2) AND (stock_check = '1'),'1',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 2) AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'0',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2) AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'0',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND bom_check = '1' AND stock_check = '1','0',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND bom_check = '1' AND stock_check = '1','0',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND bom_check = '1' AND (stock_check = '0' OR stock_check IS NULL),'0',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND bom_check = '1' AND (stock_check = '0' OR stock_check IS NULL),'0',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'0',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'0',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND (bom_check = '0' OR bom_check IS NULL) AND stock_check = '1','0',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (bom_check = '0' OR bom_check IS NULL) AND stock_check = '1','0',
+                    '0'))))))))))))))))))))))))))
+      - column: message
+        expression: IF((material_code_pl IS NULL OR material_code_pl = ''), 'Not extended on plant level',
+                    IF(plant_status_check = '99 only','Inactive Material - Properly Blocked',
+                    IF(plant_status_check != '99 only' AND creation_date_check = '1','Active Material - Newly Created/Extended',
+                    IF(plant_status_check = '98 only' ,'Material is not yet active - Block 98 available',
+                    IF(plant_status_check ='97 only','Material used for env. fee',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from billing_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from sales_order_last_date) = extract(YEAR from current_date())) AND (stock_check = '1'),'Active Material - YTD Stock Available & Purchase/Sales/Billing Delivery',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date())) AND (stock_check = '1'),'Active Material - YTD Stock Available Purchase/Production',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from billing_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from sales_order_last_date) = extract(YEAR from current_date())),'Active Material - YTD Purchase/Sales/Billing Delivery',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) = extract(YEAR from current_date()) OR extract(YEAR from purchase_document_last_date) = extract(YEAR from current_date())),'Active Material - YTD Purchase/Production',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 1) AND (stock_check = '1'),'Active Material - PYTD Stock Available & Purchase/Sales/Billing Delivery',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1) AND (stock_check = '1'),'Active Material - PYTD Stock Available & Purchase/Production',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 1 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 1),'Active Material - PYTD Purchase/Sales/Billing Delivery',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -1  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 1),'Active Material - PYTD Purchase/Production',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 2) AND (stock_check = '1'),'Active Material - PPYTD Stock Available & Purchase/Sales/Billing Delivery',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2) AND (stock_check = '1'),'Active Material - PPYTD Stock Available & Purchase/Production',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (extract(YEAR from delivery_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from billing_document_last_date) >= extract(YEAR from current_date()) - 2 OR extract(YEAR from sales_order_last_date) >= extract(YEAR from current_date()) - 2) AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'Candidate for blocking',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND (extract(YEAR from production_document_last_date) >= extract(YEAR from current_date()) -2  OR extract(YEAR from purchase_document_last_date) >= extract(YEAR from current_date()) - 2) AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'Candidate for blocking',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND bom_check = '1' AND stock_check = '1','Candidate for Blocking - Stock and BOM requires revision. No movements in PPYTD',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND bom_check = '1' AND stock_check = '1','Candidate for Blocking - Stock and BOM requires revision. No movements in PPYTD',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND bom_check = '1' AND (stock_check = '0' OR stock_check IS NULL),'Candidate for Blocking - No stock / BOM requires revision',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND bom_check = '1' AND (stock_check = '0' OR stock_check IS NULL),'Candidate for Blocking - No stock / BOM requires revision',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'Candidate for Blocking - No stock / No BOM',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (bom_check = '0' OR bom_check IS NULL) AND (stock_check = '0' OR stock_check IS NULL),'Candidate for Blocking - No stock / No BOM',
+                    IF(material_type_code IN('ZPAL', 'ZEM') AND (delivery_document_flag = '0' OR delivery_document_flag IS NULL) AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (billing_document_flag = '0' OR billing_document_flag IS NULL) AND (sales_order_flag = '0' OR sales_order_flag IS NULL) AND (bom_check = '0' OR bom_check IS NULL) AND stock_check = '1','Candidate for Blocking - Stock requires revision / No BOM',
+                    IF(material_type_code IN('ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND(production_order_check IS NULL OR production_order_check = '0') AND (purchase_order_check IS NULL OR purchase_order_check = '0') AND (bom_check = '0' OR bom_check IS NULL) AND stock_check = '1','Candidate for Blocking - Stock requires revision / No BOM',
+                    'Inactive Material - Suggested for blocking')))))))))))))))))))))))))
+      
+#final columns
+  - kind: add
+    name: add_columns
+    params:
+      - column: rule_code
+        expression: '''RPACTI_1.2'''
+      - column: country_code_nvl
+        expression: country_code
+      - column: check_date
+        expression: current_timestamp()
+      - column: purchase_document_flag
+        expression: IF(purchase_order_check = '1','X','')
+      - column: purchase_document_last_date_if
+        expression: IF(purchase_order_check ='1', purchase_document_last_date, null)
+      - column: production_order_flag
+        expression: IF(production_order_check ='1','X','')
+      - column: production_order_last_date
+        expression: IF(production_order_check ='1', production_document_last_date, null)
+      - column: stock_in_country_flag
+        expression: IF(stock_check='1','X','')
+      - column: sales_order_flag_if
+        expression: IF(material_type_code IN('ZPAL', 'ZEM') AND sales_order_flag ='1', 'X', '') 
+      - column: sales_order_last_date_if
+        expression: IF(material_type_code IN('ZPAL', 'ZEM') AND sales_order_flag ='1', sales_order_last_date, null)  
+      - column: billing_document_flag_if
+        expression: IF(material_type_code IN('ZPAL', 'ZEM') AND billing_document_flag ='1', 'X', '') 
+      - column: billing_document_last_date_if
+        expression: IF(material_type_code IN('ZPAL', 'ZEM') AND billing_document_flag ='1', billing_document_last_date, null)
+      - column: delivery_document_flag_if
+        expression: IF(material_type_code IN('ZPAL', 'ZEM') AND delivery_document_flag ='1', 'X', '') 
+      - column: delivery_document_last_date_if
+        expression: IF(material_type_code IN('ZPAL', 'ZEM') AND delivery_document_flag ='1', delivery_document_last_date, null) 
+      - column: bom_component_material_flag
+        expression: IF(bom_check='1', 'X', '')
+      - column: empty_bom_component_material_flag_final  
+        expression: "CASE WHEN(empty_bom_component_material_flag='1') THEN 'X' ELSE '' END"
+      - column: fg_bom_component_material_flag_final  
+        expression: "CASE WHEN(fg_bom_component_material_flag='1') THEN 'X' ELSE '' END"
+      - column: semi_fg_bom_component_material_flag_final  
+        expression: "CASE WHEN(semi_fg_bom_component_material_flag='1') THEN 'X' ELSE '' END"
+      - column: is_channel_01_available  
+        expression: "CASE WHEN(distribution_channel_code = '01') THEN 'X' ELSE '' END"
+
+  - kind: select
+    name: select_dm_product_check_results_activity_raw_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        material_code: material_code
+        country_code_nvl: country_code
+        max_plant_extension_date: plant_extenstion_date
+        message: message_output
+        sap_cluster: sap_cluster
+        check_date: check_date   
+        plant_status_check: plant_block_status     
+        purchase_document_flag: purchase_document_flag
+        purchase_document_last_date_if: purchase_document_last_date
+        production_order_flag: production_order_flag
+        production_order_last_date: production_order_last_date
+        stock_in_country_flag: stock_in_country_flag
+        sales_order_flag_if: sales_order_flag
+        sales_order_last_date_if: sales_order_last_date
+        bom_component_material_flag: bom_component_material_flag
+        billing_document_flag_if: billing_document_flag
+        billing_document_last_date_if: billing_document_last_date
+        delivery_document_flag_if: delivery_document_flag
+        delivery_document_last_date_if: delivery_document_last_date
+        empty_bom_number: empty_bom_number
+        empty_bom_component_material_flag_final: empty_bom_component_material_flag
+        empty_bom_material_code: empty_bom_material_code
+        fg_bom_number: fg_bom_number
+        fg_bom_component_material_flag_final: fg_bom_component_material_flag
+        fg_bom_material_code: fg_bom_material_code
+        semi_fg_bom_number: semi_fg_bom_number
+        semi_fg_bom_component_material_flag_final: semi_fg_bom_component_material_flag
+        semi_fg_bom_material_code: semi_fg_bom_material_code
+        is_channel_01_available: is_channel_01_available
+        user_manual_message: user_manual_message
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_product_check_results_activity_raw
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_check_results_activity_raw
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full

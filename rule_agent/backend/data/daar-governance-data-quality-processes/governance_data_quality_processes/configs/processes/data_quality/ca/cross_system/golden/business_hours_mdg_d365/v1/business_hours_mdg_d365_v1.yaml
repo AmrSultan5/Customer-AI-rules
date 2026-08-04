@@ -1,0 +1,1822 @@
+transform:
+  name: Business_hours_mdg_d365
+  operations:
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          partner_guid: partner_guid_mdg_but000
+          xpcpt: xpcpt_mdg_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_frg0061
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: crmm_but_frg0061
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_frg0061
+      context_name: read_mdg_frg0061
+      params:
+        columns:
+          valid_from: valid_from_mdg_frg0061
+          valid_to: valid_to_mdg_frg0061
+          schedule_type: schedule_type_mdg_frg0061
+          partner_guid: partner_guid_mdg_frg0061
+          rule_id: rule_id_mdg_frg0061
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_scrules
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: scrules
+        schema_version: v1
+
+    - kind: filter
+      name: filter_mdg_scrules
+      context_name: read_mdg_scrules
+      params:
+        - condition: type = 'W'
+
+    - kind: select
+      name: select_mdg_scrules
+      context_name: filter_mdg_scrules
+      params:
+        columns:
+          rule: rule_mdg_scrules
+          rule_id: rule_id_mdg_scrules
+        distinct: true
+
+
+    - kind: read_dataio
+      name: read_mdg_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+    
+    - kind: filter
+      name: filter_knvv
+      context_name: read_mdg_knvv
+      params:
+        - condition: vtweg = '01' AND spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100)
+    
+    - kind: select
+      name: select_mdg_knvv_checkpoint
+      context_name: filter_knvv
+      params:
+        columns:
+          kunnr: kunnr_knvv
+          kvgr4: kvgr4_knvv
+          vkorg: vkorg_knvv
+          vtweg: vtweg_knvv
+          spart: spart_knvv
+        distinct: true
+    
+    - kind: checkpoint
+      name: select_mdg_knvv
+      context_name: select_mdg_knvv_checkpoint
+
+    - kind: join
+      name: join_mdg
+      context_name: select_mdg_but000
+      params:
+        - other:
+            select_mdg_frg0061
+          how:
+            inner
+          columns:
+            partner_guid_mdg_but000: partner_guid_mdg_frg0061
+        - other:
+            select_mdg_scrules
+          how:
+            inner
+          columns:
+            rule_id_mdg_frg0061: rule_id_mdg_scrules
+        - other:
+            select_mdg_knvv
+          how:
+            inner
+          columns:
+            partner_mdg_but000: kunnr_knvv 
+
+    - kind: filter
+      name: filter_mdg
+      context_name: join_mdg
+      params:
+        - condition: to_date(substr(valid_to_mdg_frg0061,0,8),'yyyyMMdd') = '9999-12-31' AND xpcpt_mdg_but000 <> 'X' AND  partner_mdg_but000 LIKE any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%','96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%')
+
+    - kind: add
+      name: add_mdg_columns
+      context_name: filter_mdg
+      params:
+      - column: hash_mdg
+        expression: md5(concat(partner_mdg_but000,partner_guid_mdg_but000,coalesce( to_date(substr(valid_from_mdg_frg0061,0,8),'yyyyMMdd') ,''),coalesce( to_date(substr(valid_to_mdg_frg0061,0,8),'yyyyMMdd') ,''),schedule_type_mdg_frg0061,cast(SUBSTR(rule_mdg_scrules,1,2) as int),IF(substr(rule_mdg_scrules,3,1)='X','true','false'),IF(substr(rule_mdg_scrules,4,1)='X','true','false'),IF(substr(rule_mdg_scrules,5,1)='X','true','false'),IF(substr(rule_mdg_scrules,6,1)='X','true','false'),IF(substr(rule_mdg_scrules,7,1)='X','true','false'),IF(substr(rule_mdg_scrules,8,1)='X','true','false'),IF(substr(rule_mdg_scrules,9,1)='X','true','false'),concat(substr(rule_mdg_scrules,10,2),':',substr(rule_mdg_scrules,12,2),':',substr(rule_mdg_scrules,14,2)),concat(substr(rule_mdg_scrules,16,2),':',substr(rule_mdg_scrules,18,2),':',substr(rule_mdg_scrules,20,2)),concat(substr(rule_mdg_scrules,22,2),':',substr(rule_mdg_scrules,24,2),':',substr(rule_mdg_scrules,26,2)),concat(substr(rule_mdg_scrules,28,2),':',substr(rule_mdg_scrules,30,2),':',substr(rule_mdg_scrules,32,2)),concat(substr(rule_mdg_scrules,34,2),':',substr(rule_mdg_scrules,36,2),':',substr(rule_mdg_scrules,38,2)),concat(substr(rule_mdg_scrules,40,2),':',substr(rule_mdg_scrules,42,2),':',substr(rule_mdg_scrules,44,2)),concat(substr(rule_mdg_scrules,46,2),':',substr(rule_mdg_scrules,48,2),':',substr(rule_mdg_scrules,50,2)),concat(substr(rule_mdg_scrules,52,2),':',substr(rule_mdg_scrules,54,2),':',substr(rule_mdg_scrules,56,2)),concat(substr(rule_mdg_scrules,58,2),':',substr(rule_mdg_scrules,60,2),':',substr(rule_mdg_scrules,62,2)),concat(substr(rule_mdg_scrules,64,2),':',substr(rule_mdg_scrules,66,2),':',substr(rule_mdg_scrules,68,2)),concat(substr(rule_mdg_scrules,70,2),':',substr(rule_mdg_scrules,72,2),':',substr(rule_mdg_scrules,74,2)),concat(substr(rule_mdg_scrules,76,2),':',substr(rule_mdg_scrules,78,2),':',substr(rule_mdg_scrules,80,2)),concat(substr(rule_mdg_scrules,82,2),':',substr(rule_mdg_scrules,84,2),':',substr(rule_mdg_scrules,86,2)),concat(substr(rule_mdg_scrules,88,2),':',substr(rule_mdg_scrules,90,2),':',substr(rule_mdg_scrules,92,2))))
+      - column: valid_from_mdg
+        expression: coalesce(to_date(substr(valid_from_mdg_frg0061,0,8),'yyyyMMdd'),'')
+      - column: valid_to_mdg
+        expression: coalesce(to_date(substr(valid_to_mdg_frg0061,0,8),'yyyyMMdd'),'')
+      - column: frequency_mdg
+        expression: cast(SUBSTR(rule_mdg_scrules,1,2) as int)
+      - column: allowed_mon_mdg
+        expression: IF(substr(rule_mdg_scrules,3,1)='X','true','false')
+      - column: allowed_tue_mdg
+        expression: IF(substr(rule_mdg_scrules,4,1)='X','true','false')
+      - column: allowed_wed_mdg
+        expression: IF(substr(rule_mdg_scrules,5,1)='X','true','false')
+      - column: allowed_thu_mdg
+        expression: IF(substr(rule_mdg_scrules,6,1)='X','true','false')
+      - column: allowed_fri_mdg
+        expression: IF(substr(rule_mdg_scrules,7,1)='X','true','false')
+      - column: allowed_sat_mdg
+        expression: IF(substr(rule_mdg_scrules,8,1)='X','true','false')
+      - column: allowed_sun_mdg
+        expression: IF(substr(rule_mdg_scrules,9,1)='X','true','false')
+      - column: from_mon_mdg
+        expression: concat(substr(rule_mdg_scrules,10,2),':',substr(rule_mdg_scrules,12,2),':',substr(rule_mdg_scrules,14,2))
+      - column: from_tue_mdg
+        expression: concat(substr(rule_mdg_scrules,16,2),':',substr(rule_mdg_scrules,18,2),':',substr(rule_mdg_scrules,20,2))
+      - column: from_wed_mdg
+        expression: concat(substr(rule_mdg_scrules,22,2),':',substr(rule_mdg_scrules,24,2),':',substr(rule_mdg_scrules,26,2))
+      - column: from_thu_mdg
+        expression: concat(substr(rule_mdg_scrules,28,2),':',substr(rule_mdg_scrules,30,2),':',substr(rule_mdg_scrules,32,2))
+      - column: from_fri_mdg
+        expression: concat(substr(rule_mdg_scrules,34,2),':',substr(rule_mdg_scrules,36,2),':',substr(rule_mdg_scrules,38,2))
+      - column: from_sat_mdg
+        expression: concat(substr(rule_mdg_scrules,40,2),':',substr(rule_mdg_scrules,42,2),':',substr(rule_mdg_scrules,44,2))
+      - column: from_sun_mdg
+        expression: concat(substr(rule_mdg_scrules,46,2),':',substr(rule_mdg_scrules,48,2),':',substr(rule_mdg_scrules,50,2))
+      - column: to_mon_mdg
+        expression: concat(substr(rule_mdg_scrules,52,2),':',substr(rule_mdg_scrules,54,2),':',substr(rule_mdg_scrules,56,2))
+      - column: to_tue_mdg
+        expression: concat(substr(rule_mdg_scrules,58,2),':',substr(rule_mdg_scrules,60,2),':',substr(rule_mdg_scrules,62,2))
+      - column: to_wed_mdg
+        expression: concat(substr(rule_mdg_scrules,64,2),':',substr(rule_mdg_scrules,66,2),':',substr(rule_mdg_scrules,68,2))
+      - column: to_thu_mdg
+        expression: concat(substr(rule_mdg_scrules,70,2),':',substr(rule_mdg_scrules,72,2),':',substr(rule_mdg_scrules,74,2))
+      - column: to_fri_mdg
+        expression: concat(substr(rule_mdg_scrules,76,2),':',substr(rule_mdg_scrules,78,2),':',substr(rule_mdg_scrules,80,2))
+      - column: to_sat_mdg
+        expression: concat(substr(rule_mdg_scrules,82,2),':',substr(rule_mdg_scrules,84,2),':',substr(rule_mdg_scrules,86,2))
+      - column: to_sun_mdg
+        expression: concat(substr(rule_mdg_scrules,88,2),':',substr(rule_mdg_scrules,90,2),':',substr(rule_mdg_scrules,92,2))
+
+    - kind: select
+      name: mdg_checkpoint
+      context_name: add_mdg_columns
+      params:
+        columns:
+          partner_mdg_but000: partner_mdg
+          partner_guid_mdg_but000: partner_guid_mdg
+          valid_from_mdg: valid_from_mdg
+          valid_to_mdg: valid_to_mdg
+          schedule_type_mdg_frg0061: rule_type_mdg
+          frequency_mdg: frequency_mdg
+          allowed_mon_mdg: allowed_mon_mdg
+          allowed_tue_mdg: allowed_tue_mdg
+          allowed_wed_mdg: allowed_wed_mdg
+          allowed_thu_mdg: allowed_thu_mdg
+          allowed_fri_mdg: allowed_fri_mdg
+          allowed_sat_mdg: allowed_sat_mdg
+          allowed_sun_mdg: allowed_sun_mdg
+          from_mon_mdg: from_mon_mdg
+          from_tue_mdg: from_tue_mdg
+          from_wed_mdg: from_wed_mdg
+          from_thu_mdg: from_thu_mdg
+          from_fri_mdg: from_fri_mdg
+          from_sat_mdg: from_sat_mdg
+          from_sun_mdg: from_sun_mdg
+          to_mon_mdg: to_mon_mdg
+          to_tue_mdg: to_tue_mdg
+          to_wed_mdg: to_wed_mdg
+          to_thu_mdg: to_thu_mdg
+          to_fri_mdg: to_fri_mdg
+          to_sat_mdg: to_sat_mdg
+          to_sun_mdg: to_sun_mdg
+          hash_mdg: hash_mdg
+        distinct: true
+
+
+
+    - kind: checkpoint
+      name: mdg
+      context_name: mdg_checkpoint
+
+###################################################
+
+    - kind: read_dataio
+      name: read_d365_cch_businesshour
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_businesshour
+        schema_version: v1
+
+    - kind: read_dataio
+      name: read_d365_cch_optionsetmapping
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_optionsetmapping
+        schema_version: v1
+
+    - kind: filter
+      name: filter_d365_cch_optionsetmapping
+      context_name: read_d365_cch_optionsetmapping
+      params:
+        - condition: cch_entityname = 'cch_businesshour' and cch_attributename='cch_typeofbusinesshours' and cch_externalvalue <> 'Goods Receiving Hours'
+
+    - kind: select
+      name: select_d365_cch_optionsetmapping
+      context_name: filter_d365_cch_optionsetmapping
+      params:
+        columns:
+          cch_optionsetvalue: bh_cch_optionsetvalue
+          cch_externalvalue: bh_cch_externalvalue
+
+    - kind: read_dataio
+      name: read_d365_account
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: account
+        schema_version: v1
+
+    - kind: select
+      name: select_d365_account
+      context_name: read_d365_account
+      params:
+        columns:
+          id: id_d365_account
+          cch_sapid: cch_sapid
+          cch_sapcrmguid: cch_sapcrmguid
+          cch_salesorganizationid: cch_salesorganizationid
+          cch_distributionchannel: cch_distributionchannel
+          cch_division: cch_division
+
+############################################################
+
+    - kind: read_dataio
+      name: read_d365_cch_optionsetmapping
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_optionsetmapping
+        schema_version: v1
+      
+    - kind: filter
+      name: filter_cch_optionsetmapping_cd
+      context_name: read_d365_cch_optionsetmapping
+      params:
+        - condition: cch_entityname = 'account' and cch_attributename = 'cch_division' 
+    
+    - kind: select
+      name: union_cte_division
+      context_name: filter_cch_optionsetmapping_cd
+      params:
+        columns:
+          cch_optionsetvalue: cd_cch_optionsetvalue
+          cch_externalvalue: cd_cch_externalvalue
+        distinct: true
+
+
+    - kind: read_dataio
+      name: read_d365_territory
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: territory
+        schema_version: v1
+
+    - kind: filter
+      name: filter_territory
+      context_name: read_d365_territory
+      params:
+        - condition: 1 = 1
+
+    - kind: select
+      name: select_d365_territory
+      context_name: filter_territory
+      params:
+        columns:
+          cch_sapid: territory_cch_sapid
+          id: territory_id
+        distinct: true    
+#   ###################################################
+#    distributionchannel
+    - kind: filter
+      name: filter_cch_optionsetmapping_dc
+      context_name: read_d365_cch_optionsetmapping
+      params:
+        - condition: cch_entityname = 'account' and cch_attributename = 'cch_distributionchannel'
+    
+    - kind: select
+      name: union_cte_distributionchannel
+      context_name: filter_cch_optionsetmapping_dc
+      params:
+        columns:
+          cch_optionsetvalue: dc_cch_optionsetvalue
+          cch_externalvalue: dc_cch_externalvalue
+        distinct: true
+
+    - kind: join
+      name: join_d365
+      context_name: read_d365_cch_businesshour
+      params:
+        - other:
+            select_d365_cch_optionsetmapping
+          how:
+            inner
+          columns:
+            cch_typeofbusinesshours: bh_cch_optionsetvalue
+        - other:
+            select_d365_account
+          how:
+            inner
+          columns:
+            cch_accountid: id_d365_account
+        - other:
+            union_cte_distributionchannel
+          how:
+            inner
+          columns:
+            cch_distributionchannel: dc_cch_optionsetvalue
+        - other:
+            union_cte_division
+          how:
+            inner
+          columns:
+            cch_division: cd_cch_optionsetvalue
+        - other:
+            select_d365_territory
+          how:
+            left
+          columns:
+            cch_salesorganizationid: territory_id
+
+
+    - kind: filter
+      name: filter_d365
+      context_name: join_d365
+      params:
+        - condition: statecode=0 and  to_date(substr(cch_enddate,0,10),'yyyy-MM-dd') = '9999-12-31' and  cch_sapid LIKE any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%',  '21%', '19%','96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%') and dc_cch_externalvalue = '01' and cd_cch_externalvalue = '01'  and territory_cch_sapid in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600) 
+
+    - kind: add
+      name: add_d365_columns
+      context_name: filter_d365
+      params:
+      - column: hash_d365
+        expression: md5(concat(cch_sapid,upper(regexp_replace(cch_sapcrmguid,'-','')),to_date(substr(cch_startdate,0,10),'yyyy-MM-dd'),to_date(substr(cch_enddate,0,10),'yyyy-MM-dd'),bh_cch_externalvalue,cch_frequencyofbusinesshours_opt,cch_Monday,cch_Tuesday,cch_Wednesday,cch_Thursday,cch_Friday,cch_Saturday,cch_Sunday,cch_mondaystarthours,cch_tuesdaystarthours,cch_wednesdaystarthours,cch_thursdaystarthours,cch_fridaystarthours,cch_saturdaystarthours,cch_sundaystarthours,cch_mondayendhours,cch_tuesdayendhours,cch_wednesdayendhours,cch_thursdayendhours,cch_fridayendhours,cch_saturdayendhours,cch_sundayendhours))
+      - column: partner_guid_d365
+        expression: upper(regexp_replace(cch_sapcrmguid,'-',''))
+      - column: valid_from_d365
+        expression: to_date(substr(cch_startdate,0,10),'yyyy-MM-dd')
+      - column: valid_to_d365
+        expression: to_date(substr(cch_enddate,0,10),'yyyy-MM-dd')
+      - column: frequency_d365
+        expression: cast(cch_frequencyofbusinesshours_opt as bigint)
+
+    - kind: select
+      name: d365_checkpoint
+      context_name: add_d365_columns
+      params:
+        columns:
+          cch_sapid: partner_d365
+          partner_guid_d365: partner_guid_d365
+          valid_from_d365: valid_from_d365
+          valid_to_d365: valid_to_d365
+          bh_cch_externalvalue: rule_type_d365
+          frequency_d365: frequency_d365
+          cch_monday: allowed_mon_d365
+          cch_tuesday: allowed_tue_d365
+          cch_wednesday: allowed_wed_d365
+          cch_thursday: allowed_thu_d365
+          cch_friday: allowed_fri_d365
+          cch_saturday: allowed_sat_d365
+          cch_sunday: allowed_sun_d365
+          cch_mondaystarthours: from_mon_d365
+          cch_tuesdaystarthours: from_tue_d365
+          cch_wednesdaystarthours: from_wed_d365
+          cch_thursdaystarthours: from_thu_d365
+          cch_fridaystarthours: from_fri_d365
+          cch_saturdaystarthours: from_sat_d365
+          cch_sundaystarthours: from_sun_d365
+          cch_mondayendhours: to_mon_d365
+          cch_tuesdayendhours: to_tue_d365
+          cch_wednesdayendhours: to_wed_d365
+          cch_thursdayendhours: to_thu_d365
+          cch_fridayendhours: to_fri_d365
+          cch_saturdayendhours: to_sat_d365
+          cch_sundayendhours: to_sun_d365
+          hash_d365: hash_d365
+        distinct: true
+
+
+    - kind: checkpoint
+      name: d365
+      context_name: d365_checkpoint
+
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            d365
+          how:
+            full
+          columns:
+            hash_mdg: hash_d365
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: hash_d365 is null or hash_d365 = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          partner_guid_mdg: partner_guid_mdg
+          valid_from_mdg: valid_from_mdg
+          valid_to_mdg: valid_to_mdg
+          rule_type_mdg: rule_type_mdg
+          frequency_mdg: frequency_mdg
+          allowed_mon_mdg: allowed_mon_mdg
+          allowed_tue_mdg: allowed_tue_mdg
+          allowed_wed_mdg: allowed_wed_mdg
+          allowed_thu_mdg: allowed_thu_mdg
+          allowed_fri_mdg: allowed_fri_mdg
+          allowed_sat_mdg: allowed_sat_mdg
+          allowed_sun_mdg: allowed_sun_mdg
+          from_mon_mdg: from_mon_mdg
+          from_tue_mdg: from_tue_mdg
+          from_wed_mdg: from_wed_mdg
+          from_thu_mdg: from_thu_mdg
+          from_fri_mdg: from_fri_mdg
+          from_sat_mdg: from_sat_mdg
+          from_sun_mdg: from_sun_mdg
+          to_mon_mdg: to_mon_mdg
+          to_tue_mdg: to_tue_mdg
+          to_wed_mdg: to_wed_mdg
+          to_thu_mdg: to_thu_mdg
+          to_fri_mdg: to_fri_mdg
+          to_sat_mdg: to_sat_mdg
+          to_sun_mdg: to_sun_mdg
+          hash_mdg: hash_mdg
+
+    - kind: filter
+      name: non_matching_d365
+      context_name: join_non_matching_mdg
+      params:
+        - condition: hash_mdg is null or hash_mdg = ''
+
+    - kind: select
+      name: non_matching_d365_select
+      context_name: non_matching_d365
+      params:
+        columns:
+          partner_d365: partner_d365
+          partner_guid_d365: partner_guid_d365
+          valid_from_d365: valid_from_d365
+          valid_to_d365: valid_to_d365
+          rule_type_d365: rule_type_d365
+          frequency_d365: frequency_d365
+          allowed_mon_d365: allowed_mon_d365
+          allowed_tue_d365: allowed_tue_d365
+          allowed_wed_d365: allowed_wed_d365
+          allowed_thu_d365: allowed_thu_d365
+          allowed_fri_d365: allowed_fri_d365
+          allowed_sat_d365: allowed_sat_d365
+          allowed_sun_d365: allowed_sun_d365
+          from_mon_d365: from_mon_d365
+          from_tue_d365: from_tue_d365
+          from_wed_d365: from_wed_d365
+          from_thu_d365: from_thu_d365
+          from_fri_d365: from_fri_d365
+          from_sat_d365: from_sat_d365
+          from_sun_d365: from_sun_d365
+          to_mon_d365: to_mon_d365
+          to_tue_d365: to_tue_d365
+          to_wed_d365: to_wed_d365
+          to_thu_d365: to_thu_d365
+          to_fri_d365: to_fri_d365
+          to_sat_d365: to_sat_d365
+          to_sun_d365: to_sun_d365
+          hash_d365: hash_d365
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_d365_select
+          how:
+            full
+          columns:
+            partner_mdg: partner_d365
+            rule_type_mdg: rule_type_d365
+            partner_guid_mdg: partner_guid_d365
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: msg_mdg
+          expression: CASE WHEN partner_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_d365
+          expression: CASE WHEN partner_d365 IS NULL THEN 'data missing from d365' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string)   
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          partner_d365: partner
+          rule_type_d365: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+    - kind: filter
+      name: join_data_missing_from_d365_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_d365 is null
+
+    - kind: select
+      name: final_data_missing_from_d365
+      context_name: join_data_missing_from_d365_filter
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_d365: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+##Start date of validity
+    - kind: filter
+      name: business_hours_start_date_of_validity_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND valid_from_d365 <> valid_from_mdg
+
+    - kind: add
+      name: add_missing_columns_business_hours_start_date_of_validity
+      context_name: business_hours_start_date_of_validity_filter
+      params:
+        - column: attr_name_start_date_of_validity
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND valid_from_d365 <> valid_from_mdg THEN concat('BUSINESS HOURS:',' Start date of validity') END
+        - column: msg_start_date_of_validity
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND valid_from_d365 <> valid_from_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_business_hours_start_date_of_validity
+      context_name: add_missing_columns_business_hours_start_date_of_validity
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_start_date_of_validity: msg
+          attr_name_start_date_of_validity: attr_name
+          valid_from_d365: tgt_attr
+          valid_from_mdg: src_attr
+
+##End date of validity
+    - kind: filter
+      name: business_hours_end_date_of_validity_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND valid_to_d365 <> valid_to_mdg
+
+    - kind: add
+      name: add_missing_columns_business_hours_end_date_of_validity
+      context_name: business_hours_end_date_of_validity_filter
+      params:
+        - column: attr_name_start_date_of_validity
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND valid_to_d365 <> valid_to_mdg THEN concat('BUSINESS HOURS:',' End date of validity') END
+        - column: msg_start_date_of_validity
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND valid_to_d365 <> valid_to_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_business_hours_end_date_of_validity
+      context_name: add_missing_columns_business_hours_end_date_of_validity
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_start_date_of_validity: msg
+          attr_name_start_date_of_validity: attr_name
+          valid_to_d365: tgt_attr
+          valid_to_mdg: src_attr
+
+##BUSINESS HOURS: FREQUENCY
+    - kind: filter
+      name: business_hours_frequency_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND frequency_d365 <> frequency_mdg
+
+    - kind: add
+      name: add_missing_columns_business_hours_frequency
+      context_name: business_hours_frequency_filter
+      params:
+        - column: attr_name_frequency
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND frequency_d365 <> frequency_mdg THEN concat('BUSINESS HOURS:',' End date of validity') END
+        - column: msg_frequency
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND frequency_d365 <> frequency_mdg THEN 'attributes are mismatching' END
+        - column: frequency_d365_str
+          expression: cast(frequency_d365 as string)
+        - column: frequency_mdg_str
+          expression: cast(frequency_mdg as string)
+
+    - kind: select
+      name: final_business_hours_frequency
+      context_name: add_missing_columns_business_hours_frequency
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_frequency: msg
+          attr_name_frequency: attr_name
+          frequency_d365_str: tgt_attr
+          frequency_mdg_str: src_attr
+
+##BUSINESS HOURS: MONDAY
+    - kind: filter
+      name: business_hours_monday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_mon_d365 <> allowed_mon_mdg OR from_mon_d365 <> from_mon_mdg OR to_mon_d365 <> to_mon_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_monday
+      context_name: business_hours_monday_filter
+      params:
+        - column: attr_name_monday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_mon_d365 <> allowed_mon_mdg OR from_mon_d365 <> from_mon_mdg OR to_mon_d365 <> to_mon_mdg) THEN concat('BUSINESS HOURS:',' MONDAY') END
+        - column: msg_monday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_mon_d365 <> allowed_mon_mdg OR from_mon_d365 <> from_mon_mdg OR to_mon_d365 <> to_mon_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_monday
+          expression: concat('Allowed:', ' ', allowed_mon_d365, ' From ', coalesce(from_mon_d365,''), ' To ', coalesce(to_mon_d365,''))
+        - column: src_attr_monday
+          expression: concat('Allowed:', ' ', allowed_mon_mdg, ' From ', coalesce(from_mon_mdg,''), ' To ', coalesce(to_mon_mdg,''))
+
+    - kind: select
+      name: final_business_hours_monday
+      context_name: add_missing_columns_business_hours_monday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_monday: msg
+          attr_name_monday: attr_name
+          tgt_attr_monday: tgt_attr
+          src_attr_monday: src_attr
+
+##BUSINESS HOURS: TUESDAY
+    - kind: filter
+      name: business_hours_tuesday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_tue_d365 <> allowed_tue_mdg OR from_tue_d365 <> from_tue_mdg OR to_tue_d365 <> to_tue_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_tuesday
+      context_name: business_hours_tuesday_filter
+      params:
+        - column: attr_name_tuesday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_tue_d365 <> allowed_tue_mdg OR from_tue_d365 <> from_tue_mdg OR to_tue_d365 <> to_tue_mdg) THEN concat('BUSINESS HOURS:',' TUESDAY') END
+        - column: msg_tuesday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_tue_d365 <> allowed_tue_mdg OR from_tue_d365 <> from_tue_mdg OR to_tue_d365 <> to_tue_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_tuesday
+          expression: concat('Allowed:', ' ', allowed_tue_d365, ' From ', coalesce(from_tue_d365,''), ' To ', coalesce(to_tue_d365,''))
+        - column: src_attr_tuesday
+          expression: concat('Allowed:', ' ', allowed_tue_mdg, ' From ', coalesce(from_tue_mdg,''), ' To ', coalesce(to_tue_mdg,''))
+
+    - kind: select
+      name: final_business_hours_tuesday
+      context_name: add_missing_columns_business_hours_tuesday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_tuesday: msg
+          attr_name_tuesday: attr_name
+          tgt_attr_tuesday: tgt_attr
+          src_attr_tuesday: src_attr
+
+##BUSINESS HOURS: WEDNESDAY
+    - kind: filter
+      name: business_hours_wednesday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_wed_d365 <> allowed_wed_mdg OR from_wed_d365 <> from_wed_mdg OR to_wed_d365 <> to_wed_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_wednesday
+      context_name: business_hours_wednesday_filter
+      params:
+        - column: attr_name_wednesday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_wed_d365 <> allowed_wed_mdg OR from_wed_d365 <> from_wed_mdg OR to_wed_d365 <> to_wed_mdg) THEN concat('BUSINESS HOURS:',' WEDNESDAY') END
+        - column: msg_wednesday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_wed_d365 <> allowed_wed_mdg OR from_wed_d365 <> from_wed_mdg OR to_wed_d365 <> to_wed_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_wednesday
+          expression: concat('Allowed:', ' ', allowed_wed_d365, ' From ', coalesce(from_wed_d365,''), ' To ', coalesce(to_wed_d365,''))
+        - column: src_attr_wednesday
+          expression: concat('Allowed:', ' ', allowed_wed_mdg, ' From ', coalesce(from_wed_mdg,''), ' To ', coalesce(to_wed_mdg,''))
+
+    - kind: select
+      name: final_business_hours_wednesday
+      context_name: add_missing_columns_business_hours_wednesday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_wednesday: msg
+          attr_name_wednesday: attr_name
+          tgt_attr_wednesday: tgt_attr
+          src_attr_wednesday: src_attr
+
+##BUSINESS HOURS: THURSDAY
+    - kind: filter
+      name: business_hours_thursday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_thu_d365 <> allowed_thu_mdg OR from_thu_d365 <> from_thu_mdg OR to_thu_d365 <> to_thu_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_thursday
+      context_name: business_hours_thursday_filter
+      params:
+        - column: attr_name_thursday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_thu_d365 <> allowed_thu_mdg OR from_thu_d365 <> from_thu_mdg OR to_thu_d365 <> to_thu_mdg) THEN concat('BUSINESS HOURS:',' THURSDAY') END
+        - column: msg_thursday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_thu_d365 <> allowed_thu_mdg OR from_thu_d365 <> from_thu_mdg OR to_thu_d365 <> to_thu_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_thursday
+          expression: concat('Allowed:', ' ', allowed_thu_d365, ' From ', coalesce(from_thu_d365,''), ' To ', coalesce(to_thu_d365,''))
+        - column: src_attr_thursday
+          expression: concat('Allowed:', ' ', allowed_thu_mdg, ' From ', coalesce(from_thu_mdg,''), ' To ', coalesce(to_thu_mdg,''))
+
+    - kind: select
+      name: final_business_hours_thursday
+      context_name: add_missing_columns_business_hours_thursday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_thursday: msg
+          attr_name_thursday: attr_name
+          tgt_attr_thursday: tgt_attr
+          src_attr_thursday: src_attr
+
+##BUSINESS HOURS: FRIDAY
+    - kind: filter
+      name: business_hours_friday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_fri_d365 <> allowed_fri_mdg OR from_fri_d365 <> from_fri_mdg OR to_fri_d365 <> to_fri_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_friday
+      context_name: business_hours_friday_filter
+      params:
+        - column: attr_name_friday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_fri_d365 <> allowed_fri_mdg OR from_fri_d365 <> from_fri_mdg OR to_fri_d365 <> to_fri_mdg) THEN concat('BUSINESS HOURS:',' FRIDAY') END
+        - column: msg_friday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_fri_d365 <> allowed_fri_mdg OR from_fri_d365 <> from_fri_mdg OR to_fri_d365 <> to_fri_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_friday
+          expression: concat('Allowed:', ' ', allowed_fri_d365, ' From ', coalesce(from_fri_d365,''), ' To ', coalesce(to_fri_d365,''))
+        - column: src_attr_friday
+          expression: concat('Allowed:', ' ', allowed_fri_mdg, ' From ', coalesce(from_fri_mdg,''), ' To ', coalesce(to_fri_mdg,''))
+
+    - kind: select
+      name: final_business_hours_friday
+      context_name: add_missing_columns_business_hours_friday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_friday: msg
+          attr_name_friday: attr_name
+          tgt_attr_friday: tgt_attr
+          src_attr_friday: src_attr
+
+##BUSINESS HOURS: SATURDAY
+    - kind: filter
+      name: business_hours_saturday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_sat_d365 <> allowed_sat_mdg OR from_sat_d365 <> from_sat_mdg OR to_sat_d365 <> to_sat_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_saturday
+      context_name: business_hours_saturday_filter
+      params:
+        - column: attr_name_saturday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_sat_d365 <> allowed_sat_mdg OR from_sat_d365 <> from_sat_mdg OR to_sat_d365 <> to_sat_mdg) THEN concat('BUSINESS HOURS:',' SATURDAY') END
+        - column: msg_saturday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_sat_d365 <> allowed_sat_mdg OR from_sat_d365 <> from_sat_mdg OR to_sat_d365 <> to_sat_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_saturday
+          expression: concat('Allowed:', ' ', allowed_sat_d365, ' From ', coalesce(from_sat_d365,''), ' To ', coalesce(to_sat_d365,''))
+        - column: src_attr_saturday
+          expression: concat('Allowed:', ' ', allowed_sat_mdg, ' From ', coalesce(from_sat_mdg,''), ' To ', coalesce(to_sat_mdg,''))
+
+    - kind: select
+      name: final_business_hours_saturday
+      context_name: add_missing_columns_business_hours_saturday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_saturday: msg
+          attr_name_saturday: attr_name
+          tgt_attr_saturday: tgt_attr
+          src_attr_saturday: src_attr
+
+##BUSINESS HOURS: SUNDAY
+    - kind: filter
+      name: business_hours_sunday_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_sun_d365 <> allowed_sun_mdg OR from_sun_d365 <> from_sun_mdg OR to_sun_d365 <> to_sun_mdg)
+
+    - kind: add
+      name: add_missing_columns_business_hours_sunday
+      context_name: business_hours_sunday_filter
+      params:
+        - column: attr_name_sunday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_sun_d365 <> allowed_sun_mdg OR from_sun_d365 <> from_sun_mdg OR to_sun_d365 <> to_sun_mdg) THEN concat('BUSINESS HOURS:',' SUNDAY') END
+        - column: msg_sunday
+          expression: CASE WHEN partner_mdg = partner_d365 AND rule_type_mdg = rule_type_d365 AND (allowed_sun_d365 <> allowed_sun_mdg OR from_sun_d365 <> from_sun_mdg OR to_sun_d365 <> to_sun_mdg) THEN 'attributes are mismatching' END
+        - column: tgt_attr_sunday
+          expression: concat('Allowed:', ' ', allowed_sun_d365, ' From ', coalesce(from_sun_d365,''), ' To ', coalesce(to_sun_d365,''))
+        - column: src_attr_sunday
+          expression: concat('Allowed:', ' ', allowed_sun_mdg, ' From ', coalesce(from_sun_mdg,''), ' To ', coalesce(to_sun_mdg,''))
+
+    - kind: select
+      name: final_business_hours_sunday
+      context_name: add_missing_columns_business_hours_sunday
+      params:
+        columns:
+          partner_mdg: partner
+          rule_type_mdg: rule_type
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sunday: msg
+          attr_name_sunday: attr_name
+          tgt_attr_sunday: tgt_attr
+          src_attr_sunday: src_attr
+
+    - kind: union
+      name: union_comparison
+      context_name: final_data_missing_from_mdg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_d365
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_start_date_of_validity
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_end_date_of_validity
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_frequency
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_monday
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_tuesday
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_wednesday
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_thursday
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_friday
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_saturday
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_sunday
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final_pre_ob_filter
+      context_name: union_comparison
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_mdg_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: kunnr_knvv
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            kvgr4_knvv: kvgr4_tvv4t
+
+    - kind: filter
+      name: join_final
+      context_name: join_final_pre_ob_filter
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('BUSINESS HOURS' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(kvgr4_knvv,' - ',bezei_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          NULL_Value: attribute1
+          NULL_Value: attribute2
+          rule_type: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          vkorg_knvv: attribute6
+          vtweg_knvv: attribute7
+          spart_knvv: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+
+    - kind: write_dataio
+      name: write_business_appointments
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+## agg ##
+### mdg ###
+    - kind: select
+      name: select_mdg_agg
+      context_name: mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          hash_mdg: hash_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BUSINESS HOURS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            hash_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_hash_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### d365 ###
+    - kind: select
+      name: select_d365_agg
+      context_name: d365
+      params:
+        columns:
+          partner_d365: partner_d365
+          hash_d365: hash_d365
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_d365_agg
+      context_name: select_d365_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner_d365, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner_d365, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner_d365, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner_d365, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner_d365, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner_d365, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner_d365, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner_d365, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner_d365, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner_d365, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner_d365, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner_d365, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner_d365, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner_d365, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner_d365, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner_d365, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner_d365, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner_d365, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner_d365, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner_d365, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner_d365, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner_d365, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner_d365, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner_d365, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner_d365, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner_d365, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner_d365, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner_d365, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner_d365, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BUSINESS HOURS' as string)
+        - column: src_system
+          expression: cast('d365' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_d365_agg
+      context_name: add_missing_columns_d365_agg
+      params:
+        - aggs:
+            hash_d365: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_d365_agg_final
+      context_name: group_d365_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_hash_d365: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_mdg ###
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: join
+      name: join_kna1_missing_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_missing_mdg_agg
+      context_name: join_kna1_missing_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: filter_aufSD_missing_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BUSINESS HOURS' as string)
+        - column: src_system
+          expression: cast('d365' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_d365 ###
+    - kind: select
+      name: select_data_missing_from_d365_agg
+      context_name: final_data_missing_from_d365
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: join
+      name: join_kna1_missing_d365_agg
+      context_name: select_data_missing_from_d365_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_missing_d365_agg
+      context_name: join_kna1_missing_d365_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_d365_agg
+      context_name: filter_aufSD_missing_d365_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BUSINESS HOURS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM d365' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_d365_agg
+      context_name: add_missing_columns_data_missing_from_d365_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_d365_final
+      context_name: group_data_missing_from_d365_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### mismatch ###
+    - kind: union
+      name: union_comparison_agg
+      context_name: final_business_hours_start_date_of_validity
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_end_date_of_validity
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_frequency
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_monday
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_tuesday
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_wednesday
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_thursday
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_friday
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_saturday
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_business_hours_sunday
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+            
+    - kind: filter
+      name: filter_final_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: filter_final_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BUSINESS HOURS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true  
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_d365_agg_final
+
+    - kind: union
+      name: union_comparison_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_mdg_agg_final
+
+    - kind: union
+      name: union_comparison_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_d365_final
+
+    - kind: union
+      name: union_comparison_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_mismatch_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg_final
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

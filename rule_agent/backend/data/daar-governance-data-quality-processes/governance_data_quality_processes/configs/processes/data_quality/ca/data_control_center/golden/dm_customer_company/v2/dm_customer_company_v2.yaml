@@ -1,0 +1,273 @@
+transform:
+  name: dm_customer_company
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_knb1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knb1
+
+  - kind: select
+    name: select_knb1
+    params:
+      columns:
+        zterm: knb1_zterm
+        fdgrv: knb1_fdgrv
+        kunnr: knb1_kunnr
+        bukrs: knb1_bukrs
+        akont: knb1_akont
+        loevm: knb1_loevm
+        nodel: knb1_nodel
+        sap_cluster: knb1_sap_cluster
+
+  - kind: filter
+    name: filter_knb1
+    params:
+      - condition:
+          knb1_loevm != 'X' AND knb1_nodel != 'X'
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t052u
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t052u
+
+  - kind: filter
+    name: filter_t052u
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t052u
+    params:
+      columns:
+        zterm: t52_zterm
+        text1: t52_text1
+        sap_cluster: t52_sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t035t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t035t
+
+  - kind: filter
+    name: filter_t035t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t035t
+    params:
+      columns:
+        grupp: t35_grupp
+        textl: t35_textl
+        sap_cluster: t35_sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+
+  - kind: filter
+    name: filter_cluster_config
+    params:
+      - condition:
+          flag = 'DM_company'
+
+  - kind: select
+    name: select_cluster_config
+    params:
+      columns:
+        company_code: cc_company_code
+        country_code: country_code_cc
+        cluster: cc_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_knb5
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knb5
+
+  - kind: select
+    name: select_knb5
+    params:
+      columns:
+        kunnr: kunnr
+        bukrs: bukrs
+        mansp: mansp
+        mahna: mahna
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t040t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t040t
+
+  - kind: filter
+    name: filter_t040t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t040t
+    params:
+      columns:
+        mansp: mansp
+        text1: text1_t040t
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t047t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t047t
+
+  - kind: filter
+    name: filter_t047t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t047t
+    params:
+      columns:
+        mahna: mahna
+        textm: textm_t047t
+        sap_cluster: sap_cluster
+
+  - kind: join
+    context_name: filter_knb1
+    name: join_knb1_t052
+    params:
+      - other:
+          select_t052u
+        how:
+          left
+        columns:
+          knb1_zterm: t52_zterm
+          knb1_sap_cluster: t52_sap_cluster
+      - other:
+          select_t035t
+        how:
+          left
+        columns:
+          knb1_fdgrv: t35_grupp
+          knb1_sap_cluster: t35_sap_cluster
+      - other:
+          select_cluster_config
+        how:
+          inner
+        columns:
+          knb1_bukrs: cc_company_code
+          knb1_sap_cluster: cc_cluster
+      - other:
+          select_knb5
+        how:
+          left
+        columns:
+          knb1_kunnr: kunnr
+          knb1_bukrs: bukrs
+          knb1_sap_cluster: sap_cluster
+      - other:
+          select_t040t
+        how:
+          left
+        columns:
+          mansp: mansp
+          sap_cluster: sap_cluster
+      - other:
+          select_t047t
+        how:
+          left
+        columns:
+          mahna: mahna
+          sap_cluster: sap_cluster
+
+
+  - kind: select
+    name: select_dcc_customer_company
+    params:
+      columns:
+        knb1_kunnr: customer_code
+        knb1_bukrs: company_code
+        country_code_cc: country_code
+        knb1_akont: reconciliation_account
+        knb1_fdgrv: planning_group_code
+        t35_textl: planning_group_description
+        knb1_zterm: terms_of_payment_code
+        t52_text1: terms_of_payment_description
+        mahna: dunning_procedure_code
+        text1_t040t: dunning_procedure_name
+        mansp: dunning_block_code
+        textm_t047t: dunning_block_name
+        knb1_sap_cluster: sap_cluster
+
+  - kind: write_dataio
+    name: write_dcc_dm_customer_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_company
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

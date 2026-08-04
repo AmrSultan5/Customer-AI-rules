@@ -1,0 +1,36 @@
+transform:
+  name: edvs_audit_data_historical
+  operations:
+  
+  - kind: read_local
+    name: read_edvs_audit_data_historical
+    params:
+      format: csv
+      location: /mnt/datalake_idq/raw/edvs/historical_data/audit_data/audit_data.csv
+      options:
+        header: true
+  
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: run_id
+        to: integer
+      - column: last_update
+        to: timestamp
+        to_format: "yyyy-MM-dd HH:mm:ss.SSS"
+
+  - kind: write_dataio
+    name: write_edvs_audit_data_historical
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: edvs
+      namespace: golden
+      object_name: audit_data
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

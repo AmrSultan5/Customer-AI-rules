@@ -1,0 +1,1138 @@
+transform:
+  name: vendor_link_customer
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_general
+      schema_version: v3
+
+  - kind: filter
+    name: filter_vg4
+    context_name: read_dm_vendor_general
+    params:
+      - condition:
+          sap_cluster = 'CL1' AND is_active = '1'  AND account_group_code IN ('4000') AND is_active = '1'
+
+  - kind: select
+    name: select_vg4
+    context_name: filter_vg4
+    params:
+      columns:
+        vendor_code: vendor_code_vg4
+        country_code: country_code_vg4
+        account_group_code: account_group_code_vg4
+        vendor_name: vendor_name_vg4
+        customer_code: customer_code_vg4
+        corporate_vendor_code: corporate_vendor_code_vg4
+        addressability_flag: addressability_flag_vg4
+        sap_cluster: sap_cluster_vg4
+      distinct: true  
+
+  - kind: filter
+    name: filter_vg9
+    context_name: read_dm_vendor_general
+    params:
+      - condition:
+          sap_cluster = 'CL1' AND is_active = '1' AND account_group_code IN ('9000')
+
+  - kind: select
+    name: select_vg9
+    context_name: filter_vg9
+    params:
+      columns:
+        vendor_code: vendor_code_vg9
+        country_code: country_code_vg9
+        account_group_code: account_group_code_vg9
+        vendor_name: vendor_name_vg9
+        customer_code: customer_code_vg9
+        corporate_vendor_code: corporate_vendor_code_vg9
+        addressability_flag: addressability_flag_vg9
+        sap_cluster: sap_cluster_vg9
+      distinct: true  
+
+  - kind: filter
+    name: filter_vg91
+    context_name: read_dm_vendor_general
+    params:
+      - condition:
+          sap_cluster = 'CL1' AND account_group_code IN ('9000') # AND is_active = '1'
+
+  - kind: select
+    name: select_vg91
+    context_name: filter_vg91
+    params:
+      columns:
+        vendor_code: vendor_code_vg91
+        vendor_name: vendor_name_vg91
+        customer_code: customer_code_vg91
+        corporate_vendor_code: corporate_vendor_code_vg91
+        addressability_flag: addressability_flag_vg91
+        is_active: is_active_vg91
+        sap_cluster: sap_cluster_vg91
+      distinct: true 
+ 
+  - kind: select
+    name: select_vg91_2
+    context_name: filter_vg91
+    params:
+      columns:
+        vendor_code: vendor_code_vg91_2
+        vendor_name: vendor_name_vg91_2
+        customer_code: customer_code_vg91_2
+        corporate_vendor_code: corporate_vendor_code_vg91_2
+        addressability_flag: addressability_flag_vg91_2
+        is_active: is_active_vg91_2
+        sap_cluster: sap_cluster_vg91_2
+      distinct: true  
+
+  - kind: read_dataio
+    name: read_dm_vendor_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_tax
+      schema_version: v1 
+
+  - kind: filter
+    name: filter_non_null_tax_value
+    context_name: read_dm_vendor_tax
+    params:
+      - condition:
+          ((tax_0_value is not null and tax_0_value != '') or (tax_1_value is not null and tax_1_value != '') or (tax_2_value is not null and tax_2_value != '') or (tax_3_value is not null and tax_3_value != '') or (tax_4_value is not null and tax_4_value != '') or (tax_5_value is not null and tax_5_value != '')) #and vendor_code ='4300006113'
+
+  - kind: select
+    name: select_vt4
+    context_name: filter_non_null_tax_value
+    params:
+      columns:
+        vendor_code: vendor_code_vt4
+        tax_0_value: tax_0_value_vt4
+        tax_1_value: tax_1_value_vt4
+        tax_2_value: tax_2_value_vt4
+        tax_3_value: tax_3_value_vt4
+        tax_4_value: tax_4_value_vt4
+        tax_5_value: tax_5_value_vt4
+        sap_cluster: sap_cluster_vt4
+      distinct: true  
+
+  - kind: filter
+    name: filter_vt9
+    context_name: read_dm_vendor_tax
+    params:
+      - condition:
+          vendor_code like '9%'
+
+  - kind: select
+    name: select_vt9
+    context_name: filter_vt9
+    params:
+      columns:
+        vendor_code: vendor_code_vt9
+        tax_0_value: tax_0_value_vt9
+        tax_1_value: tax_1_value_vt9
+        tax_2_value: tax_2_value_vt9
+        tax_3_value: tax_3_value_vt9
+        tax_4_value: tax_4_value_vt9
+        tax_5_value: tax_5_value_vt9
+        sap_cluster: sap_cluster_vt9
+      distinct: true  
+
+  - kind: read_dataio
+    name: read_dm_vendor_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_bank
+      schema_version: v1
+
+  - kind: select
+    name: select_vb4
+    context_name: read_dm_vendor_bank
+    params:
+      columns:
+        vendor_code: vendor_code_vb4
+        partner_bank_type: partner_bank_type_vb4
+        bank_key: bank_key_vb4
+        iban: iban_vb4
+        sap_cluster: sap_cluster_vb4
+      distinct: true  
+
+  - kind: filter
+    name: filter_vb9
+    context_name: read_dm_vendor_bank
+    params:
+      - condition:
+          vendor_code like '9%'
+
+  - kind: select
+    name: select_vb9
+    context_name: filter_vb9
+    params:
+      columns:
+        vendor_code: vendor_code_vb9
+        iban: iban_vb9
+        sap_cluster: sap_cluster_vb9
+      distinct: true
+
+  - kind: join
+    name: join_part_1
+    context_name: select_vg4
+    params:
+      - other:
+          select_vt4
+        how:
+          left
+        columns:
+          vendor_code_vg4: vendor_code_vt4
+          sap_cluster_vg4: sap_cluster_vt4
+      - other:
+          select_vb4
+        how:
+          left
+        columns:
+          vendor_code_vg4: vendor_code_vb4
+          sap_cluster_vg4: sap_cluster_vb4
+      - other:
+          select_vg9
+        how:
+          left
+        columns:
+          corporate_vendor_code_vg4: vendor_code_vg9
+          sap_cluster_vg4: sap_cluster_vg9
+
+  - kind: join
+    name: join_part_2
+    context_name: join_part_1
+    params:
+      - other:
+          select_vt9
+        how:
+          left
+        columns:
+          tax_0_value_vt4: tax_0_value_vt9
+          tax_1_value_vt4: tax_1_value_vt9
+          tax_2_value_vt4: tax_2_value_vt9
+          tax_3_value_vt4: tax_3_value_vt9
+          tax_4_value_vt4: tax_4_value_vt9
+          tax_5_value_vt4: tax_5_value_vt9
+          sap_cluster_vt4: sap_cluster_vt9
+      - other:
+          select_vb9
+        how:
+          left
+        columns:
+          iban_vb4: iban_vb9
+          sap_cluster_vb4: sap_cluster_vb9
+      - other:
+          select_vg91
+        how:
+          left
+        columns:
+          vendor_code_vt9: vendor_code_vg91
+          sap_cluster_vt9: sap_cluster_vg91
+      - other:
+          select_vg91_2
+        how:
+          left
+        columns:
+          vendor_code_vb9: vendor_code_vg91_2
+          sap_cluster_vb9: sap_cluster_vg91_2
+
+  - kind: add
+    name: add_update_inactive_data
+    context_name: join_part_2
+    params:
+      - column: vendor_code_vt9
+        expression: if(is_active_vg91 = '0', NULL, vendor_code_vt9)
+        overwrite: true
+      - column: tax_0_value_vt9
+        expression: if(is_active_vg91 = '0', NULL, tax_0_value_vt9)
+        overwrite: true
+      - column: tax_1_value_vt9
+        expression: if(is_active_vg91 = '0', NULL, tax_1_value_vt9)
+        overwrite: true
+      - column: tax_2_value_vt9
+        expression: if(is_active_vg91 = '0', NULL, tax_2_value_vt9)
+        overwrite: true
+      - column: tax_3_value_vt9
+        expression: if(is_active_vg91 = '0', NULL, tax_3_value_vt9)
+        overwrite: true
+      - column: tax_4_value_vt9
+        expression: if(is_active_vg91 = '0', NULL, tax_4_value_vt9)
+        overwrite: true
+      - column: tax_5_value_vt9
+        expression: if(is_active_vg91 = '0', NULL, tax_5_value_vt9)
+        overwrite: true
+      - column: sap_cluster_vt9
+        expression: if(is_active_vg91 = '0', NULL, sap_cluster_vt9)
+        overwrite: true
+      - column: vendor_code_vb9
+        expression: if(is_active_vg91_2 = '0', NULL, vendor_code_vb9)
+        overwrite: true
+      - column: iban_vb9
+        expression: if(is_active_vg91_2 = '0', NULL, iban_vb9)
+        overwrite: true
+      - column: sap_cluster_vb9
+        expression: if(is_active_vg91_2 = '0', NULL, sap_cluster_vb9)
+        overwrite: true
+      - column: vendor_code_vg91
+        expression: if(is_active_vg91 = '0', NULL, vendor_code_vg91)
+        overwrite: true
+      - column: vendor_name_vg91
+        expression: if(is_active_vg91 = '0', NULL, vendor_name_vg91)
+        overwrite: true
+      - column: customer_code_vg91
+        expression: if(is_active_vg91 = '0', NULL, customer_code_vg91)
+        overwrite: true
+      - column: corporate_vendor_code_vg91
+        expression: if(is_active_vg91 = '0', NULL, corporate_vendor_code_vg91)
+        overwrite: true
+      - column: addressability_flag_vg91
+        expression: if(is_active_vg91 = '0', NULL, addressability_flag_vg91)
+        overwrite: true
+      - column: sap_cluster_vg91
+        expression: if(is_active_vg91 = '0', NULL, sap_cluster_vg91)
+        overwrite: true
+      - column: is_active_vg91
+        expression: if(is_active_vg91 = '0', NULL, is_active_vg91)
+        overwrite: true
+      - column: vendor_code_vg91_2
+        expression: if(is_active_vg91_2 = '0', NULL, vendor_code_vg91_2)
+        overwrite: true
+      - column: vendor_name_vg91_2
+        expression: if(is_active_vg91_2 = '0', NULL, vendor_name_vg91_2)
+        overwrite: true
+      - column: customer_code_vg91_2
+        expression: if(is_active_vg91_2 = '0', NULL, customer_code_vg91_2)
+        overwrite: true
+      - column: corporate_vendor_code_vg91_2
+        expression: if(is_active_vg91_2 = '0', NULL, corporate_vendor_code_vg91_2)
+        overwrite: true
+      - column: addressability_flag_vg91_2
+        expression: if(is_active_vg91_2 = '0', NULL, addressability_flag_vg91_2)
+        overwrite: true
+      - column: sap_cluster_vg91
+        expression: if(is_active_vg91 = '0', NULL, sap_cluster_vg91)
+        overwrite: true
+      - column: is_active_vg91_2
+        expression: if(is_active_vg91_2 = '0', NULL, is_active_vg91_2)
+        overwrite: true
+
+# #-------------------------DELETE_NOT_DUPLICATED_IBANS--------------------
+
+  - kind: select
+    name: select_iban_nulls_vg91
+    context_name: add_update_inactive_data
+    params:
+      columns:
+        vendor_code_vg91: vendor_code_vg91_iban
+        sap_cluster_vg91: sap_cluster_vg91_iban
+      distinct: true
+
+  - kind: select
+    name: select_iban_nulls_vb9
+    context_name: add_update_inactive_data
+    params:
+      columns:
+        vendor_code_vb9: vendor_code_vb9_iban
+        sap_cluster_vb9: sap_cluster_vb9_iban
+      distinct: true
+
+  - kind: join
+    name: join_vendor_with_null_iban
+    context_name: select_iban_nulls_vg91
+    params:
+      - other:
+          select_iban_nulls_vb9
+        how:
+          outer
+        columns:
+          vendor_code_vg91_iban: vendor_code_vb9_iban
+          sap_cluster_vg91_iban: sap_cluster_vb9_iban
+
+  - kind: filter
+    name: filter_iban_nulls
+    context_name: join_vendor_with_null_iban
+    params:
+      - condition:
+          vendor_code_vg91_iban is not null and vendor_code_vb9_iban is null
+
+  - kind: join
+    name: join_null_iban_vendors
+    context_name: add_update_inactive_data
+    params:
+      - other:
+          filter_iban_nulls
+        how:
+          left
+        columns:
+          vendor_code_vg91: vendor_code_vg91_iban
+          sap_cluster_vg91: sap_cluster_vg91_iban
+
+  - kind: add
+    name: add_null_iban_values
+    context_name: join_null_iban_vendors
+    params:
+      - column: iban_vb9
+        expression: if(vendor_code_vg91 is not null and vendor_code_vg91_iban is not null, NULL, iban_vb9)
+        overwrite: true
+
+#-------------------------END----------DELETE_NOT_DUPLICATED_IBANS--------------------
+
+  - kind: add
+    name: add_vg91_merge
+    context_name: add_null_iban_values
+    params:
+      - column: vendor_code_vg91
+        expression: if(vendor_code_vg91 = '' or vendor_code_vg91 is null, vendor_code_vg91_2, vendor_code_vg91)
+        overwrite: true
+      - column: vendor_code_vg91 #----------------------NULL EXCEPTION WHEN VG91 IS NULL AND WILL NOT JOIN TAX AND BANK DUPLICATES
+        expression: if(vendor_code_vg91 is null, '', vendor_code_vg91)
+        overwrite: true
+      - column: vendor_name_vg91
+        expression: if(vendor_name_vg91 = '' or vendor_name_vg91 is null, vendor_name_vg91_2, vendor_name_vg91)
+        overwrite: true
+      - column: customer_code_vg91
+        expression: if(customer_code_vg91 = '' or customer_code_vg91 is null, customer_code_vg91_2, customer_code_vg91)
+        overwrite: true
+      - column: corporate_vendor_code_vg91
+        expression: if(corporate_vendor_code_vg91 = '' or corporate_vendor_code_vg91 is null, corporate_vendor_code_vg91_2, corporate_vendor_code_vg91)
+        overwrite: true
+      - column: addressability_flag_vg91
+        expression: if(addressability_flag_vg91 = '' or addressability_flag_vg91 is null, addressability_flag_vg91_2, addressability_flag_vg91)
+        overwrite: true
+      - column: sap_cluster_vg91
+        expression: if(sap_cluster_vg91 = '' or sap_cluster_vg91 is null, sap_cluster_vg91_2, sap_cluster_vg91)
+        overwrite: true
+
+  - kind: group
+    name: group_non_duplicates
+    context_name: add_vg91_merge
+    params:
+      - aggs:
+          vendor_code_vg91: collect_set
+        by:
+        - vendor_code_vg4
+        - account_group_code_vg4
+        - sap_cluster_vg4
+       
+  - kind: add
+    name: add_non_duplicates_concat
+    context_name: group_non_duplicates
+    params:
+      - column: non_duplicates
+        expression: concat_ws(', ', sort_array(collect_set_vendor_code_vg91))
+
+  - kind: join
+    name: join_non_duplicates
+    context_name: add_vg91_merge
+    params:
+      - other:
+          add_non_duplicates_concat
+        how:
+          left
+        columns:
+          vendor_code_vg4: vendor_code_vg4
+          account_group_code_vg4: account_group_code_vg4
+          sap_cluster_vg4: sap_cluster_vg4
+
+  - kind: filter
+    name: filter_non_duplicates
+    context_name: join_non_duplicates
+    params:
+      - condition:
+          (vendor_code_vg91 is not null and vendor_code_vg91 != '' and non_duplicates is not null and non_duplicates != '') or ((vendor_code_vg91 is null or vendor_code_vg91 = '') and (non_duplicates is null or non_duplicates = ''))
+
+  - kind: group
+    name: group_duplicated_by_tax_value
+    context_name: filter_non_duplicates
+    params:
+      - aggs:
+          tax_0_value_vt4: max
+          tax_1_value_vt4: max
+          tax_2_value_vt4: max
+          tax_3_value_vt4: max
+          tax_4_value_vt4: max
+          tax_5_value_vt4: max
+          tax_0_value_vt9: max
+          tax_1_value_vt9: max
+          tax_2_value_vt9: max
+          tax_3_value_vt9: max
+          tax_4_value_vt9: max
+          tax_5_value_vt9: max
+        by:
+        - vendor_code_vg4
+        - country_code_vg4
+        - account_group_code_vg4
+        - vendor_name_vg4
+        - customer_code_vg4
+        - corporate_vendor_code_vg4
+        - addressability_flag_vg4
+        - sap_cluster_vg4
+        - vendor_code_vt4
+        - sap_cluster_vt4
+        - vendor_code_vb4
+        - partner_bank_type_vb4
+        - bank_key_vb4
+        - iban_vb4
+        - sap_cluster_vb4
+        - vendor_code_vg9
+        - country_code_vg9
+        - account_group_code_vg9
+        - vendor_name_vg9
+        - customer_code_vg9
+        - corporate_vendor_code_vg9
+        - addressability_flag_vg9
+        - sap_cluster_vg9
+        - vendor_code_vt9
+        - sap_cluster_vt9
+        - vendor_code_vb9
+        - iban_vb9
+        - sap_cluster_vb9
+        - vendor_code_vg91
+        - vendor_name_vg91
+        - customer_code_vg91
+        - corporate_vendor_code_vg91
+        - addressability_flag_vg91
+        - sap_cluster_vg91
+
+  - kind: add
+    name: add_tax_duplicates
+    context_name: group_duplicated_by_tax_value
+    params:
+      - column: duplicated_by_tax_value_temp
+        expression: if(max_tax_0_value_vt4 is not null AND max_tax_0_value_vt4 != '' AND max_tax_0_value_vt9 is not null AND max_tax_0_value_vt9 != '' AND max_tax_0_value_vt4 = max_tax_0_value_vt9, 
+                    'TAX0' || CHR(58) || ' ' || max_tax_0_value_vt4, NULL)
+      - column: duplicated_by_tax_value_temp
+        expression: if(duplicated_by_tax_value_temp is null AND max_tax_1_value_vt4 is not null AND max_tax_1_value_vt4 != '' AND max_tax_1_value_vt9 is not null AND max_tax_1_value_vt9 != '' AND 
+                    max_tax_1_value_vt4 = max_tax_1_value_vt9, 'TAX1' || CHR(58) || ' ' ||  max_tax_1_value_vt4,
+                    if(max_tax_1_value_vt4 is not null AND max_tax_1_value_vt4 != '' AND max_tax_1_value_vt9 is not null AND max_tax_1_value_vt9 != '' AND max_tax_1_value_vt4 = max_tax_1_value_vt9, 
+                    duplicated_by_tax_value_temp || ', ' ||  'TAX1' || CHR(58) || ' ' ||  max_tax_1_value_vt4, duplicated_by_tax_value_temp))
+        overwrite: true
+      - column: duplicated_by_tax_value_temp
+        expression: if(duplicated_by_tax_value_temp is null AND max_tax_2_value_vt4 is not null AND max_tax_2_value_vt4 != '' AND max_tax_2_value_vt9 is not null AND max_tax_2_value_vt9 != '' AND 
+                    max_tax_2_value_vt4 = max_tax_2_value_vt9, 'TAX2' || CHR(58) || ' ' ||  max_tax_2_value_vt4,
+                    if(max_tax_2_value_vt4 is not null AND max_tax_2_value_vt4 != '' AND max_tax_2_value_vt9 is not null AND max_tax_2_value_vt9 != '' AND max_tax_2_value_vt4 = max_tax_2_value_vt9, 
+                    duplicated_by_tax_value_temp || ', ' ||  'TAX2' || CHR(58) || ' ' ||  max_tax_2_value_vt4, duplicated_by_tax_value_temp))
+        overwrite: true
+      - column: duplicated_by_tax_value_temp
+        expression: if(duplicated_by_tax_value_temp is null AND max_tax_3_value_vt4 is not null AND max_tax_3_value_vt4 != '' AND max_tax_3_value_vt9 is not null AND max_tax_3_value_vt9 != '' AND 
+                    max_tax_3_value_vt4 = max_tax_3_value_vt9, 'TAX3' || CHR(58) || ' ' ||  max_tax_3_value_vt4,
+                    if(max_tax_3_value_vt4 is not null AND max_tax_3_value_vt4 != '' AND max_tax_3_value_vt9 is not null AND max_tax_3_value_vt9 != '' AND max_tax_3_value_vt4 = max_tax_3_value_vt9, 
+                    duplicated_by_tax_value_temp || ', ' ||  'TAX3' || CHR(58) || ' ' ||  max_tax_3_value_vt4, duplicated_by_tax_value_temp))
+        overwrite: true
+      - column: duplicated_by_tax_value_temp
+        expression: if(duplicated_by_tax_value_temp is null AND max_tax_4_value_vt4 is not null AND max_tax_4_value_vt4 != '' AND max_tax_4_value_vt9 is not null AND max_tax_4_value_vt9 != '' AND 
+                    max_tax_4_value_vt4 = max_tax_4_value_vt9, 'TAX4' || CHR(58) || ' ' ||  max_tax_4_value_vt4,
+                    if(max_tax_4_value_vt4 is not null AND max_tax_4_value_vt4 != '' AND max_tax_4_value_vt9 is not null AND max_tax_4_value_vt9 != '' AND max_tax_4_value_vt4 = max_tax_4_value_vt9, 
+                    duplicated_by_tax_value_temp || ', ' ||  'TAX4' || CHR(58) || ' ' ||  max_tax_4_value_vt4, duplicated_by_tax_value_temp))
+        overwrite: true
+      - column: duplicated_by_tax_value_temp
+        expression: if(duplicated_by_tax_value_temp is null AND max_tax_5_value_vt4 is not null AND max_tax_5_value_vt4 != '' AND max_tax_5_value_vt9 is not null AND max_tax_5_value_vt9 != '' AND 
+                    max_tax_5_value_vt4 = max_tax_5_value_vt9, 'TAX5' || CHR(58) || ' ' ||  max_tax_5_value_vt4,
+                    if(max_tax_5_value_vt4 is not null AND max_tax_5_value_vt4 != '' AND max_tax_5_value_vt9 is not null AND max_tax_5_value_vt9 != '' AND max_tax_5_value_vt4 = max_tax_5_value_vt9, 
+                    duplicated_by_tax_value_temp || ', ' ||  'TAX5' || CHR(58) || ' ' ||  max_tax_5_value_vt4, duplicated_by_tax_value_temp))
+        overwrite: true
+
+  - kind: select
+    name: select_tax_duplicates
+    context_name: add_tax_duplicates
+    params:
+      columns:
+        vendor_code_vg4: vendor_code_vg4
+        vendor_code_vg91: vendor_code_vg91
+        account_group_code_vg4: account_group_code_vg4
+        sap_cluster_vg4: sap_cluster_vg4
+        duplicated_by_tax_value_temp: duplicated_by_tax_value
+      distinct: true
+
+  - kind: filter
+    name: filter_null_duplicates
+    context_name: select_tax_duplicates
+    params:
+      - condition:
+          duplicated_by_tax_value is not null and duplicated_by_tax_value != ''
+
+  - kind: select
+    name: select_bank_duplicates
+    context_name: add_vg91_merge
+    params:
+      columns:
+        vendor_code_vg4: vendor_code_vg4_b
+        vendor_code_vg91: vendor_code_vg91
+        account_group_code_vg4: account_group_code_vg4_b
+        iban_vb4: iban_vb4_b
+        iban_vb9: iban_vb9_b
+        sap_cluster_vg4: sap_cluster_vg4_b
+      distinct: true
+
+  - kind: add
+    name: add_bank_duplicates
+    context_name: select_bank_duplicates
+    params:
+      - column: duplicated_by_bank_value_temp
+        expression: if(iban_vb4_b is not null AND iban_vb4_b != '' AND iban_vb9_b is not null AND iban_vb9_b != '' AND iban_vb4_b = iban_vb9_b, 'IBAN' || CHR(58) || ' ' || iban_vb4_b, NULL)
+
+  - kind: group
+    name: group_duplicated_by_bank_value
+    context_name: add_bank_duplicates
+    params:
+      - aggs:
+          duplicated_by_bank_value_temp: collect_set
+        by:
+        - vendor_code_vg4_b
+        - vendor_code_vg91
+        - account_group_code_vg4_b
+        - sap_cluster_vg4_b
+
+  - kind: add
+    name: add_bank_duplicates_concat
+    context_name: group_duplicated_by_bank_value
+    params:
+      - column: duplicated_by_bank_value
+        expression: concat_ws(', ', sort_array(collect_set_duplicated_by_bank_value_temp)) 
+
+  - kind: join
+    name: join_bank_tax_duplicates
+    context_name: filter_non_duplicates
+    params:
+      - other:
+          filter_null_duplicates
+        how:
+          left
+        columns:
+          vendor_code_vg4: vendor_code_vg4
+          vendor_code_vg91: vendor_code_vg91
+          account_group_code_vg4: account_group_code_vg4
+          sap_cluster_vg4: sap_cluster_vg4
+      - other:
+          add_bank_duplicates_concat
+        how:
+          left
+        columns:
+          vendor_code_vg4: vendor_code_vg4_b
+          vendor_code_vg91: vendor_code_vg91
+          account_group_code_vg4: account_group_code_vg4_b
+          sap_cluster_vg4: sap_cluster_vg4_b
+
+  - kind: add
+    name: add_tax_duplicates
+    context_name: join_bank_tax_duplicates
+    params:
+      - column: duplicated_by_tax0_flag
+        expression: if(instr(duplicated_by_tax_value, 'TAX0') > 0, '1', '0')
+      - column: duplicated_by_tax1_flag
+        expression: if(instr(duplicated_by_tax_value, 'TAX1') > 0, '1', '0')
+      - column: duplicated_by_tax2_flag
+        expression: if(instr(duplicated_by_tax_value, 'TAX2') > 0, '1', '0')
+      - column: duplicated_by_tax3_flag
+        expression: if(instr(duplicated_by_tax_value, 'TAX3') > 0, '1', '0')
+      - column: duplicated_by_tax4_flag
+        expression: if(instr(duplicated_by_tax_value, 'TAX4') > 0, '1', '0')
+      - column: duplicated_by_tax5_flag
+        expression: if(instr(duplicated_by_tax_value, 'TAX5') > 0, '1', '0')
+      - column: duplicated_by_iban_flag
+        expression: if(instr(duplicated_by_bank_value, 'IBAN') > 0, '1', '0')
+      - column: duplicated_by_vendor_code
+        expression: if(partner_bank_type_vb4 = 'BGNS' or bank_key_vb4 LIKE '%CITI%', null,
+                    if(duplicated_by_bank_value is not null AND duplicated_by_bank_value != '' AND vendor_code_vg91 is not null AND vendor_code_vg91 != '', vendor_code_vg91,
+                    if(duplicated_by_tax_value is not null AND duplicated_by_tax_value != '' AND vendor_code_vg91 is not null AND vendor_code_vg91 != '', vendor_code_vg91, NULL)))
+      - column: customer_code_vg91
+        expression: if(duplicated_by_vendor_code is not null and customer_code_vg91 is not null, customer_code_vg91, '')
+        overwrite: true
+      - column: corporate_vendor_code_vg91
+        expression: if(duplicated_by_vendor_code is not null and corporate_vendor_code_vg91 is not null, corporate_vendor_code_vg91, '')
+        overwrite: true
+      - column: addressability_flag_vg91
+        expression: if(duplicated_by_vendor_code is not null and addressability_flag_vg91 is not null, addressability_flag_vg91, '')
+        overwrite: true
+      - column: addressability_vendor_9000_flag
+        expression: if(duplicated_by_vendor_code is null, '',
+                    if(addressability_flag_vg91 = 'X', '1','0'))
+      - column: link_vendor_4000_vendor_9000_flag
+        expression: if(duplicated_by_vendor_code is null OR addressability_vendor_9000_flag != '1', '',
+                    if(corporate_vendor_code_vg4 = corporate_vendor_code_vg91 AND addressability_flag_vg91 = 'X', '1', '0'))
+      - column: addressability_vendor_4000_flag
+        expression: if(link_vendor_4000_vendor_9000_flag <> '1', '',
+                    if(customer_code_vg91 is not null, '1','0'))
+
+
+  - kind: select
+    name: select_final_du
+    context_name: add_tax_duplicates
+    params:
+      columns:
+        vendor_code_vg4: vendor_code
+        country_code_vg4: country_code
+        account_group_code_vg4: vendor_account_group_code
+        vendor_name_vg4: vendor_name
+        customer_code_vg4: customer_code
+        corporate_vendor_code_vg4: corporate_vendor_code
+        addressability_flag_vg4: addressability_flag
+        sap_cluster_vg4: sap_cluster
+        iban_vb4: iban
+        tax_0_value_vt4: tax_0_value
+        tax_1_value_vt4: tax_1_value
+        tax_2_value_vt4: tax_2_value
+        tax_3_value_vt4: tax_3_value
+        tax_4_value_vt4: tax_4_value
+        tax_5_value_vt4: tax_5_value
+        vendor_code_vg9: linked_by_vendor_code
+        country_code_vg9: linked_by_country_of_origin
+        account_group_code_vg9: linked_by_vendor_account_group_code
+        vendor_name_vg9: linked_by_vendor_name
+        customer_code_vg9: linked_by_customer_code
+        corporate_vendor_code_vg9: linked_by_corporate_vendor_code
+        addressability_flag_vg9: linked_by_addressability_flag
+        duplicated_by_vendor_code: duplicated_by_vendor_code
+        vendor_name_vg91: duplicated_by_vendor_name
+        customer_code_vg91: duplicated_by_customer_code
+        corporate_vendor_code_vg91: duplicated_by_corporate_vendor_code
+        addressability_flag_vg91: duplicated_by_addressability_flag
+        duplicated_by_tax_value: duplicated_by_tax_value
+        duplicated_by_bank_value: duplicated_by_bank_value
+        duplicated_by_tax0_flag: duplicated_by_tax0_flag
+        duplicated_by_tax1_flag: duplicated_by_tax1_flag
+        duplicated_by_tax2_flag: duplicated_by_tax2_flag
+        duplicated_by_tax3_flag: duplicated_by_tax3_flag
+        duplicated_by_tax4_flag: duplicated_by_tax4_flag
+        duplicated_by_tax5_flag: duplicated_by_tax5_flag
+        duplicated_by_iban_flag: duplicated_by_iban_flag
+        link_vendor_4000_vendor_9000_flag: link_vendor_4000_vendor_9000_flag
+        addressability_vendor_4000_flag: addressability_vendor_4000_flag
+        addressability_vendor_9000_flag: addressability_vendor_9000_flag
+      distinct: true
+
+  - kind: group
+    name: group_final_du
+    context_name: select_final_du
+    params:
+      - aggs:
+           tax_0_value: max
+           tax_1_value: max
+           tax_2_value: max
+           tax_3_value: max
+           tax_4_value: max
+           tax_5_value: max
+        by:
+        -  vendor_code
+        -  country_code
+        -  vendor_account_group_code
+        -  vendor_name
+        -  customer_code
+        -  corporate_vendor_code
+        -  addressability_flag
+        -  sap_cluster
+        -  iban
+        -  linked_by_vendor_code
+        -  linked_by_country_of_origin
+        -  linked_by_vendor_account_group_code
+        -  linked_by_vendor_name
+        -  linked_by_customer_code
+        -  linked_by_corporate_vendor_code
+        -  linked_by_addressability_flag
+        -  duplicated_by_vendor_code
+        -  duplicated_by_vendor_name
+        -  duplicated_by_customer_code
+        -  duplicated_by_corporate_vendor_code
+        -  duplicated_by_addressability_flag
+        -  duplicated_by_tax_value
+        -  duplicated_by_bank_value
+        -  duplicated_by_tax0_flag
+        -  duplicated_by_tax1_flag
+        -  duplicated_by_tax2_flag
+        -  duplicated_by_tax3_flag
+        -  duplicated_by_tax4_flag
+        -  duplicated_by_tax5_flag
+        -  duplicated_by_iban_flag
+        - link_vendor_4000_vendor_9000_flag
+        - addressability_vendor_4000_flag
+        - addressability_vendor_9000_flag
+
+# #--------------DETAILS----------------
+
+  - kind: add
+    name: add_details_1
+    context_name: group_final_du
+    params:
+      - column: dq_message_output
+        expression: if(link_vendor_4000_vendor_9000_flag = '', 'N/A',
+                    if(link_vendor_4000_vendor_9000_flag = '1', 'OK', 'Invalid'))
+      - column: dq_flag_output
+        expression: link_vendor_4000_vendor_9000_flag
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: rule_name
+        expression: '"Link between AG 4000 and 9000 vendors"'
+      - column: quality_rule
+        expression: rule_name || ' ' || quality_category
+
+  - kind: add
+    name: add_details_2
+    context_name: group_final_du
+    params:
+      - column: dq_message_output
+        expression: if(addressability_vendor_4000_flag  = '', 'N/A',
+                    if(addressability_vendor_4000_flag  = '1', 'OK', 'Invalid'))
+      - column: dq_flag_output
+        expression: addressability_vendor_4000_flag
+      - column: quality_category
+        expression: '"Completeness"'
+      - column: rule_name
+        expression: '"Addressability check AG 4000"'
+      - column: quality_rule
+        expression: rule_name || ' ' || quality_category
+
+  - kind: add
+    name: add_details_3
+    context_name: group_final_du
+    params:
+      - column: dq_message_output
+        expression: if(addressability_vendor_9000_flag = '', 'N/A',
+                    if(addressability_vendor_9000_flag = '1', 'OK', 'Invalid'))
+      - column: dq_flag_output
+        expression: addressability_vendor_9000_flag
+      - column: quality_category
+        expression: '"Accuracy"'
+      - column: rule_name
+        expression: '"Addressability check AG 9000"'
+      - column: quality_rule
+        expression: rule_name || ' ' || quality_category
+
+  - kind: union
+    name: union_details_1
+    context_name: add_details_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_details_2
+
+  - kind: union
+    name: union_details_2
+    context_name: union_details_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_details_3
+
+  - kind: read_dataio
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_company
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      - condition:
+          sap_cluster = 'CL1' AND (posting_block = '' OR deletion_flag = '')
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: filter_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code_vc
+        extended_on: extended_on
+        sap_cluster: sap_cluster
+      distinct: true  
+
+  - kind: group
+    name: group_dm_vendor_company
+    context_name: select_dm_vendor_company
+    params:
+      - aggs:
+          extended_on: min
+        by:
+        - vendor_code
+        - sap_cluster
+
+  - kind: join
+    name: join_dm_vendor_company
+    context_name: select_dm_vendor_company
+    params:
+      - other:
+          group_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+          extended_on: min_extended_on
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dm_vendor_company_min_extended_on
+    context_name: union_details_2
+    params:
+      - other:
+          join_dm_vendor_company
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_blank_tax_iban_and_country_code
+    context_name: join_dm_vendor_company_min_extended_on
+    params:
+      - column: max_tax_0_value
+        expression: "''"
+        overwrite: true
+      - column: max_tax_1_value
+        expression: '""'
+        overwrite: true
+      - column: max_tax_2_value
+        expression: '""'
+        overwrite: true
+      - column: max_tax_3_value
+        expression: '""'
+        overwrite: true
+      - column: max_tax_4_value
+        expression: '""'
+        overwrite: true
+      - column: max_tax_5_value
+        expression: '""'
+        overwrite: true
+      - column: iban
+        expression: '""'
+        overwrite: true
+      - column: country_code
+        expression: country_code_vc
+        overwrite: true
+
+  - kind: select
+    name: select_final_details
+    context_name: add_blank_tax_iban_and_country_code
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+        vendor_account_group_code: vendor_account_group_code
+        vendor_name: vendor_name
+        customer_code: customer_code
+        corporate_vendor_code: corporate_vendor_code
+        addressability_flag: addressability_flag
+        sap_cluster: sap_cluster
+        iban: iban
+        max_tax_0_value: tax_0_value
+        max_tax_1_value: tax_1_value
+        max_tax_2_value: tax_2_value
+        max_tax_3_value: tax_3_value
+        max_tax_4_value: tax_4_value
+        max_tax_5_value: tax_5_value
+        linked_by_vendor_code: linked_by_vendor_code
+        linked_by_country_of_origin: linked_by_country_code
+        linked_by_vendor_account_group_code: linked_by_vendor_account_group_code
+        linked_by_vendor_name: linked_by_vendor_name
+        linked_by_customer_code: linked_by_customer_code
+        linked_by_corporate_vendor_code: linked_by_corporate_vendor_code
+        linked_by_addressability_flag: linked_by_addressability_flag
+        duplicated_by_vendor_code: duplicated_by_vendor_code
+        duplicated_by_vendor_name: duplicated_by_vendor_name
+        duplicated_by_customer_code: duplicated_by_customer_code
+        duplicated_by_corporate_vendor_code: duplicated_by_corporate_vendor_code
+        duplicated_by_addressability_flag: duplicated_by_addressability_flag
+        duplicated_by_tax_value: duplicated_by_tax_value
+        duplicated_by_bank_value: duplicated_by_bank_value
+        duplicated_by_tax0_flag: duplicated_by_tax0_flag
+        duplicated_by_tax1_flag: duplicated_by_tax1_flag
+        duplicated_by_tax2_flag: duplicated_by_tax2_flag
+        duplicated_by_tax3_flag: duplicated_by_tax3_flag
+        duplicated_by_tax4_flag: duplicated_by_tax4_flag
+        duplicated_by_tax5_flag: duplicated_by_tax5_flag
+        duplicated_by_iban_flag: duplicated_by_iban_flag
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        quality_rule: quality_rule
+        quality_category: quality_category
+        rule_name: rule_name
+      distinct: true
+
+  - kind: write_dataio
+    name: write_vendor_link_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: vendor_link_customer
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full
+
+#--------------AGGREGATED----------------
+  - kind: select
+    name: select_aggregated
+    context_name: select_final_details
+    params:
+      columns:
+        country_code: country_code
+        quality_category: quality_category
+        quality_rule: quality_rule
+        rule_name: rule_name
+        dq_flag_output: dq_flag_output
+        duplicated_by_tax0_flag: duplicated_by_tax0_flag
+        duplicated_by_tax1_flag: duplicated_by_tax1_flag
+        duplicated_by_tax2_flag: duplicated_by_tax2_flag
+        duplicated_by_tax3_flag: duplicated_by_tax3_flag
+        duplicated_by_tax4_flag: duplicated_by_tax4_flag
+        duplicated_by_tax5_flag: duplicated_by_tax5_flag
+        duplicated_by_iban_flag: duplicated_by_iban_flag
+
+  - kind: add
+    name: add_totals
+    context_name: select_aggregated
+    params:
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: if(dq_flag_output is not null and dq_flag_output != '', 1, null)
+      - column: failed_checks
+        expression: if(dq_flag_output = '0', 1, null)
+
+  - kind: group
+    name: group_aggregated
+    context_name: add_totals
+    params:
+      - aggs:
+           total_records: count
+           total_checks: count
+           failed_checks: count
+           duplicated_by_tax0_flag: sum
+           duplicated_by_tax1_flag: sum
+           duplicated_by_tax2_flag: sum
+           duplicated_by_tax3_flag: sum
+           duplicated_by_tax4_flag: sum
+           duplicated_by_tax5_flag: sum
+           duplicated_by_iban_flag: sum
+        by:
+        -  country_code
+        -  quality_rule
+        -  quality_category
+        -  rule_name
+
+  - kind: cast
+    name: cast_aggregated_int
+    context_name: group_aggregated
+    params:
+      - column: count_total_records
+        to: int
+      - column: count_total_checks
+        to: int
+      - column: count_failed_checks
+        to: int
+      - column: sum_duplicated_by_tax0_flag
+        to: int
+      - column: sum_duplicated_by_tax1_flag
+        to: int
+      - column: sum_duplicated_by_tax2_flag
+        to: int
+      - column: sum_duplicated_by_tax3_flag
+        to: int
+      - column: sum_duplicated_by_tax4_flag
+        to: int
+      - column: sum_duplicated_by_tax5_flag
+        to: int
+      - column: sum_duplicated_by_iban_flag
+        to: int
+
+  - kind: cast
+    name: cast_aggregated_str
+    context_name: cast_aggregated_int
+    params:
+      - column: sum_duplicated_by_tax0_flag
+        to: string
+      - column: sum_duplicated_by_tax1_flag
+        to: string
+      - column: sum_duplicated_by_tax2_flag
+        to: string
+      - column: sum_duplicated_by_tax3_flag
+        to: string
+      - column: sum_duplicated_by_tax4_flag
+        to: string
+      - column: sum_duplicated_by_tax5_flag
+        to: string
+      - column: sum_duplicated_by_iban_flag
+        to: string
+
+  - kind: add
+    name: add_loading_date
+    context_name: cast_aggregated_str
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_aggregated_final
+    context_name: add_loading_date
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_category: quality_category
+        quality_rule: quality_rule
+        rule_name: rule_name
+        count_failed_checks: failed_checks
+        sum_duplicated_by_tax0_flag: duplicated_by_tax0_flag
+        sum_duplicated_by_tax1_flag: duplicated_by_tax1_flag
+        sum_duplicated_by_tax2_flag: duplicated_by_tax2_flag
+        sum_duplicated_by_tax3_flag: duplicated_by_tax3_flag
+        sum_duplicated_by_tax4_flag: duplicated_by_tax4_flag
+        sum_duplicated_by_tax5_flag: duplicated_by_tax5_flag
+        sum_duplicated_by_iban_flag: duplicated_by_iban_flag
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: vendor_link_customer
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

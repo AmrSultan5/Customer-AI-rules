@@ -1,0 +1,756 @@
+transform:
+  name: vendor_suppression
+  operations:
+  - kind: read_dataio
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_general
+      schema_version: v3
+
+  - kind: read_dataio
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_company
+      schema_version: v2
+
+  - kind: read_dataio
+    name: read_dm_vendor_purchase_org
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_vendor_purchase_org
+      schema_version: v3
+
+  - kind: read_dataio
+    name: read_dm_accounting_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_accounting_documents
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_purchase_orders
+      schema_version: v2
+
+  - kind: read_dataio
+    name: read_company_code_purchase_org_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: company_code_purchase_org_matrix
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_cockpit_thdr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: vendor
+      object_name: cockpit_thdr
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      - condition:
+          sap_cluster = 'CL1' and account_group_code = '4000' and vendor_code like '4%'
+
+  - kind: filter
+    name: filter_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      - condition:
+          sap_cluster = 'CL1'
+
+  - kind: filter
+    name: filter_dm_vendor_purchase_org
+    context_name: read_dm_vendor_purchase_org
+    params:
+      - condition:
+          sap_cluster = 'CL1'
+
+  - kind: filter
+    name: filter_dm_accounting_documents
+    context_name: read_dm_accounting_documents
+    params:
+      - condition:
+          (document_status not in('M', 'D') and account_type = 'K' and source = 'Active') or (source = 'Cleared' and archive_flag = 'X')
+
+  - kind: add
+    name: add_cockpit_doc_date
+    context_name: read_cockpit_thdr
+    params:
+      - column: doc_date_parsed
+        expression: to_date(cast(doc_date as string), 'yyyyMMdd')
+
+  - kind: filter
+    name: filter_cockpit_case1
+    context_name: add_cockpit_doc_date
+    params:
+      - condition:
+          status in ('01', '02', '05') and vendor_no like '4%'
+
+  - kind: select
+    name: select_cockpit_case1_keys
+    context_name: filter_cockpit_case1
+    params:
+      columns:
+        vendor_no: vendor_code_c1
+        comp_code: company_code_c1
+      distinct: true
+
+  - kind: filter
+    name: filter_cockpit_case2
+    context_name: add_cockpit_doc_date
+    params:
+      - condition:
+          status in ('01', '03', '05', '06') and vendor_no like '4%' and doc_date_parsed >= add_months(current_date(), -13)
+
+  - kind: select
+    name: select_cockpit_case2_keys
+    context_name: filter_cockpit_case2
+    params:
+      columns:
+        vendor_no: vendor_code_c2
+        comp_code: company_code_c2
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: filter_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_name: vendor_name
+        account_group_code: account_group_code
+        is_active: is_active_vg
+        created_on: created_on_vg
+        last_unblock_date: last_unblock_date_vg
+        deletion_flag: deletion_flag_vg
+        country_code: country_code_vg
+        posting_block: posting_block_vg
+        purchasing_block: purchasing_block_vg
+        deletion_block: deletion_block_vg
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: filter_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        is_active: is_active_vc
+        created_on: created_on_vc
+        last_unblock_date: last_unblock_date_vc
+        extended_on: extended_on
+        deletion_flag: deletion_flag_vc
+        country_code: country_code_vc
+        deletion_block: deletion_block_vc
+        posting_block: posting_block_vc
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_vendor_company_keys
+    context_name: select_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_purchase_org
+    context_name: filter_dm_vendor_purchase_org
+    params:
+      columns:
+        vendor_code: vendor_code
+        purchasing_organization: purchasing_organization
+        country_code: country_code_vp
+        is_active: is_active_vp
+        deletion_flag: deletion_flag_vp
+        purchasing_block: purchasing_block_vp
+        last_unblock_date: last_unblock_date_vp
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_accounting_documents
+    context_name: filter_dm_accounting_documents
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        posting_date: posting_date
+        accounting_document_number: accounting_document_number
+        source: source
+        document_number_of_clearing: document_number_of_clearing
+        clearing_date: clearing_date
+        archive_flag: archive_flag
+      distinct: true
+
+  - kind: select
+    name: select_dm_purchase_orders
+    context_name: read_dm_purchase_orders
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        purchasing_organization: purchasing_organization
+        purchasing_document_number: purchasing_document_number
+        order_created_when: order_created_when
+        invoice_completion_flag: invoice_completion_flag
+        delivery_completion_flag: delivery_completion_flag
+        amount_ordered: amount_ordered
+        amount_history: amount_history
+        quantity_ordered: quantity_ordered
+        quantity_history: quantity_history
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_accounting_docs
+    context_name: select_dm_accounting_documents
+
+  - kind: group
+    name: group_pre_acct_doc_date
+    context_name: checkpoint_accounting_docs
+    params:
+      - aggs:
+          posting_date: max
+        by:
+        - vendor_code
+        - company_code
+
+  - kind: join
+    name: join_pre_acct_all_docs
+    context_name: checkpoint_accounting_docs
+    params:
+      - other:
+          group_pre_acct_doc_date
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+          company_code: company_code
+
+  - kind: add
+    name: add_pre_acct_flags
+    context_name: join_pre_acct_all_docs
+    params:
+      - column: accounting_document_date
+        expression: if(max_posting_date < add_months(current_date(), if(company_code = '0590', -13, -12)), cast(null as timestamp), max_posting_date)
+      - column: accounting_items_opened_val
+        expression: if(isnull(accounting_document_date), -1,
+                    if(posting_date >= add_months(current_date(), if(company_code = '0590', -13, -12)) and (isnull(document_number_of_clearing)
+                    or document_number_of_clearing = '')
+                    and source = 'Active', 1,
+                    if(posting_date < add_months(current_date(), if(company_code = '0590', -13, -12)) and (isnull(document_number_of_clearing)
+                    or document_number_of_clearing = '')
+                    and source = 'Active' and isnull(clearing_date), 1,
+                    0)))
+      - column: accounting_items_parked_val
+        expression: if(isnull(accounting_document_date), -1,
+                    if(posting_date >= add_months(current_date(), if(company_code = '0590', -13, -12)) and (((isnotnull(document_number_of_clearing)
+                    and document_number_of_clearing <> '')
+                    and source = 'Active') or (source = 'Cleared' and archive_flag = 'X')), 1,
+                    if(posting_date < add_months(current_date(), if(company_code = '0590', -13, -12)) and (((isnotnull(document_number_of_clearing)
+                    and document_number_of_clearing <> '')
+                    and source = 'Active' and isnull(clearing_date)) or (source = 'Cleared' and archive_flag = 'X')), 1,
+                    0)))
+      - column: acct_doc_for_max_date
+        expression: if(posting_date = max_posting_date, accounting_document_number, null)
+
+  - kind: group
+    name: group_pre_acct_flags
+    context_name: add_pre_acct_flags
+    params:
+      - aggs:
+          accounting_items_opened_val: max
+          accounting_items_parked_val: max
+          posting_date: max
+          acct_doc_for_max_date: max
+        by:
+        - vendor_code
+        - company_code
+
+  - kind: select
+    name: select_pre_acct
+    context_name: group_pre_acct_flags
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        max_accounting_items_opened_val: max_accounting_items_opened_val
+        max_accounting_items_parked_val: max_accounting_items_parked_val
+        max_posting_date: max_posting_date
+        max_acct_doc_for_max_date: max_accounting_document_number
+
+  - kind: checkpoint
+    name: checkpoint_pre_acct
+    context_name: select_pre_acct
+
+  - kind: join
+    name: join_po_with_matrix
+    context_name: select_dm_purchase_orders
+    params:
+      - other:
+          read_company_code_purchase_org_matrix
+        how:
+          inner
+        columns:
+          company_code: company_code
+          purchasing_organization: purchasing_organization
+      - other:
+          select_vendor_company_keys
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+          company_code: company_code
+
+  - kind: select
+    name: select_po_filtered
+    context_name: join_po_with_matrix
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        purchasing_organization: purchasing_organization
+        order_created_when: order_created_when
+        amount_ordered: amount_ordered
+        amount_history: amount_history
+        quantity_ordered: quantity_ordered
+        quantity_history: quantity_history
+      distinct: true
+
+  - kind: group
+    name: group_pre_po_date
+    context_name: select_po_filtered
+    params:
+      - aggs:
+          order_created_when: max
+        by:
+        - vendor_code
+        - purchasing_organization
+
+  - kind: select
+    name: select_pre_po_date
+    context_name: group_pre_po_date
+    params:
+      columns:
+        vendor_code: vendor_code
+        purchasing_organization: purchasing_organization
+        max_order_created_when: cross_company_max_po_date
+
+  - kind: group
+    name: group_pre_po_per_company
+    context_name: select_po_filtered
+    params:
+      - aggs:
+          order_created_when: max
+          amount_ordered: sum
+          amount_history: sum
+          quantity_ordered: sum
+          quantity_history: sum
+        by:
+        - vendor_code
+        - company_code
+        - purchasing_organization
+
+  - kind: checkpoint
+    name: checkpoint_pre_po_per_company
+    context_name: group_pre_po_per_company
+
+  - kind: join
+    name: join_vendor_master
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_vendor_purchase_org
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+          country_code_vc: country_code_vp
+          sap_cluster: sap_cluster
+      - other:
+          read_company_code_purchase_org_matrix
+        how:
+          inner
+        columns:
+          company_code: company_code
+          purchasing_organization: purchasing_organization
+
+  - kind: join
+    name: join_vendor_suppression_final
+    context_name: join_vendor_master
+    params:
+      - other:
+          checkpoint_pre_acct
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          company_code: company_code
+      - other:
+          select_pre_po_date
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          purchasing_organization: purchasing_organization
+      - other:
+          checkpoint_pre_po_per_company
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          company_code: company_code
+          purchasing_organization: purchasing_organization
+      - other:
+          select_cockpit_case1_keys
+        how:
+          left
+        columns:
+          vendor_code: vendor_code_c1
+          company_code: company_code_c1
+      - other:
+          select_cockpit_case2_keys
+        how:
+          left
+        columns:
+          vendor_code: vendor_code_c2
+          company_code: company_code_c2
+
+  - kind: add
+    name: add_vendor_suppression_val
+    context_name: join_vendor_suppression_final
+    params:
+      - column: accounting_document_date
+        expression: if(max_posting_date < add_months(current_date(), if(company_code = '0590', -13, -12)), cast(null as timestamp), max_posting_date)
+      - column: accounting_document_number_out
+        expression: if(isnull(accounting_document_date), cast(null as string), max_accounting_document_number)
+      - column: purchase_document_date
+        expression: if(cross_company_max_po_date < add_months(current_date(), if(company_code = '0590', -13, -12)), cast(null as timestamp), cross_company_max_po_date)
+      - column: max_po_item_to_invoice_val
+        expression: if(isnotnull(max_order_created_when) and max_order_created_when >= add_months(current_date(), if(company_code = '0590', -13, -12))
+                    and sum_amount_ordered = sum_amount_history, 0,
+                    if(isnotnull(max_order_created_when) and max_order_created_when >= add_months(current_date(), if(company_code = '0590', -13, -12))
+                    and sum_amount_ordered <> sum_amount_history, 1,
+                    -1))
+      - column: max_po_item_to_deliver_val
+        expression: if(isnotnull(max_order_created_when) and max_order_created_when >= add_months(current_date(), if(company_code = '0590', -13, -12))
+                    and sum_quantity_ordered = sum_quantity_history, 0,
+                    if(isnotnull(max_order_created_when) and max_order_created_when >= add_months(current_date(), if(company_code = '0590', -13, -12))
+                    and sum_quantity_ordered <> sum_quantity_history, 1,
+                    -1))
+
+  - kind: add
+    name: add_du_vendor_suppression
+    context_name: add_vendor_suppression_val
+    params:
+      - column: accounting_items_opened_flag
+        expression: if(isnull(max_accounting_items_opened_val) or max_accounting_items_opened_val = -1, '',
+                    if(max_accounting_items_opened_val = 0, '0',
+                    '1'))
+      - column: accounting_items_parked_flag
+        expression: if(isnull(max_accounting_items_parked_val) or max_accounting_items_parked_val = -1, '',
+                    if(max_accounting_items_parked_val = 0, '0',
+                    '1'))
+      - column: po_item_to_invoice_flag
+        expression: if(max_po_item_to_invoice_val = -1, '',
+                    if(max_po_item_to_invoice_val = 1, '1',
+                    '0'))
+      - column: po_item_to_deliver_flag
+        expression: if(max_po_item_to_deliver_val = -1, '',
+                    if(max_po_item_to_deliver_val = 1, '1',
+                    '0'))
+      - column: vendor_activity_status
+        expression: if(is_active_vg = '0' or is_active_vc = '0' or is_active_vp = '0', '0', '1')
+      - column: new_vendor_status
+        expression: if(company_code = '0590'
+                    and (created_on_vg <= add_months(current_date(), -13) or created_on_vc <= add_months(current_date(), -13)
+                    or extended_on <= add_months(current_date(), -13)), '1',
+                    if((company_code <> '0590' or isnull(company_code))
+                    and (created_on_vg <= add_months(current_date(), -12) or created_on_vc <= add_months(current_date(), -12)
+                    or extended_on <= add_months(current_date(), -12)), '1',
+                    '0'))
+      - column: last_year_unblock_date
+        expression: if(greatest(last_unblock_date_vg, last_unblock_date_vc, last_unblock_date_vp) >= add_months(current_date(), if(company_code = '0590', -14, -13)),
+                    greatest(last_unblock_date_vg, last_unblock_date_vc, last_unblock_date_vp), null)
+      - column: block_status
+        expression: if(deletion_flag_vg = '' and posting_block_vc = '' and posting_block_vg = '' and purchasing_block_vg = ''
+                    and deletion_block_vg = '' and deletion_flag_vc = '' and deletion_flag_vp = '' and purchasing_block_vp = '', '1', '0')
+      - column: vendor_suppression_flag
+        expression: if(new_vendor_status = '0', '1',
+                    if(isnotnull(last_year_unblock_date), '1',
+                    if(block_status = '0'
+                    and (deletion_flag_vc = '' and deletion_flag_vp = '' and purchasing_block_vp = '' and posting_block_vc = ''), '1',
+                    if(block_status = '0'
+                    and (deletion_flag_vg = 'X' and posting_block_vg = 'X' and purchasing_block_vg = 'X' and deletion_block_vg = 'X'), '1',
+                    if(block_status = '0', '1',
+                    if(block_status = '1'
+                    and (accounting_items_opened_flag <> '1' and accounting_items_parked_flag <> '1' and po_item_to_invoice_flag <> '1' and po_item_to_deliver_flag <> '1')
+                    and (purchase_document_date < add_months(current_date(), if(company_code = '0590', -13, -12)) or isnull(purchase_document_date))
+                    and (accounting_document_date < add_months(current_date(), if(company_code = '0590', -13, -12)) or isnull(accounting_document_date)), '0',
+                    '1'))))))
+      - column: vendor_suppression_output
+        expression: if(new_vendor_status = '0', 'Active Vendor - Newly Created',
+                    if(isnotnull(last_year_unblock_date), 'Active Vendor',
+                    if(block_status = '0'
+                    and (deletion_flag_vc = '' and deletion_flag_vp = '' and purchasing_block_vp = '' and posting_block_vc = ''), 'Inactive Vendor Not Fully Blocked - No Subject to Supprestion Routine',
+                    if(block_status = '0'
+                    and (deletion_flag_vg = 'X' and posting_block_vg = 'X' and purchasing_block_vg = 'X' and deletion_block_vg = 'X'), 'Inactive Vendor - Properly Blocked',
+                    if(block_status = '0', 'Inactive Vendor Not Fully Blocked - No Subject to Supprestion Routine',
+                    if(block_status = '1'
+                    and (accounting_items_opened_flag <> '1' and accounting_items_parked_flag <> '1' and po_item_to_invoice_flag <> '1' and po_item_to_deliver_flag <> '1')
+                    and (purchase_document_date < add_months(current_date(), if(company_code = '0590', -13, -12)) or isnull(purchase_document_date))
+                    and (accounting_document_date < add_months(current_date(), if(company_code = '0590', -13, -12)) or isnull(accounting_document_date)), 'Inactive Vendor - Suggested for Suppression',
+                    'Active Vendor'))))))
+      - column: country_code_company
+        expression: lower(country_code_vc)
+      - column: cockpit_flag
+        expression: if(isnotnull(vendor_code_c1) or isnotnull(vendor_code_c2), '1', '0')
+
+  - kind: select
+    name: select_du_vendor_suppression
+    context_name: add_du_vendor_suppression
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_name: vendor_name
+        account_group_code: account_group_code
+        vendor_activity_status: vendor_activity_status
+        new_vendor_status: new_vendor_status
+        created_on_vg: vendor_created_on
+        extended_on: extended_on
+        last_year_unblock_date: last_year_unblock_date
+        block_status: block_status
+        company_code: company_code
+        purchasing_organization: purchasing_organization
+        deletion_flag_vg: deletion_flag_general
+        country_code_vg: country_code_general
+        country_code_company: country_code_company
+        posting_block_vg: posting_block_general
+        purchasing_block_vg: purchasing_block_general
+        posting_block_vc: specific_company_code_block
+        deletion_block_vg: deletion_block_general
+        deletion_block_vc: deletion_block_company
+        deletion_flag_vc: deletion_flag_company
+        deletion_flag_vp: deletion_flag_po
+        purchasing_block_vp: purchase_flag_po
+        purchase_document_date: purchase_document_date
+        accounting_document_date: accounting_document_date
+        accounting_document_number_out: accounting_document_number
+        accounting_items_opened_flag: accounting_items_opened_flag
+        accounting_items_parked_flag: accounting_items_parked_flag
+        po_item_to_invoice_flag: po_item_to_invoice_flag
+        po_item_to_deliver_flag: po_item_to_deliver_flag
+        vendor_suppression_flag: vendor_suppression_flag
+        vendor_suppression_output: vendor_suppression
+        cockpit_flag: cockpit_flag
+      distinct: true
+
+  - kind: add
+    name: add_vendor_suppression_detailed
+    context_name: select_du_vendor_suppression
+    params:
+      - column: accounting_items_opened
+        expression: if(accounting_items_opened_flag = '1', 'Yes',
+                    if(accounting_items_opened_flag = '0', 'No',
+                    ''))
+      - column: accounting_items_parked
+        expression: if(accounting_items_parked_flag = '1', 'Yes',
+                    if(accounting_items_parked_flag = '0', 'No',
+                    ''))
+      - column: po_item_to_invoice
+        expression: if(po_item_to_invoice_flag = '1', 'Yes',
+                    if(po_item_to_invoice_flag = '0', 'No',
+                    ''))
+      - column: po_item_to_deliver
+        expression: if(po_item_to_deliver_flag = '1', 'Yes',
+                    if(po_item_to_deliver_flag = '0', 'No',
+                    ''))
+
+  - kind: select
+    name: select_vendor_suppression_detailed
+    context_name: add_vendor_suppression_detailed
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_name: vendor_name
+        account_group_code: account_group_code
+        vendor_created_on: vendor_created_on
+        extended_on: extended_on
+        last_year_unblock_date: last_year_unblock_date
+        block_status: block_status
+        company_code: company_code
+        purchasing_organization: purchasing_organization
+        deletion_flag_general: deletion_flag_general
+        country_code_general: country_code_general
+        country_code_company: country_code_company
+        posting_block_general: posting_block_general
+        purchasing_block_general: purchasing_block_general
+        specific_company_code_block: specific_company_code_block
+        deletion_block_general: deletion_block_general
+        deletion_block_company: deletion_block_company
+        deletion_flag_company: deletion_flag_company
+        deletion_flag_po: deletion_flag_po
+        purchase_flag_po: purchase_flag_po
+        purchase_document_date: purchase_document_date
+        accounting_document_date: accounting_document_date
+        accounting_document_number: accounting_document_number
+        accounting_items_opened: accounting_items_opened
+        accounting_items_parked: accounting_items_parked
+        po_item_to_invoice: po_item_to_invoice
+        po_item_to_deliver: po_item_to_deliver
+        vendor_suppression: vendor_suppression
+        cockpit_flag: cockpit_flag
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: vendor_suppression
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full
+
+  - kind: add
+    name: add_vendor_suppression_aggregated
+    context_name: select_du_vendor_suppression
+    params:
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: if(vendor_suppression_flag in ('0', '1'), 1, null)
+      - column: failed_checks
+        expression: if(vendor_suppression_flag = '0', 1, null)
+      - column: loading_date
+        expression: current_date()
+
+  - kind: group
+    name: group_vendor_suppression_aggregated
+    context_name: add_vendor_suppression_aggregated
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          failed_checks: count
+        by:
+        - country_code_company
+        - company_code
+
+  - kind: cast
+    name: cast_vendor_suppression_aggregated
+    context_name: group_vendor_suppression_aggregated
+    params:
+      - column: count_total_records
+        to: int
+      - column: count_total_checks
+        to: int
+      - column: count_failed_checks
+        to: int
+
+  - kind: add
+    name: add_loading_date_and_quality_category
+    context_name: cast_vendor_suppression_aggregated
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: quality_category
+        expression: "'completeness'"
+
+  - kind: select
+    name: select_vendor_suppression_aggregated
+    context_name: add_loading_date_and_quality_category
+    params:
+      columns:
+        country_code_company: country_code
+        company_code: company_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_failed_checks: failed_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: vendor_suppression
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

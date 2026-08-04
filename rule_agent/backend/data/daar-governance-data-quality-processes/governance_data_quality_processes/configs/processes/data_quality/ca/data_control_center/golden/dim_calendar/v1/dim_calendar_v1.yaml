@@ -1,0 +1,85 @@
+transform:
+  name: dim_calendar
+  operations:
+
+# Read date
+
+  - kind: read_dataio
+    name: read_date
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: date
+      schema_version: v2
+
+  #Select date
+
+  - kind: select
+    name: select_date
+    context_name: read_date
+    params:
+      columns:
+        date_id: date_id_1
+        year_445: year
+        month_445: month
+        week_445: week
+      distinct: true
+
+
+  - kind: add
+    name: add_date_id
+    params:
+      - column: date_id
+        expression: "to_date(date_id_1,'YYYY-MM-DD')"
+
+  - kind: add
+    name: add_week_sequential
+    params:
+      - column: week_sequential
+        expression: "DENSE_RANK() OVER ( ORDER BY concat(year,lpad(week,2,'0')) ASC)"
+
+  - kind: add
+    name: add_year_week
+    params:
+      - column: year_week
+        expression: concat(year,'w',lpad(week,2,'0'))
+
+
+  - kind: add
+    name: add_start_of_week
+    params:
+      - column: start_of_week
+        expression: "date_id - weekday(date_id)"  
+
+  - kind: select
+    name: select_date_final
+    params:
+      columns:
+        date_id: date_id
+        year: year
+        month: month
+        week: week
+        week_sequential: week_sequential
+        year_week: year_week
+        start_of_week: start_of_week
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dim_calendar
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_calendar
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

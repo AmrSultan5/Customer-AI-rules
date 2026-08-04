@@ -1,0 +1,110 @@
+transform:
+  name: dm_product_uom
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_marm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: marm
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t006a
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t006a
+
+  - kind: filter
+    name: filter_t006a
+    params:
+      - condition:
+          spras = 'E'  
+
+  - kind: select
+    name: select_t006a
+    context_name: filter_t006a
+    params:
+      columns:
+        msehi: t006a_msehi
+        msehl: t006a_msehl
+        spras: t006a_spras             
+        sap_cluster: t006a_sap_cluster     
+
+  - kind: select
+    name: select_marm
+    context_name: read_marm
+    params:
+      columns:
+        matnr: marm_matnr
+        ean11: marm_ean11  
+        umren: marm_umren
+        umrez: marm_umrez
+        meinh: marm_meinh
+        volum: marm_volum
+        voleh: marm_voleh               
+        sap_cluster: marm_sap_cluster           
+                   
+  - kind: join
+    context_name: select_marm 
+    name: join_marm_t006a
+    params:
+      - other:
+          select_t006a
+        how:
+          left
+        columns:
+          marm_meinh: t006a_msehi
+          marm_sap_cluster: t006a_sap_cluster       
+
+  - kind: add
+    name: add_dm_product_uom
+    params:
+      - column: conversion_factor
+        expression: marm_umrez/marm_umren          
+
+  - kind: select
+    name: select_dm_product_uom
+    params:
+      columns:
+        marm_matnr: material_code
+        marm_ean11: ean_code
+        marm_umren: conversion_denominator
+        marm_umrez: conversion_numerator
+        conversion_factor: conversion_factor
+        marm_meinh: alternative_unit_of_measure_code
+        t006a_msehl: alternative_unit_of_measure_name
+        marm_volum: volume
+        marm_voleh: volume_unit                      
+        marm_sap_cluster: sap_cluster  
+
+  - kind: write_dataio
+    name: write_dm_product_uom
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_uom
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full      

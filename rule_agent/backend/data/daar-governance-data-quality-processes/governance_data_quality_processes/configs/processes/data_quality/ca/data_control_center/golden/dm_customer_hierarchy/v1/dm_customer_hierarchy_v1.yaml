@@ -1,0 +1,549 @@
+transform:
+  name: dm_customer_hierarchy
+  operations:
+  - kind: read_dataio
+    name: read_knvh
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvh
+      schema_version: v1
+
+
+  - kind: read_dataio
+    name: read_thioz
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      namespace: reference_data
+      object_name: thioz
+      schema_version: v1
+      source: sap_s4hana
+
+  - kind: select
+    name: select_thioz
+    context_name: read_thioz
+    params:
+      columns:
+        vkorg: vkorg_th
+        vtweg: vtweg_th
+        spart: spart_th
+        hvkorg: hvkorg_th
+        hvtweg: hvtweg_th
+        hspart: hspart_th
+        sap_cluster: sap_cluster_th
+
+  - kind: select
+    name: select_l7_knvh
+    context_name: read_knvh
+    params:
+      columns:
+        kunnr: l7_customer_code
+        spart: l7_division_code
+        vtweg: l7_distribution_channel_code
+        datab: l7_customer_valid_from
+        datbi: l7_customer_valid_to
+        vkorg: l7_sales_org_code
+        hspart: l6_division_code
+        hvtweg: l6_distribution_channel_code
+        hvkorg: l6_sales_org_code
+        sap_cluster: sap_cluster_l7
+        hzuor: hzuor
+        hkunnr: hkunnr_l7
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_l7_knvh
+    params:
+      - condition:
+          (hzuor = 0)
+
+  - kind: group
+    name: group_l7_knvh
+    params:
+      - aggs:
+          l7_customer_valid_to: max
+        by:
+        - l7_customer_code
+        - l7_division_code
+        - l7_distribution_channel_code
+        - l7_sales_org_code
+        - sap_cluster_l7
+
+  - kind: select
+    name: select_l7_grouped
+    params:
+      columns:
+        l7_customer_code: l7_customer_code_grp
+        l7_division_code: l7_division_code_grp
+        l7_distribution_channel_code: l7_distribution_channel_code_grp
+        l7_sales_org_code: l7_sales_org_code_grp
+        sap_cluster_l7: sap_cluster_l7_grp
+        max_l7_customer_valid_to: l7_customer_valid_to_grp
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_knvh_l7
+    context_name: select_l7_grouped
+    params:
+      - other:
+          select_l7_knvh
+        how:
+          inner
+        columns:
+          l7_customer_code_grp: l7_customer_code
+          l7_division_code_grp: l7_division_code
+          l7_distribution_channel_code_grp: l7_distribution_channel_code
+          l7_sales_org_code_grp: l7_sales_org_code
+          sap_cluster_l7_grp: sap_cluster_l7
+          l7_customer_valid_to_grp: l7_customer_valid_to
+
+  - kind: select
+    name: select_l7_knvh_final
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_division_code: l7_division_code
+        l7_distribution_channel_code: l7_distribution_channel_code
+        l7_customer_valid_from: l7_customer_valid_from
+        l7_customer_valid_to: l7_customer_valid_to
+        l7_sales_org_code: l7_sales_org_code
+        l6_division_code: l6_division_code
+        l6_distribution_channel_code: l6_distribution_channel_code
+        l6_sales_org_code: l6_sales_org_code
+        sap_cluster_l7: sap_cluster_l7
+        hkunnr_l7: hkunnr_l7
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_l6_knvh
+    context_name: read_knvh
+    params:
+      columns:
+        kunnr: l6_customer_code
+        sap_cluster: sap_cluster_l6
+        hzuor: hzuor
+        datbi: datbi_l6
+        hvkorg: hvkorg_l6
+        vtweg: vtweg_l6
+        spart: spart_l6
+        hkunnr: hkunnr_l6
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_l6_knvh
+    params:
+      - condition:
+          (hzuor = 6)
+
+  - kind: group
+    name: group_l6_knvh
+    params:
+      - aggs:
+          datbi_l6: max
+        by:
+        - l6_customer_code
+        - sap_cluster_l6
+        - hvkorg_l6
+        - vtweg_l6
+        - spart_l6
+
+  - kind: select
+    name: select_l6_grouped
+    params:
+      columns:
+        l6_customer_code: l6_customer_code_grp
+        hvkorg_l6: hvkorg_l6_grp
+        vtweg_l6: vtweg_l6_grp
+        spart_l6: spart_l6_grp
+        sap_cluster_l6: sap_cluster_l6_grp
+        max_datbi_l6: datbi_l6_grp
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_knvh_l6
+    context_name: select_l6_grouped
+    params:
+      - other:
+          select_l6_knvh
+        how:
+          inner
+        columns:
+          l6_customer_code_grp: l6_customer_code
+          hvkorg_l6_grp: hvkorg_l6
+          vtweg_l6_grp: vtweg_l6
+          spart_l6_grp: spart_l6
+          sap_cluster_l6_grp: sap_cluster_l6
+          datbi_l6_grp: datbi_l6
+
+  - kind: select
+    name: select_l6_knvh_final
+    context_name: join_knvh_l6
+    params:
+      columns:
+        l6_customer_code: l6_customer_code
+        sap_cluster_l6: sap_cluster_l6
+        datbi_l6: datbi_l6
+        hvkorg_l6: hvkorg_l6
+        vtweg_l6: vtweg_l6
+        spart_l6: spart_l6
+        hkunnr_l6: hkunnr_l6
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_l5_knvh
+    context_name: read_knvh
+    params:
+      columns:
+        kunnr: l5_customer_code
+        sap_cluster: sap_cluster_l5
+        hzuor: hzuor
+        datbi: datbi_l5
+        hkunnr: hkunnr_l5
+        hvkorg: hvkorg_l5
+        vtweg: vtweg_l5
+        spart: spart_l5
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_l5_knvh
+    params:
+      - condition:
+          (hzuor = 5)
+
+  - kind: group
+    name: group_l5_knvh
+    params:
+      - aggs:
+          datbi_l5: max
+        by:
+        - l5_customer_code
+        - sap_cluster_l5
+        - hvkorg_l5
+        - vtweg_l5
+        - spart_l5
+
+  - kind: select
+    name: select_l5_grouped
+    params:
+      columns:
+        l5_customer_code: l5_customer_code_grp
+        hvkorg_l5: hvkorg_l5_grp
+        vtweg_l5: vtweg_l5_grp
+        spart_l5: spart_l5_grp
+        sap_cluster_l5: sap_cluster_l5_grp
+        max_datbi_l5: datbi_l5_grp
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_knvh_l5
+    context_name: select_l5_grouped
+    params:
+      - other:
+          select_l5_knvh
+        how:
+          inner
+        columns:
+          l5_customer_code_grp: l5_customer_code
+          hvkorg_l5_grp: hvkorg_l5
+          vtweg_l5_grp: vtweg_l5
+          spart_l5_grp: spart_l5
+          sap_cluster_l5_grp: sap_cluster_l5
+          datbi_l5_grp: datbi_l5
+
+  - kind: select
+    name: select_l5_knvh_final
+    context_name: join_knvh_l5
+    params:
+      columns:
+        l5_customer_code: l5_customer_code
+        sap_cluster_l5: sap_cluster_l5
+        datbi_l5: datbi_l5
+        hvkorg_l5: hvkorg_l5
+        vtweg_l5: vtweg_l5
+        spart_l5: spart_l5
+        hkunnr_l5: hkunnr_l5
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_l4_knvh
+    context_name: read_knvh
+    params:
+      columns:
+        kunnr: l4_customer_code
+        hvkorg: l3_sales_org_code
+        sap_cluster: sap_cluster_l4
+        hzuor: hzuor
+        datbi: datbi_l4
+        hkunnr: hkunnr_l4
+        vtweg: vtweg_l4
+        spart: spart_l4
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_l4_knvh
+    params:
+      - condition:
+          (hzuor = 4)
+
+  - kind: group
+    name: group_l4_knvh
+    params:
+      - aggs:
+          datbi_l4: max
+        by:
+        - l4_customer_code
+        - l3_sales_org_code
+        - sap_cluster_l4
+        - vtweg_l4
+        - spart_l4
+
+  - kind: select
+    name: select_l4_grouped
+    params:
+      columns:
+        l4_customer_code: l4_customer_code_grp
+        l3_sales_org_code: l3_sales_org_code_grp
+        vtweg_l4: vtweg_l4_grp
+        spart_l4: spart_l4_grp
+        sap_cluster_l4: sap_cluster_l4_grp
+        max_datbi_l4: datbi_l4_grp
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_knvh_l4
+    context_name: select_l4_grouped
+    params:
+      - other:
+          select_l4_knvh
+        how:
+          inner
+        columns:
+          l4_customer_code_grp: l4_customer_code
+          l3_sales_org_code_grp: l3_sales_org_code
+          vtweg_l4_grp: vtweg_l4
+          spart_l4_grp: spart_l4
+          sap_cluster_l4_grp: sap_cluster_l4
+          datbi_l4_grp: datbi_l4
+
+  - kind: select
+    name: select_l4_knvh_final
+    context_name: join_knvh_l4
+    params:
+      columns:
+        l4_customer_code: l4_customer_code
+        sap_cluster_l4: sap_cluster_l4
+        datbi_l4: datbi_l4
+        l3_sales_org_code: l3_sales_org_code
+        vtweg_l4: vtweg_l4
+        spart_l4: spart_l4
+        hkunnr_l4: hkunnr_l4
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_l3_knvh
+    context_name: read_knvh
+    params:
+      columns:
+        kunnr: l3_customer_code
+        hkunnr: l2_customer_code
+        sap_cluster: sap_cluster_l3
+        hzuor: hzuor
+        datbi: datbi_l3
+        hvkorg: hvkorg_l3
+        vtweg: vtweg_l3
+        spart: spart_l3
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_l3_knvh
+    params:
+      - condition:
+          (hzuor = 3)
+
+  - kind: group
+    name: group_l3_knvh
+    params:
+      - aggs:
+          datbi_l3: max
+        by:
+        - l3_customer_code
+        - sap_cluster_l3
+        - hvkorg_l3
+        - vtweg_l3
+        - spart_l3
+
+
+  - kind: select
+    name: select_l3_grouped
+    params:
+      columns:
+        l3_customer_code: l3_customer_code_grp
+        hvkorg_l3: hvkorg_l3_grp
+        vtweg_l3: vtweg_l3_grp
+        spart_l3: spart_l3_grp
+        sap_cluster_l3: sap_cluster_l3_grp
+        max_datbi_l3: datbi_l3_grp
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_knvh_l3
+    context_name: select_l3_grouped
+    params:
+      - other:
+          select_l3_knvh
+        how:
+          inner
+        columns:
+          l3_customer_code_grp: l3_customer_code
+          hvkorg_l3_grp: hvkorg_l3
+          vtweg_l3_grp: vtweg_l3
+          spart_l3_grp: spart_l3
+          sap_cluster_l3_grp: sap_cluster_l3
+          datbi_l3_grp: datbi_l3
+
+  - kind: select
+    name: select_l3_knvh_final
+    context_name: join_knvh_l3
+    params:
+      columns:
+        l3_customer_code: l3_customer_code
+        sap_cluster_l3: sap_cluster_l3
+        datbi_l3: datbi_l3
+        hvkorg_l3: hvkorg_l3
+        vtweg_l3: vtweg_l3
+        spart_l3: spart_l3
+        l2_customer_code: l2_customer_code
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_l7_l6_l5_l4_l3_th
+    context_name: select_l7_knvh_final
+    params:
+      - other:
+          select_l6_knvh_final
+        how:
+          left
+        columns:
+          hkunnr_l7: l6_customer_code
+          l6_sales_org_code: hvkorg_l6
+          l7_distribution_channel_code: vtweg_l6
+          l7_division_code: spart_l6
+          sap_cluster_l7: sap_cluster_l6
+      - other:
+          select_l5_knvh_final
+        how:
+          left
+        columns:
+          hkunnr_l6: l5_customer_code
+          hvkorg_l6: hvkorg_l5
+          vtweg_l6: vtweg_l5
+          spart_l6: spart_l5
+          sap_cluster_l6: sap_cluster_l5
+      - other:
+          select_l4_knvh_final
+        how:
+          left
+        columns:
+          hkunnr_l5: l4_customer_code
+          hvkorg_l5: l3_sales_org_code
+          vtweg_l5: vtweg_l4
+          spart_l5: spart_l4
+          sap_cluster_l5: sap_cluster_l4
+      - other:
+          select_l3_knvh_final
+        how:
+          left
+        columns:
+          hkunnr_l4: l3_customer_code
+          l3_sales_org_code: hvkorg_l3
+          vtweg_l4: vtweg_l3
+          spart_l4: spart_l3
+          sap_cluster_l4: sap_cluster_l3
+      - other:
+          select_thioz
+        how:
+          left
+        columns:
+          l7_sales_org_code: vkorg_th
+          l7_distribution_channel_code: vtweg_th
+          l7_division_code: spart_th
+          l6_sales_org_code: hvkorg_th
+          l6_distribution_channel_code: hvtweg_th
+          l6_division_code: hspart_th
+          sap_cluster_l7: sap_cluster_th
+
+
+  - kind: add
+    name: add_l7_is_allowed_assignment
+    params:
+      - column: l7_is_allowed_assignment
+        expression: "CASE WHEN vkorg_th IS NOT NULL THEN '1' ELSE '0' END"
+
+
+  - kind: select
+    name: select_dm_customer_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_division_code: l7_division_code
+        l7_distribution_channel_code: l7_distribution_channel_code
+        l7_customer_valid_from: l7_customer_valid_from
+        l7_customer_valid_to: l7_customer_valid_to
+        l7_sales_org_code: l7_sales_org_code
+        l7_is_allowed_assignment: l7_is_allowed_assignment
+        l6_division_code: l6_division_code
+        l6_distribution_channel_code: l6_distribution_channel_code
+        l6_customer_code: l6_customer_code
+        l6_sales_org_code: l6_sales_org_code
+        l5_customer_code: l5_customer_code
+        l4_customer_code: l4_customer_code
+        l3_customer_code: l3_customer_code
+        l2_customer_code: l2_customer_code
+        l3_sales_org_code: l3_sales_org_code
+        sap_cluster_l7: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

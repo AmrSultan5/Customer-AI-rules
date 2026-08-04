@@ -1,0 +1,153 @@
+transform:
+  name: zg_partner_function_assignment
+  operations:
+
+#DETAILED
+#read zg_partner_function_assignment
+  - kind: read_dataio
+    name: read_du_zg_partner_function_assignment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: zg_partner_function_assignment
+      schema_version: v1
+
+  - kind: add
+    name: add_dq_output_message
+    params:
+      - column: dq_output_message
+        expression: IF(output_value == '0','Missing ZG Group','OK')
+
+  - kind: select
+    name: select_zg_partner_function_assignment
+    params:
+      columns:
+        sales_organization: sales_organization
+        country_code: country_code
+        customer_code: customer_code
+        customer_name: customer_name
+        partner_function: partner_function
+        assigned_bp_customer: assigned_bp_customer
+        order_block: order_block
+        order_block_description: order_block_description
+        hierarchy_level_4: hierarchy_level_4
+        level_4_description: level_4_description
+        hierarchy_level_3: hierarchy_level_3
+        level_3_description: level_3_description
+        customer_group_4: customer_group_4
+        customer_group_description: customer_group_description
+        trade_channel: trade_channel
+        trade_channel_description: trade_channel_description
+        sub_trade_channel: sub_trade_channel
+        sub_trade_channel_description: sub_trade_channel_description
+        dq_output_message: output_value
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: zg_partner_function_assignment
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#AGGREGATED
+#read zg_partner_function_assignment
+  - kind: read_dataio
+    name: read_du_zg_partner_function_assignment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: zg_partner_function_assignment
+      schema_version: v1
+
+  - kind: select
+    name: select_du_completeness
+    context_name: read_du_zg_partner_function_assignment
+    params:
+      columns:
+        country_code: country_code
+        level_4_description: hierarchy_level_4
+        level_3_description: hierarchy_level_3
+        output_value: output_value
+
+  - kind: add
+    name: add_aggregated_completeness
+    params:
+      - column: rule_name
+        expression: '"Missing ZG group"'
+      - column: total_checks
+        expression: CASE WHEN output_value!='' THEN '1' ELSE NULL END
+      - column: invalid_checks
+        expression: CASE WHEN output_value!= '1' THEN '1' ELSE NULL END
+ 
+  - kind: group
+    name: group_completeness
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: sum
+        by:
+        - country_code
+        - hierarchy_level_4
+        - hierarchy_level_3
+        - rule_name
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: count_total_checks
+        to: integer
+      - column: sum_invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_completeness
+    params:
+      columns:
+        rule_name: rule_name
+        country_code: country_code
+        hierarchy_level_4: hierarchy_level_4
+        hierarchy_level_3: hierarchy_level_3
+        sum_invalid_checks: invalid_checks
+        count_total_checks: total_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: zg_partner_function_assignment
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

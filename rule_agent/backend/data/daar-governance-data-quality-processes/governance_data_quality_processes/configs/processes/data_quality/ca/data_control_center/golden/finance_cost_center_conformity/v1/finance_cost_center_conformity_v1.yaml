@@ -1,0 +1,534 @@
+transform:
+  name: finance_cost_center_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_center_active
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center_active
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_profit_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_profit_center
+
+#READ conf_func_area_structure_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_func_area_structure
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_func_area_structure
+
+  - kind: select
+    name: select_dfcc
+    context_name: read_dm_finance_cost_center
+    params:
+      columns:
+        company_code: company_code
+        cost_center_number:  cost_center_number
+        person_responsible: person_responsible
+        functional_area: functional_area
+        profit_center: profit_center
+        cost_center_category: cost_center_category
+        is_cost_center_allowed: is_cost_center_allowed
+        controlling_area_code: controlling_area_code
+        standard_hierarchy_area: standard_hierarchy_area
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dfcc
+    context_name: select_dfcc
+    params:
+      - column: standard_hierarchy_area_substr
+        expression: SUBSTR(standard_hierarchy_area, 4, 20)
+
+  - kind: select
+    name: select_dfca
+    context_name: read_dm_finance_controlling_area
+    params:
+      columns:
+        company_code: company_code_dfca
+        country_code: country_code_dfca
+        controlling_area_code: controlling_area_code_dfca
+        sap_cluster: sap_cluster_dfca
+      distinct: true
+
+  - kind: select
+    name: select_dfcca
+    context_name: read_dm_finance_cost_center_active
+    params:
+      columns:
+        company_code: company_code_dfcca
+        cost_center_number:  cost_center_number_dfcca
+        sap_cluster: sap_cluster_dfcca
+      distinct: true
+
+  - kind: select
+    name: select_dfpc
+    context_name: read_dm_finance_profit_center
+    params:
+      columns:
+        profit_center: profit_center_dfpc
+        sap_cluster: sap_cluster_dfpc
+      distinct: true
+  
+  - kind: select
+    name: select_cfas
+    context_name: read_conf_func_area_structure
+    params:
+      columns:
+        hierarchy_format: hierarchy_format
+        func_area: func_area_cfas
+      distinct: true
+
+#READ cost_center_functional_area_matrix_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cost_center_functional_area_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cost_center_functional_area_matrix
+
+  - kind: select
+    name: select_ccfam
+    context_name: read_cost_center_functional_area_matrix
+    params:
+      columns:
+        cost_center_group: cost_center_group_cf
+        functional_area_code: functional_area_code_cf
+      distinct: true
+
+  - kind: join
+    name: join_dfcc_dfca_dfcca
+    context_name: add_dfcc
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code_dfca
+          company_code: company_code_dfca
+          sap_cluster: sap_cluster_dfca
+      - other:
+          select_dfcca
+        how:
+          inner
+        columns:
+          cost_center_number: cost_center_number_dfcca
+          company_code: company_code_dfcca
+          sap_cluster: sap_cluster_dfcca
+      - other:
+          select_ccfam
+        how:
+          left
+        columns:
+          standard_hierarchy_area_substr: cost_center_group_cf
+
+  - kind: join
+    name: join_dfcc_dfca_dfcca_cfas
+    context_name: select_dfcc
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code_dfca
+          company_code: company_code_dfca
+          sap_cluster: sap_cluster_dfca
+      - other:
+          select_dfcca
+        how:
+          inner
+        columns:
+          cost_center_number: cost_center_number_dfcca
+          company_code: company_code_dfcca
+          sap_cluster: sap_cluster_dfcca
+      - other:  
+          select_cfas
+        how:
+          inner
+        columns:
+          functional_area: func_area_cfas
+
+  - kind: join
+    name: join_dfcc_dfca_dfcca_dfpc
+    context_name: select_dfcc
+    params:
+      - other:
+          select_dfpc
+        how:
+          left
+        columns:
+          profit_center: profit_center_dfpc
+          sap_cluster: sap_cluster_dfpc
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code_dfca
+          company_code: company_code_dfca
+          sap_cluster: sap_cluster_dfca
+      - other:
+          select_dfcca
+        how:
+          inner
+        columns:
+          cost_center_number: cost_center_number_dfcca
+          company_code: company_code_dfcca
+          sap_cluster: sap_cluster_dfcca
+
+#SELECT RFCONF_CC_2
+  - kind: select
+    name: select_RFCONF_CC_2
+    context_name: join_dfcc_dfca_dfcca
+    params:
+      columns:
+        company_code: company_code
+        cost_center_number:  cost_center_number
+        functional_area: functional_area
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+        functional_area_code_cf: functional_area_code_cf
+        standard_hierarchy_area_substr: standard_hierarchy_area_substr
+        cost_center_group_cf: cost_center_group_cf
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_CC_2
+    context_name: select_RFCONF_CC_2
+    params:
+      - column: rule_code
+        expression: "'RFCONF_CC.2'"
+      - column: attribute_name
+        expression: '''Cost Center'''
+      - column: check_status
+        expression: 
+                    if(functional_area IS NULL OR functional_area = '' OR functional_area_code_cf IS NULL OR functional_area_code_cf = '', '',
+                    if(functional_area = functional_area_code_cf, '1', '0'))
+
+  - kind: select
+    name: select_RFCONF_CC_2_final
+    context_name: add_RFCONF_CC_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        cost_center_number: finance_value
+        attribute_name: attribute_name
+        functional_area: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_CC_3
+  - kind: select
+    name: select_RFCONF_CC_3
+    context_name: join_dfcc_dfca_dfcca_cfas
+    params:
+      columns:
+        company_code: company_code
+        cost_center_number:  cost_center_number
+        standard_hierarchy_area: standard_hierarchy_area
+        hierarchy_format: hierarchy_format
+        functional_area: functional_area
+        func_area_cfas: func_area_cfas
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_CC_3
+    context_name: select_RFCONF_CC_3
+    params:
+      - column: rule_code
+        expression: "'RFCONF_CC.3'"
+      - column: attribute_name
+        expression: '''Cost Center'''
+      - column: check_status
+        expression: 
+                    if(standard_hierarchy_area IS NULL OR standard_hierarchy_area = '', '',
+                    if(SUBSTR(standard_hierarchy_area, 1, 3) = SUBSTR(cost_center_number, 1, 3), '1',
+                    if(SUBSTR(hierarchy_format, 4, LENGTH(hierarchy_format)) = SUBSTR(standard_hierarchy_area, 4, LENGTH(standard_hierarchy_area)), '1',
+                    if(functional_area = func_area_cfas, '1',
+                    '0'))))
+
+  - kind: select
+    name: select_RFCONF_CC_3_final
+    context_name: add_RFCONF_CC_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        cost_center_number: finance_value
+        attribute_name: attribute_name
+        standard_hierarchy_area: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_CC_4
+  - kind: select
+    name: select_RFCONF_CC_4
+    context_name: join_dfcc_dfca_dfcca
+    params:
+      columns:
+        company_code: company_code
+        cost_center_number:  cost_center_number
+        cost_center_category: cost_center_category
+        is_cost_center_allowed: is_cost_center_allowed
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_CC_4
+    context_name: select_RFCONF_CC_4
+    params:
+      - column: rule_code
+        expression: "'RFCONF_CC.4'"
+      - column: attribute_name
+        expression: '''Cost Center'''
+      - column: check_status
+        expression: 
+                    if(cost_center_category IS NULL OR cost_center_category = '', '',
+                    if(is_cost_center_allowed = '1' OR  cost_center_category IN ('E','F','G','H','L','M','S','V','W'), '1',
+                    '0'))
+
+  - kind: select
+    name: select_RFCONF_CC_4_final
+    context_name: add_RFCONF_CC_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        cost_center_number: finance_value
+        attribute_name: attribute_name
+        cost_center_category: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_CC_5
+  - kind: select
+    name: select_RFCONF_CC_5
+    context_name: join_dfcc_dfca_dfcca
+    params:
+      columns:
+        company_code: company_code
+        cost_center_number: cost_center_number
+        standard_hierarchy_area: standard_hierarchy_area
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_CC_5
+    context_name: select_RFCONF_CC_5
+    params:
+      - column: rule_code
+        expression: "'RFCONF_CC.5'"
+      - column: attribute_name
+        expression: '''Cost Center'''
+      - column: finance_value
+        expression: cost_center_number
+      - column: check_status
+        expression: 
+                    if(cost_center_number IS NULL OR cost_center_number = '', '',
+                    if(SUBSTR(cost_center_number, 1, 3) = SUBSTR(company_code, LENGTH(company_code)-2, 3) AND company_code NOT IN ('1450','1452'), '1',
+                    if(SUBSTR(cost_center_number, 1, 3) = '145' AND company_code = '1450','1',
+                    if(SUBSTR(cost_center_number, 1, 3) = '142' AND company_code = '1420','1',
+                    if(SUBSTR(cost_center_number, 4, 3) = SUBSTR(standard_hierarchy_area, LEN(standard_hierarchy_area)-2, 3),'1',
+                    if(LEN(cost_center_number) = 10,'1',
+                    '0'))))))
+
+  - kind: select
+    name: select_RFCONF_CC_5_final
+    context_name: add_RFCONF_CC_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        cost_center_number: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_CC_10
+  - kind: select
+    name: select_RFCONF_CC_10
+    context_name: join_dfcc_dfca_dfcca_dfpc
+    params:
+      columns:
+        company_code: company_code
+        cost_center_number: cost_center_number
+        profit_center: profit_center
+        controlling_area_code: controlling_area_code
+        profit_center_dfpc: profit_center_dfpc
+        country_code_dfca: country_code_dfca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_CC_10
+    context_name: select_RFCONF_CC_10
+    params:
+      - column: rule_code
+        expression: "'RFCONF_CC.10'"
+      - column: attribute_name
+        expression: '''Cost Center'''
+      - column: check_status
+        expression: 
+                    if(controlling_area_code IS NULL OR controlling_area_code = '' OR company_code IS NULL OR company_code = '', '',
+                    if(controlling_area_code IS NOT NULL AND controlling_area_code != '' AND company_code IS NOT NULL AND company_code != '' AND (profit_center IS NULL OR profit_center = ''), '0',
+                    if(company_code NOT IN ('1450','1452') AND SUBSTR(controlling_area_code, LEN(controlling_area_code) -2, 3) = SUBSTR(profit_center, 1, 3),'1',
+                    if(company_code IN ('1450','1452') AND SUBSTR(profit_center, 1, 3) = '145','1',
+                    if(profit_center IS NOT NULL AND profit_center != '' AND profit_center_dfpc IS NOT NULL AND profit_center_dfpc != '','1',
+                    '0')))))
+
+  - kind: select
+    name: select_RFCONF_CC_10_final
+    context_name: add_RFCONF_CC_10
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        cost_center_number: finance_value
+        attribute_name: attribute_name
+        profit_center: value_checked
+        country_code_dfca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_RFCONF_CC_2_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_CC_3_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_CC_4_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_CC_5_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_CC_10_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        check_date: check_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_finance_cost_center_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: finance_cost_center_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

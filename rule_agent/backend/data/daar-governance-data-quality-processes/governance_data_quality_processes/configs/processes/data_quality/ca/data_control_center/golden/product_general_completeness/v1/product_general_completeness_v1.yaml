@@ -1,0 +1,1846 @@
+transform:
+  name: product_general_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_plant
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_logistic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_logistic
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_uom
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_uom
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_universe
+
+  - kind: select
+    name: select_dm_product_universe_0
+    context_name: read_dm_product_universe
+    params:
+      columns:
+        material_code: material_code_dpu
+        country_code: country_code_dpu
+        sap_cluster: sap_cluster_dpu
+        eu_flag: eu_flag_dpu
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_country_trade_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_country_trade_classification
+
+  - kind: select
+    name: select_dm_product_country_trade_classification
+    context_name: read_dm_product_country_trade_classification
+    params:
+      columns:
+        material_code: material_code_dpctc
+        country_code: country_code_dpctc
+        trade_classification: trade_classification_dpctc
+        commodity_code: commodity_code_dpctc
+        sap_cluster: sap_cluster_dpctc
+      distinct: true
+
+#READ conf_material_group_weight_v2
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_material_group_weight
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_material_group_weight
+
+  - kind: select
+    context_name: read_conf_material_group_weight
+    name: select_cmgw
+    params:
+      columns:
+        material_group_code: conf_material_group_code
+        material_description: conf_material_description
+        base_unit_of_measure_code: conf_base_unit_of_measure_code
+        weight_unit: conf_weight_unit
+        min_weight: conf_min_weight
+        max_weight: conf_max_weight
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_material_group_commodity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_material_group_commodity
+
+  - kind: filter
+    name: filter_cmgc_null
+    context_name: read_conf_material_group_commodity
+    params:
+      - condition:
+          material_description IS NULL OR material_description = ''
+
+  - kind: select
+    name: select_cmgc_null
+    context_name: filter_cmgc_null
+    params:
+      columns:
+        material_group_code: material_group_code_cmgc_null
+        material_type_code: material_type_code_cmgc_null
+        material_description: material_description_cmgc_null
+      distinct: true
+
+  - kind: filter
+    context_name: read_dm_product_general
+    name: filter_general
+    params:
+      - condition:
+          is_basic_scope = '1'
+
+  - kind: select
+    name: select_dm_product_general
+    context_name: filter_general
+    params:
+      columns:
+        material_code: material_code
+        material_type_code: material_type_code
+        bpp_package_code: bpp_package_code
+        base_unit_of_measure_code: base_unit_of_measure_code
+        material_description: material_description
+        coffee_channel_code: coffee_channel_code
+        ean_code: ean_code
+        ban_code: ban_code
+        bpp_code: bpp_code
+        general_item_category_group_code: general_item_category_group_code
+        storage_conditions_code: storage_conditions_code
+        material_group_code: material_group_code
+        material_type_name_unified: material_type_name_unified
+        remaining_shelf_life: remaining_shelf_life
+        total_shelf_life: total_shelf_life
+        reference_packaging_material_code: reference_packaging_material_code
+        temperature_condition_code: temperature_condition_code
+        weight_unit: weight_unit
+        gross_weight: gross_weight
+        net_weight: net_weight
+        coffee_capsule_system_code: coffee_capsule_system_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dpg_ban
+    context_name: select_dm_product_general
+    params:
+      - column: material_code_made_of_ban
+        expression: LPAD(ban_code, 18, '0')
+
+  - kind: select
+    name: select_dpg_ban
+    context_name: add_dpg_ban
+    params:
+      columns:
+        material_code: material_code_ban
+        material_group_code: material_group_code_ban
+        material_code_made_of_ban: material_code_made_of_ban
+        sap_cluster: sap_cluster_ban 
+        ban_code: ban_code_ban
+        material_type_code: material_type_code_ban
+        bpp_code: bpp_code_ban
+      distinct: true
+
+  - kind: select
+    name: select_dpp
+    context_name: read_dm_product_plant
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        is_production_version_x_r: is_production_version_x_r 
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dpp_26_2_3
+    context_name: select_dpp
+    params:
+      - aggs:
+          is_production_version_x_r : max
+        by:
+        - material_code
+        - sap_cluster
+
+  - kind: join
+    name: join_self_dpp_26_2_3
+    context_name: select_dpp
+    params:
+      - other:
+          group_dpp_26_2_3
+        how:
+          left
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_dpp_26_2_3
+    context_name: join_self_dpp_26_2_3
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        max_is_production_version_x_r: is_production_version_x_r 
+        sap_cluster: sap_cluster
+      distinct: true
+
+#rule 201.1
+  - kind: filter
+    name: filter_dm_product_plant_201_1
+    context_name: read_dm_product_plant
+    params:
+      - condition:
+          CASE WHEN (country_code = 'CH' AND plant_code NOT IN ('5511','5521','5502')) OR material_status_code NOT IN ('', '98') THEN false ELSE true END
+
+  - kind: select
+    name: select_dpp_201_1
+    context_name: filter_dm_product_plant_201_1
+    params:
+      columns:
+        material_code: material_code_dpp_201
+        sap_cluster: sap_cluster_dpp_201
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_product_plant
+    context_name: read_dm_product_plant
+    params:
+      - condition:
+          material_status_code != 'ZA' and is_basic_scope = '1'
+
+  - kind: select
+    name: select_dm_product_plant
+    context_name: filter_dm_product_plant
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    context_name: read_dm_product_sales_organization
+    name: filter_sales
+    params:
+      - condition:
+          is_basic_scope = '1'
+
+  - kind: filter
+    name: filter_dm_product_sales_organization_26_2_3
+    context_name: filter_sales
+    params:
+      - condition:
+          sales_org_code != '0001'
+
+  - kind: add
+    name: add_sales_org_code
+    context_name: read_dm_product_sales_organization
+    params:
+      - column: sales_org_code_for_join
+        expression: "CASE WHEN sales_org_code = '7800' THEN '7900' ELSE sales_org_code END"
+
+  - kind: select
+    name: select_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code
+        sales_org_code: sales_org_code
+        country_code: country_code
+        account_assignment_group_code: account_assignment_group_code
+        sales_org_code_for_join: sales_org_code_for_join
+        distribution_channel_code: distribution_channel_code
+        sales_unit_name: sales_unit_name
+        ss_sm_flag: ss_sm_flag
+        brand_code: brand_code
+        flavour_code: flavour_code
+        pack_type_code: pack_type_code
+        pack_size_code: pack_size_code
+        sales_unit_code: sales_unit_code
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l3_code: product_hierarchy_l3_code
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        product_hierarchy_l5_code: product_hierarchy_l5_code
+        material_price_group_code: material_price_group_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_product_sales_organization
+    context_name: select_dm_product_sales_organization
+    params:
+      - condition:
+          distribution_channel_code = '01' AND sales_org_code = '0001'
+
+#rules 201.1 and 204.1
+  - kind: filter
+    name: filter_sales_20x_country_code_fix
+    context_name: select_dm_product_sales_organization
+    params:
+      - condition:
+          country_code != 'BSO'
+
+  - kind: select
+    name: select_dm_product_sales_organization_all
+    params:
+      columns:
+        material_code: material_code
+        sales_org_code: sales_org_code
+        sales_org_code_for_join: sales_org_code_for_join
+        country_code: country_code
+        distribution_channel_code: distribution_channel_code
+        ss_sm_flag: ss_sm_flag
+        brand_code: brand_code
+        flavour_code: flavour_code
+        pack_type_code: pack_type_code
+        pack_size_code: pack_size_code
+        sales_unit_code: sales_unit_code
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        material_price_group_code: material_price_group_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dpso_f
+    context_name: filter_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code_so
+        sales_org_code: sales_org_code_so
+        country_code: country_code_so
+        brand_code: brand_code_so
+        flavour_code: flavour_code_so
+        pack_type_code: pack_type_code_so
+        pack_size_code: pack_size_code_so
+        sales_unit_code: sales_unit_code_so
+        product_hierarchy_code: product_hierarchy_code_so
+        sap_cluster: sap_cluster_so
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_logistic_pre
+    context_name: read_dm_product_logistic
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code_logistic
+        operation_code: operation_code
+        leo_stock_group: leo_stock_group
+        leo_material_group: leo_material_group
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_country_code
+    params:
+      - column: country_code_for_join
+        expression: "CASE WHEN country_code_logistic = 'IE' THEN 'GB' ELSE country_code_logistic END"
+
+  - kind: select
+    name: select_dm_product_logistic
+    params:
+      columns:
+        material_code: material_code
+        country_code_logistic: country_code_logistic
+        country_code_for_join: country_code_for_join
+        operation_code: operation_code
+        leo_stock_group: leo_stock_group
+        leo_material_group: leo_material_group
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_uom
+    context_name: read_dm_product_uom
+    params:
+      columns:
+        material_code: material_code
+        ean_code: ean_code_uom
+        alternative_unit_of_measure_code: alternative_unit_of_measure_code
+        conversion_numerator: conversion_numerator
+        conversion_denominator: conversion_denominator
+        conversion_factor: conversion_factor
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_product_uom_ST
+    context_name: select_dm_product_uom
+    params:
+      - condition:
+          alternative_unit_of_measure_code = 'ST'
+
+  - kind: filter
+    name: filter_dm_product_uom_PAK
+    context_name: select_dm_product_uom
+    params:
+      - condition:
+          alternative_unit_of_measure_code = 'PAK'
+
+  - kind: filter
+    name: filter_dm_product_universe
+    context_name: read_dm_product_universe
+    params:
+      - condition:
+          country_code != 'BSO'
+
+  - kind: add
+    name: add_country_code_dpu
+    params:
+      - column: country_code_for_join_dpu
+        expression: "CASE WHEN country_code = 'IE' THEN 'GB' ELSE country_code END"
+
+  - kind: select
+    name: select_dm_product_universe
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code_universe
+        country_code_for_join_dpu: country_code_for_join_dpu
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dpg_dpu
+    context_name: select_dm_product_general
+    params:
+      - other:
+          read_dm_product_universe
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_cmgw
+        how:
+          left
+        columns:
+          material_group_code: conf_material_group_code
+
+  - kind: join
+    name: join_dpg_dpp_dpso
+    context_name: select_dm_product_general
+    params:
+      - other:
+          read_dm_product_universe
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_plant
+        how:
+          inner
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_sales_organization
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dpg_dpso_filter
+    context_name: select_dm_product_general
+    params:
+      - other:
+          filter_dm_product_sales_organization
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dpg_dpso
+    context_name: select_dm_product_general
+    params:
+      - other:
+          select_dm_product_sales_organization
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dpg_dpu_dpso_dpl
+    context_name: select_dm_product_general
+    params:
+      - other:
+          select_dm_product_universe
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_logistic
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code_for_join_dpu: country_code_for_join
+          sap_cluster: sap_cluster
+      - other:
+          filter_sales_20x_country_code_fix
+        how:
+          left
+        columns:
+          material_code: material_code
+          operation_code: sales_org_code_for_join
+          sap_cluster: sap_cluster
+      - other:
+          select_dpp_201_1
+        how:
+          left
+        columns:
+          material_code: material_code_dpp_201
+          sap_cluster: sap_cluster_dpp_201
+
+# filter_dm_product_plant_201_1
+
+  - kind: join
+    name: join_dpuom_dpu
+    context_name: select_dm_product_uom
+    params:
+      - other:
+          select_dm_product_universe
+        how:
+          left
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dpg_dpuom_dpso_PAK
+    context_name: select_dm_product_general
+    params:
+      - other:
+          filter_dm_product_uom_PAK
+        how:
+          left
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_dm_product_sales_organization_26_2_3
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dpp_26_2_3
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dpg_dpuom_dpso_ST
+    context_name: select_dm_product_general
+    params:
+      - other:
+          filter_dm_product_uom_ST
+        how:
+          left
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_dm_product_sales_organization_26_2_3
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dpp_26_2_3
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dpg_dpu_dpp_dpso_dpuom_filter
+    context_name: select_dm_product_general
+    params:
+      - other:
+          select_dm_product_universe
+        how:
+          left
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_plant
+        how:
+          inner
+        columns:
+          material_code: material_code
+          country_code_universe: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_sales_organization
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_uom
+        how:
+          left
+        columns:
+          material_code: material_code
+          base_unit_of_measure_code: alternative_unit_of_measure_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_53_3
+    context_name: select_dpg_ban
+    params:
+      - other:
+          join_dpg_dpu
+        how:
+          inner
+        columns:
+          material_code_made_of_ban: material_code
+          sap_cluster_ban: sap_cluster
+      - other:
+          select_dpso_f
+        how:
+          left
+        columns:
+          material_code_ban: material_code_so
+          sap_cluster_ban: sap_cluster_so
+          country_code: country_code_so
+
+  - kind: join
+    name: join_dpg_dpctc_dpu
+    context_name: read_dm_product_general
+    params:
+    - other:
+        select_dm_product_universe_0
+      how:
+        inner
+      columns:
+        material_code: material_code_dpu
+        sap_cluster: sap_cluster_dpu
+    - other:
+        select_dm_product_country_trade_classification
+      how:
+        left
+      columns:
+        material_code_dpu: material_code_dpctc
+        country_code_dpu: country_code_dpctc
+        sap_cluster_dpu: sap_cluster_dpctc
+    - other:
+        select_cmgc_null
+      how:
+        left
+      columns:
+        material_type_code: material_type_code_cmgc_null
+        material_group_code: material_group_code_cmgc_null
+
+  - kind: filter
+    name: filter_cmgc
+    context_name: read_conf_material_group_commodity
+    params:
+      - condition:
+          material_description IS NOT NULL AND material_description != ''
+
+  - kind: select
+    name: select_cmgc
+    context_name: filter_cmgc
+    # context_name: read_conf_material_group_commodity
+    params:
+      columns:
+        material_group_code: material_group_code_cmgc
+        material_type_code: material_type_code_cmgc
+        material_description: material_description_cmgc
+      distinct: true
+
+  - kind: join
+    name: join_dpg_dpctc_dpu_final
+    context_name: join_dpg_dpctc_dpu
+    params:
+    - other:
+        select_cmgc
+      how:
+        left
+      columns:
+        material_type_code: material_type_code_cmgc
+        material_group_code: material_group_code_cmgc
+
+  - kind: add
+    name: add_commodity_flag
+    context_name: join_dpg_dpctc_dpu_final
+    params:
+      - column: commodity_flag
+        expression: if(material_description LIKE material_description_cmgc OR material_description_cmgc_null IS NOT NULL, '1', '')
+
+#SELECT RPCOMP_82_1
+  - kind: select
+    name: select_RPCOMP_82_1_commodity
+    context_name: add_commodity_flag
+    params:
+      columns:
+        country_code_dpu: country_code
+        material_code: material_code
+        material_description: material_description
+        material_type_code: material_type_code
+        commodity_code_dpctc: commodity_code
+        commodity_flag: mat_descr_flag
+        eu_flag_dpu: eu_flag
+        sap_cluster_dpu: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_mat_descr_flag
+    params:
+      - aggs:
+          mat_descr_flag: max
+        by:
+        - country_code
+        - material_code
+        - sap_cluster
+
+  - kind: join
+    name: join_mat_descr_flag
+    context_name: select_RPCOMP_82_1_commodity
+    params:
+      - other:
+          group_mat_descr_flag
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_checks
+    context_name: join_dpg_dpu
+    params:
+      # - column: rpcomp_161_1
+      #   expression: #if(material_type_code NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR ban_code IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+      #               #if(isnull(ban_code) or ban_code = '', '0', 
+      #               #if(isnotnull(ban_code) and ban_code != '', '1',
+      #               #'')))
+      #               if(material_type_code LIKE 'ZFG%' and (isnull(ban_code) or ban_code = ''), '0', 
+      #               if(material_type_code LIKE 'ZFG%' and (isnotnull(ban_code) and ban_code != ''), '1',
+      #               ''))
+      - column: rpcomp_166_1
+        expression: if(material_description like '%ABP%', '', 
+                    if((isnull(base_unit_of_measure_code) or base_unit_of_measure_code = ''), '0', '1'))
+      - column: rpcomp_196_1
+        expression: if(material_description like '%ABP%', '', 
+                    if((isnull(general_item_category_group_code) or general_item_category_group_code = ''), '0', '1'))
+      - column: rpcomp_253_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_type_code = 'ZSTL', '',
+                    if(isnull(material_group_code) or material_group_code = '', '0', '1')))
+      - column: rpcomp_265_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_group_code IN ('1110000'),'',
+                    if(material_type_name_unified = 'Finished Goods' and (isnull(remaining_shelf_life) or remaining_shelf_life = '' or remaining_shelf_life = 0), '0',
+                    if(material_type_name_unified = 'Finished Goods' and remaining_shelf_life > 0, '1', ''))))
+      - column: rpcomp_293_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_group_code IN ('1110000'), '',
+                    if(general_item_category_group_code IN ('ZCVP','ZSNK'), '',
+                    if(material_type_code in('ZFGP', 'ZFG', 'ZFGS', 'ZFGA', 'ZFGC') and (isnull(reference_packaging_material_code) or reference_packaging_material_code = ''), '0', 
+                    if(material_type_code in('ZFGP', 'ZFG', 'ZFGS', 'ZFGA', 'ZFGC') and (isnotnull(reference_packaging_material_code) and reference_packaging_material_code != ''), '1', 
+                    '')))))
+      - column: rpcomp_324_1
+        expression: if(material_description like '%ABP%', '',
+                    if((material_group_code IN ('1110000')), '',
+                    if((material_type_name_unified = 'Finished Goods' or (material_type_code in('ZSF') AND  material_group_code = '1003012')) 
+                    and (isnull(temperature_condition_code) or temperature_condition_code = ''), '0',
+                    if((material_type_name_unified = 'Finished Goods' or (material_type_code in('ZSF') AND  material_group_code = '1003012')) 
+                    and (isnotnull(temperature_condition_code) and temperature_condition_code != ''), '1', ''))))
+      - column: rpcomp_325_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_group_code IN ('1110000'),'',
+                    if(material_type_name_unified = 'Finished Goods' and (isnull(total_shelf_life) or total_shelf_life = '' or total_shelf_life = 0), '0',
+                    if(material_type_name_unified = 'Finished Goods' and total_shelf_life > 0, '1', ''))))
+      - column: rpcomp_371_1
+        expression: if(material_description like '%ABP%', '',
+                    if((material_type_name_unified in('Finished Goods','Concentrate KITs', 'Raw Material and Semi- FG') or material_type_code in('ZRWT', 'ZSFT') or material_group_code in('1004010'))
+                    and (isnull(weight_unit) or weight_unit = ''), '0',
+                    if((material_type_name_unified in('Finished Goods','Concentrate KITs', 'Raw Material and Semi- FG') or material_type_code in('ZRWT', 'ZSFT') or material_group_code in('1004010'))
+                    and (isnotnull(weight_unit) and weight_unit != ''), '1', '')))
+      - column: rpcomp_53_1
+        expression: if(material_type_code like 'ZFG%' and (isnull(bpp_code) or bpp_code = '' or bpp_code = 'ZZZZZZZZZZ'), '0', 
+                    if(material_type_code like 'ZFG%' and isnotnull(bpp_code) and bpp_code != '' and bpp_code != 'ZZZZZZZZZZ', '1', ''))
+      - column: rpcomp_6_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_type_code in('ZSF', 'ZRW', 'ZRWT', 'ZSFT', 'ZNVL') and (material_group_code 
+                    in('1003012', '1003013', '1003005', '1003014', '1003002', '1003006', '1003008', '1003007', '1004002', '1004003', '1004005', '1003015', '1003009', '1003010', '1004007', '1004008', '1003003', '1004011', '1004009', '1004004', '1003001', '1004010') OR material_group_code = conf_material_group_code) 
+                    and (isnull(gross_weight)  or gross_weight = 0), '0',
+                    if(material_type_code in('ZSF', 'ZRW', 'ZRWT', 'ZSFT', 'ZNVL') and (material_group_code 
+                    in('1003012', '1003013', '1003005', '1003014', '1003002', '1003006', '1003008', '1003007', '1004002', '1004003', '1004005', '1003015', '1003009', '1003010', '1004007', '1004008', '1003003', '1004011', '1004009', '1004004', '1003001', '1004010') OR material_group_code = conf_material_group_code)
+                    and gross_weight > 0, '1', '')))
+      - column: rpcomp_77_1
+        expression: if(material_type_code in('ZSF', 'ZRW', 'ZRWT', 'ZSFT', 'ZNVL') and (material_group_code 
+                    in('1003012', '1003013', '1003005', '1003014', '1003002', '1003006', '1003008', '1003007', '1004002', '1004003', '1004005', '1003015', '1003009', '1003010', '1004007', '1004008', '1003003', '1004011', '1004009', '1004004', '1003001', '1004010') OR material_group_code = conf_material_group_code)
+                    and (isnull(net_weight) or net_weight = '' or net_weight = 0), '0',
+                    if(material_type_code in('ZSF', 'ZRW', 'ZRWT', 'ZSFT', 'ZNVL') and (material_group_code 
+                    in('1003012', '1003013', '1003005', '1003014', '1003002', '1003006', '1003008', '1003007', '1004002', '1004003', '1004005', '1003015', '1003009', '1003010', '1004007', '1004008', '1003003', '1004011', '1004009', '1004004', '1003001', '1004010') OR material_group_code = conf_material_group_code)
+                    and net_weight > 0, '1', ''))
+      - column: rpcomp_87_1
+        expression: if(material_type_code = 'ZFGC' and (isnull(coffee_capsule_system_code) or coffee_capsule_system_code = ''), '0', 
+                    if(material_type_code ='ZFGC' and (isnotnull(coffee_capsule_system_code) and coffee_capsule_system_code != ''), '1', 
+                    ''))
+      # - column: rpcomp_88_1
+      #   expression: if(material_type_code = 'ZFGC' and (isnull(coffee_channel_code) or coffee_channel_code = ''), '0', 
+      #               if(material_type_code ='ZFGC' and (isnotnull(coffee_channel_code) and coffee_channel_code != ''), '1', 
+      #               ''))
+      - column: rpcomp_89_1
+        expression: if(material_type_code = 'ZFGC' and (isnull(coffee_class_code) or coffee_class_code = ''), '0', 
+                    if(material_type_code ='ZFGC' and (isnotnull(coffee_class_code) and coffee_class_code != ''), '1', 
+                    ''))
+      # - column: rpcomp_90_1
+      #   expression: if(material_type_code = 'ZFGC' and (isnull( coffee_format_code) or  coffee_format_code = ''), '0', 
+      #               if(material_type_code ='ZFGC' and (isnotnull(coffee_format_code) and coffee_format_code != ''), '1', 
+      #               ''))
+      - column: rpcomp_91_1
+        expression: if(material_type_code = 'ZFGC' and (isnull(coffee_method_code) or coffee_method_code = ''), '0', 
+                    if(material_type_code ='ZFGC' and (isnotnull(coffee_method_code) and coffee_method_code != ''), '1', 
+                    ''))
+      # - column: rule_code_rpcomp_161_1
+      #   expression: '''RPCOMP_161.1'''
+      - column: rule_code_rpcomp_166_1
+        expression: '''RPCOMP_166.1'''
+      - column: rule_code_rpcomp_196_1
+        expression: '''RPCOMP_196.1'''
+      - column: rule_code_rpcomp_253_1
+        expression: '''RPCOMP_253.1'''
+      - column: rule_code_rpcomp_265_1
+        expression: '''RPCOMP_265.1'''
+      - column: rule_code_rpcomp_293_1
+        expression: '''RPCOMP_293.1'''
+      - column: rule_code_rpcomp_324_1
+        expression: '''RPCOMP_324.1'''
+      - column: rule_code_rpcomp_325_1
+        expression: '''RPCOMP_325.1'''
+      - column: rule_code_rpcomp_371_1
+        expression: '''RPCOMP_371.1'''
+      - column: rule_code_rpcomp_53_1
+        expression: '''RPCOMP_53.1'''
+      - column: rule_code_rpcomp_6_1
+        expression: '''RPCOMP_6.1'''
+      - column: rule_code_rpcomp_77_1
+        expression: '''RPCOMP_77.1'''
+      - column: rule_code_rpcomp_87_1
+        expression: '''RPCOMP_87.1'''
+      # - column: rule_code_rpcomp_88_1
+      #   expression: '''RPCOMP_88.1'''
+      - column: rule_code_rpcomp_89_1
+        expression: '''RPCOMP_89.1'''
+      # - column: rule_code_rpcomp_90_1
+      #   expression: '''RPCOMP_90.1'''
+      - column: rule_code_rpcomp_91_1
+        expression: '''RPCOMP_91.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: add
+    name: add_checks_2
+    context_name: join_dpg_dpp_dpso
+    params:
+      - column: rpcomp_15_1
+        expression: if(material_description like '%ABP%', '',
+                    if((product_hierarchy_l4_code IN ('01010012123') OR (material_type_code IN ('ZFG') AND general_item_category_group_code IN ('ZCVI','ZCVP'))), '',
+                    if((material_type_code in('ZFG', 'ZFGS') or (material_type_code in('ZFGC') and coffee_channel_code != 'CH4')) 
+                    and base_unit_of_measure_code in('PC', 'CS', 'ST') and (isnull(ean_code) or ean_code = ''), '0', 
+                    if((material_type_code in('ZFG', 'ZFGS') or (material_type_code in('ZFGC') and coffee_channel_code != 'CH4')) 
+                    and base_unit_of_measure_code in('PC', 'CS', 'ST') and (isnotnull(ean_code) and ean_code != ''), '1', 
+                    if((material_type_code in('ZFG', 'ZFGS') or (material_type_code in('ZFGC') and coffee_channel_code != 'CH4')) 
+                    and (isnull(ean_code) or ean_code = ''), '0', 
+                    if((material_type_code in('ZFG', 'ZFGS') or (material_type_code in('ZFGC') and coffee_channel_code != 'CH4')) 
+                    and (isnotnull(ean_code)  and ean_code != ''), '1', ''))))))
+      - column: rule_code_rpcomp_15_1
+        expression: '''RPCOMP_15.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: add
+    name: add_checks_3
+    context_name: join_dpg_dpso_filter
+    params:
+# ---------------------------------rpcomp_161_1_UC06_RULE_UPDATE
+      - column: rpcomp_161_1
+        expression: 
+                    if(material_type_code NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnull(ban_code) or ban_code = '', '0', 
+                    if(isnotnull(ban_code) and ban_code != '', '1',
+                    '')))
+      - column: rpcomp_161_3
+        expression: if(material_type_code not like 'ZFG%', '',
+                    if((isnull(ban_code) or ban_code = '') or (isnull(brand_code) or brand_code = '') or (isnull(flavour_code) or flavour_code = '') or (isnull(pack_type_code) or pack_type_code = '') or (isnull(pack_size_code) or pack_size_code = '') 
+                    or (isnull(sales_unit_code) or sales_unit_code = '') or (isnull(bpp_code) or bpp_code = '') or (isnull(product_hierarchy_code) or product_hierarchy_code = ''), '0', '1'))
+      - column: rule_code_rpcomp_161_1
+        expression: '''RPCOMP_161.1'''
+      - column: rule_code_rpcomp_161_3
+        expression: '''RPCOMP_161.3'''
+      - column: check_date
+        expression: current_timestamp()
+      - column: concat_161_3
+        expression: concat_ws('_', ban_code, brand_code, flavour_code, pack_type_code, pack_size_code, sales_unit_code, bpp_code, product_hierarchy_code)
+
+  - kind: add
+    name: add_checks_4
+    context_name: join_dpg_dpu_dpso_dpl
+    params:
+      - column: rpcomp_201_1
+        expression: if(material_description like '%ABP%', '',
+                    if(general_item_category_group_code in ('ZCVP', 'ZSNK'), '',
+                    if(country_code_universe = 'CY' AND material_type_code = 'ZFGM', '',
+                    if(material_code_dpp_201 IS NOT NULL AND material_code_dpp_201 != '' AND material_type_code LIKE 'ZFG%', '',                  
+                    if(material_type_code like 'ZFG%' and material_group_code != '1110000' and (isnotnull(leo_stock_group) and leo_stock_group != ''), '1', 
+                    if(material_type_code like 'ZFG%' and material_group_code != '1110000' and (isnull(leo_stock_group) or leo_stock_group = ''), '0', ''
+                    ))))))
+      - column: rpcomp_204_1
+        expression: if(material_description like '%ABP%', '',
+                    if(general_item_category_group_code in ('ZCVP', 'ZSNK'), '',
+                    if(country_code_universe = 'CY' AND material_type_code = 'ZFGM', '',                      
+                    if(material_type_code like 'ZFG%' and material_group_code != '1110000' and (isnotnull(leo_material_group) and leo_material_group != ''), '1', 
+                    if(material_type_code like 'ZFG%' and material_group_code != '1110000' and (isnull(leo_material_group) or leo_material_group = ''), '0', ''
+                    )))))
+      - column: rule_code_rpcomp_201_1
+        expression: '''RPCOMP_201.1'''
+      - column: rule_code_rpcomp_204_1
+        expression: '''RPCOMP_204.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  # - kind: add
+  #   name: add_checks_5
+  #   context_name: join_dpg_dpso
+  #   params:
+  #     - column: rpcomp_153_1
+  #       expression: if(material_description like '%ABP%', '',
+  #                   if(material_group_code IN ('1110000'),'',  
+  #                   if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (isnull(ss_sm_flag) or ss_sm_flag= ''), '0', 
+  #                   if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (isnotnull(ss_sm_flag) and ss_sm_flag != ''), '1', 
+  #                   ''))))
+  #     - column: rpcomp_252_1
+  #       expression: if(material_description like '%ABP%', '',
+  #                   if(material_group_code IN ('1110000'),'',  
+  #                   if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (isnull(material_price_group_code) or material_price_group_code= ''), '0', 
+  #                   if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (isnotnull(material_price_group_code) and material_price_group_code != ''), '1', 
+  #                   ''))))
+  #     - column: rule_code_rpcomp_153_1
+  #       expression: '''RPCOMP_153.1'''
+  #     - column: rule_code_rpcomp_252_1
+  #       expression: '''RPCOMP_252.1'''
+  #     - column: check_date
+  #       expression: current_timestamp()
+        
+### --------------------------------UC03-----------------------------------
+### ----------Please remove the logic for rpcomp_88_1 and rpcomp_90_1 rules from point "add_checks" and uncomment below-----------
+
+  - kind: add
+    name: add_checks_5
+    context_name: join_dpg_dpso
+    params:
+      - column: rpcomp_88_1
+        expression: if(material_type_code = 'ZFGC' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123',
+                   '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnull(coffee_channel_code) or coffee_channel_code = ''),'0', 
+                    if(material_type_code ='ZFGC' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123', '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnotnull(coffee_channel_code) and coffee_channel_code != ''), '1', 
+                    ''))
+      - column: rpcomp_90_1
+        expression: if(material_type_code = 'ZFGC'and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123',
+                   '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and   (isnull( coffee_format_code) or  coffee_format_code = ''), '0', 
+                    if(material_type_code ='ZFGC' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123', '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnotnull(coffee_format_code) and coffee_format_code != ''), '1', 
+                    ''))
+      - column: rpcomp_153_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_group_code IN ('1110000'),'',  
+                    if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123', '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnull(ss_sm_flag) or ss_sm_flag= ''), '0', 
+                    if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123', '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnotnull(ss_sm_flag) and ss_sm_flag != ''), '1', 
+                    ''))))
+      - column: rpcomp_252_1
+        expression: if(material_description like '%ABP%', '',
+                    if(material_group_code IN ('1110000'),'',  
+                    if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123', '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnull(material_price_group_code) or material_price_group_code= ''), '0', 
+                    if(material_type_code like 'ZFG%' and sales_org_code = '0001' and distribution_channel_code = '01' and (product_hierarchy_l4_code IN ('01010012001','01010012015','01010012117', '01010012123', '01010012031','01010012041', '01010012055', '01010022155', '01010012060','01010032163', '01010012069', '01010012083', '01010012093','01010012097', '01010012107', '01030042179', '01010032169', '01030052301', '01030052315', '01049882988', '01049992999', '01010022133', '01010022145', '01010012137') OR product_hierarchy_l5_code = '010100120832085' OR product_hierarchy_l3_code = '0206008') and (isnotnull(material_price_group_code) and material_price_group_code != ''), '1', 
+                    ''))))
+      - column: rule_code_rpcomp_88_1
+        expression: '''RPCOMP_88.1'''
+      - column: rule_code_rpcomp_90_1
+        expression: '''RPCOMP_90.1'''
+      - column: rule_code_rpcomp_153_1
+        expression: '''RPCOMP_153.1'''
+      - column: rule_code_rpcomp_252_1
+        expression: '''RPCOMP_252.1'''
+      - column: check_date
+        expression: current_timestamp()
+## --------------------------------
+
+  - kind: add
+    name: add_checks_6
+    context_name: join_dpuom_dpu
+    params:
+      - column: rpcomp_259_1
+        expression: if(isnull(conversion_numerator) or conversion_numerator = '', '0', '1')
+      - column: rpcomp_81_1
+        expression: if(isnull(conversion_denominator) or conversion_denominator = '', '0', '1')
+      - column: rule_code_rpcomp_259_1
+        expression: '''RPCOMP_259.1'''
+      - column: rule_code_rpcomp_81_1
+        expression: '''RPCOMP_81.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: add
+    name: add_checks_7
+    context_name: join_dpg_dpu_dpp_dpso_dpuom_filter
+    params:
+      - column: rpcomp_26_1
+        expression: if(material_description like '%ABP%', '',
+                    if((product_hierarchy_l4_code IN('01010012123') OR (material_type_code in('ZFG') AND general_item_category_group_code IN ('ZCVI','ZCVP'))),'', 
+                    if((material_type_code in('ZFG', 'ZFGS') or (material_type_code in('ZFGC') and coffee_channel_code != 'CH4')) 
+                    and (isnull(ean_code) OR ean_code = ''), '0', 
+                    if((material_type_code in('ZFG', 'ZFGS') or (material_type_code in('ZFGC') and coffee_channel_code != 'CH4')) 
+                    and (isnotnull(ean_code) and ean_code != ''), '1', ''))))
+      - column: rule_code_rpcomp_26_1
+        expression: '''RPCOMP_26.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: add
+    name: add_checks_8
+    context_name: join_53_3
+    params:
+      - column: rpcomp_53_3
+        expression: 
+                    if(material_type_code_ban NOT IN('ZFG', 'ZFGS', 'ZFGC', 'ZFGA', 'ZFGM') OR brand_code_so IN('ZV7', 'ZYU', 'ZYV', 'Z88', 'Z99') Or material_group_code != '1110000', '', 
+                    if(isnull(bpp_code_ban) or bpp_code_ban = '', '0', 
+                    if(isnotnull(bpp_code_ban) and bpp_code_ban != '', '1',
+                    '')))
+      - column: rule_code_rpcomp_53_3
+        expression: '''RPCOMP_53.3'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: add
+    name: add_checks_9
+    context_name: join_dpg_dpuom_dpso_PAK
+    params:
+      - column: rpcomp_26_2
+        expression: if(material_type_code not like '%ZFG%' OR 
+                       material_group_code = '1110000' OR 
+                       general_item_category_group_code IN ('ZCVP', 'ZSNK', 'ZCVC', 'ZFGD', 'ZIRB', 'ZFGA') OR
+                       material_description like '%ABP%' OR
+                       material_type_code = 'ZFGP' OR
+                       regexp_extract(sales_unit_name, '[0-9]+X[0-9]+', 0) is null or regexp_extract(sales_unit_name, '[0-9]+X[0-9]+', 0) = '' OR
+                       is_production_version_x_r = '1' OR 
+                       account_assignment_group_code IN ('D7', 'D8', 'D9', 'E1', 'E2') OR bpp_package_code IN ('8705', '8405'), '',
+                    if(ean_code_uom IS NOT NULL AND ean_code_uom != '' AND conversion_factor IS NOT NULL, '1', '0'))
+      - column: rule_code_rpcomp_26_2
+        expression: '''RPCOMP_26.2'''
+      - column: value_checked
+        expression: concat(coalesce(ean_code_uom, '', ''), '_', coalesce(round(1/conversion_factor, 0), '', ''))
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: add
+    name: add_checks_10
+    context_name: join_dpg_dpuom_dpso_ST
+    params:
+      - column: rpcomp_26_3
+        expression: if(material_type_code not like '%ZFG%' OR 
+                       material_group_code = '1110000' OR 
+                       general_item_category_group_code IN ('ZCVP', 'ZSNK', 'ZCVC', 'ZFGD', 'ZIRB', 'ZFGA') OR
+                       material_description like '%ABP%' OR
+                       material_type_code = 'ZFGP' OR
+                       sales_unit_name IN ('PMX BIB', 'PMX TANK', 'PRE TANK', 'OTHER') OR
+                       is_production_version_x_r = '1' OR 
+                       account_assignment_group_code IN ('D7', 'D8', 'D9', 'E1', 'E2') OR bpp_package_code IN ('8705', '8405'), '',
+                    if(ean_code_uom IS NOT NULL AND ean_code_uom != '' AND conversion_factor IS NOT NULL, '1', '0'))
+      - column: rule_code_rpcomp_26_3
+        expression: '''RPCOMP_26.3'''
+      - column: value_checked
+        expression: concat(coalesce(ean_code_uom, '', ''), '_', coalesce(round(1/conversion_factor, 0), '', ''))
+      - column: check_date
+        expression: current_timestamp()
+        
+  - kind: add
+    name: add_checks_11
+    context_name: join_mat_descr_flag
+    params:
+      - column: rpcomp_82_1
+        expression: if(eu_flag != 1 OR eu_flag IS NULL OR eu_flag = '', '',
+                    if(max_mat_descr_flag != '1', '',
+                    if(material_type_code IN ('ZSPS','ZSV'), '',
+                    if(commodity_code IS NULL OR commodity_code = '', '0', '1'))))
+      - column: rule_code_rpcomp_82_1
+        expression: '''RPCOMP_82.1'''
+      - column: value_checked
+        expression: commodity_code
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rpcomp_15_1
+    context_name: add_checks_2
+    params:
+      columns:
+        rule_code_rpcomp_15_1: rule_code
+        rpcomp_15_1: check_status
+        material_code: material_code
+        ean_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_153_1
+    context_name: add_checks_5
+    params:
+      columns:
+        rule_code_rpcomp_153_1: rule_code
+        rpcomp_153_1: check_status
+        material_code: material_code
+        ss_sm_flag: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_161_1
+    # context_name: add_checks
+    context_name: add_checks_3
+    params:
+      columns:
+        rule_code_rpcomp_161_1: rule_code
+        rpcomp_161_1: check_status
+        material_code: material_code
+        ban_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_161_3
+    context_name: add_checks_3
+    params:
+      columns:
+        rule_code_rpcomp_161_3: rule_code
+        rpcomp_161_3: check_status
+        material_code: material_code
+        concat_161_3: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_166_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_166_1: rule_code
+        rpcomp_166_1: check_status
+        material_code: material_code
+        base_unit_of_measure_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_196_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_196_1: rule_code
+        rpcomp_196_1: check_status
+        material_code: material_code
+        general_item_category_group_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_201_1
+    context_name: add_checks_4
+    params:
+      columns:
+        rule_code_rpcomp_201_1: rule_code
+        rpcomp_201_1: check_status
+        material_code: material_code
+        leo_stock_group: value_checked
+        check_date: check_date
+        country_code_universe: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_204_1
+    context_name: add_checks_4
+    params:
+      columns:
+        rule_code_rpcomp_204_1: rule_code
+        rpcomp_204_1: check_status
+        material_code: material_code
+        leo_material_group: value_checked
+        check_date: check_date
+        country_code_universe: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_252_1
+    context_name: add_checks_5
+    params:
+      columns:
+        rule_code_rpcomp_252_1: rule_code
+        rpcomp_252_1: check_status
+        material_code: material_code
+        material_price_group_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_253_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_253_1: rule_code
+        rpcomp_253_1: check_status
+        material_code: material_code
+        material_group_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_259_1
+    context_name: add_checks_6
+    params:
+      columns:
+        rule_code_rpcomp_259_1: rule_code
+        rpcomp_259_1: check_status
+        material_code: material_code
+        conversion_numerator: value_checked
+        check_date: check_date
+        country_code_universe: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_26_1
+    context_name: add_checks_7
+    params:
+      columns:
+        rule_code_rpcomp_26_1: rule_code
+        rpcomp_26_1: check_status
+        material_code: material_code
+        ean_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_265_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_265_1: rule_code
+        rpcomp_265_1: check_status
+        material_code: material_code
+        remaining_shelf_life: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_293_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_293_1: rule_code
+        rpcomp_293_1: check_status
+        material_code: material_code
+        reference_packaging_material_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_324_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_324_1: rule_code
+        rpcomp_324_1: check_status
+        material_code: material_code
+        temperature_condition_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_325_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_325_1: rule_code
+        rpcomp_325_1: check_status
+        material_code: material_code
+        total_shelf_life: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_371_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_371_1: rule_code
+        rpcomp_371_1: check_status
+        material_code: material_code
+        weight_unit: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_53_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_53_1: rule_code
+        rpcomp_53_1: check_status
+        material_code: material_code
+        bpp_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_53_3
+    context_name: add_checks_8
+    params:
+      columns:
+        rule_code_rpcomp_53_3: rule_code
+        rpcomp_53_3: check_status
+        material_code: material_code
+        bpp_code_ban: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_6_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_6_1: rule_code
+        rpcomp_6_1: check_status
+        material_code: material_code
+        gross_weight: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_77_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_77_1: rule_code
+        rpcomp_77_1: check_status
+        material_code: material_code
+        net_weight: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_81_1
+    context_name: add_checks_6
+    params:
+      columns:
+        rule_code_rpcomp_81_1: rule_code
+        rpcomp_81_1: check_status
+        material_code: material_code
+        conversion_denominator: value_checked
+        check_date: check_date
+        country_code_universe: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_87_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_87_1: rule_code
+        rpcomp_87_1: check_status
+        material_code: material_code
+        coffee_capsule_system_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_88_1
+    # context_name: add_checks
+    context_name: add_checks_5
+    params:
+      columns:
+        rule_code_rpcomp_88_1: rule_code
+        rpcomp_88_1: check_status
+        material_code: material_code
+        coffee_channel_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_89_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_89_1: rule_code
+        rpcomp_89_1: check_status
+        material_code: material_code
+        coffee_class_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_90_1
+    # context_name: add_checks
+    context_name: add_checks_5
+    params:
+      columns:
+        rule_code_rpcomp_90_1: rule_code
+        rpcomp_90_1: check_status
+        material_code: material_code
+        coffee_format_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_91_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rpcomp_91_1: rule_code
+        rpcomp_91_1: check_status
+        material_code: material_code
+        coffee_method_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_26_2
+    context_name: add_checks_9
+    params:
+      columns:
+        rule_code_rpcomp_26_2: rule_code
+        rpcomp_26_2: check_status
+        material_code: material_code
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        sales_org_code: sales_org_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rpcomp_26_3
+    context_name: add_checks_10
+    params:
+      columns:
+        rule_code_rpcomp_26_3: rule_code
+        rpcomp_26_3: check_status
+        material_code: material_code
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        sales_org_code: sales_org_code
+        sap_cluster: sap_cluster
+      distinct: true
+      
+  - kind: select
+    name: select_rpcomp_82_1
+    context_name: add_checks_11
+    params:
+      columns:
+        rule_code_rpcomp_82_1: rule_code
+        rpcomp_82_1: check_status
+        material_code: material_code
+        value_checked: value_checked
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rpcomp_15_1
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_153_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_161_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_161_3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_166_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_196_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_201_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_204_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_252_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_253_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_259_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_26_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_265_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_293_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_324_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_325_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_371_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_53_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_53_3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_6_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_77_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_81_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_87_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_88_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_89_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_90_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_91_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_26_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_26_3
+      
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_rpcomp_82_1
+
+  - kind: write_dataio
+    name: write_product_general_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: product_general_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

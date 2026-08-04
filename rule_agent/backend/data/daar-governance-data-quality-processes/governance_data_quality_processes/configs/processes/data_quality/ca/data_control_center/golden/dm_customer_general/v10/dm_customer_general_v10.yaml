@@ -1,0 +1,2191 @@
+transform:
+  name: dm_customer_general
+  operations:
+
+  - kind: read_dataio
+    name: read_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: filter
+    name: filter_kna1
+    params:
+      - condition:
+          ( nodel <> 'X' and loevm <> 'X' AND (ktokd like '7%' OR ktokd like '9%') and aufsd not in ('S', 'NH', 'S3', 'S4', 'SY', 'U', 'R'))
+
+  - kind: add
+    name: add_kunnr_short
+    params:
+      - column: kunnr_short
+        expression: substring(kunnr, 1, 2)
+
+  - kind: select
+    name: select_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        kunnr_short: kunnr_short
+        aufsd: aufsd
+        land1: land1
+        adrnr: adrnr
+        name1: name1
+        name2: name2
+        name3: name3
+        name4: name4
+        ktokd: ktokd
+        katr1: katr1
+        katr6: katr6
+        katr7: katr7
+        katr4: katr4
+        kukla: kukla
+        bran1: bran1
+        hzuor: hzuor
+        lifnr: lifnr
+        nodel: nodel
+        stkzu: stkzu
+        ort01: ort01
+        ort02: ort02
+        pstlz: pstlz
+        sortl: sortl
+        loevm: loevm
+        stras: stras
+        stcd1: stcd1
+        stcd2: stcd2
+        stcd3: stcd3
+        stceg: stceg
+        erdat: erdat
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_dm_customer_sales_org
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+      schema_version: v3
+
+
+  - kind: select
+    name: select_dm_customer_sales_org
+    params:
+      columns:
+        customer_code: customer_code_knvv
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+      schema_version: v2
+
+  - kind: filter
+    name: filter_cluster_config
+    params:
+      - condition:
+          flag = 'DM_general'
+
+  - kind: select
+    name: select_cluster_config
+    params:
+      columns:
+        account_group_code: account_group_code
+        cluster: cluster
+        country_code: country_code
+
+  - kind: read_dataio
+    name: read_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: select
+    name: select_but000
+    params:
+      columns:
+        partner: partner
+        partner_guid: partner_guid
+        name_org1: name_org1
+        name_org2: name_org2
+        name_org3: name_org3
+        name_org4: name_org4
+        natpers: natpers
+        legal_enty: legal_enty
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_tvast
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvast
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvast
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvast
+    params:
+      columns:
+        aufsp: aufsp
+        vtext: tvast_vtext
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_tvk1t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvk1t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvk1t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvk1t
+    params:
+      columns:
+        katr1: katr1
+        vtext: tvk1t_vtext
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_tvk6t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvk6t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvk6t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvk6t
+    params:
+      columns:
+        katr6: katr6
+        vtext: tvk6t_vtext
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_tvk7t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvk7t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvk7t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvk7t
+    params:
+      columns:
+        katr7: katr7
+        vtext: tvk7t_vtext
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_tvk4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvk4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvk4t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvk4t
+    params:
+      columns:
+        katr4: katr4
+        vtext: tvk4t_vtext
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_t016t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t016t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t016t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t016t
+    params:
+      columns:
+        brsch: t016t_brsch
+        brtxt: brtxt
+        sap_cluster: t016t_sap_cluster
+
+  - kind: read_dataio
+    name: read_tkukt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tkukt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tkukt
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tkukt
+    params:
+      columns:
+        kukla: kukla
+        vtext: tkukt_vtext
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_zw2_cmdemand
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: zw2_cmdemand
+      schema_version: v1
+
+  - kind: select
+    name: select_zw2_cmdemand
+    params:
+      columns:
+        bran1: zw2_cmdemand_bran1
+        brsch: zw2_cmdemand_brsch
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_zw2_cmdemand_a9
+    context_name: read_zw2_cmdemand
+    params:
+      columns:
+        bran1: zw2_cmdemand_bran1_a9
+        brsch: zw2_cmdemand_brsch_a9
+        sap_cluster: sap_cluster
+
+
+  - kind: read_dataio
+    name: read_bp1012
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: bp1012
+      schema_version: v1
+
+  - kind: filter
+    name: filter_bp1012
+    params:
+      - condition:
+          grade_method = 'BD_SURV'
+
+  - kind: select
+    name: select_bp1012
+    params:
+      columns:
+        partner: bp1012_partner
+        grade: grade
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_but0is
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but0is
+      schema_version: v1
+
+  - kind: filter
+    name: filter_but0is
+    params:
+      - condition:
+          isdef = 'X'
+
+  - kind: select
+    name: select_but0is
+    params:
+      columns:
+        partner: but0is_partner
+        ind_sector: ind_sector_x
+        sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_but0is_blank
+    context_name: read_but0is
+    params:
+      - condition:
+          isdef <> 'X'
+
+  - kind: select
+    name: select_but0is_blank
+    params:
+      columns:
+        partner: but0is_partner_blank
+        ind_sector: ind_sector
+        sap_cluster: sap_cluster
+
+  - kind: group
+    name: group_but0is_blank
+    params:
+      - aggs:
+          ind_sector: max
+        by:
+        - but0is_partner_blank
+        - sap_cluster
+
+  - kind: read_dataio
+    name: read_cvi_cust_link
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: cvi_cust_link
+      schema_version: v1
+
+  - kind: select
+    name: select_cvi_cust_link
+    params:
+      columns:
+        partner_guid: cvi_cust_link_partner_guid
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_ausp_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: customer
+      object_name: ausp
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ausp_crm
+    params:
+      - condition:
+          atinn IN('143','148','151','146','584','582','601','613')
+
+  - kind: select
+    name: select_ausp_crm
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_ausp_crm_for_grouping
+    context_name: filter_ausp_crm
+    params:
+      columns:
+        partner_guid: partner_guid
+        atinn: atinn
+        changed_at: changed_at
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_ausp_crm
+    params:
+      - aggs:
+          changed_at: max
+        by:
+        - partner_guid
+        - atinn
+        - sap_cluster
+
+  - kind: join
+    name: join_group_ausp_crm
+    context_name: filter_ausp_crm
+    params:
+      - other:
+          group_ausp_crm
+        how:
+          inner
+        columns:
+          partner_guid: partner_guid
+          atinn: atinn
+          changed_at: max_changed_at
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_ausp_crm_143
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '143'
+
+  - kind: select
+    name: select_ausp_crm_143
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_143
+        atinn: ausp_atinn_143
+        atwrt: ausp_atwrt_143
+        sap_cluster: sap_cluster_143
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_148
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '148'
+
+  - kind: select
+    name: select_ausp_crm_148
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_148
+        atinn: ausp_atinn_148
+        atwrt: ausp_atwrt_148
+        sap_cluster: sap_cluster_148
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_151
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '151'
+
+  - kind: select
+    name: select_ausp_crm_151
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_151
+        atinn: ausp_atinn_151
+        atwrt: ausp_atwrt_151
+        sap_cluster: sap_cluster_151
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_146
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '146'
+
+  - kind: select
+    name: select_ausp_crm_146
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_146
+        atinn: ausp_atinn_146
+        atwrt: ausp_atwrt_146
+        sap_cluster: sap_cluster_146
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_584
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '584'
+
+  - kind: select
+    name: select_ausp_crm_584
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_584
+        atinn: ausp_atinn_584
+        atwrt: ausp_atwrt_584
+        sap_cluster: sap_cluster_584
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_582
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '582'
+
+  - kind: select
+    name: select_ausp_crm_582
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_582
+        atinn: ausp_atinn_582
+        atwrt: ausp_atwrt_582
+        sap_cluster: sap_cluster_582
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_601
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '601'
+
+  - kind: select
+    name: select_ausp_crm_601
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_601
+        atinn: ausp_atinn_601
+        atwrt: ausp_atwrt_601
+        sap_cluster: sap_cluster_601
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_613
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '613'
+
+  - kind: select
+    name: select_ausp_crm_613
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_613
+        atinn: ausp_atinn_613
+        atwrt: ausp_atwrt_613
+        sap_cluster: sap_cluster_613
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cawn_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: cawn
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cawn_crm
+    params:
+      - condition:
+          atinn IN('143','148','151','146','584','582','601','613')
+
+  - kind: select
+    name: select_cawn_crm_143
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_143
+        atwrt: cawn_atwrt_143
+        atzhl: cawn_atzhl_143
+        sap_cluster: sap_cluster_143
+
+  - kind: select
+    name: select_cawn_crm_148
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_148
+        atwrt: cawn_atwrt_148
+        atzhl: cawn_atzhl_148
+        sap_cluster: sap_cluster_148
+
+  - kind: select
+    name: select_cawn_crm_151
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_151
+        atwrt: cawn_atwrt_151
+        atzhl: cawn_atzhl_151
+        sap_cluster: sap_cluster_151
+
+  - kind: select
+    name: select_cawn_crm_146
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_146
+        atwrt: cawn_atwrt_146
+        atzhl: cawn_atzhl_146
+        sap_cluster: sap_cluster_146
+
+  - kind: select
+    name: select_cawn_crm_584
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_584
+        atwrt: cawn_atwrt_584
+        atzhl: cawn_atzhl_584
+        sap_cluster: sap_cluster_584
+
+  - kind: select
+    name: select_cawn_crm_582
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_582
+        atwrt: cawn_atwrt_582
+        atzhl: cawn_atzhl_582
+        sap_cluster: sap_cluster_582
+
+  - kind: select
+    name: select_cawn_crm_601
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_601
+        atwrt: cawn_atwrt_601
+        atzhl: cawn_atzhl_601
+        sap_cluster: sap_cluster_601
+
+  - kind: select
+    name: select_cawn_crm_613
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_613
+        atwrt: cawn_atwrt_613
+        atzhl: cawn_atzhl_613
+        sap_cluster: sap_cluster_613
+
+  - kind: read_dataio
+    name: read_cawnt_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: cawnt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cawnt_crm
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_cawnt_crm_143
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_143
+        atwtb: cawnt_atwtb_143
+        atzhl: cawnt_atzhl_143
+        sap_cluster: sap_cluster_143
+
+  - kind: select
+    name: select_cawnt_crm_148
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_148
+        atwtb: cawnt_atwtb_148
+        atzhl: cawnt_atzhl_148
+        sap_cluster: sap_cluster_148
+
+  - kind: select
+    name: select_cawnt_crm_151
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_151
+        atwtb: cawnt_atwtb_151
+        atzhl: cawnt_atzhl_151
+        sap_cluster: sap_cluster_151
+
+  - kind: select
+    name: select_cawnt_crm_146
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_146
+        atwtb: cawnt_atwtb_146
+        atzhl: cawnt_atzhl_146
+        sap_cluster: sap_cluster_146
+
+  - kind: select
+    name: select_cawnt_crm_584
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_584
+        atwtb: cawnt_atwtb_584
+        atzhl: cawnt_atzhl_584
+        sap_cluster: sap_cluster_584
+
+  - kind: select
+    name: select_cawnt_crm_582
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_582
+        atwtb: cawnt_atwtb_582
+        atzhl: cawnt_atzhl_582
+        sap_cluster: sap_cluster_582
+
+  - kind: select
+    name: select_cawnt_crm_601
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_601
+        atwtb: cawnt_atwtb_601
+        atzhl: cawnt_atzhl_601
+        sap_cluster: sap_cluster_601
+
+  - kind: select
+    name: select_cawnt_crm_613
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_613
+        atwtb: cawnt_atwtb_613
+        atzhl: cawnt_atzhl_613
+        sap_cluster: sap_cluster_613
+
+  - kind: read_dataio
+    name: read_dim_country
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dim_country
+      schema_version: v1
+
+  - kind: select
+    name: select_dc
+    context_name: read_dim_country
+    params:
+      columns:
+        country_code: country_code_dc
+        country_name: country_name_dc
+
+  - kind: read_dataio
+    name: read_conf_customer_code_country_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_customer_code_country_mapping
+      schema_version: v1
+
+  - kind: select
+    name: select_ccm
+    context_name: read_conf_customer_code_country_mapping
+    params:
+      columns:
+        customer_code_short: customer_code_short
+        country_code: country_code_ccm
+
+  - kind: join
+    name: join_ausp_crm_143
+    context_name: select_ausp_crm
+    params:
+      - other:
+          select_ausp_crm_143
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_143
+          sap_cluster: sap_cluster_143
+      - other:
+          select_ausp_crm_148
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_148
+          sap_cluster: sap_cluster_148
+      - other:
+          select_ausp_crm_151
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_151
+          sap_cluster: sap_cluster_151
+      - other:
+          select_ausp_crm_146
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_146
+          sap_cluster: sap_cluster_146
+      - other:
+          select_ausp_crm_584
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_584
+          sap_cluster: sap_cluster_584
+      - other:
+          select_ausp_crm_582
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_582
+          sap_cluster: sap_cluster_582
+      - other:
+          select_ausp_crm_601
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_601
+          sap_cluster: sap_cluster_601
+      - other:
+          select_ausp_crm_613
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_613
+          sap_cluster: sap_cluster_613
+      - other:
+          select_cawn_crm_143
+        how:
+          left
+        columns:
+          ausp_atinn_143: cawn_atinn_143
+          ausp_atwrt_143: cawn_atwrt_143
+          sap_cluster_143: sap_cluster_143
+      - other:
+          select_cawn_crm_148
+        how:
+          left
+        columns:
+          ausp_atinn_148: cawn_atinn_148
+          ausp_atwrt_148: cawn_atwrt_148
+          sap_cluster_148: sap_cluster_148
+      - other:
+          select_cawn_crm_151
+        how:
+          left
+        columns:
+          ausp_atinn_151: cawn_atinn_151
+          ausp_atwrt_151: cawn_atwrt_151
+          sap_cluster_151: sap_cluster_151
+      - other:
+          select_cawn_crm_146
+        how:
+          left
+        columns:
+          ausp_atinn_146: cawn_atinn_146
+          ausp_atwrt_146: cawn_atwrt_146
+          sap_cluster_146: sap_cluster_146
+      - other:
+          select_cawn_crm_584
+        how:
+          left
+        columns:
+          ausp_atinn_584: cawn_atinn_584
+          ausp_atwrt_584: cawn_atwrt_584
+          sap_cluster_584: sap_cluster_584
+      - other:
+          select_cawn_crm_582
+        how:
+          left
+        columns:
+          ausp_atinn_582: cawn_atinn_582
+          ausp_atwrt_582: cawn_atwrt_582
+          sap_cluster_582: sap_cluster_582
+      - other:
+          select_cawn_crm_601
+        how:
+          left
+        columns:
+          ausp_atinn_601: cawn_atinn_601
+          ausp_atwrt_601: cawn_atwrt_601
+          sap_cluster_601: sap_cluster_601
+      - other:
+          select_cawn_crm_613
+        how:
+          left
+        columns:
+          ausp_atinn_613: cawn_atinn_613
+          ausp_atwrt_613: cawn_atwrt_613
+          sap_cluster_613: sap_cluster_613
+      - other:
+          select_cawnt_crm_143
+        how:
+          left
+        columns:
+          cawn_atinn_143: cawnt_atinn_143
+          cawn_atzhl_143: cawnt_atzhl_143
+          sap_cluster_143: sap_cluster_143
+      - other:
+          select_cawnt_crm_148
+        how:
+          left
+        columns:
+          cawn_atinn_148: cawnt_atinn_148
+          cawn_atzhl_148: cawnt_atzhl_148
+          sap_cluster_148: sap_cluster_148
+      - other:
+          select_cawnt_crm_151
+        how:
+          left
+        columns:
+          cawn_atinn_151: cawnt_atinn_151
+          cawn_atzhl_151: cawnt_atzhl_151
+          sap_cluster_151: sap_cluster_151
+      - other:
+          select_cawnt_crm_146
+        how:
+          left
+        columns:
+          cawn_atinn_146: cawnt_atinn_146
+          cawn_atzhl_146: cawnt_atzhl_146
+          sap_cluster_146: sap_cluster_146
+      - other:
+          select_cawnt_crm_584
+        how:
+          left
+        columns:
+          cawn_atinn_584: cawnt_atinn_584
+          cawn_atzhl_584: cawnt_atzhl_584
+          sap_cluster_584: sap_cluster_584
+      - other:
+          select_cawnt_crm_582
+        how:
+          left
+        columns:
+          cawn_atinn_582: cawnt_atinn_582
+          cawn_atzhl_582: cawnt_atzhl_582
+          sap_cluster_582: sap_cluster_582
+      - other:
+          select_cawnt_crm_601
+        how:
+          left
+        columns:
+          cawn_atinn_601: cawnt_atinn_601
+          cawn_atzhl_601: cawnt_atzhl_601
+          sap_cluster_601: sap_cluster_601
+      - other:
+          select_cawnt_crm_613
+        how:
+          left
+        columns:
+          cawn_atinn_613: cawnt_atinn_613
+          cawn_atzhl_613: cawnt_atzhl_613
+          sap_cluster_613: sap_cluster_613
+
+  - kind: select
+    name: select_ausp_crm_all
+    params:
+      columns:
+        ausp_crm_partner_guid: partner_guid
+        cawn_atwrt_143: cawn_atwrt_143
+        cawnt_atwtb_143: cawnt_atwtb_143
+        ausp_atwrt_148: ausp_atwrt_148
+        cawn_atwrt_148: cawn_atwrt_148
+        cawnt_atwtb_148: cawnt_atwtb_148
+        ausp_atwrt_151: ausp_atwrt_151
+        cawn_atwrt_151: cawn_atwrt_151
+        cawnt_atwtb_151: cawnt_atwtb_151
+        cawn_atwrt_146: cawn_atwrt_146
+        cawnt_atwtb_146: cawnt_atwtb_146
+        cawn_atwrt_584: cawn_atwrt_584
+        cawnt_atwtb_584: cawnt_atwtb_584
+        ausp_atwrt_582: ausp_atwrt_582
+        cawn_atwrt_582: cawn_atwrt_582
+        cawnt_atwtb_582: cawnt_atwtb_582
+        cawn_atwrt_601: cawn_atwrt_601
+        cawnt_atwtb_601: cawnt_atwtb_601
+        cawn_atwrt_613: cawn_atwrt_613
+        cawnt_atwtb_613: cawnt_atwtb_613
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_zglobal_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: zglobal_customer
+      schema_version: v1
+
+  - kind: select
+    name: select_zglobal_customer
+    params:
+      columns:
+        customer_id: zc_customer_id
+        customer_name: customer_name
+        sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_ztrade_name
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: ztrade_name
+      schema_version: v1
+
+  - kind: select
+    name: select_ztrade_name
+    params:
+      columns:
+        customer_id: zct_customer_id
+        trade_id: trade_id
+        trade_id_name: trade_id_name
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_ztrade_name_zct2
+    params:
+      columns:
+        trade_id: zct2_trade_id
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_t005
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t005
+      schema_version: v1
+
+  - kind: select
+    name: select_t005
+    params:
+      columns:
+        land1: t005_land1
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_t005_0
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_0
+        sap_cluster: t005_sap_cluster_0
+
+  - kind: select
+    name: select_t005_1
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_1
+        sap_cluster: t005_sap_cluster_1
+
+  - kind: select
+    name: select_t005_2
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_2
+        sap_cluster: t005_sap_cluster_2
+
+  - kind: select
+    name: select_t005_3
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_3
+        sap_cluster: t005_sap_cluster_3
+
+  - kind: select
+    name: select_t005_4
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_4
+        sap_cluster: t005_sap_cluster_4
+
+  - kind: select
+    name: select_t005_5
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_5
+        sap_cluster: t005_sap_cluster_5
+
+  - kind: select
+    name: select_t005_6
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_6
+        sap_cluster: t005_sap_cluster_6
+
+  - kind: read_dataio
+    name: read_dfkkbptaxnum
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: dfkkbptaxnum
+      schema_version: v1
+
+  - kind: add
+    name: add_dfkkbptaxnum
+    params:
+      - column: substring_taxtype
+        expression: substring(taxtype, 0, 2)
+
+  - kind: select
+    name: select_dfkkbptaxnum
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_0
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%0'
+
+  - kind: select
+    name: select_dfkkbptaxnum_0
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_0
+        taxnum: taxnum_0
+        substring_taxtype: substring_taxtype_0
+        sap_cluster: sap_cluster_0
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_1
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%1'
+
+  - kind: select
+    name: select_dfkkbptaxnum_1
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_1
+        taxnum: taxnum_1
+        substring_taxtype: substring_taxtype_1
+        sap_cluster: sap_cluster_1
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_2
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%2'
+
+  - kind: select
+    name: select_dfkkbptaxnum_2
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_2
+        taxnum: taxnum_2
+        substring_taxtype: substring_taxtype_2
+        sap_cluster: sap_cluster_2
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_3
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%3'
+
+  - kind: select
+    name: select_dfkkbptaxnum_3
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_3
+        taxnum: taxnum_3
+        substring_taxtype: substring_taxtype_3
+        sap_cluster: sap_cluster_3
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_4
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%4'
+
+  - kind: select
+    name: select_dfkkbptaxnum_4
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_4
+        taxnum: taxnum_4
+        substring_taxtype: substring_taxtype_4
+        sap_cluster: sap_cluster_4
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_5
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%5'
+
+  - kind: select
+    name: select_dfkkbptaxnum_5
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_5
+        taxnum: taxnum_5
+        substring_taxtype: substring_taxtype_5
+        sap_cluster: sap_cluster_5
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_6
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%6'
+
+  - kind: select
+    name: select_dfkkbptaxnum_6
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_6
+        taxnum: taxnum_6
+        substring_taxtype: substring_taxtype_6
+        sap_cluster: sap_cluster_6
+      distinct: true
+
+  - kind: join
+    name: join_dfkkbptaxnum_0_1_2_3_4_5_6
+    context_name: select_dfkkbptaxnum
+    params:
+      - other:
+          select_dfkkbptaxnum_0
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_0
+      - other:
+          select_dfkkbptaxnum_1
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_1
+      - other:
+          select_dfkkbptaxnum_2
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_2
+      - other:
+          select_dfkkbptaxnum_3
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_3
+      - other:
+          select_dfkkbptaxnum_4
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_4
+      - other:
+          select_dfkkbptaxnum_5
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_5
+      - other:
+          select_dfkkbptaxnum_6
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster_6
+
+
+  - kind: read_dataio
+    name: read_lot_gc_adr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: lot_gc_adr
+      schema_version: v1
+
+  - kind: select
+    name: select_l
+    params:
+      columns:
+        lot_gc_latitude: lot_gc_latitude_l
+        lot_gc_longitud: lot_gc_longitud_l
+        addrnumber: addrnumber_l
+        sap_cluster: sap_cluster_l
+
+  - kind: read_dataio
+    name: read_ca_0_cus03_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_cus03_customer
+      schema_version: v1
+
+  - kind: select
+    name: select_ca_0_cus03_customer
+    params:
+      columns:
+        customer: customer
+        bic_credoutlt: bic_credoutlt
+
+  - kind: read_dataio
+    name: read_dummy_customers
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dummy_customers
+      schema_version: v1
+
+  - kind: select
+    name: select_dummy_customers
+    params:
+      columns:
+        customer_code: customer_code
+
+
+  - kind: read_dataio
+    name: read_cacus03pi_customer_pi
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: cacus03pi_customer_pi
+      schema_version: v1
+
+  - kind: select
+    name: select_cacus03pi_customer_pi
+    params:
+      columns:
+        customer: customer_cacus03pi
+        bic_cterrid: bic_cterrid
+        cterrid_desc: cterrid_desc
+        ctlm_pid_desc: ctlm_pid_desc
+
+  - kind: read_dataio
+    name: read_cdhdr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdhdr
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdhdr
+    context_name: read_cdhdr
+    params:
+      - condition: objectclas = 'DEBI'
+
+  - kind: select
+    name: select_cdhdr
+    context_name: filter_cdhdr
+    params:
+      columns:
+        changenr: changenr
+        udate: udate
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cdpos
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdpos
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cdpos
+    context_name: read_cdpos
+    params:
+      - condition: objectclas = 'DEBI' AND chngind = 'U' AND tabname = 'KNA1' AND fname = 'AUFSD'
+
+  - kind: select
+    name: select_cdpos
+    context_name: filter_cdpos
+    params:
+      columns:
+        objectid: objectid
+        value_new: value_new
+        changenr: changenr
+        sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_cdhdr_cdpos
+    context_name: select_cdpos
+    params:
+      - other:
+          select_cdhdr
+        how:
+          left
+        columns:
+          changenr: changenr
+          sap_cluster: sap_cluster
+
+  - kind: group
+    name: group_cdhdr_cdpos
+    context_name: join_cdhdr_cdpos
+    params:
+      - aggs:
+          udate: max
+        by:
+        - objectid
+        - value_new
+        - sap_cluster
+
+  - kind: select
+    name: select_udate
+    context_name: group_cdhdr_cdpos
+    params:
+      columns:
+        objectid: objectid
+        value_new: value_new
+        max_udate: udate
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_crm_activities
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_crm_activities
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dm_customer_crm_activities_visit
+    context_name: read_dm_customer_crm_activities
+    params:
+      - condition:
+          execution_visit_status <> ''
+
+  - kind: group
+    name: group_dm_customer_crm_activities_visit
+    context_name: filter_dm_customer_crm_activities_visit
+    params:
+      - aggs:
+          customer_code: count
+        by:
+        - customer_code
+
+  - kind: select
+    name: select_customer_crm_activities_visit
+    context_name: group_dm_customer_crm_activities_visit
+    params:
+      columns:
+        count_customer_code: count_crm_activities_visit
+        customer_code: customer_code
+      distinct: true
+
+  - kind: join
+    name: join_kna1_but000
+    context_name: select_kna1
+    params:
+      - other:
+          select_dm_customer_sales_org
+        how:
+          inner
+        columns:
+          kunnr: customer_code_knvv
+          sap_cluster: sap_cluster
+      - other:
+          select_cluster_config
+        how:
+          inner
+        columns:
+          ktokd: account_group_code
+          sap_cluster: cluster
+      - other:
+          select_but000
+        how:
+          inner
+        columns:
+          kunnr: partner
+          sap_cluster: sap_cluster
+      - other:
+          select_tvast
+        how:
+          left
+        columns:
+          aufsd: aufsp
+          sap_cluster: sap_cluster
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+          sap_cluster: sap_cluster
+      - other:
+          select_tvk1t
+        how:
+          left
+        columns:
+          katr1: katr1
+          sap_cluster: sap_cluster
+      - other:
+          select_tvk6t
+        how:
+          left
+        columns:
+          katr6: katr6
+          sap_cluster: sap_cluster
+      - other:
+          select_tvk7t
+        how:
+          left
+        columns:
+          katr7: katr7
+          sap_cluster: sap_cluster
+      - other:
+          select_tvk4t
+        how:
+          left
+        columns:
+          katr4: katr4
+          sap_cluster: sap_cluster
+      - other:
+          select_zw2_cmdemand
+        how:
+          left
+        columns:
+          bran1: zw2_cmdemand_bran1
+          sap_cluster: sap_cluster
+      - other:
+          select_cvi_cust_link
+        how:
+          left
+        columns:
+          partner_guid: cvi_cust_link_partner_guid
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_crm_all
+        how:
+          left
+        columns:
+          partner_guid: partner_guid
+          sap_cluster: sap_cluster
+      - other:
+          select_t005
+        how:
+          left
+        columns:
+          country_code: t005_land1
+          sap_cluster: sap_cluster
+      - other:
+          join_dfkkbptaxnum_0_1_2_3_4_5_6
+        how:
+          left
+        columns:
+          kunnr: dfkkbptaxnum_partner
+          sap_cluster: sap_cluster
+      - other:
+          select_t005_0
+        how:
+          left
+        columns:
+          substring_taxtype_0: t005_land1_0
+          sap_cluster_0: t005_sap_cluster_0
+      - other:
+          select_t005_1
+        how:
+          left
+        columns:
+          substring_taxtype_1: t005_land1_1
+          sap_cluster_1: t005_sap_cluster_1
+      - other:
+          select_t005_2
+        how:
+          left
+        columns:
+          substring_taxtype_2: t005_land1_2
+          sap_cluster_2: t005_sap_cluster_2
+      - other:
+          select_t005_3
+        how:
+          left
+        columns:
+          substring_taxtype_3: t005_land1_3
+          sap_cluster_3: t005_sap_cluster_3
+      - other:
+          select_t005_4
+        how:
+          left
+        columns:
+          substring_taxtype_4: t005_land1_4
+          sap_cluster_4: t005_sap_cluster_4
+      - other:
+          select_t005_5
+        how:
+          left
+        columns:
+          substring_taxtype_5: t005_land1_5
+          sap_cluster_5: t005_sap_cluster_5
+      - other:
+          select_t005_6
+        how:
+          left
+        columns:
+          substring_taxtype_6: t005_land1_6
+          sap_cluster_6: t005_sap_cluster_6
+      - other:
+          select_bp1012
+        how:
+          left
+        columns:
+          kunnr: bp1012_partner
+          sap_cluster: sap_cluster
+      - other:
+          select_but0is
+        how:
+          left
+        columns:
+          kunnr: but0is_partner
+          sap_cluster: sap_cluster
+      - other:
+          group_but0is_blank
+        how:
+          left
+        columns:
+          kunnr: but0is_partner_blank
+          sap_cluster: sap_cluster
+      - other:
+          select_tkukt
+        how:
+          left
+        columns:
+          kukla: kukla
+          sap_cluster: sap_cluster
+      - other:
+          select_zglobal_customer
+        how:
+          left
+        columns:
+          ausp_atwrt_148: zc_customer_id
+          sap_cluster: sap_cluster
+      - other:
+          select_ztrade_name
+        how:
+          left
+        columns:
+          ausp_atwrt_148: zct_customer_id
+          ausp_atwrt_151: trade_id
+          sap_cluster: sap_cluster
+      - other:
+          select_ztrade_name_zct2
+        how:
+          left
+        columns:
+          ausp_atwrt_151: zct2_trade_id
+          sap_cluster: sap_cluster
+      - other:
+          select_l
+        how:
+          left
+        columns:
+          adrnr: addrnumber_l
+          sap_cluster: sap_cluster_l
+      - other:
+          select_ca_0_cus03_customer
+        how:
+          left
+        columns:
+          kunnr: customer
+      - other:
+          select_dummy_customers
+        how:
+          anti
+        columns:
+          kunnr: customer_code
+      - other:
+          select_cacus03pi_customer_pi
+        how:
+          left
+        columns:
+          kunnr: customer_cacus03pi
+      - other:
+          select_udate
+        how:
+          left
+        columns:
+          kunnr: objectid
+          aufsd: value_new
+          sap_cluster: sap_cluster
+      - other:
+          select_ccm
+        how:
+          left
+        columns:
+          kunnr_short: customer_code_short
+      - other:
+          select_dc
+        how:
+          left
+        columns:
+          country_code: country_code_dc
+      - other:
+          select_customer_crm_activities_visit
+        how:
+          left
+        columns:
+         kunnr: customer_code
+
+  - kind: add
+    name: add_dm_customer_general
+    params:
+      - column: is_allowed_country_code
+        expression: IF(isnull(t005_land1), '0', '1')
+      - column: industry_code1_map_flag
+        expression: IF(isnull(zw2_cmdemand_bran1), '0', '1')
+      - column: is_allowed_tax_0_country_code
+        expression: IF(isnull(t005_land1_0), '0', '1')
+      - column: is_allowed_tax_1_country_code
+        expression: IF(isnull(t005_land1_1), '0', '1')
+      - column: is_allowed_tax_2_country_code
+        expression: IF(isnull(t005_land1_2), '0', '1')
+      - column: is_allowed_tax_3_country_code
+        expression: IF(isnull(t005_land1_3), '0', '1')
+      - column: is_allowed_tax_4_country_code
+        expression: IF(isnull(t005_land1_4), '0', '1')
+      - column: is_allowed_tax_5_country_code
+        expression: IF(isnull(t005_land1_5), '0', '1')
+      - column: is_allowed_tax_6_country_code
+        expression: IF(isnull(t005_land1_6), '0', '1')
+      - column: is_allowed_trading_group_code
+        expression: IF(isnull(zct2_trade_id), '0', '1')
+      - column: ind_sector
+        expression: IF(isnull(ind_sector_x), max_ind_sector, ind_sector_x)
+
+  - kind: join
+    name: join_a8_a9
+    params:
+      - other:
+          select_zw2_cmdemand_a9
+        how:
+          left
+        columns:
+          bran1: zw2_cmdemand_bran1_a9
+          ind_sector: zw2_cmdemand_brsch_a9
+          sap_cluster: sap_cluster
+      - other:
+          select_t016t
+        how:
+          left
+        columns:
+          ind_sector: t016t_brsch
+          sap_cluster: t016t_sap_cluster
+
+  - kind: add
+    name: add_dm_customer_general_a9
+    params:
+      - column: is_industry_sub_demand_area_allowed
+        expression: IF(isnull(zw2_cmdemand_bran1_a9), '0', '1')
+
+  - kind: add
+    name: add_dm_customer_general__taxs
+    params:
+      - column: taxtype_falg_0
+        expression: "CASE WHEN (taxtype_0 is null) THEN '0'  WHEN (land1 = substring_taxtype_0) THEN '1' ELSE '10' END"
+      - column: taxtype_falg_1
+        expression: "CASE WHEN (taxtype_1 is null) THEN '0'  WHEN (land1 = substring_taxtype_1) THEN '1' ELSE '10' END"
+      - column: taxtype_falg_2
+        expression: "CASE WHEN (taxtype_2 is null) THEN '0'  WHEN (land1 = substring_taxtype_2) THEN '1' ELSE '10' END"
+      - column: taxtype_falg_3
+        expression: "CASE WHEN (taxtype_3 is null) THEN '0'  WHEN (land1 = substring_taxtype_3) THEN '1' ELSE '10' END"
+      - column: taxtype_falg_4
+        expression: "CASE WHEN (taxtype_4 is null) THEN '0'  WHEN (land1 = substring_taxtype_4) THEN '1' ELSE '10' END"
+      - column: taxtype_falg_5
+        expression: "CASE WHEN (taxtype_5 is null) THEN '0'  WHEN (land1 = substring_taxtype_5) THEN '1' ELSE '10' END"
+      - column: taxtype_falg_6
+        expression: "CASE WHEN (taxtype_6 is null) THEN '0'  WHEN (land1 = substring_taxtype_6) THEN '1' ELSE '10' END"
+
+  - kind: add
+    name: add_dm_customer_general__taxs
+    params:
+      - column: taxtype_falg_sum
+        expression: taxtype_falg_0 + taxtype_falg_1 + taxtype_falg_2 + taxtype_falg_3 + taxtype_falg_4 + taxtype_falg_5 + taxtype_falg_6
+
+
+  - kind: group
+    name: group_tax
+    params:
+      - aggs:
+          kunnr: count
+        by:
+        - kunnr
+        - sap_cluster
+
+  - kind: join
+    name: join_group_tax_add_tax
+    context_name: add_dm_customer_general__taxs
+    params:
+      - other:
+          group_tax
+        how:
+          left
+        columns:
+          kunnr: kunnr
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_true
+    params:
+      - column: taxtype_falg_true
+        expression: "CASE WHEN taxtype_falg_sum < 10 THEN TRUE WHEN land1 = substring_taxtype_0 THEN TRUE WHEN land1 = substring_taxtype_1 THEN TRUE WHEN land1 = substring_taxtype_2 THEN TRUE WHEN land1 = substring_taxtype_3 THEN TRUE WHEN land1 = substring_taxtype_4 THEN TRUE WHEN land1 = substring_taxtype_5 THEN TRUE WHEN land1 = substring_taxtype_6 THEN TRUE ELSE FALSE END"
+
+#Add legal_name and name_above_door and customer visits flag
+  - kind: add
+    name: add_new_fields
+    params:
+      - column: legal_name
+        expression: CASE WHEN country_code = 'IT' THEN concat(name_org1,' ',name_org2) WHEN country_code = 'RO' THEN concat(name_org1,' ',name_org3,' ',name_org4) WHEN country_code = 'CZ' THEN '-1' WHEN country_code = 'SK' THEN '-1' WHEN country_code = 'RS' THEN name_org1 WHEN country_code = 'ME' THEN name_org1 WHEN country_code = 'KV' THEN name_org1 WHEN country_code = 'BG' THEN name_org1 WHEN country_code = 'GR' THEN name_org1 WHEN country_code = 'CY' THEN name_org1 WHEN country_code = 'NG' THEN name_org1 WHEN country_code = 'AT' THEN name_org1 WHEN country_code = 'HR' THEN name_org1 WHEN country_code = 'BA' THEN name_org1 WHEN country_code = 'SI' THEN name_org1 WHEN country_code = 'MK' THEN name_org2 WHEN country_code = 'UA' THEN name_org1 WHEN country_code = 'AM' THEN '-1' WHEN country_code = 'MD' THEN name_org1 WHEN country_code = 'EG' THEN name_org1 WHEN country_code = 'HU' THEN name_org2 WHEN country_code = 'CH' THEN name_org1 WHEN country_code = 'IE' THEN name_org3 WHEN country_code = 'GB' THEN name_org3 WHEN country_code = 'PL' THEN '-1' WHEN country_code = 'EE' THEN name_org1 WHEN country_code = 'LT' THEN name_org1 WHEN country_code = 'LV' THEN name_org1 ELSE '-1' END
+      - column: name_above_door
+        expression: CASE WHEN country_code = 'IT' THEN name_org2 WHEN country_code = 'RO' THEN name_org2 WHEN country_code = 'CZ' THEN concat(name_org1,' ',name_org2) WHEN country_code = 'SK' THEN concat(name_org1,' ',name_org2) WHEN country_code = 'RS' THEN name_org1 WHEN country_code = 'ME' THEN name_org1 WHEN country_code = 'KV' THEN name_org1 WHEN country_code = 'BG' THEN name_org2 WHEN country_code = 'GR' THEN name_org2 WHEN country_code = 'CY' THEN name_org2 WHEN country_code = 'NG' THEN name_org2 WHEN country_code = 'AT' THEN name_org2 WHEN country_code = 'HR' THEN name_org2 WHEN country_code = 'BA' THEN name_org2 WHEN country_code = 'SI' THEN name_org2 WHEN country_code = 'MK' THEN name_org1 WHEN country_code = 'UA' THEN name_org2 WHEN country_code = 'AM' THEN concat(name_org1,' ',name_org2) WHEN country_code = 'MD' THEN name_org2 WHEN country_code = 'EG' THEN name_org2 WHEN country_code = 'HU' THEN name_org1 WHEN country_code = 'CH' THEN name_org2 WHEN country_code = 'IE' THEN name_org1 WHEN country_code = 'GB' THEN name_org1 WHEN country_code = 'PL' THEN concat(name_org1,' ',name_org2) WHEN country_code = 'EE' THEN name_org2 WHEN country_code = 'LT' THEN name_org2 WHEN country_code = 'LV' THEN name_org2 ELSE '-1' END
+      - column: customer_visits_flag
+        expression: if(count_crm_activities_visit > 0, '1', '0')
+
+  - kind: filter
+    name: filter_dm_customer_general_sum_flag
+    params:
+      - condition:
+          taxtype_falg_sum >= 0 AND taxtype_falg_sum <= 7 or (count_kunnr > 1 and taxtype_falg_true = TRUE and taxtype_falg_sum < 10) or (count_kunnr < 2 and taxtype_falg_true = TRUE and taxtype_falg_sum > 10)
+
+  - kind: governance_data_quality_processes.custom_operations.text.transliterate_non_latin.TransliterateNonLatinOperation
+    name: transliterate_non_latin
+    context_name: filter_dm_customer_general_sum_flag
+    config_kind: governance_data_quality_processes.custom_operation_configs.text.transliterate_non_latin_config.TransliterateNonLatinOperationConfig
+    params:
+      columns: 
+        legal_name: legal_name_translit
+        name_above_door: name_above_door_translit
+
+  - kind: governance_data_quality_processes.custom_operations.nad_validator.nad_validator.NADValidatorOperation
+    name: nad_validator
+    context_name: transliterate_non_latin
+    config_kind: governance_data_quality_processes.custom_operation_configs.nad_validator.nad_validator_config.NADValidatorOperationConfig
+    params:
+      column_nad: "name_above_door_translit"
+      column_country: "country_name_dc"
+
+  - kind: select
+    name: select_dm_customer_general
+    params:
+      columns:
+        kunnr: customer_code
+        country_code: country_code
+        # country_name_dc: country_name
+        is_allowed_country_code: is_allowed_country_code
+        name_org1: organization_1_name
+        name_org2: organization_2_name
+        name_org3: organization_3_name
+        name_org4: organization_4_name
+        natpers: natural_person_flag
+        name1: customer_1_name
+        name2: customer_2_name
+        name3: customer_3_name
+        name4: customer_4_name
+        ktokd: account_group_code
+        txt30: account_group_name
+        katr1: customer_activity_cluster_code
+        tvk1t_vtext: customer_activity_cluster_name
+        katr6: trade_channel_code
+        tvk6t_vtext: trade_channel_name
+        katr7: sub_trade_channel_code
+        tvk7t_vtext: sub_trade_channel_name
+        katr4: distribution_type_code
+        tvk4t_vtext: distribution_type_name
+        aufsd: central_order_block_code
+        tvast_vtext: central_order_block_name
+        kukla: customer_classification_code
+        tkukt_vtext: customer_classification_name
+        bran1: industry_code1
+        industry_code1_map_flag: industry_code1_map_flag
+        hzuor: assignment_hierarchy_level
+        lifnr: vendor_code
+        nodel: deletion_block_flag
+        stkzu: liable_vat_flag
+        ort01: city
+        ort02: district
+        pstlz: postal_code
+        sortl: sort_field
+        loevm: deletion_central_flag
+        stras: street_house_number
+        stcd1: tax_number_1
+        stcd2: tax_number_2
+        stcd3: tax_number_3
+        stceg: vat_number
+        ind_sector: industry_code
+        brtxt: industry_name
+        is_industry_sub_demand_area_allowed: is_industry_sub_demand_area_allowed
+        cvi_cust_link_partner_guid: business_partner_guid
+        cawn_atwrt_143: ccaf_code
+        cawnt_atwtb_143: ccaf_name
+        ausp_atwrt_151: trading_group_code
+        cawnt_atwtb_151: trading_group_name
+        is_allowed_trading_group_code: is_allowed_trading_group_code
+        trade_id_name: trading_standard_name
+        ausp_atwrt_148: global_customer_code
+        cawnt_atwtb_148: global_customer_name
+        customer_name: global_customer_standard_name
+        cawn_atwrt_146: channel_priority_code
+        cawnt_atwtb_146: channel_priority_name
+        cawn_atwrt_584: actual_warm_space_code
+        cawnt_atwtb_584: actual_warm_space_name
+        ausp_atwrt_582: target_coolers_doors_code
+        cawnt_atwtb_582: target_coolers_doors_name
+        cawn_atwrt_613: local_segmentation_code
+        cawnt_atwtb_613: local_segmentation_name
+        cawn_atwrt_601: red_outlet_flag
+        grade: rating_value
+        taxtype_0: tax_0_type
+        is_allowed_tax_0_country_code: is_allowed_tax_0_country_code
+        taxnum_0: tax_0_value
+        taxtype_1: tax_1_type
+        is_allowed_tax_1_country_code: is_allowed_tax_1_country_code
+        taxnum_1: tax_1_value
+        taxtype_2: tax_2_type
+        is_allowed_tax_2_country_code: is_allowed_tax_2_country_code
+        taxnum_2: tax_2_value
+        taxtype_3: tax_3_type
+        is_allowed_tax_3_country_code: is_allowed_tax_3_country_code
+        taxnum_3: tax_3_value
+        taxtype_4: tax_4_type
+        is_allowed_tax_4_country_code: is_allowed_tax_4_country_code
+        taxnum_4: tax_4_value
+        taxtype_5: tax_5_type
+        is_allowed_tax_5_country_code: is_allowed_tax_5_country_code
+        taxnum_5: tax_5_value
+        taxtype_6: tax_6_type
+        is_allowed_tax_6_country_code: is_allowed_tax_6_country_code
+        taxnum_6: tax_6_value
+        lot_gc_latitude_l: latitude
+        lot_gc_longitud_l: longitude
+        bic_credoutlt: red_survey_outlet_flag
+        bic_cterrid: business_developer_territory_code
+        cterrid_desc: business_developer_name
+        ctlm_pid_desc: team_leader_name
+        sap_cluster: sap_cluster
+        erdat: creation_date
+        legal_name: legal_name
+        name_above_door: name_above_door
+        udate: central_order_block_assignment_date
+        legal_enty: legal_form_code
+        country_code_ccm: country_code_from_customer_code
+        land1: country_code_from_sap_attribute
+        name_above_door_translit_FoundSuffix: name_above_door_corp_ind
+        legal_name_translit: legal_name_translit
+        name_above_door_translit: name_above_door_translit
+        customer_visits_flag: customer_visits_flag
+      distinct: true
+
+  - kind: cast
+    name: cast_central_order_block_assignment_date
+    context_name: select_dm_customer_general
+    params:
+      - column: central_order_block_assignment_date
+        to: date
+
+  - kind: filter
+    name: filter_dm_customer_general
+    context_name: cast_central_order_block_assignment_date
+    params:
+      - condition:
+          sub_trade_channel_code <> 'ZZZ'
+
+  - kind: write_dataio
+    name: write_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      process_run_id: '{{process_run_id}}'
+      schema_version: v11
+      refresh_mode: full

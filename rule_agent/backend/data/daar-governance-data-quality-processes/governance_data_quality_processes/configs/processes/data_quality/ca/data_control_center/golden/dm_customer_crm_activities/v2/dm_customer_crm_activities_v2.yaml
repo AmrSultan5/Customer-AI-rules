@@ -1,0 +1,145 @@
+transform:
+  name: dm_customer_crm_activities
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ca_crm01m_crm_activities
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      namespace: mtc
+      domain: cchbc
+      object_name: ca_crm01m_crm_activities
+
+  - kind: filter
+    name: filter_ca_crm01m_crm_activities
+    params:
+      - condition:
+          calday > add_months(current_date(), -24) and isnotnull(customer)
+
+  - kind: select
+    name: select_ca_crm01m_crm_activities
+    params:
+      columns:
+        customer: customer
+        crm_prctyp: crm_prctyp
+        crm_rg: crm_rg
+        crm_rca: crm_rca
+        crm_usstat: crm_usstat
+        staonesys0: staonesys0
+        staonesys8: staonesys8
+        bic_cinp_chn: bic_cinp_chn
+        bic_cbusdeva: bic_cbusdeva
+        bic_ctim_acfr: bic_ctim_acfr
+        bic_ctim_acto: bic_ctim_acto
+        fiscper: fiscper
+        fiscyear: fiscyear
+        fiscvarnt: fiscvarnt
+        crm_rsn_co: crm_rsn_co
+        crm_direct: crm_direct
+        crm_no_act: crm_no_act
+        calday: calday
+        record: record
+        bic_cactivid: bic_cactivid
+      distinct: true
+
+  - kind: add
+    name: add_dm_customer_crm_activites
+    params:
+      - column: user_status
+        expression: "CASE WHEN crm_usstat = 'E0008' THEN 'Invalid' 
+        WHEN crm_usstat = 'E0007' THEN 'Rejected' 
+        WHEN crm_usstat = 'E0003' THEN 'Completed' 
+        WHEN crm_usstat = 'E0002' THEN 'In Process' 
+        WHEN crm_usstat = 'E0001' THEN 'Open' 
+        ELSE '' END"
+      - column: activity_status
+        expression: "CASE WHEN staonesys0 = '40' THEN 'Completed' 
+        WHEN staonesys0 = '10' THEN 'Open' 
+        WHEN staonesys0 = '20' THEN 'In Process' 
+        WHEN staonesys0 = '00' THEN 'Not Assigned' 
+        WHEN staonesys0 = '30' THEN 'Released' 
+        WHEN staonesys0 = '50' THEN 'Finished' 
+        WHEN staonesys0 = '60' THEN 'Active' 
+        WHEN staonesys0 = '70' THEN 'Being Terminated' 
+        WHEN staonesys0 = '80' THEN 'Terminated' 
+        WHEN staonesys0 = '90' THEN 'Contract Accepted' 
+        ELSE '' END"
+      - column: direction
+        expression: "CASE WHEN crm_direct = '1' THEN 'Outbound' 
+        WHEN crm_direct = '0' THEN 'Inbound' 
+        ELSE '' END"
+      - column: actual_activity_from
+        expression: concat_ws(':', hour(bic_ctim_acfr), minute(bic_ctim_acfr), second(bic_ctim_acfr))
+      - column: actual_activity_to
+        expression: concat_ws(':', hour(bic_ctim_acto), minute(bic_ctim_acto), second(bic_ctim_acto))
+      - column: transaction_id
+        expression: concat_ws('_', record, bic_cactivid)
+      - column: planning_visit_status
+        expression: "CASE WHEN crm_prctyp = 'ZVIS' and crm_usstat <> 'E0008' and isnull(bic_cinp_chn) THEN 'planned visit' 
+        WHEN bic_cinp_chn = 'PDA' THEN 'ad-hoc visit'
+        ELSE '' END"
+      - column: execution_visit_status
+        expression: "CASE WHEN crm_prctyp = 'ZVIS' and crm_usstat <> 'E0008' and crm_rg <> 'ZW2VIS03' and staonesys0 = '40' AND isnull(bic_cinp_chn) and (isnull(staonesys8) or staonesys8 = '00') THEN 'executed planned visit' 
+        WHEN crm_prctyp = 'ZVIS' AND staonesys0 = '40' and bic_cinp_chn = 'PDA' and ( isnull(staonesys8) or staonesys8 = '00') THEN 'executed ad-hoc visit' 
+        ELSE '' END"
+      - column: planning_calls_status
+        expression: "CASE WHEN crm_direct = '1' and fiscvarnt = 'Z1' and crm_usstat <> 'E0008' and crm_prctyp IN('ZBK', 'ZTS') THEN 'executed outbound calls' 
+        ELSE '' END"
+      - column: execution_calls_status
+        expression: "CASE WHEN crm_direct = '1' and fiscvarnt = 'Z1' and crm_usstat <> 'E0008' and crm_prctyp IN('ZBK', 'ZTS') and crm_rsn_co <> '0019' and staonesys0 = '40' AND (isnull(staonesys8) OR staonesys8 = '00') THEN 'planned outbound calls' 
+        ELSE '' END"
+      - column: activity_date
+        expression: string(calday)
+
+  - kind: select
+    name: select_dm_customer_crm_activities
+    params:
+      columns:
+        customer: customer_code
+        crm_prctyp: process_type
+        crm_rg: code_group
+        crm_rca: catalog_reason
+        user_status: user_status
+        activity_status: activity_status
+        staonesys8: rejected_status_code
+        bic_cinp_chn: channel
+        bic_cbusdeva: bd_employee
+        actual_activity_from: actual_activity_from
+        actual_activity_to: actual_activity_to
+        fiscper: fiscal_period
+        fiscyear: fiscal_year
+        activity_date: activity_date
+        transaction_id: transaction_id
+        fiscvarnt: fiscal_variant
+        crm_rsn_co: activity_reason
+        direction: direction
+        crm_no_act: number_of_activities
+        planning_visit_status: planning_visit_status
+        execution_visit_status: execution_visit_status
+        planning_calls_status: planning_calls_status
+        execution_calls_status: execution_calls_status
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_crm_activities
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_crm_activities
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

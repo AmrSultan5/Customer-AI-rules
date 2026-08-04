@@ -1,0 +1,1335 @@
+transform:
+  name: coolers_critical_md_checks
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: read_dataio
+    name: read_dm_material_coolers
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_coolers
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_order_block_vs_cooler_status
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: order_block_vs_cooler_status
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_door_equivalent_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: door_equivalent_matrix
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_ccaf_code_accuracy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: ccaf_code_accuracy
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_material_coolers
+    context_name: read_dm_material_coolers
+    params:
+      - condition:
+          cde_category_description not in('POM Overcounter','POM Remote Dozator','POM Tower') 
+          and equipment_status in('PLCD', 'UINV', 'FOND', 'NACT', 'LOST' ) 
+          and cde_type = 'COOLER'
+
+  - kind: filter
+    name: filter_dm_cust_hierarchy
+    context_name: read_dm_cust_hierarchy
+    params:
+      - condition:
+          l7_division_code = '01' and l7_distribution_channel_code = '01' 
+          and ((sap_cluster = 'CL1' and l7_sales_org_code in('1100', '1200', '2000', '2800', '4090', '4500', '4900', '5100', '6100', '6300', '8500', '9100')) 
+          or (sap_cluster = 'CL2' AND l7_sales_org_code in('2300', '2500', '3100', '3200', '3300', '3801', '3802', '3803', '3804', '3805', '3806', '5500', '7200', '7800', '7900', '8100', '8200', '8600', '9200', '9400', '9500', '9600')))
+
+  - kind: filter
+    name: filter_order_block_vs_cooler_status_ref
+    context_name: read_order_block_vs_cooler_status
+    params:
+      - condition:
+          allowed_cooler_status <> 'No cooler must be linked to this customer'
+
+  - kind: filter
+    name: filter_order_block_vs_cooler_status_ref2
+    context_name: read_order_block_vs_cooler_status
+    params:
+      - condition:
+          allowed_cooler_status = 'No cooler must be linked to this customer'
+
+  - kind: filter
+    name: filter_dm_customer_c1
+    context_name: read_dm_customer
+    params:
+      - condition:
+          division_code = '01' and distribution_channel_code = '01' and account_group_code like '90%'
+
+  - kind: add
+    name: add_dm_customer_c1
+    context_name: filter_dm_customer_c1
+    params:
+      - column: element_one
+        expression: substring(ccaf_code, 1, 1)
+      - column: element_two
+        expression: substring(ccaf_code, 2, 1)
+      - column: element_three
+        expression: substring(ccaf_code, 3, 1)
+      - column: element_four
+        expression: substring(ccaf_code, 4, 1)
+
+  - kind: select
+    name: select_dm_customer_c1
+    context_name: add_dm_customer_c1
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        sales_org_code: sales_org_code
+        account_group_code: account_group_code
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        street_name: street_name
+        house_number: house_number
+        house_number_supplement: house_number_supplement
+        post_code: post_code
+        city: city
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        element_one: element_one
+        element_two: element_two
+        element_three: element_three
+        element_four: element_four
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c2
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c2
+        customer_name: customer_name_c2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_org_hierarchy
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        country_code: country_code
+        country_name: country_name
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_material_coolers
+    context_name: filter_dm_material_coolers
+    params:
+      columns:
+        partner_number: partner_number
+        material_code: material_code
+        material_description: material_description
+        cde_type: cde_type
+        cde_category: cde_category
+        cde_category_description: cde_category_description
+        number_of_doors: number_of_doors
+        equipment_number: equipment_number
+        equipment_name: equipment_name
+        equipment_status: equipment_status
+        equipment_status_description: equipment_status_description
+        cs_branding: cs_branding
+        acquisition_date: acquisition_date
+        install_date: install_date
+        manufacturer_serial_number: manufacturer_serial_number
+      distinct: true
+
+  - kind: select
+    name: select_dm_cust_hierarchy
+    context_name: filter_dm_cust_hierarchy
+    params:
+      columns:
+        l3_customer_code: l3_customer_code
+        l7_customer_code: l7_customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_order_block_vs_cooler_status_ref
+    context_name: filter_order_block_vs_cooler_status_ref
+    params:
+      columns:
+        allowed_cooler_status: allowed_cooler_status_ref
+        order_block: order_block_ref
+      distinct: true
+
+  - kind: select
+    name: select_order_block_vs_cooler_status_ref2
+    context_name: filter_order_block_vs_cooler_status_ref2
+    params:
+      columns:
+        allowed_cooler_status: allowed_cooler_status_ref2
+        order_block: order_block_ref2
+      distinct: true
+
+  - kind: select
+    name: select_ccaf_code_accuracy
+    context_name: read_ccaf_code_accuracy
+    params:
+      columns:
+        first_part: first_part
+        second_part: second_part
+        third_part: third_part
+        fourth_part: fourth_part
+      distinct: true
+
+  - kind: select
+    name: select_door_equivalent_matrix
+    context_name: read_door_equivalent_matrix
+    params:
+      columns:
+        cs_category_descr: cs_category_descr
+        cs_door_equiv: cs_door_equiv
+      distinct: true
+
+  - kind: join
+    name: join_du_coolers_critical_md_checks
+    context_name: select_dm_customer_c1
+    params:
+      - other:
+          select_dm_cust_hierarchy
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_org_hierarchy
+        how:
+          left
+        columns:
+          sales_org_code: sales_org_code
+      - other:
+          select_dm_material_coolers
+        how:
+          inner
+        columns:
+          customer_code: partner_number
+      - other:
+          select_order_block_vs_cooler_status_ref
+        how:
+          left
+        columns:
+          order_block_code: order_block_ref
+          equipment_status: allowed_cooler_status_ref
+      - other:
+          select_order_block_vs_cooler_status_ref2
+        how:
+          left
+        columns:
+          order_block_code: order_block_ref2
+      - other:
+          select_door_equivalent_matrix
+        how:
+          left
+        columns:
+          cde_category_description: cs_category_descr
+          number_of_doors: cs_door_equiv
+      - other:
+          select_dm_customer_c2
+        how:
+          left
+        columns:
+          l3_customer_code: customer_code_c2
+          sap_cluster: sap_cluster
+      - other:
+          select_ccaf_code_accuracy
+        how:
+          left
+        columns:
+          element_one: first_part
+          element_two: second_part
+          element_three: third_part
+          element_four: fourth_part
+
+  - kind: add
+    name: add_du_coolers_critical_md_checks
+    context_name: join_du_coolers_critical_md_checks
+    params:
+      - column: cde_category_if_blank_check_flag
+        expression: if(isnull(cde_category), '0', '1')
+      - column: doors_equivalent_if_blank_check_flag
+        expression: if(isnull(number_of_doors), '0', '1')
+      - column: material_equipment_desc_check_flag
+        expression: if(material_description = equipment_name, '1', '0')
+      - column: ccaf_customer_check
+        expression: if(order_block_code in('M', 'NR'), '', if(isnull(ccaf_code), '0', '1'))
+      - column: cs_branding_check
+        expression: if(isnull(cs_branding), '0', '1')
+      - column: acquisition_date_check
+        expression: if(isnull(acquisition_date), '0', '1')
+      - column: install_date_if_blank_check
+        expression: if(isnull(install_date) or install_date LIKE '%1900-01-01%', '0', '1')
+      - column: order_block_cooler_status_check_flag
+        expression: if((isnull(order_block_code) or order_block_code = '') 
+                    and equipment_status in('PLCD', 'FOND', 'NACT', 'UINV', 'LOST'), '1', 
+                    if(isnull(order_block_ref2) and isnull(allowed_cooler_status_ref), '0', '1'))
+      - column: placement_not_allowed_check_flag
+        expression: if(isnotnull(order_block_ref2) and isnotnull(equipment_status), '0', '1')
+      - column: doors_equivalent_check_flag
+        expression: if(doors_equivalent_if_blank_check_flag = '1' and number_of_doors = cs_door_equiv, '1', 
+                    if(doors_equivalent_if_blank_check_flag = '0', '', '0'))
+      - column: ccaf_accuracy_check
+        expression: if(ccaf_customer_check = '1' and isnotnull(first_part)
+                    and isnotnull(second_part) 
+                    and isnotnull(third_part) and isnotnull(fourth_part), '1',
+                    if(ccaf_customer_check != '1', '', '0'))
+      - column: install_date_accuracy_wrong_format
+        expression: if(install_date_if_blank_check = '1' and substring(install_date, 1, 10) = date_format(install_date, 'yyyy-MM-dd'), '1', 
+                    if(install_date_if_blank_check != '1', '', '0'))
+      - column: install_date_accuracy_future
+        expression: if(install_date_if_blank_check = '1' and install_date <= current_date(), '1', 
+                    if(install_date_if_blank_check != '1', '', '0'))
+      - column: cde_category_open_front_check_flag
+        expression: if(cde_category_description = 'Open Front', '0', '1')
+
+  - kind: cast
+    name: cast_du_coolers_critical_md_checks
+    context_name: add_du_coolers_critical_md_checks
+    params:
+      - column: number_of_doors
+        to: decimal(10,1)
+
+  - kind: select
+    name: select_du_coolers_critical_md_checks
+    context_name: cast_du_coolers_critical_md_checks
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        country_name: country_name
+        country_code: country_code
+        l3_customer_code: customer_group_3_code
+        customer_name_c2: customer_group_3_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        sales_org_code: sales_org_code
+        account_group_code: account_group_code
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        street_name: street_name
+        house_number: house_number
+        house_number_supplement: house_number_supplement
+        post_code: post_code
+        city: city
+        material_code: material_number
+        material_description: material_description
+        cde_type: cde_type
+        cde_category: cde_category
+        cde_category_description: cde_category_description
+        number_of_doors: number_of_doors
+        equipment_number: equipment_number
+        equipment_name: equipment_name
+        equipment_status: equipment_status
+        equipment_status_description: equipment_status_description
+        cs_branding: cs_branding
+        acquisition_date: acquisition_date
+        install_date: install_date
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        manufacturer_serial_number: manufacturer_serial_number
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        ccaf_accuracy_check: ccaf_accuracy_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+      distinct: true
+
+#detailed
+  - kind: add
+    name: add_dq_checks
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      - column: customer_order_block_vs_equipment_status
+        expression: "CASE WHEN order_block_cooler_status_check_flag = '0' THEN 'Wrong combination customer order block - cooler status (1.1)' WHEN placement_not_allowed_check_flag = '0' THEN 'No cooler placement allowed for customer with this order block (1.2)' ELSE 'OK' END"
+      - column: doors_equivalent_versus_cooler_category
+        expression: "CASE WHEN cde_category_if_blank_check_flag = '0' AND doors_equivalent_if_blank_check_flag = '0' THEN 'Cooler with no CDE Category (2.1), Door equivalent value is missing (2.2)'
+        WHEN cde_category_if_blank_check_flag = '0' AND doors_equivalent_if_blank_check_flag = '1' AND doors_equivalent_check_flag = '0' THEN 'Cooler with no CDE Category (2.1), Door equivalent value is incorrect (2.3)'
+        WHEN cde_category_if_blank_check_flag = '0' AND doors_equivalent_if_blank_check_flag = '1' AND doors_equivalent_check_flag = '1' THEN 'Cooler with no CDE Category (2.1)'
+        WHEN cde_category_if_blank_check_flag = '1' AND doors_equivalent_if_blank_check_flag = '0' THEN 'Door equivalent value is missing (2.2)'
+        WHEN cde_category_if_blank_check_flag = '1' AND doors_equivalent_if_blank_check_flag = '1' AND doors_equivalent_check_flag = '0' THEN 'Door equivalent value is incorrect (2.3)'
+        WHEN cde_category_if_blank_check_flag = '1' AND doors_equivalent_if_blank_check_flag = '1' AND doors_equivalent_check_flag = '1' THEN 'OK' ELSE 'N/A' END"
+      - column: material_equipment_desc_check
+        expression: "CASE WHEN material_equipment_desc_check_flag = '0' THEN 'Material description does not match the equipment description (2.4)' ELSE 'OK' END"
+      - column: ccaf_customer_check_msg
+        expression: "CASE WHEN ccaf_customer_check = '0' THEN 'No CCAF assigned (3.1)' WHEN ccaf_accuracy_check = '0' THEN 'Incorrect CCAF values assigned (3.2)' ELSE 'OK' END"
+      - column: cs_branding_check_msg
+        expression: "CASE WHEN cs_branding_check = '0' THEN 'Cooler with no CS Branding (4.1)' ELSE 'OK' END"
+      - column: acquisition_date_check_msg
+        expression: "CASE WHEN acquisition_date_check = '0' THEN 'Cooler with no acquisition date (4.2)' ELSE 'OK' END"
+      - column: install_date_check
+        expression: "CASE WHEN install_date_if_blank_check = '0' THEN 'Install Date Check Missing (5.1)'
+        WHEN install_date_accuracy_wrong_format = '0' THEN 'Install Date Check has wrong format (5.2)'
+        WHEN install_date_accuracy_future = '0' THEN 'Install Date Check in the future (5.3)' ELSE 'OK' END"
+
+  - kind: cast
+    name: cast_to_string
+    params:
+      - column: acquisition_date
+        to: string
+
+  - kind: add
+    name: add_upper_country
+    params:
+     - column: country_code
+       expression: UPPER(country_code)
+       overwrite: true
+
+  - kind: select
+    name: select_g_detailed
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        country_code: country_code
+        customer_group_3_code: customer_group_3_code
+        customer_group_3_name: customer_group_3_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        sales_org_code: sales_org_code
+        account_group_code: account_group_code
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        street_name: street_name
+        house_number: house_number
+        house_number_supplement: house_number_supplement
+        post_code: post_code
+        city: city
+        material_number: material_number
+        material_description: material_description
+        cde_type: cde_type
+        cde_category: cde_category
+        cde_category_description: cde_category_description
+        number_of_doors: number_of_doors
+        equipment_number: equipment_number
+        equipment_name: equipment_name
+        equipment_status: equipment_status
+        equipment_status_description: equipment_status_description
+        cs_branding: cs_branding
+        acquisition_date: acquisition_date
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        manufacturer_serial_number: manufacturer_serial_number
+        install_date: install_date
+        customer_order_block_vs_equipment_status: customer_order_block_vs_equipment_status
+        doors_equivalent_versus_cooler_category: doors_equivalent_versus_cooler_category
+        material_equipment_desc_check: material_equipment_desc_check
+        ccaf_customer_check_msg: ccaf_customer_check
+        cs_branding_check_msg: cs_branding_check
+        acquisition_date_check_msg: acquisition_date_check
+        install_date_check: install_date_check
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: coolers_critical_md_checks
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+## AGGREGATED LAYER
+  - kind: select
+    name: select_du_group_1_accuracy
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_2_completeness
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_2_accuracy
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_4_accuracy
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_3_completeness
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_3_accuracy
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_5_completeness
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_6_completeness
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_7_completeness
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+  - kind: select
+    name: select_du_group_7_accuracy
+    context_name: select_du_coolers_critical_md_checks
+    params:
+      columns:
+        country_code: country_code
+        customer_code: customer_code
+        doors_equivalent_check_flag: doors_equivalent_check_flag
+        ccaf_accuracy_check: ccaf_accuracy_check
+        install_date_accuracy_wrong_format: install_date_accuracy_wrong_format
+        install_date_accuracy_future: install_date_accuracy_future
+        order_block_cooler_status_check_flag: order_block_cooler_status_check_flag
+        placement_not_allowed_check_flag: placement_not_allowed_check_flag
+        cde_category_if_blank_check_flag: cde_category_if_blank_check_flag
+        doors_equivalent_if_blank_check_flag: doors_equivalent_if_blank_check_flag
+        cde_category_open_front_check_flag: cde_category_open_front_check_flag
+        material_equipment_desc_check_flag: material_equipment_desc_check_flag
+        ccaf_customer_check: ccaf_customer_check
+        cs_branding_check: cs_branding_check
+        acquisition_date_check: acquisition_date_check
+        install_date_if_blank_check: install_date_if_blank_check
+
+#GROUP 1 ACCURACY
+
+  - kind: add
+    name: add_aggregated_group_1_accuracy
+    context_name: select_du_group_1_accuracy
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 1"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_records
+       expression: IF(order_block_cooler_status_check_flag  = '0' OR placement_not_allowed_check_flag = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_1_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_1_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 2 completeness
+
+  - kind: add
+    name: add_aggregated_group_2_completeness
+    context_name: select_du_group_2_completeness
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 2"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_records
+       expression: IF(cde_category_if_blank_check_flag = '0' AND doors_equivalent_if_blank_check_flag = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_2_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_2_completeness
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 2 ACCURACY
+
+  - kind: add
+    name: add_aggregated_group_2_accuracy
+    context_name: select_du_group_2_accuracy
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(doors_equivalent_check_flag  != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 2"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_records
+       expression: IF(doors_equivalent_check_flag = '0' OR cde_category_open_front_check_flag = '0', 1, NULL) 
+
+  - kind: group
+    name: group_group_2_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_2_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 4 ACCURACY
+
+  - kind: add
+    name: add_aggregated_group_4_accuracy
+    context_name: select_du_group_4_accuracy
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 4"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_records
+       expression: IF(material_equipment_desc_check_flag = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_4_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_4_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 3 completeness
+
+  - kind: add
+    name: add_aggregated_group_3_completeness
+    context_name: select_du_group_3_completeness
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 3"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_records
+       expression: IF(ccaf_customer_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_3_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_3_completeness
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 3 ACCURACY
+
+  - kind: add
+    name: add_aggregated_group_3_accuracy
+    context_name: select_du_group_3_accuracy
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(ccaf_accuracy_check != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 3"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_records
+       expression: IF(ccaf_accuracy_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_3_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_3_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 5 COMPLETNESS
+
+  - kind: add
+    name: add_aggregated_group_5_completeness
+    context_name: select_du_group_5_completeness
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 5"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_records
+       expression: IF(cs_branding_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_5_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_5_completeness
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 6 COMPLETNESS
+
+  - kind: add
+    name: add_aggregated_group_6_completeness
+    context_name: select_du_group_6_completeness
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 6"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_records
+       expression: IF(acquisition_date_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_6_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_6_completeness
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 7 COMPLETNESS
+
+  - kind: add
+    name: add_aggregated_group_7_completeness
+    context_name: select_du_group_7_completeness
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(customer_code != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 7"'
+     - column: quality_category
+       expression: '"Completeness"'
+     - column: invalid_records
+       expression: IF(install_date_if_blank_check = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_7_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_7_completeness
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+#GROUP 7 ACCURACY
+
+  - kind: add
+    name: add_aggregated_group_7_accuracy
+    context_name: select_du_group_7_accuracy
+    params:
+     - column: total_records
+       expression: IF(customer_code != '', 1, NULL)
+     - column: total_checks
+       expression: IF(install_date_accuracy_wrong_format != '' OR install_date_accuracy_future != '', 1, NULL)
+     - column: group_number
+       expression: '"Group 7"'
+     - column: quality_category
+       expression: '"Accuracy"'
+     - column: invalid_records
+       expression: IF(install_date_accuracy_wrong_format = '0' OR install_date_accuracy_future = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_7_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - group_number
+        - quality_category
+
+  - kind: select
+    name: select_group_7_accuracy
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        count_invalid_records: invalid_records
+      distinct: true
+
+  - kind: union
+    name: union_group_1_accuracy_group_2_completeness
+    context_name: select_group_1_accuracy
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_2_completeness
+
+  - kind: union
+    name: union_group_2_accuracy
+    context_name: union_group_1_accuracy_group_2_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_2_accuracy
+
+  - kind: union
+    name: union_group_4_accuracy
+    context_name: union_group_2_accuracy
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_4_accuracy
+
+  - kind: union
+    name: union_group_3_completeness
+    context_name: union_group_4_accuracy
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_3_completeness
+
+  - kind: union
+    name: union_group_3_accuracy
+    context_name: union_group_3_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_3_accuracy
+
+  - kind: union
+    name: union_group_5_completeness
+    context_name: union_group_3_accuracy
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_5_completeness
+
+  - kind: union
+    name: union_group_6_completeness
+    context_name: union_group_5_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_6_completeness
+
+  - kind: union
+    name: union_group_7_completeness
+    context_name: union_group_6_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_7_completeness
+
+  - kind: union
+    name: union_group_7_accuracy
+    context_name: union_group_7_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_group_7_accuracy
+
+  - kind: select
+    name: select_union_all
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        invalid_records: invalid_records
+      distinct: true
+
+#READ CHECK NAMES AND NUMBERS
+  - kind: read_dataio
+    name: read_check_names_and_numbers
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: check_names_and_numbers
+      schema_version: v1
+
+  - kind: select
+    name: select_check_names_and_numbers
+    params:
+      columns:
+        check_number: check_number
+        measure: measure
+        check_name: check_name
+        output_message: output_message
+        idq_group: idq_group
+        matrix_label_pbi: matrix_label_pbi
+        sorting_order: sorting_order
+      distinct: true
+
+#JOIN WITH CHECK_NAMES_AND_NUMBERS TABLE
+  - kind: join
+    name: join_union_check_names_and_numbers
+    context_name: select_union_all
+    params:
+      - other:
+          select_check_names_and_numbers
+        how:
+          left
+        columns:
+          quality_category: measure
+          group_number: idq_group
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        group_number: group_number
+        quality_category: quality_category
+        invalid_records: invalid_checks
+        loading_date: loading_date
+        sorting_order: sorting_order
+        matrix_label_pbi: group_name
+      distinct: true
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: total_records
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: invalid_checks
+        to: integer
+
+  - kind: add
+    name: add_upper_country
+    params:
+     - column: country_code
+       expression: UPPER(country_code)
+       overwrite: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: coolers_critical_md_checks
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

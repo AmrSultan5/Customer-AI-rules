@@ -1,0 +1,121 @@
+transform:
+  name: dm_customer_satisfaction_surveys
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#Response survey
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_response_survey
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: customer_gauge
+      namespace: transaction
+      object_name: response_survey
+
+  - kind: filter
+    name: filter_account_number
+    params:
+      - condition:
+          len(account_number) = 10
+
+  - kind: select
+    name: select_response_survey
+    params:
+      columns:
+        cg_id: cg_id
+        account_number: account_number
+        delivery_vector: delivery_vector
+        nps: nps
+        translated_comment: translated_comment
+        date_survey_response_date: date_survey_response_date
+        date_creation: date_creation
+      distinct: true
+
+#NON Response survey
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_non_response_survey
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: customer_gauge
+      namespace: transaction
+      object_name: non_response_survey
+
+  - kind: filter
+    name: filter_account_number_non
+    params:
+      - condition:
+          len(account_number) = 10
+
+  - kind: add
+    name: add_non_response_survey
+    params:
+      - column: nps
+        expression: CAST(NULL AS STRING)
+      - column: translated_comment
+        expression: CAST(NULL AS STRING)
+      - column: date_survey_response_date
+        expression: CAST(NULL AS DATE)
+
+  - kind: select
+    name: select_non_response_survey
+    params:
+      columns:
+        cg_id: cg_id
+        account_number: account_number
+        delivery_vector: delivery_vector
+        nps: nps
+        translated_comment: translated_comment
+        date_survey_response_date: date_survey_response_date
+        date_creation: date_creation
+      distinct: true
+
+
+  - kind: union
+    name: union_response_survey_non_response_survey
+    context_name: select_response_survey
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_non_response_survey
+
+  - kind: select
+    name: select_dm_customer_satisfaction_surveys
+    params:
+      columns:
+        cg_id: campaigne_id
+        account_number: customer_code
+        delivery_vector: delivery_vector
+        nps: nps
+        translated_comment: comment
+        date_survey_response_date: response_date
+        date_creation: creation_date
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_dm_customer_satisfaction_surveys
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_satisfaction_surveys
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

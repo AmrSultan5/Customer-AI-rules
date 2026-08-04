@@ -1,0 +1,157 @@
+transform:
+  name: dm_vendor_contact_person
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read but0bk
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but051
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: contact_person_relationships
+      object_name: but051
+
+
+  - kind: select
+    name: select_but051
+    params:
+      columns:
+        partner1: partner1
+        partner2: partner2
+        date_to: date_to
+        relnr: relnr
+        reltyp: reltyp
+        xrf: xrf
+        fnctn: fnctn
+        tel_number: tel_number
+        abtnr: abtnr
+        smtp_address: smtp_address
+      distinct: true
+
+# Read tbz9a
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tbz9a
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: tbz9a
+
+  - kind: filter
+    name: filter_tbz9a
+    params:
+      - condition:
+          ( spras='E')
+
+  - kind: select
+    name: select_tbz9a
+    params:
+      columns:
+        reltyp: reltyp
+        rtitl: rtitl
+      distinct: true
+
+# Read tb911
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tb911
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: tb911
+
+  - kind: filter
+    name: filter_tb911
+    params:
+      - condition:
+          ( spras='E')
+
+  - kind: select
+    name: select_tb911
+    params:
+      columns:
+        abtnr: abtnr
+        bez20: bez20
+      distinct: true
+
+  - kind: join
+    name: join_but051
+    context_name: select_but051
+    params:
+      - other:
+          select_tbz9a
+        how:
+          left
+        columns:
+          reltyp: reltyp
+      - other:
+          select_tb911
+        how:
+          left
+        columns:
+          abtnr: abtnr
+
+  - kind: add
+    name: add_vendor_code
+    params:
+      - column: vendor_code
+        expression: "CASE
+                    WHEN substring(partner1,0,3) ='V43' THEN replace(partner1,LEFT(partner1,3),'430')
+                    WHEN substring(partner1,0,3) ='V40' THEN REPLACE(partner1,LEFT(partner1,3),'400')
+                    WHEN substring(partner1,0,3) ='V90' THEN REPLACE(partner1,LEFT(partner1,3),'900')
+                    ELSE partner1 END"
+  - kind: select
+    name: select_contact_person
+    params:
+      columns:
+        partner1: partner_code
+        partner2: partner_code2
+        vendor_code: vendor_code
+        date_to: valid_to
+        relnr: relationship_number
+        reltyp: relationship_category
+        rtitl: relationship_category_description
+        xrf: partner_role
+        fnctn: partner_function
+        tel_number: partner_number
+        abtnr: department_code
+        bez20: department_description
+        smtp_address: email_address
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_dm_vendor_contact_person
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_contact_person
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full

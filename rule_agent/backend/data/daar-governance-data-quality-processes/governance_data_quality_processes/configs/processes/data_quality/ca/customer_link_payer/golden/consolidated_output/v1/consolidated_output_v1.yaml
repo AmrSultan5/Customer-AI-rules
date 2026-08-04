@@ -1,0 +1,693 @@
+transform:
+  name: customer_link_payer
+  operations:
+
+#du
+  - kind: read_dataio
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_partner
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_customer_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_tax
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_scope
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: scope
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_partner_cp
+    context_name: read_dm_customer_partner
+    params:
+      - condition:
+          partner_function_code_converted = 'PY' and division_code = '01' and distribution_channel_code = '01'
+
+  - kind: select
+    name: select_dm_customer_partner_cp
+    context_name: filter_dm_customer_partner_cp
+    params:
+      columns:
+        customer_code: customer_code_cp
+        partner_code: partner_code_cp
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: filter
+    name: filter_dm_customer_c1
+    context_name: read_dm_customer
+    params:
+      - condition:
+          division_code = '01' and distribution_channel_code = '01' and account_group_code like '90%'
+          and order_block_code not in('S1', 'E', 'G', 'R', 'U', 'S', 'S3', 'S4', 'SP', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9') 
+          and customer_group_4_code in('DI', 'IN') and is_l7_customer_in_scope = '1' 
+          and if(lower(country_code) not in('cz', 'sk'), terms_of_payment_code not in('ZC00', 'ZC98', 'ZADV'), true)
+
+  - kind: filter
+    name: filter_dm_customer_c3
+    context_name: read_dm_customer
+    params:
+      - condition:
+          division_code = '01' and distribution_channel_code = '01' and account_group_code like '90%'
+          and order_block_code not in('S1', 'R', 'U', 'S3', 'S4', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9') 
+          and customer_group_4_code in ('DI', 'IN', 'AWC', 'AWM', 'DC', 'DE', 'DEC', 'DTS', 'ECS', 'WH', 'WHN') 
+          and is_l7_customer_in_scope = '1' 
+
+  - kind: select
+    name: select_dm_customer_c1
+    context_name: filter_dm_customer_c1
+    params:
+      columns:
+        customer_code: customer_code_c1
+        customer_name: customer_name_c1
+        customer_group_4_code: customer_group_4_code_c1
+        customer_group_4_name: customer_group_4_name_c1
+        sales_org_code: sales_org_code_c1
+        order_block_code: order_block_code_c1
+        order_block_name: order_block_name_c1
+        terms_of_payment_code: terms_of_payment_code_c1
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c2
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c2
+        customer_name: customer_name_c2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c3
+    context_name: filter_dm_customer_c3
+    params:
+      columns:
+        customer_code: customer_code_c3
+        customer_name: customer_name_c3
+        order_block_code: order_block_code_c3
+        order_block_name: order_block_name_c3
+        customer_group_4_code: customer_group_4_code_c3
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: filter
+    name: filter_dm_cust_hierarchy
+    context_name: read_dm_cust_hierarchy
+    params:
+      - condition:
+          l7_division_code = '01' and l7_distribution_channel_code = '01'
+
+  - kind: select
+    name: select_dm_cust_hierarchy_ch
+    context_name: filter_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code_ch
+        l3_customer_code: l3_customer_code_ch
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_org_hierarchy_oh
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        sales_org_code: sales_org_code_oh
+        country_code: country_code_oh
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_tax_ct1
+    context_name: read_dm_customer_tax
+    params:
+      - condition:
+          tax_type_code not like '%0' and isnotnull(tax_number) and tax_number <> '' 
+          and regexp_replace(tax_number, '0+', '0') <> '0' and len(tax_number) >= 3 
+
+  - kind: filter
+    name: filter_dm_customer_tax_ct2
+    context_name: read_dm_customer_tax
+    params:
+      - condition:
+          tax_type_code like '%0' and isnotnull(tax_number) and tax_number <> '' 
+          and regexp_replace(tax_number, '0+', '0') <> '0' and len(tax_number) >= 3 
+
+  - kind: select
+    name: select_scope_ct1
+    context_name: read_scope
+    params:
+      columns:
+        tax_type_code: tax_type_code_scope_ct1
+        country_name: country_name_ct1
+        is_exception: is_exception_ct1
+      distinct: true
+
+  - kind: select
+    name: select_scope_ct2
+    context_name: read_scope
+    params:
+      columns:
+        tax_type_code: tax_type_code_scope_ct2
+        country_name: country_name_ct2
+        is_exception: is_exception_ct2
+      distinct: true
+
+
+  - kind: select
+    name: select_dm_customer_tax_ct1
+    context_name: filter_dm_customer_tax_ct1
+    params:
+      columns:
+        customer_code: customer_code_ct1
+        tax_number: tax_number_ct1
+        tax_type_code: tax_type_code_ct1
+        country_code: country_code_ct1
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_tax_ct2
+    context_name: filter_dm_customer_tax_ct2
+    params:
+      columns:
+        customer_code: customer_code_ct2
+        tax_number: tax_number_ct2
+        tax_type_code: tax_type_code_ct2
+        country_code: country_code_ct2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_customer_tax_ct1_scope
+    context_name: select_dm_customer_tax_ct1
+    params:
+      - other:
+          select_scope_ct1
+        how:
+          inner
+        columns:
+          tax_type_code_ct1: tax_type_code_scope_ct1
+
+  - kind: join
+    name: join_dm_customer_tax_ct2_scope
+    context_name: select_dm_customer_tax_ct2
+    params:
+      - other:
+          select_scope_ct2
+        how:
+          inner
+        columns:
+          tax_type_code_ct2: tax_type_code_scope_ct2
+
+
+  - kind: join
+    name: join_du_customer_link_payer
+    context_name: select_dm_customer_c1
+    params:
+      - other:
+          select_dm_org_hierarchy_oh
+        how:
+          inner
+        columns:
+          sales_org_code_c1: sales_org_code_oh
+      - other:
+          select_dm_cust_hierarchy_ch
+        how:
+          left
+        columns:
+          customer_code_c1: l7_customer_code_ch
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c2
+        how:
+          left
+        columns:
+          l3_customer_code_ch: customer_code_c2
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_partner_cp
+        how:
+          inner
+        columns:
+          customer_code_c1: customer_code_cp
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c3
+        how:
+          left
+        columns:
+          partner_code_cp: customer_code_c3
+          sap_cluster: sap_cluster
+      - other:
+          join_dm_customer_tax_ct1_scope
+        how:
+          inner
+        columns:
+          customer_code_c3: customer_code_ct1
+          sap_cluster: sap_cluster
+      - other:
+          join_dm_customer_tax_ct2_scope
+        how:
+          left
+        columns:
+          customer_code_c3: customer_code_ct2
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_distinct_payer_code_ct1
+    context_name: join_du_customer_link_payer
+    params:
+      columns:
+        customer_code_c3: customer_code_c3
+        tax_number_ct1: tax_number_ct1
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_distinct_payer_code_ct2
+    context_name: join_du_customer_link_payer
+    params:
+      columns:
+        customer_code_c3: customer_code_c3
+        tax_number_ct2: tax_number_ct2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_distinct_tax_number_ct1
+    context_name: join_du_customer_link_payer
+    params:
+      columns:
+        customer_code_c1: customer_code_c1
+        customer_code_c3: customer_code_c3
+        tax_number_ct1: tax_number_ct1
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_distinct_tax_number_ct2
+    context_name: join_du_customer_link_payer
+    params:
+      columns:
+        customer_code_c1: customer_code_c1
+        customer_code_c3: customer_code_c3
+        tax_number_ct2: tax_number_ct2
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: group
+    name: group_payer_code_ct1
+    context_name: select_distinct_payer_code_ct1
+    params:
+      - aggs:
+          customer_code_c3: count
+        by:
+        - tax_number_ct1
+        - sap_cluster
+
+  - kind: group
+    name: group_payer_code_ct2
+    context_name: select_distinct_payer_code_ct2
+    params:
+      - aggs:
+          customer_code_c3: count
+        by:
+        - tax_number_ct2
+        - sap_cluster
+
+  - kind: group
+    name: group_tax_number_ct1
+    context_name: select_distinct_tax_number_ct1
+    params:
+      - aggs:
+          tax_number_ct1: count
+        by:
+        - customer_code_c1
+        - customer_code_c3
+        - sap_cluster
+
+  - kind: group
+    name: group_tax_number_ct2
+    context_name: select_distinct_tax_number_ct2
+    params:
+      - aggs:
+          tax_number_ct2: count
+        by:
+        - customer_code_c1
+        - customer_code_c3
+        - sap_cluster
+
+  - kind: select
+    name: select_group_payer_code_ct1
+    context_name: group_payer_code_ct1
+    params:
+      columns:
+        count_customer_code_c3: count_payer_code_ct1
+        tax_number_ct1: tax_number_ct1
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_group_payer_code_ct2
+    context_name: group_payer_code_ct2
+    params:
+      columns:
+        count_customer_code_c3: count_payer_code_ct2
+        tax_number_ct2: tax_number_ct2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_group_tax_number_ct1
+    context_name: group_tax_number_ct1
+    params:
+      columns:
+        count_tax_number_ct1: count_tax_number_ct1
+        customer_code_c1: customer_code_c1
+        customer_code_c3: customer_code_c3
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_group_tax_number_ct2
+    context_name: group_tax_number_ct2
+    params:
+      columns:
+        count_tax_number_ct2: count_tax_number_ct2
+        customer_code_c1: customer_code_c1
+        customer_code_c3: customer_code_c3
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_du_customer_link_payer_counts
+    context_name: join_du_customer_link_payer
+    params:
+      - other:
+          select_group_payer_code_ct1
+        how:
+          left
+        columns:
+          tax_number_ct1: tax_number_ct1
+          sap_cluster: sap_cluster
+      - other:
+          select_group_payer_code_ct2
+        how:
+          left
+        columns:
+          tax_number_ct2: tax_number_ct2
+          sap_cluster: sap_cluster
+      - other:
+          select_group_tax_number_ct1
+        how:
+          left
+        columns:
+          customer_code_c1: customer_code_c1
+          customer_code_c3: customer_code_c3
+          sap_cluster: sap_cluster
+      - other:
+          select_group_tax_number_ct2
+        how:
+          left
+        columns:
+          customer_code_c1: customer_code_c1
+          customer_code_c3: customer_code_c3
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_du_customer_link_payer
+    context_name: join_du_customer_link_payer_counts
+    params:
+      - column: tax_number_ba
+        expression: if(lower(country_code_ct1) = 'ba', substring(tax_number_ct1, 0, 9), tax_number_ct1)
+      - column: supressed_payer_check_flag
+        expression: if(order_block_code_c3 in('S', 'SP', 'E', 'G'), '0', '1')
+      - column: multi_payers_check_flag
+        expression: if(supressed_payer_check_flag = '1' 
+                    and (customer_code_c1 <> customer_code_c3 and customer_group_4_code_c1 = 'IN') = false
+                    and ((count_payer_code_ct1 > 1 and isnotnull(country_name_ct1) and ifnull(is_exception_ct1, '0') = '1') 
+                    or (count_payer_code_ct2 > 1 and isnotnull(country_name_ct2) and ifnull(is_exception_ct2, '0') = '1')), '0', 
+                    if(supressed_payer_check_flag = '1' 
+                    and ((count_payer_code_ct1 > 1 and isnotnull(country_name_ct1) and ifnull(is_exception_ct1, '0') <> '1') 
+                    or (count_payer_code_ct2 > 1 and isnotnull(country_name_ct2) and ifnull(is_exception_ct2, '0') <> '1')), '0', 
+                    '1'))
+      - column: multi_tax_numbers_check_flag
+        expression: if(supressed_payer_check_flag = '1' and isnotnull(tax_number_ct1) 
+                    and tax_number_ct1 <> '' 
+                    and (customer_code_c1 <> customer_code_c3 and customer_group_4_code_c1 = 'IN') = false
+                    and count_tax_number_ct1 > 1 and isnotnull(country_name_ct1) and ifnull(is_exception_ct1, '0') = '1', '0', 
+                    if(supressed_payer_check_flag = '1' and isnotnull(tax_number_ct1) and tax_number_ct1 <> ''
+                    and count_tax_number_ct1 > 1 and isnotnull(country_name_ct1) and ifnull(is_exception_ct2, '0') <> '1' , '0', 
+                    '1'))
+
+  - kind: select
+    name: select_du_customer_link_payer
+    context_name: add_du_customer_link_payer
+    params:
+      columns:
+        tax_number_ba: tax_number
+        tax_type_code_ct1: tax_type
+        tax_number_ct2: vat_number
+        customer_code_c1: customer_code
+        customer_name_c1: customer_name
+        customer_code_c3: payer_code
+        customer_name_c3: payer_name
+        order_block_code_c3: payer_order_block_code
+        order_block_name_c3: payer_order_block_name
+        customer_group_4_code_c3: payer_group_4_code
+        order_block_code_c1: order_block_code
+        order_block_name_c1: order_block_name
+        customer_code_c2: customer_hier_3_code
+        customer_name_c2: customer_hier_3_name
+        customer_group_4_code_c1: customer_group_4_code
+        customer_group_4_name_c1: customer_group_4_name
+        country_code_oh: country_code
+        sales_org_code_c1: sales_org_code
+        terms_of_payment_code_c1: terms_of_payment_code
+        multi_payers_check_flag: multi_payers_check_flag
+        supressed_payer_check_flag: supressed_payer_check_flag
+        multi_tax_numbers_check_flag: multi_tax_numbers_check_flag
+      distinct: true
+
+#detailed
+  - kind: add
+    name: add_dq_message_output
+    context_name: select_du_customer_link_payer
+    params:
+      - column: dq_message_output
+        expression: |
+          CASE 
+            WHEN supressed_payer_check_flag = '0' THEN 'Suppressed payer'
+            WHEN supressed_payer_check_flag = '1' AND multi_tax_numbers_check_flag = '0' THEN 'Multi Tax Numbers'
+            WHEN supressed_payer_check_flag = '1' AND multi_tax_numbers_check_flag = '1' AND multi_payers_check_flag = '0' THEN 'Multiple payers'
+            ELSE 'OK'
+          END
+
+  - kind: select
+    name: select_detailed
+    params:
+      columns:
+        tax_number: tax_number
+        tax_type: tax_type
+        vat_number: vat_number
+        customer_code: customer_code
+        customer_name: customer_name
+        payer_code: payer_code
+        payer_name: payer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        payer_order_block_code: payer_order_block_code
+        payer_order_block_name: payer_order_block_name
+        payer_group_4_code: payer_group_4_code
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_code: country_code
+        sales_org_code: sales_org_code
+        terms_of_payment_code: terms_of_payment_code
+        multi_payers_check_flag: multi_payers_check_flag
+        supressed_payer_check_flag: supressed_payer_check_flag
+        multi_tax_numbers_check_flag: multi_tax_numbers_check_flag
+        dq_message_output: dq_message_output    
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: customer_link_payer
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+# AGGREGATED LAYER
+  - kind: add
+    #context_name: select_detailed  
+    name: add_aggregated_group_2_accuracy
+    context_name: select_du_customer_link_payer
+    params:
+      - column: total_records
+        expression: IF(customer_code != '', 1, NULL)
+      - column: total_checks
+        expression: IF(customer_code != '', 1, NULL)
+      - column: invalid_records
+        expression: IF(multi_payers_check_flag = '0' OR supressed_payer_check_flag = '0'  OR multi_tax_numbers_check_flag = '0', 1, NULL)
+
+  - kind: group
+    name: group_group_2_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+          - country_code
+          - customer_group_4_name
+          - customer_group_4_code
+
+  - kind: add
+    name: add_aggregated_group_21_accuracy
+    params:
+      - column: quality_category
+        expression: '"accuracy"'
+
+  - kind: select
+    name: select_group_2_accuracy
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        count_total_records: total_records
+        count_total_checks: count_total_checks
+        quality_category: quality_category
+        count_invalid_records: count_invalid_records
+      distinct: true
+
+
+  - kind: add
+    name: add_customer_loading_date
+    params:
+      - column: customer_group_4
+        expression: IF(customer_group_4_code != '' and customer_group_4_name != '', CONCAT(customer_group_4_code, ' - ', customer_group_4_name),'lack of CG4')
+      - column: loading_date
+        expression: CAST(current_date() AS date)
+      - column: invalid_records
+        expression: CAST(count_invalid_records AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+   
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4: customer_group_4
+        total_checks: total_checks
+        quality_category: quality_category
+        invalid_records: invalid_checks
+        loading_date: loading_date
+      distinct: true
+   
+   
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: customer_link_payer
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

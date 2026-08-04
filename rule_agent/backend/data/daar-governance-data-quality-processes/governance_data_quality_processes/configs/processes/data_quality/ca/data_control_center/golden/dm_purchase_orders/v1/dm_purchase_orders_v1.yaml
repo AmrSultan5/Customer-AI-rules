@@ -1,0 +1,209 @@
+transform:
+  name: dm_purchase_orders
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read EKKO
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ekko
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ekko
+
+
+
+
+  - kind: select
+    name: select_ekko
+    params:
+      columns:
+        ebeln: ebeln_ekko
+        loekz: loekz
+        aedat: aedat_ekko
+        bstyp: bstyp
+        bedat: bedat
+        ekgrp: ekgrp
+        bsart: bsart
+        lifnr: lifnr
+        ernam: ernam
+        ekorg: ekorg
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  # - kind: add
+  #   name: filter_sysdate
+  #   params:
+  #       - column: sysdate_add
+  #         expression: left(current_date(), 4)
+  # - kind: add
+  #   name: filter_range
+  #   params:
+  #       - column: range_1
+  #         expression: concat(left(CAST(date_format(sysdate_add, "yyyy") -2 AS string), 4), "-01-01")
+
+  - kind: filter
+    name: filter_loekz_aedat
+    params:
+        - condition: (loekz='' OR loekz IS NULL) #AND aedat_ekko > range_1
+
+
+# Read EKPO
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ekpo
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ekpo
+
+  - kind: add
+    name: add_werks_substr
+    params:
+      - column: werks_substr
+        expression: substring(werks,0,2)
+
+  - kind: select
+    name: select_ekpo
+    params:
+      columns:
+        matnr: matnr
+        ebeln: ebeln_ekpo
+        bukrs: bukrs
+        werks: werks
+        werks_substr: werks_substr
+        ebelp: ebelp
+        elikz: elikz
+        erekz: erekz
+        menge: menge
+        meins: meins
+        txz01: txz01
+        uniqueid: uniqueid
+        creationdate: creationdate
+        sap_cluster: sap_cluster_ekpo
+      distinct: true
+    skip_next: false
+
+
+  - kind: add
+    name: filter_creationdate
+    params:
+        - column: sysdate_add_ekpo
+          expression: left(current_date(), 4)
+
+  - kind: add
+    name: filter_aedat_2
+    params:
+        - column: range_1_ekpo
+          expression: concat(left(CAST(date_format(sysdate_add_ekpo, "yyyy") -2 AS string), 4), "-01-01")
+
+  - kind: filter
+    name: filter_creationdate
+    params:
+        - condition: (loekz='' OR loekz IS NULL) AND creationdate > range_1_ekpo
+
+# Read plant_code_mapping
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_ekko_ekpo_pcm
+    context_name: select_ekpo
+    params:
+      - other:
+          select_ekko
+        how:
+          inner
+        columns:
+          ebeln_ekpo: ebeln_ekko
+          sap_cluster_ekpo: sap_cluster
+      - other:
+          select_pcm
+        how:
+          inner
+        columns:
+          werks_substr: plant_code_short
+          sap_cluster: sap_cluster
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        matnr: material_code
+        bukrs: company_code
+        country_code: country_code
+        werks: plant_code
+        bstyp: purchasing_document_category
+        bedat: purchase_document_date
+        ekgrp: purchasing_group
+        ekorg: purchasing_organization
+        bsart: purchasing_document_type
+        ebeln_ekko: purchasing_document_number
+        ebelp: item_number
+        elikz: delivery_completion_flag
+        erekz: invoice_completion_flag
+        menge: quantity_ordered
+        meins: unit_of_measure
+        lifnr: vendor_code
+        ernam: created_by
+        aedat_ekko: order_created_when
+        txz01: order_item_description
+        uniqueid: item_id
+        creationdate: item_created_when
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_purchase_orders
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

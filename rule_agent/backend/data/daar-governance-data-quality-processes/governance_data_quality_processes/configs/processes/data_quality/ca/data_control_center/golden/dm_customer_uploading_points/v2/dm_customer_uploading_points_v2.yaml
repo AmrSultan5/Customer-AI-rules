@@ -1,0 +1,136 @@
+transform:
+  name: dm_customer_uploading_points
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_knva
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knva
+
+  - kind: add
+    name: add_dm_customer_uploading_points
+    params:
+      - column: grh_mon_morning_from
+        expression: if(moab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(moab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_mon_morning_to
+        expression: if(mobi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(mobi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_mon_afternoon_from
+        expression: if(moab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(moab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_mon_afternoon_to
+        expression: if(mobi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(mobi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_tue_morning_from
+        expression: if(diab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(diab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_tue_morning_to
+        expression: if(dibi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(dibi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_tue_afternoon_from
+        expression: if(diab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(diab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_tue_afternoon_to
+        expression: if(dibi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(dibi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_wed_morning_from
+        expression: if(miab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(miab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_wed_morning_to
+        expression: if(mibi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(mibi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_wed_afternoon_from
+        expression: if(miab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(miab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_wed_afternoon_to
+        expression: if(mibi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(mibi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_thu_morning_from
+        expression: if(doab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(doab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_thu_morning_to
+        expression: if(dobi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(dobi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_thu_afternoon_from
+        expression: if(doab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(doab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_thu_afternoon_to
+        expression: if(dobi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(dobi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_fri_morning_from
+        expression: if(frab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(frab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_fri_morning_to
+        expression: if(frbi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(frbi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_fri_afternoon_from
+        expression: if(frab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(frab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_fri_afternoon_to
+        expression: if(frbi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(frbi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sat_morning_from
+        expression: if(saab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(saab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sat_morning_to
+        expression: if(sabi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(sabi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sat_afternoon_from
+        expression: if(saab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(saab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sat_afternoon_to
+        expression: if(sabi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(sabi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sun_morning_from
+        expression: if(soab1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(soab1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sun_morning_to
+        expression: if(sobi1 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(sobi1, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sun_afternoon_from
+        expression: if(soab2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(soab2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+      - column: grh_sun_afternoon_to
+        expression: if(sobi2 rlike '^[0-9]{6}$', ifnull(date_format(try_to_timestamp(sobi2, 'HHmmss'), 'HH:mm'), '-1'), '-1')
+
+  - kind: select
+    name: select_dm_customer_uploading_points
+    params:
+      columns:
+        kunnr: customer_code
+        ablad: uploading_point_code
+        knfak: calendar_code
+        wanid: grh_default_values_code
+        grh_mon_morning_from: grh_mon_morning_from
+        grh_mon_morning_to: grh_mon_morning_to
+        grh_mon_afternoon_from: grh_mon_afternoon_from
+        grh_mon_afternoon_to: grh_mon_afternoon_to
+        grh_tue_morning_from: grh_tue_morning_from
+        grh_tue_morning_to: grh_tue_morning_to
+        grh_tue_afternoon_from: grh_tue_afternoon_from
+        grh_tue_afternoon_to: grh_tue_afternoon_to
+        grh_wed_morning_from: grh_wed_morning_from
+        grh_wed_morning_to: grh_wed_morning_to
+        grh_wed_afternoon_from: grh_wed_afternoon_from
+        grh_wed_afternoon_to: grh_wed_afternoon_to
+        grh_thu_morning_from: grh_thu_morning_from
+        grh_thu_morning_to: grh_thu_morning_to
+        grh_thu_afternoon_from: grh_thu_afternoon_from
+        grh_thu_afternoon_to: grh_thu_afternoon_to
+        grh_fri_morning_from: grh_fri_morning_from
+        grh_fri_morning_to: grh_fri_morning_to
+        grh_fri_afternoon_from: grh_fri_afternoon_from
+        grh_fri_afternoon_to: grh_fri_afternoon_to
+        grh_sat_morning_from: grh_sat_morning_from
+        grh_sat_morning_to: grh_sat_morning_to
+        grh_sat_afternoon_from: grh_sat_afternoon_from
+        grh_sat_afternoon_to: grh_sat_afternoon_to
+        grh_sun_morning_from: grh_sun_morning_from
+        grh_sun_morning_to: grh_sun_morning_to
+        grh_sun_afternoon_from: grh_sun_afternoon_from
+        grh_sun_afternoon_to: grh_sun_afternoon_to
+        defab: is_default_uploading_point
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_uploading_points
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_uploading_points
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

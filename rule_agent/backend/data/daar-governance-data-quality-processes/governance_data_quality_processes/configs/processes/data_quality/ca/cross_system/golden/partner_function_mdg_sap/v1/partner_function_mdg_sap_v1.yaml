@@ -1,0 +1,1209 @@
+transform:
+  name: Partner_function_mdg_s4hana
+  operations:
+    - kind: read_dataio
+      name: read_mdg_knvp
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvp
+        schema_version: v1
+
+    - kind: filter
+      name: filter_mdg_knvp
+      context_name: read_mdg_knvp
+      params:
+        - condition:
+            kunnr like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%') and parvw in ('AG','WE','RE','RG','YR','XD','ZW','Z4','ZY','Z3','ZG','ZC','SB') and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_mdg_knvp
+      context_name: filter_mdg_knvp
+      params:
+        columns:
+          kunnr: partner_mdg_knvp
+          vkorg: vkorg_mdg_knvp
+          vtweg: vtweg_mdg_knvp
+          spart: spart_mdg_knvp
+          parvw: parvw_mdg_knvp
+          kunn2: kunn2_mdg_knvp
+
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          partner_guid: partner_guid_mdg_but000
+          name_last: name_last_mdg_but000
+          name_first: name_first_mdg_but000
+
+    - kind: read_dataio
+      name: read_mdg_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+    
+    - kind: filter
+      name: filter_mdg_knvv
+      context_name: read_mdg_knvv
+      params:
+        - condition:
+            vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+    
+    - kind: select
+      name: select_knvv_pre_checkpoint
+      context_name: filter_mdg_knvv
+      params:          
+        columns:
+          kunnr: kunnr_knvv
+          kvgr4: kvgr4_knvv
+          vkorg: vkorg_knvv
+          vtweg: vtweg_knvv
+          spart: spart_knvv
+        distinct: true
+    
+    - kind: checkpoint
+      name: select_knvv
+      context_name: select_knvv_pre_checkpoint
+
+    - kind: join
+      name: join_mdg
+      context_name: select_mdg_knvp
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            inner
+          columns:
+            partner_mdg_knvp: partner_mdg_but000
+
+    - kind: add
+      name: add_mdg_HASH
+      context_name: join_mdg
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(partner_mdg_knvp,vkorg_mdg_knvp, vtweg_mdg_knvp, spart_mdg_knvp,parvw_mdg_knvp,kunn2_mdg_knvp))
+
+    - kind: select
+      name: SELECT_mdg
+      context_name: add_mdg_HASH
+      params:
+        columns:
+          partner_mdg_knvp: partner_mdg
+          vkorg_mdg_knvp: vkorg_mdg
+          vtweg_mdg_knvp: vtweg_mdg
+          spart_mdg_knvp: spart_mdg
+          parvw_mdg_knvp: parvw_mdg
+          kunn2_mdg_knvp: kunn2_mdg
+          name_first_mdg_but000: name_first_mdg
+          name_last_mdg_but000: name_last_mdg
+          partner_guid_mdg_but000: partner_guid_mdg
+          HASH: HASH_mdg
+    
+    - kind: checkpoint
+      name: mdg
+      context_name: SELECT_mdg
+
+##s4hana##
+    - kind: read_dataio
+      name: read_s4hana_knvp
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: customer
+        object_name: knvp
+        schema_version: v1
+
+    - kind: filter
+      name: filter_s4hana_knvp
+      context_name: read_s4hana_knvp
+      params:
+        - condition:
+            if(sap_cluster = 'CL1', KUNNR like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'), KUNNR like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%')) and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700) and parvw in ('AG','WE','RE','RG','YR','XD','ZW','Z4','ZY','Z3','ZG','ZC','SB')
+
+    - kind: select
+      name: select_s4hana_knvp
+      context_name: filter_s4hana_knvp
+      params:
+        columns:
+          kunnr: partner_s4hana_knvp
+          vkorg: vkorg_s4hana_knvp
+          vtweg: vtweg_s4hana_knvp
+          spart: spart_s4hana_knvp
+          parvw: parvw_s4hana_knvp
+          kunn2: kunn2_s4hana_knvp
+          sap_cluster: sap_cluster_knvp
+
+    - kind: read_dataio
+      name: read_s4hana_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_but000
+      context_name: read_s4hana_but000
+      params:
+        columns:
+          partner: partner_s4hana_but000
+          partner_guid: partner_guid_s4hana_but000
+          name_last: name_last_s4hana_but000
+          name_first: name_first_s4hana_but000
+          sap_cluster: sap_cluster_but000
+
+    - kind: join
+      name: join_s4hana
+      context_name: select_s4hana_knvp
+      params:
+        - other:
+            select_s4hana_but000
+          how:
+            inner
+          columns:
+            partner_s4hana_knvp: partner_s4hana_but000
+            sap_cluster_knvp: sap_cluster_but000
+
+    - kind: add
+      name: add_s4hana_HASH
+      context_name: join_s4hana
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(partner_s4hana_knvp,vkorg_s4hana_knvp, vtweg_s4hana_knvp, spart_s4hana_knvp,parvw_s4hana_knvp,kunn2_s4hana_knvp))
+
+    - kind: select
+      name: select_s4hana
+      context_name: add_s4hana_HASH
+      params:
+        columns:
+          partner_s4hana_knvp: partner_s4hana
+          vkorg_s4hana_knvp: vkorg_s4hana
+          vtweg_s4hana_knvp: vtweg_s4hana
+          spart_s4hana_knvp: spart_s4hana
+          parvw_s4hana_knvp: parvw_s4hana
+          kunn2_s4hana_knvp: kunn2_s4hana
+          name_first_s4hana_but000: name_first_s4hana
+          name_last_s4hana_but000: name_last_s4hana
+          partner_guid_s4hana_but000: partner_guid_s4hana
+          HASH: HASH_s4hana
+    
+    - kind: checkpoint
+      name: s4hana
+      context_name: select_s4hana
+
+## YR ##
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            s4hana
+          how:
+            full
+          columns:
+            HASH_mdg: HASH_s4hana
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_s4hana is null or HASH_s4hana = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          vkorg_mdg: vkorg_mdg
+          vtweg_mdg: vtweg_mdg
+          spart_mdg: spart_mdg
+          parvw_mdg: parvw_mdg
+          kunn2_mdg: kunn2_mdg
+          name_first_mdg: name_first_mdg
+          name_last_mdg: name_last_mdg
+          partner_guid_mdg: partner_guid_mdg
+          HASH_mdg: HASH_mdg
+
+    - kind: filter
+      name: non_matching_s4hana
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_mdg is null or HASH_mdg = ''
+
+    - kind: select
+      name: non_matching_s4hana_select
+      context_name: non_matching_s4hana
+      params:
+        columns:
+          partner_s4hana: partner_s4hana
+          vkorg_s4hana: vkorg_s4hana
+          vtweg_s4hana: vtweg_s4hana
+          spart_s4hana: spart_s4hana
+          parvw_s4hana: parvw_s4hana
+          kunn2_s4hana: kunn2_s4hana
+          name_first_s4hana: name_first_s4hana
+          name_last_s4hana: name_last_s4hana
+          partner_guid_s4hana: partner_guid_s4hana
+          HASH_s4hana: HASH_s4hana
+
+###data missing from mdg
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_s4hana_select
+          how:
+            full
+          columns:
+            partner_mdg: partner_s4hana
+            vkorg_mdg: vkorg_s4hana
+            vtweg_mdg: vtweg_s4hana
+            spart_mdg: spart_s4hana
+            parvw_mdg: parvw_s4hana
+            partner_guid_mdg: partner_guid_s4hana
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: msg_mdg
+          expression: CASE WHEN partner_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_s4hana
+          expression: CASE WHEN partner_s4hana IS NULL THEN 'data missing from sap' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string)   
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          partner_s4hana: partner
+          parvw_s4hana: parvw
+          vkorg_s4hana: vkorg
+          vtweg_s4hana: vtweg
+          spart_s4hana: spart
+          src_system: src_system
+          tgt_system: tgt_system
+          name_first_s4hana: name_first
+          name_last_s4hana: name_last
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+###data missing from S4HANA
+
+    - kind: filter
+      name: join_data_missing_from_s4hana_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_s4hana is null
+
+    - kind: select
+      name: final_data_missing_from_s4hana
+      context_name: join_data_missing_from_s4hana_filter
+      params:
+        columns:
+          partner_mdg: partner
+          parvw_mdg: parvw
+          vkorg_mdg: vkorg
+          vtweg_mdg: vtweg
+          spart_mdg: spart
+          src_system: src_system
+          tgt_system: tgt_system
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          msg_s4hana: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+## PARTNER FUNCTION mismatch
+    - kind: filter
+      name: partner_function_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND partner_guid_mdg = partner_guid_s4hana AND kunn2_s4hana <> kunn2_mdg and parvw_mdg <> parvw_s4hana
+
+    - kind: add
+      name: add_missing_columns_partner_function
+      context_name: partner_function_filter
+      params:
+        - column: attr_name_partner_function
+          expression: CASE WHEN partner_mdg = partner_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND partner_guid_mdg = partner_guid_s4hana AND kunn2_s4hana <> kunn2_mdg and parvw_mdg <> parvw_s4hana THEN concat('PARTNER FUNCTION:',' ',parvw_mdg) END
+        - column: msg_partner_function
+          expression: CASE WHEN partner_mdg = partner_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND partner_guid_mdg = partner_guid_s4hana AND kunn2_s4hana <> kunn2_mdg and parvw_mdg <> parvw_s4hana THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_partner_function
+      context_name: add_missing_columns_partner_function
+      params:
+        columns:
+          partner_mdg: partner
+          parvw_mdg: parvw
+          vkorg_mdg: vkorg
+          vtweg_mdg: vtweg
+          spart_mdg: spart
+          src_system: src_system
+          tgt_system: tgt_system
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          msg_partner_function: msg
+          attr_name_partner_function: attr_name
+          kunn2_s4hana: tgt_attr
+          kunn2_mdg: src_attr
+
+    - kind: union
+      name: union
+      context_name: final_data_missing_from_mdg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_s4hana
+
+    - kind: union
+      name: union
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_partner_function
+
+##write missing mismatches
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: filter
+      name: filter_kna1
+      params:
+        - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_kna1
+      context_name: filter_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: kunnr_knvv
+            vtweg: vtweg_knvv
+            spart: spart_knvv
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            kvgr4_knvv: kvgr4_tvv4t
+
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('PARTNER FUNCTION' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(kvgr4_knvv,' - ',bezei_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          name_first: attribute1
+          name_last: attribute2
+          parvw: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          vkorg_knvv: attribute6
+          vtweg_knvv: attribute7
+          spart_knvv: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+        distinct: true
+
+    - kind: filter
+      name: filter_final
+      context_name: select_final
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: write_dataio
+      name: write_partner_function
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+## agg ##
+### mdg ###
+
+    - kind: join
+      name: join_mdg_agg
+      context_name: mdg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_mdg: kunnr_kna1
+
+    - kind: filter
+      name: filter_mdg_agg
+      context_name: join_mdg_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg_mdg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_mdg_agg
+      context_name: filter_mdg_agg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          HASH_mdg: HASH_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('PARTNER FUNCTION' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            HASH_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### s4hana ###
+
+    - kind: join
+      name: join_s4hana_agg
+      context_name: s4hana
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_s4hana: kunnr_kna1
+
+    - kind: filter
+      name: filter_s4hana_agg
+      context_name: join_s4hana_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg_s4hana IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_s4hana_agg
+      context_name: filter_s4hana_agg
+      params:
+        columns:
+          partner_s4hana: partner_s4hana
+          HASH_s4hana: HASH_s4hana
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_s4hana_agg
+      context_name: select_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner_s4hana, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner_s4hana, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner_s4hana, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner_s4hana, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner_s4hana, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner_s4hana, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner_s4hana, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner_s4hana, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner_s4hana, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner_s4hana, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner_s4hana, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner_s4hana, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner_s4hana, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner_s4hana, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner_s4hana, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner_s4hana, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner_s4hana, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner_s4hana, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner_s4hana, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner_s4hana, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner_s4hana, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner_s4hana, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner_s4hana, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner_s4hana, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner_s4hana, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner_s4hana, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner_s4hana, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner_s4hana, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner_s4hana, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('PARTNER FUNCTION' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_s4hana_agg
+      context_name: add_missing_columns_s4hana_agg
+      params:
+        - aggs:
+            HASH_s4hana: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_s4hana_agg_final
+      context_name: group_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_s4hana: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_mdg ###
+
+    - kind: join
+      name: join_missing_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_mdg_agg
+      context_name: join_missing_mdg_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: filter_missing_mdg_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('PARTNER FUNCTION' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_s4hana ###
+
+    - kind: join
+      name: join_missing_s4hana_agg
+      context_name: final_data_missing_from_s4hana
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_s4hana_agg
+      context_name: join_missing_s4hana_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_data_missing_from_s4hana_agg
+      context_name: filter_missing_s4hana_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_s4hana_agg
+      context_name: select_data_missing_from_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('PARTNER FUNCTION' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM SAP' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_s4hana_agg
+      context_name: add_missing_columns_data_missing_from_s4hana_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_s4hana_final
+      context_name: group_data_missing_from_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### mismatch ###
+
+    - kind: join
+      name: join_final_agg
+      context_name: final_partner_function
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: kunnr_knvv
+            vtweg: vtweg_knvv
+            spart: spart_knvv
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            kvgr4_knvv: kvgr4_tvv4t
+
+    - kind: filter
+      name: filter_final_agg
+      context_name: join_final_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: filter_final_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('PARTNER FUNCTION' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true  
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_s4hana_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_mdg_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_s4hana_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_mismatch_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

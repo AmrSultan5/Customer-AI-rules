@@ -1,0 +1,667 @@
+transform:
+  name: customer_relation_integrity_mdg_d365_crm_s4hana
+  operations:
+    - kind: read_dataio
+      name: read_reconciliation_results
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: application
+          storage_id: '{{dataio.storage_id}}'
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        schema_version: v1
+
+    - kind: filter
+      name: filter_reconciliation_results
+      context_name: read_reconciliation_results
+      params:
+        - condition: table_name='CONTACT RELATIONSHIP' and dimension='telephone' and coalesce(attribute9,'') in ('1','')
+
+    - kind: filter
+      name: filter_reconciliation_results_mdg
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'mdg'
+
+    - kind: add
+      name: add_mdg_columns_telephone
+      context_name: filter_reconciliation_results_mdg
+      params:
+      - column: mdg_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_mdg
+      context_name: add_mdg_columns_telephone
+      params:
+        columns:
+          primary_key_src_l2: partner_mdg
+          primary_key_l1: primary_key_l1_mdg
+          attribute8: attribute8_mdg
+          attribute2: attribute2_mdg
+          mdg_join_col: mdg_join_col
+        distinct: true
+
+
+    - kind: filter
+      name: filter_reconciliation_results_sap
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'sap'
+
+    - kind: add
+      name: add_sap_columns_telephone
+      context_name: filter_reconciliation_results_sap
+      params:
+      - column: sap_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_sap
+      context_name: add_sap_columns_telephone
+      params:
+        columns:
+          primary_key_src_l2: partner_sap
+          primary_key_l1: primary_key_l1_sap
+          attribute8: attribute8_sap
+          attribute2: attribute2_sap
+          sap_join_col: sap_join_col
+        distinct: true
+
+
+
+    - kind: filter
+      name: filter_reconciliation_results_d365
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'd365'
+
+    - kind: add
+      name: add_d365_columns_telephone
+      context_name: filter_reconciliation_results_d365
+      params:
+      - column: d365_join_col
+        expression: md5(concat(primary_key_src_l2,trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))), trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),upper(substr(primary_key_l1,12,length(primary_key_l1))),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_d365
+      context_name: add_d365_columns_telephone
+      params:
+        columns:
+          primary_key_src_l2: partner_d365
+          primary_key_l1: primary_key_l1_d365
+          attribute8: attribute8_d365
+          attribute2: attribute2_d365
+          d365_join_col: d365_join_col
+        distinct: true
+
+
+    - kind: filter
+      name: filter_reconciliation_results_crm
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'crm'
+
+    - kind: add
+      name: add_crm_columns_telephone
+      context_name: filter_reconciliation_results_crm
+      params:
+      - column: crm_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_crm
+      context_name: add_crm_columns_telephone
+      params:
+        columns:
+          primary_key_src_l2: partner_crm
+          primary_key_l1: primary_key_l1_crm
+          attribute8: attribute8_crm
+          attribute2: attribute2_crm
+          crm_join_col: crm_join_col
+        distinct: true
+
+
+    - kind: join
+      name: join_telephone
+      context_name: select_reconciliation_results_mdg
+      params:
+        - other:
+            select_reconciliation_results_sap
+          how:
+            full
+          columns:
+            mdg_join_col: sap_join_col
+        - other:
+            select_reconciliation_results_d365
+          how:
+            full
+          columns:
+            mdg_join_col: d365_join_col
+        - other:
+            select_reconciliation_results_crm
+          how:
+            full
+          columns:
+            mdg_join_col: crm_join_col
+
+
+    - kind: add
+      name: add_join_telephone
+      context_name: join_telephone
+      params:
+      - column: country
+        expression: coalesce(coalesce(coalesce(attribute2_mdg,attribute2_d365),attribute2_sap),attribute2_crm)
+      - column: partner
+        expression: coalesce(coalesce(coalesce(partner_mdg,partner_d365),partner_sap),partner_crm)
+      - column: partner_guid
+        expression: coalesce(coalesce(coalesce(substr(primary_key_l1_mdg,11,length(primary_key_l1_mdg)),upper(substr(primary_key_l1_d365,12,length(primary_key_l1_d365)))),substr(primary_key_l1_sap,11,length(primary_key_l1_sap))),substr(primary_key_l1_crm,11,length(primary_key_l1_crm)))
+      - column: attribute
+        expression: cast('telephone' as string)
+      - column: mdg_value
+        expression: coalesce(concat(attribute8_mdg),'')
+      - column: sap_value
+        expression: coalesce(concat(attribute8_sap),'')
+      - column: d365_value
+        expression: coalesce(concat(attribute8_d365),'')
+      - column: crm_value
+        expression: coalesce(concat(attribute8_crm),'')
+      - column: result
+        expression: if (   coalesce(concat(attribute8_mdg),'')  = coalesce(concat(attribute8_d365),'')   and coalesce(concat(attribute8_mdg),'')  = coalesce(concat(attribute8_sap),'') and coalesce(concat(attribute8_mdg),'')  = coalesce(concat(attribute8_crm),''), 'yes', 'no')
+
+    - kind: select
+      name: select_telephone
+      context_name: add_join_telephone
+      params:
+        columns:
+          country: country
+          partner: partner
+          partner_guid: partner_guid
+          attribute: attribute
+          mdg_value: mdg_value
+          sap_value: sap_value
+          d365_value: d365_value
+          crm_value: crm_value
+          result: result
+        distinct: true
+
+    - kind: filter
+      name: filter_telephone
+      context_name: select_telephone
+      params:
+        - condition: mdg_value <> '' or d365_value <>''  or  sap_value <>''   or  crm_value <>''
+
+
+
+    - kind: checkpoint
+      name: checkpoint_telephone
+      context_name: filter_telephone
+
+
+###########
+
+
+
+    - kind: filter
+      name: filter_reconciliation_results
+      context_name: read_reconciliation_results
+      params:
+        - condition: table_name='CONTACT RELATIONSHIP' and dimension='telephone' and coalesce(attribute9,'') in ('2','3')
+
+    - kind: filter
+      name: filter_reconciliation_results_mdg
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'mdg'
+
+    - kind: add
+      name: add_mdg_columns_mobile
+      context_name: filter_reconciliation_results_mdg
+      params:
+      - column: mdg_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_mdg
+      context_name: add_mdg_columns_mobile
+      params:
+        columns:
+          primary_key_src_l2: partner_mdg
+          primary_key_l1: primary_key_l1_mdg
+          attribute8: attribute8_mdg
+          attribute2: attribute2_mdg
+          mdg_join_col: mdg_join_col
+        distinct: true
+
+
+    - kind: filter
+      name: filter_reconciliation_results_sap
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'sap'
+
+    - kind: add
+      name: add_sap_columns_mobile
+      context_name: filter_reconciliation_results_sap
+      params:
+      - column: sap_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_sap
+      context_name: add_sap_columns_mobile
+      params:
+        columns:
+          primary_key_src_l2: partner_sap
+          primary_key_l1: primary_key_l1_sap
+          attribute8: attribute8_sap
+          attribute2: attribute2_sap
+          sap_join_col: sap_join_col
+        distinct: true
+
+
+
+    - kind: filter
+      name: filter_reconciliation_results_d365
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'd365'
+
+    - kind: add
+      name: add_d365_columns_mobile
+      context_name: filter_reconciliation_results_d365
+      params:
+      - column: d365_join_col
+        expression: md5(concat(primary_key_src_l2,trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))), trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),upper(substr(primary_key_l1,12,length(primary_key_l1))),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_d365
+      context_name: add_d365_columns_mobile
+      params:
+        columns:
+          primary_key_src_l2: partner_d365
+          primary_key_l1: primary_key_l1_d365
+          attribute8: attribute8_d365
+          attribute2: attribute2_d365
+          d365_join_col: d365_join_col
+        distinct: true
+
+
+
+
+    - kind: filter
+      name: filter_reconciliation_results_crm
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'crm'
+
+    - kind: add
+      name: add_crm_columns_mobile
+      context_name: filter_reconciliation_results_crm
+      params:
+      - column: crm_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),coalesce(attribute8,'')))
+
+    - kind: select
+      name: select_reconciliation_results_crm
+      context_name: add_crm_columns_mobile
+      params:
+        columns:
+          primary_key_src_l2: partner_crm
+          primary_key_l1: primary_key_l1_crm
+          attribute8: attribute8_crm
+          attribute2: attribute2_crm
+          crm_join_col: crm_join_col
+        distinct: true
+
+
+    - kind: join
+      name: join_mobile
+      context_name: select_reconciliation_results_mdg
+      params:
+        - other:
+            select_reconciliation_results_sap
+          how:
+            full
+          columns:
+            mdg_join_col: sap_join_col
+        - other:
+            select_reconciliation_results_d365
+          how:
+            full
+          columns:
+            mdg_join_col: d365_join_col
+        - other:
+            select_reconciliation_results_crm
+          how:
+            full
+          columns:
+            mdg_join_col: crm_join_col
+
+    - kind: add
+      name: add_join_mobile
+      context_name: join_mobile
+      params:
+      params:
+      - column: country
+        expression: coalesce(coalesce(coalesce(attribute2_mdg,attribute2_d365),attribute2_sap),attribute2_crm)
+      - column: partner
+        expression: coalesce(coalesce(coalesce(partner_mdg,partner_d365),partner_sap),partner_crm)
+      - column: partner_guid
+        expression: coalesce(coalesce(coalesce(substr(primary_key_l1_mdg,11,length(primary_key_l1_mdg)),upper(substr(primary_key_l1_d365,12,length(primary_key_l1_d365)))),substr(primary_key_l1_sap,11,length(primary_key_l1_sap))),substr(primary_key_l1_crm,11,length(primary_key_l1_crm)))
+      - column: attribute
+        expression: cast('mobile' as string)
+      - column: mdg_value
+        expression: coalesce(concat(attribute8_mdg),'')
+      - column: sap_value
+        expression: coalesce(concat(attribute8_sap),'')
+      - column: d365_value
+        expression: coalesce(concat(attribute8_d365),'')
+      - column: crm_value
+        expression: coalesce(concat(attribute8_crm),'')
+      - column: result
+        expression: if (   coalesce(concat(attribute8_mdg),'')  = coalesce(concat(attribute8_d365),'')   and coalesce(concat(attribute8_mdg),'')  = coalesce(concat(attribute8_sap),'') and coalesce(concat(attribute8_mdg),'')  = coalesce(concat(attribute8_crm),''), 'yes', 'no')
+
+
+    - kind: select
+      name: select_mobile
+      context_name: add_join_mobile
+      params:
+        columns:
+          country: country
+          partner: partner
+          partner_guid: partner_guid
+          attribute: attribute
+          mdg_value: mdg_value
+          sap_value: sap_value
+          d365_value: d365_value
+          crm_value: crm_value
+          result: result
+        distinct: true
+
+    - kind: filter
+      name: filter_mobile
+      context_name: select_mobile
+      params:
+        - condition: mdg_value <> '' or d365_value <>''  or  sap_value <>''  or  crm_value <>''
+
+
+    - kind: checkpoint
+      name: checkpoint_mobile
+      context_name: filter_mobile
+
+
+###################
+
+    - kind: filter
+      name: filter_reconciliation_results
+      context_name: read_reconciliation_results
+      params:
+        - condition: table_name='CONTACT RELATIONSHIP' and dimension='email' 
+
+    - kind: filter
+      name: filter_reconciliation_results_mdg
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'mdg'
+
+    - kind: add
+      name: add_mdg_columns_email
+      context_name: filter_reconciliation_results_mdg
+      params:
+      - column: mdg_join_col
+        expression: md5(concat(primary_key_src_l2, trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),substr(primary_key_l1,11,length(primary_key_l1)),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))))
+
+    - kind: select
+      name: select_reconciliation_results_mdg
+      context_name: add_mdg_columns_email
+      params:
+        columns:
+          primary_key_src_l2: partner_mdg
+          primary_key_l1: primary_key_l1_mdg
+          attribute8: attribute8_mdg
+          attribute2: attribute2_mdg
+          mdg_join_col: mdg_join_col
+        distinct: true
+
+
+    - kind: filter
+      name: filter_reconciliation_results_sap
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'sap'
+
+    - kind: add
+      name: add_sap_columns_email
+      context_name: filter_reconciliation_results_sap
+      params:
+      - column: sap_join_col
+        expression: md5(concat(primary_key_src_l2,trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))), trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),upper(substr(primary_key_l1,11,length(primary_key_l1))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))))
+
+    - kind: select
+      name: select_reconciliation_results_sap
+      context_name: add_sap_columns_email
+      params:
+        columns:
+          primary_key_src_l2: partner_sap
+          primary_key_l1: primary_key_l1_sap
+          attribute8: attribute8_sap
+          attribute2: attribute2_sap
+          sap_join_col: sap_join_col
+        distinct: true
+
+
+
+    - kind: filter
+      name: filter_reconciliation_results_d365
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'd365'
+
+    - kind: add
+      name: add_d365_columns_email
+      context_name: filter_reconciliation_results_d365
+      params:
+      - column: d365_join_col
+        expression: md5(concat(primary_key_src_l2,trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))), trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),upper(substr(primary_key_l1,12,length(primary_key_l1))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))))
+
+    - kind: select
+      name: select_reconciliation_results_d365
+      context_name: add_d365_columns_email
+      params:
+        columns:
+          primary_key_src_l2: partner_d365
+          primary_key_l1: primary_key_l1_d365
+          attribute8: attribute8_d365
+          attribute2: attribute2_d365
+          d365_join_col: d365_join_col
+        distinct: true
+
+
+
+    - kind: filter
+      name: filter_reconciliation_results_crm
+      context_name: filter_reconciliation_results
+      params:
+        - condition: src_system = 'crm'
+
+    - kind: add
+      name: add_crm_columns_email
+      context_name: filter_reconciliation_results_crm
+      params:
+      - column: crm_join_col
+        expression: md5(concat(primary_key_src_l2,trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute6, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))), trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute5, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))),upper(substr(primary_key_l1,11,length(primary_key_l1))),trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))))
+
+    - kind: select
+      name: select_reconciliation_results_crm
+      context_name: add_crm_columns_email
+      params:
+        columns:
+          primary_key_src_l2: partner_crm
+          primary_key_l1: primary_key_l1_crm
+          attribute8: attribute8_crm
+          attribute2: attribute2_crm
+          crm_join_col: crm_join_col
+        distinct: true
+
+
+    - kind: join
+      name: join_email
+      context_name: select_reconciliation_results_mdg
+      params:
+        - other:
+            select_reconciliation_results_sap
+          how:
+            full
+          columns:
+            mdg_join_col: sap_join_col
+        - other:
+            select_reconciliation_results_d365
+          how:
+            full
+          columns:
+            mdg_join_col: d365_join_col
+        - other:
+            select_reconciliation_results_crm
+          how:
+            full
+          columns:
+            mdg_join_col: crm_join_col
+
+    - kind: add
+      name: add_join_email
+      context_name: join_email
+      params:
+      - column: country
+        expression: coalesce(coalesce(coalesce(attribute2_mdg,attribute2_d365),attribute2_sap),attribute2_crm)
+      - column: partner
+        expression: coalesce(coalesce(coalesce(partner_mdg,partner_d365),partner_sap),partner_crm)
+      - column: partner_guid
+        expression: coalesce(coalesce(coalesce(substr(primary_key_l1_mdg,11,length(primary_key_l1_mdg)),upper(substr(primary_key_l1_d365,12,length(primary_key_l1_d365)))),substr(primary_key_l1_sap,11,length(primary_key_l1_sap))),substr(primary_key_l1_crm,11,length(primary_key_l1_crm)))
+      - column: attribute
+        expression: cast('email' as string)
+      - column: mdg_value
+        expression: coalesce(concat(attribute8_mdg),'')
+      - column: sap_value
+        expression: coalesce(concat(attribute8_sap),'')
+      - column: d365_value
+        expression: coalesce(concat(attribute8_d365),'')
+      - column: crm_value
+        expression: coalesce(concat(attribute8_crm),'')
+      - column: result
+        expression: if ( trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8_mdg, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))  = trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8_d365, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))) and  trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8_mdg, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))  = trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8_sap, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))) and trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8_mdg, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', '')))  = trim(lower(regexp_replace(regexp_replace(regexp_replace(coalesce( regexp_replace(attribute8_crm, '\u00A0', ''),''), '\\n', ''), '\\r', ''), '\\t', ''))) , 'yes', 'no')
+
+
+    - kind: select
+      name: select_email
+      context_name: add_join_email
+      params:
+        columns:
+          country: country
+          partner: partner
+          partner_guid: partner_guid
+          attribute: attribute
+          mdg_value: mdg_value
+          sap_value: sap_value
+          d365_value: d365_value
+          crm_value: crm_value
+          result: result
+        distinct: true
+
+    - kind: filter
+      name: filter_email
+      context_name: select_email
+      params:
+        - condition: mdg_value <> '' or d365_value <>''  or  sap_value <>''  or  crm_value <>''
+
+
+    - kind: checkpoint
+      name: checkpoint_email
+      context_name: filter_email
+
+
+#################
+
+    - kind: union
+      name: union_matching
+      context_name: checkpoint_telephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: checkpoint_mobile
+
+    - kind: union
+      name: union_matching
+      params:
+        allow_missing: true
+        by_name: true
+        other: checkpoint_email
+
+
+    - kind: add
+      name: add_final
+      context_name: union_matching
+      params:
+      - column: domain
+        expression: cast('customer' as string)
+      - column: table_name
+        expression: cast('CUSTOMER RELATION INTEGRITY' as string)
+      - column: src_system
+        expression: cast('mdg' as string)
+      - column: tgt_system
+        expression: cast('dummy' as string)
+      - column: attribute3
+        expression: attribute
+      - column: dimension
+        expression: lower(attribute)
+      - column: loading_date
+        expression: current_date()
+
+    - kind: select
+      name: select_final
+      context_name: add_final
+      params:
+        columns:
+          domain: domain
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          partner: attribute1
+          partner_guid: attribute2
+          attribute3: attribute3
+          mdg_value: attribute4
+          sap_value: attribute5
+          crm_value: attribute6
+          d365_value: attribute7
+          result: attribute8
+          loading_date: loading_date
+          country: country
+        distinct: true
+
+    - kind: filter
+      name: filter_final
+      context_name: select_final
+      params:
+        - condition: 1 = 1
+
+    - kind: write_dataio
+      name: write_customer_relation_integrity
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True

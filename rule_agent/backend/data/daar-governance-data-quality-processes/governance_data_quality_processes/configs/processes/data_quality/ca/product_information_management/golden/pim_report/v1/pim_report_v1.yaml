@@ -1,0 +1,799 @@
+transform:
+  name: pim_report
+  operations:
+
+#read and prepare sources
+#dm_material
+  - kind: read_dataio
+    name: read_dm_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      schema_version: v6
+
+  - kind: filter
+    name: filter_dm_material
+    context_name: read_dm_material
+    params:
+      - condition:
+          (sales_organization != '0001' AND quantity_per_layer IS NOT NULL AND (((is_active_sales = 1 OR creation_date >= add_months(current_date(), -12)) AND material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM') AND material_group_code != '1110000') OR (material_type_code IN ('ZMM','ZMMN') AND reference_material_for_packed_materials <>  '')))
+
+  - kind: select
+    name: select_dm_material
+    context_name: filter_dm_material
+    params:
+      columns:
+        material_code: material_code_ma
+        sales_organization: sales_organization
+        external_identification_of_data: external_identification_of_data
+        ean: ean
+        creation_date: creation_date
+        material_name: material_name
+        material_name_native_lang: material_name_native_lang
+        brand_code: brand_code
+        brand_description: brand_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        sales_unit_code: sales_unit_code
+        sales_unit_name: sales_unit_name
+        weight_unit: weight_unit
+        unit_of_measure_code: unit_of_measure_code
+        quantity_per_layer: quantity_per_layer
+        gross_weight: gross_weight
+        net_weight: net_weight
+        storage_condition_code: storage_condition_code
+        remaining_shelf_life: remaining_shelf_life
+        total_shelf_life: total_shelf_life
+        sap_cluster: sap_cluster_ma
+      distinct: true
+
+#dm_org_hierarchy
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: add
+    name: add_dm_org_hierarchy
+    context_name: read_dm_org_hierarchy
+    params:
+      - column: country_code
+        expression: "UPPER(country_code)"
+        overwrite: true
+
+  - kind: select
+    name: select_dm_org_hierarchy
+    context_name: add_dm_org_hierarchy
+    params:
+      columns:
+        sales_org_code: sales_org_code
+        country_code: country_code_oh
+        country_name: country_name
+      distinct: true
+
+#dm_unit_of_measure
+  - kind: read_dataio
+    name: read_dm_unit_of_measure
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_unit_of_measure
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_unit_of_measure
+    context_name: read_dm_unit_of_measure
+    params:
+      columns:
+        material_code: material_code_uom
+        alternative_unit_of_measure_code: alternative_unit_of_measure_code
+        conversion_numerator: conversion_numerator
+        conversion_denominator: conversion_denominator
+        conversion_factor: conversion_factor
+        ean_code: ean_code
+        length: length
+        width: width
+        height: height
+        weight_unit_uom: weight_unit_uom
+        gross_weight_uom: gross_weight_uom
+        unit_of_dimension: unit_of_dimension
+        sap_cluster: sap_cluster_uom
+      distinct: true
+
+#dataset for filtering out materials with auomc not in list
+  - kind: filter
+    name: filter_dm_unit_of_measure_inner_join
+    context_name: select_dm_unit_of_measure
+    params:
+      - condition:
+          alternative_unit_of_measure_code IN ('ST', 'PAK', 'CS', 'PAL')
+
+  - kind: select
+    name: select_dm_unit_of_measure_inner_join
+    context_name: filter_dm_unit_of_measure_inner_join
+    params:
+      columns:
+        material_code_uom: material_code_uom_inner_join
+        sap_cluster_uom: sap_cluster_uom_inner_join
+
+#dm_unit_of_measure - groupings per category
+#alternative_unit_of_measure_code = 'ST'
+  - kind: filter
+    name: filter_dm_unit_of_measure_auomc_st
+    context_name: select_dm_unit_of_measure
+    params:
+      - condition:
+          alternative_unit_of_measure_code = 'ST'
+
+  - kind: group
+    name: group_dm_unit_of_measure_auomc_st
+    context_name: filter_dm_unit_of_measure_auomc_st
+    params:
+      - aggs:
+          ean_code : max
+          conversion_factor: max
+          unit_of_dimension: max
+          weight_unit_uom: max
+          conversion_denominator: max
+          height: max
+          width: max
+          length: max
+          gross_weight_uom: max
+        by:
+        - material_code_uom 
+        - sap_cluster_uom
+
+  - kind: select
+    name: select_dm_unit_of_measure_auomc_st
+    context_name: group_dm_unit_of_measure_auomc_st
+    params:
+      columns:
+        material_code_uom: material_code_uom_auomc_st
+        sap_cluster_uom: sap_cluster_uom_auomc_st
+        # max_ean_code: ean_inside_unit
+        max_ean_code: ean_piece
+        max_conversion_factor: conversion_factor_piece
+        max_unit_of_dimension: unit_of_dimension_piece
+        max_weight_unit_uom: weight_unit_uom_piece
+        max_conversion_denominator: conversion_denominator_piece
+        max_height: height_piece
+        max_width: width_piece
+        max_length: depth_piece
+        max_gross_weight_uom: gross_weight_uom_piece
+      distinct: true
+
+#alternative_unit_of_measure_code = 'PAK'
+  - kind: filter
+    name: filter_dm_unit_of_measure_auomc_pak
+    context_name: select_dm_unit_of_measure
+    params:
+      - condition:
+          alternative_unit_of_measure_code = 'PAK'
+
+  - kind: group
+    name: group_dm_unit_of_measure_auomc_pak
+    context_name: filter_dm_unit_of_measure_auomc_pak
+    params:
+      - aggs:
+          ean_code : max
+          conversion_factor: max
+          unit_of_dimension: max
+          weight_unit_uom: max
+          conversion_denominator: max
+          height: max
+          width: max
+          length: max
+          gross_weight_uom: max
+        by:
+        - material_code_uom
+        - sap_cluster_uom
+
+  - kind: select
+    name: select_dm_unit_of_measure_auomc_pak
+    context_name: group_dm_unit_of_measure_auomc_pak
+    params:
+      columns:
+        material_code_uom: material_code_uom_auomc_pak
+        sap_cluster_uom: sap_cluster_uom_auomc_pak
+        max_ean_code: ean_pack
+        max_conversion_factor: conversion_factor_pack
+        max_unit_of_dimension: unit_of_dimension_pack
+        max_weight_unit_uom: weight_unit_uom_pack
+        max_conversion_denominator: conversion_denominator_pack
+        max_height: height_pack
+        max_width: width_pack
+        max_length: depth_pack
+        max_gross_weight_uom: gross_weight_uom_pack
+      distinct: true
+
+#alternative_unit_of_measure_code = 'CS'
+  - kind: filter
+    name: filter_dm_unit_of_measure_auomc_cs
+    context_name: select_dm_unit_of_measure
+    params:
+      - condition:
+          alternative_unit_of_measure_code = 'CS'
+
+  - kind: group
+    name: group_dm_unit_of_measure_auomc_cs
+    context_name: filter_dm_unit_of_measure_auomc_cs
+    params:
+      - aggs:
+          ean_code : max
+          conversion_factor: max
+          unit_of_dimension: max
+          weight_unit_uom: max
+          conversion_denominator: max
+          height: max
+          width: max
+          length: max
+          gross_weight_uom: max
+        by:
+        - material_code_uom
+        - sap_cluster_uom
+
+  - kind: select
+    name: select_dm_unit_of_measure_auomc_cs
+    context_name: group_dm_unit_of_measure_auomc_cs
+    params:
+      columns:
+        material_code_uom: material_code_uom_auomc_cs
+        sap_cluster_uom: sap_cluster_uom_auomc_cs
+        max_ean_code: ean_case
+        max_conversion_factor: conversion_factor_case
+        max_unit_of_dimension: unit_of_dimension_case
+        max_weight_unit_uom: weight_unit_uom_case
+        max_conversion_denominator: conversion_denominator_case
+        max_height: height_case
+        max_width: width_case
+        max_length: depth_case
+        max_gross_weight_uom: gross_weight_uom_case
+      distinct: true
+
+#alternative_unit_of_measure_code = 'PAL'
+  - kind: filter
+    name: filter_dm_unit_of_measure_auomc_pal
+    context_name: select_dm_unit_of_measure
+    params:
+      - condition:
+          alternative_unit_of_measure_code = 'PAL'
+
+  - kind: group
+    name: group_dm_unit_of_measure_auomc_pal
+    context_name: filter_dm_unit_of_measure_auomc_pal
+    params:
+      - aggs:
+          ean_code : max
+          conversion_factor: max
+          unit_of_dimension: max
+          weight_unit_uom: max
+          conversion_numerator: max
+          conversion_denominator: max
+          height: max
+          width: max
+          length: max
+          gross_weight_uom: max
+        by:
+        - material_code_uom
+        - sap_cluster_uom
+
+  - kind: select
+    name: select_dm_unit_of_measure_auomc_pal
+    context_name: group_dm_unit_of_measure_auomc_pal
+    params:
+      columns:
+        material_code_uom: material_code_uom_auomc_pal
+        sap_cluster_uom: sap_cluster_uom_auomc_pal
+        max_ean_code: ean_pallet
+        max_conversion_factor: conversion_factor_pallet
+        max_unit_of_dimension: unit_of_dimension_pallet
+        max_weight_unit_uom: weight_unit_uom_pallet
+        max_conversion_numerator: conversion_numerator_pallet
+        max_conversion_denominator: conversion_denominator_pallet
+        max_height: height_without_pallet
+        max_width: width_pallet
+        max_length: depth_pallet
+        max_gross_weight_uom: gross_weight_uom_pallet
+      distinct: true
+
+#dm_material_plant
+  - kind: read_dataio
+    name: read_dm_material_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_plant
+      schema_version: v3
+
+  - kind: filter
+    name: filter_dm_material_plant
+    context_name: read_dm_material_plant
+    params:
+      - condition:
+          country_code_of_origin is not null AND country_code_of_origin != '' AND material_status_code != '99'
+
+  - kind: select
+    name: select_dm_material_plant
+    context_name: filter_dm_material_plant
+    params:
+      columns:
+        material_code: material_code_c2
+        country_code: country_code_c2
+        country_code_of_origin: country_code_of_origin
+        sap_cluster: sap_cluster_c2
+      distinct: true
+
+#join dm_material, dm_org_hierarchy, dm_unit_of_measure, dm_material_plant
+  - kind: join
+    name: join_datasets
+    context_name: select_dm_material
+    params:
+      - other:
+          select_dm_org_hierarchy
+        how:
+          inner
+        columns:
+          sales_organization: sales_org_code
+      - other:
+          select_dm_unit_of_measure_inner_join
+        how:
+          inner
+        columns:
+          material_code_ma: material_code_uom_inner_join
+          sap_cluster_ma: sap_cluster_uom_inner_join
+      - other:
+          select_dm_unit_of_measure_auomc_st
+        how:
+          left
+        columns:
+          material_code_ma: material_code_uom_auomc_st
+          sap_cluster_ma: sap_cluster_uom_auomc_st
+      - other:
+          select_dm_unit_of_measure_auomc_pak
+        how:
+          left
+        columns:
+          material_code_ma: material_code_uom_auomc_pak
+          sap_cluster_ma: sap_cluster_uom_auomc_pak
+      - other:
+          select_dm_unit_of_measure_auomc_cs
+        how:
+          left
+        columns:
+          material_code_ma: material_code_uom_auomc_cs
+          sap_cluster_ma: sap_cluster_uom_auomc_cs
+      - other:
+          select_dm_unit_of_measure_auomc_pal
+        how:
+          left
+        columns:
+          material_code_ma: material_code_uom_auomc_pal
+          sap_cluster_ma: sap_cluster_uom_auomc_pal
+      - other:
+          select_dm_material_plant
+        how:
+          left
+        columns:
+          material_code_ma: material_code_c2
+          country_code_oh: country_code_c2
+          sap_cluster_ma: sap_cluster_c2
+
+#step 1 from requirements
+  - kind: add
+    name: add_columns_step_1
+    context_name: join_datasets
+    params:
+      - column: brutto_weight_piece
+        expression: "CASE WHEN unit_of_measure_code= 'ST' THEN gross_weight ELSE gross_weight_uom_piece END"
+      - column: netto_weight_piece
+        expression: "CASE WHEN unit_of_measure_code= 'ST' THEN net_weight ELSE 0 END"
+      - column: brutto_weight_case
+        expression: "CASE WHEN unit_of_measure_code= 'CS' THEN gross_weight ELSE gross_weight_uom_case END"
+      - column: net_weight_case
+        expression: "CASE WHEN unit_of_measure_code= 'CS' THEN net_weight ELSE 0 END"
+      - column: net_weight_pallet
+        expression: "CASE WHEN unit_of_measure_code= 'PAL' THEN net_weight ELSE 0 END"
+      - column: weight_unit_pack
+        expression: weight_unit
+      - column: weight_unit_pallet
+        expression: weight_unit
+      - column: weight_unit_case
+        expression: weight_unit
+      - column: weight_unit_piece
+        expression: weight_unit
+      - column: ean_inside_unit
+        expression: ean_piece
+      - column: pc_per_phc
+        expression: conversion_denominator_piece
+
+  - kind: select
+    name: select_step_1
+    context_name: add_columns_step_1
+    params:
+      columns:
+        sales_org_code: sales_org
+        country_name: country
+        material_code_ma: sap_code
+        external_identification_of_data: external_identification_of_data
+        ean: ean_retail_sales_unit
+        ean_inside_unit: ean_inside_unit
+        creation_date: creation_date
+        ean_piece: ean_piece
+        ean_pack: ean_pack
+        ean_case: ean_case
+        ean_pallet: ean_pallet
+        material_name: product_full_name_1
+        material_name_native_lang: product_full_name_2
+        brand_code: brand_number
+        brand_description: brand
+        package_type_code: package_info_1
+        package_type_name: package_info_2
+        package_size_code: package_size_retail_1
+        package_size_name: package_size_retail_2
+        sales_unit_code: package_unit_1
+        sales_unit_name: package_unit_2
+        conversion_factor_pallet: conversion_factor_pallet
+        conversion_factor_case: conversion_factor_case
+        conversion_factor_piece: conversion_factor_piece
+        conversion_factor_pack: conversion_factor_pack
+        unit_of_dimension_pallet: unit_of_dimension_pallet
+        unit_of_dimension_case: unit_of_dimension_case
+        unit_of_dimension_piece: unit_of_dimension_piece
+        unit_of_dimension_pack: unit_of_dimension_pack
+        weight_unit_pack: weight_unit_pack
+        weight_unit_pallet: weight_unit_pallet
+        weight_unit_case: weight_unit_case
+        weight_unit_piece: weight_unit_piece
+        unit_of_measure_code: unit_of_measure
+        pc_per_phc: pc_per_phc
+        conversion_denominator_pallet: conversion_denominator_pallet
+        conversion_denominator_piece: conversion_denominator_piece
+        conversion_numerator_pallet: conversion_numerator_pallet
+        quantity_per_layer: phc_per_layer_1
+        height_piece: height_piece
+        width_piece: width_piece
+        depth_piece: depth_piece
+        brutto_weight_piece: brutto_weight_piece
+        netto_weight_piece: netto_weight_piece
+        height_pack: height_pack
+        width_pack: width_pack
+        depth_pack: depth_pack
+        gross_weight_uom_pack: brutto_weight_pack
+        height_case: height_case
+        width_case: width_case
+        depth_case: depth_case
+        brutto_weight_case: brutto_weight_case
+        net_weight_case: net_weight_case
+        # quantity_per_layer: phc_per_layer_2
+        height_without_pallet: height_without_pallet
+        width_pallet: width_pallet
+        depth_pallet: depth_pallet
+        net_weight_pallet: weight_netto_pallet
+        gross_weight_uom_pallet: weight_brutto_pallet
+        storage_condition_code: storage_and_use
+        remaining_shelf_life: minimum_remaining_shelf_life
+        total_shelf_life: bbd
+        country_code_of_origin: origin_production_country
+      distinct: true
+
+#step 2 from requirements
+  - kind: add
+    name: add_columns_step_21
+    context_name: select_step_1
+    params:
+      - column: netto_weight_piece_21
+        expression: "CASE WHEN weight_unit_piece = 'KG' THEN netto_weight_piece WHEN weight_unit_piece = 'G' THEN netto_weight_piece * 0.001 WHEN weight_unit_piece = 'DAG' THEN netto_weight_piece * 0.1 WHEN weight_unit_piece = 'MG' THEN netto_weight_piece * 1000 WHEN weight_unit_piece = 'GG' THEN netto_weight_piece * 1000000 ELSE 0 END"
+      - column: net_weight_case_21
+        expression: "CASE WHEN weight_unit_case = 'KG' THEN net_weight_case WHEN weight_unit_case = 'G' THEN net_weight_case * 0.001 WHEN weight_unit_case = 'DAG' THEN net_weight_case * 0.1 WHEN weight_unit_case = 'MG' THEN net_weight_case * 1000 WHEN weight_unit_case = 'GG' THEN net_weight_case * 1000000 ELSE 0 END"
+
+  - kind: add
+    name: add_columns_step_22
+    context_name: add_columns_step_21
+    params:
+      - column: pc_per_layer
+        expression: "conversion_denominator_piece * phc_per_layer_1"
+      - column: pc_per_pallet
+        expression: "conversion_denominator_piece * conversion_numerator_pallet"
+      - column: layers_per_pallet_1
+        expression: "conversion_numerator_pallet / phc_per_layer_1"
+      - column: height_piece_22
+        expression: "CASE WHEN unit_of_dimension_piece = 'CM' THEN height_piece WHEN unit_of_dimension_piece = 'MM' THEN height_piece * 0.1 WHEN unit_of_dimension_piece = 'DM' THEN height_piece * 10 WHEN unit_of_dimension_piece = 'M' THEN height_piece *100 WHEN unit_of_dimension_piece = 'KM' THEN Height_Piece * 100000 ELSE 0 END"
+      - column: width_piece_22
+        expression: "CASE WHEN unit_of_dimension_piece = 'CM' THEN width_piece WHEN unit_of_dimension_piece = 'MM' THEN width_piece * 0.1 WHEN unit_of_dimension_piece = 'DM' THEN width_piece * 10 WHEN unit_of_dimension_piece = 'M' THEN width_piece *100 WHEN unit_of_dimension_piece = 'KM' THEN width_piece * 100000 ELSE 0 END"
+      - column: depth_piece_22
+        expression: "CASE WHEN unit_of_dimension_piece = 'CM' THEN depth_piece WHEN unit_of_dimension_piece = 'MM' THEN depth_piece * 0.1 WHEN unit_of_dimension_piece = 'DM' THEN depth_piece * 10 WHEN unit_of_dimension_piece = 'M' THEN depth_piece *100 WHEN unit_of_dimension_piece = 'KM' THEN depth_piece * 100000 ELSE 0 END"
+      - column: brutto_weight_piece_22
+        expression: "CASE WHEN weight_unit_piece = 'KG' THEN brutto_weight_piece WHEN weight_unit_piece = 'G' THEN brutto_weight_piece * 0.001 WHEN weight_unit_piece = 'DAG' THEN brutto_weight_piece * 0.1 WHEN weight_unit_piece = 'MG' THEN brutto_weight_piece * 1000 WHEN weight_unit_piece = 'GG' THEN brutto_weight_piece * 1000000 ELSE 0 END"
+      - column: netto_weight_piece_22
+        expression: "CASE WHEN unit_of_measure= 'ST' THEN netto_weight_piece_21 WHEN unit_of_measure= 'CS' THEN conversion_factor_piece * net_weight_case_21 WHEN unit_of_measure = 'PAK' THEN '' WHEN unit_of_measure = 'PAL' THEN '' ELSE '' END"
+      - column: height_pack_22
+        expression: "CASE WHEN unit_of_dimension_pack = 'CM' THEN height_pack WHEN unit_of_dimension_pack = 'MM' THEN height_pack * 0.1 WHEN unit_of_dimension_pack = 'DM' THEN height_pack * 10 WHEN unit_of_dimension_pack = 'M' THEN height_pack * 100 WHEN unit_of_dimension_pack = 'KM' THEN height_pack * 100000 ELSE 0 END"
+      - column: width_pack_22
+        expression: "CASE WHEN unit_of_dimension_pack = 'CM' THEN width_pack WHEN unit_of_dimension_pack = 'MM' THEN width_pack * 0.1 WHEN unit_of_dimension_pack = 'DM' THEN width_pack * 10 WHEN unit_of_dimension_pack = 'M' THEN width_pack * 100 WHEN unit_of_dimension_pack = 'KM' THEN width_pack * 100000 ELSE 0 END"
+      - column: depth_pack_22
+        expression: "CASE WHEN unit_of_dimension_pack = 'CM' THEN depth_pack WHEN unit_of_dimension_pack = 'MM' THEN depth_pack * 0.1 WHEN unit_of_dimension_pack = 'DM' THEN depth_pack * 10 WHEN unit_of_dimension_pack = 'M' THEN depth_pack * 100 WHEN unit_of_dimension_pack = 'KM' THEN depth_pack * 100000 ELSE 0 END"
+      - column: brutto_weight_pack_22
+        expression: "CASE WHEN weight_unit_pack = 'KG' THEN brutto_weight_pack WHEN weight_unit_pack = 'G' THEN brutto_weight_pack * 0.001 WHEN weight_unit_pack = 'DAG' THEN brutto_weight_pack * 0.1 WHEN weight_unit_pack = 'MG' THEN brutto_weight_pack * 1000 WHEN weight_unit_pack = 'GG' THEN brutto_weight_pack * 1000000 ELSE 0 END"
+      - column: netto_weight_pack_22
+        expression: "CASE WHEN unit_of_measure = 'PAK' THEN '' WHEN unit_of_measure = 'CS' THEN conversion_factor_pack * net_weight_case_21 WHEN unit_of_measure = 'ST' THEN conversion_factor_pack * netto_weight_piece_21 WHEN unit_of_measure = 'PAL' THEN '' ELSE '' END"
+      - column: height_case_22
+        expression: "CASE WHEN unit_of_dimension_case = 'CM' THEN height_case WHEN unit_of_dimension_case = 'MM' THEN height_case * 0.1 WHEN unit_of_dimension_case = 'DM' THEN height_case * 10 WHEN unit_of_dimension_case = 'M' THEN height_case * 100 WHEN unit_of_dimension_case = 'KM' THEN height_case * 100000 ELSE 0 END"
+      - column: width_case_22
+        expression: "CASE WHEN unit_of_dimension_case = 'CM' THEN width_case WHEN unit_of_dimension_case = 'MM' THEN width_case * 0.1 WHEN unit_of_dimension_case = 'DM' THEN width_case * 10 WHEN unit_of_dimension_case = 'M' THEN width_case * 100 WHEN unit_of_dimension_case = 'KM' THEN width_case * 100000 ELSE 0 END"
+      - column: depth_case_22
+        expression: "CASE WHEN unit_of_dimension_case = 'CM' THEN depth_case WHEN unit_of_dimension_case = 'MM' THEN depth_case * 0.1 WHEN unit_of_dimension_case = 'DM' THEN depth_case * 10 WHEN unit_of_dimension_case = 'M' THEN depth_case * 100 WHEN unit_of_dimension_case = 'KM' THEN depth_case * 100000 ELSE 0 END"
+      - column: brutto_weight_case_22
+        expression: "CASE WHEN weight_unit_case = 'KG' THEN brutto_weight_case WHEN weight_unit_case = 'G' THEN brutto_weight_case * 0.001 WHEN weight_unit_case = 'DAG' THEN brutto_weight_case * 0.1 WHEN weight_unit_case = 'MG' THEN brutto_weight_case * 1000 WHEN weight_unit_case = 'GG' THEN brutto_weight_case * 1000000 ELSE 0 END"
+      - column: net_weight_case_22
+        expression: "CASE WHEN unit_of_measure = 'CS' THEN net_weight_case_21 WHEN unit_of_measure = 'PAK' THEN '' WHEN unit_of_measure = 'ST' THEN conversion_factor_case * netto_weight_piece_21 WHEN unit_of_measure = 'PAL' THEN '' ELSE '' END"
+      - column: subunits_per_pallet_22
+        expression: "conversion_numerator_pallet * conversion_denominator_piece"
+      - column: layers_per_pallet_2_22
+        expression: "conversion_numerator_pallet / phc_per_layer_1"
+      - column: subunits_per_layer_22
+        expression: "conversion_denominator_piece * phc_per_layer_1"
+      - column: height_without_pallet_22
+        expression: "CASE WHEN unit_of_dimension_pallet = 'CM' THEN height_without_pallet WHEN unit_of_dimension_pallet = 'MM' THEN height_without_pallet * 0.1 WHEN unit_of_dimension_pallet = 'DM' THEN height_without_pallet * 10 WHEN unit_of_dimension_pallet = 'M' THEN height_without_pallet * 100 WHEN unit_of_dimension_pallet = 'KM' THEN height_without_pallet * 100000 ELSE 0 END"
+      - column: width_pallet_22
+        expression: "CASE WHEN unit_of_dimension_pallet = 'CM' THEN width_pallet WHEN unit_of_dimension_pallet = 'MM' THEN width_pallet * 0.1 WHEN unit_of_dimension_pallet = 'DM' THEN width_pallet * 10 WHEN unit_of_dimension_pallet = 'M' THEN width_pallet * 100 WHEN unit_of_dimension_pallet = 'KM' THEN width_pallet * 100000 ELSE 0 END"
+      - column: depth_pallet_22
+        expression: "CASE WHEN unit_of_dimension_pallet = 'CM' THEN depth_pallet WHEN unit_of_dimension_pallet = 'MM' THEN depth_pallet * 0.1 WHEN unit_of_dimension_pallet = 'DM' THEN depth_pallet * 10 WHEN unit_of_dimension_pallet = 'M' THEN depth_pallet * 100 WHEN unit_of_dimension_pallet = 'KM' THEN depth_pallet * 100000 ELSE 0 END"
+      - column: weight_brutto_pallet_22
+        expression: "CASE WHEN weight_unit_pallet = 'KG' THEN weight_brutto_pallet WHEN weight_unit_pallet = 'G' THEN weight_brutto_pallet * 0.001 WHEN weight_unit_pallet = 'DAG' THEN weight_brutto_pallet * 0.1 WHEN weight_unit_pallet = 'MG' THEN weight_brutto_pallet * 1000 WHEN weight_unit_pallet= 'GG' THEN weight_brutto_pallet * 1000000 ELSE 0 END"
+      - column: weight_netto_pallet_22
+        expression: "CASE WHEN unit_of_measure = 'PAL' THEN weight_netto_pallet WHEN unit_of_measure = 'PAK' THEN '' WHEN unit_of_measure = 'ST' THEN conversion_factor_pallet * netto_weight_piece_21 WHEN unit_of_measure = 'CS' THEN conversion_factor_pallet * net_weight_case_21 ELSE '' END"
+      - column: cases_on_pallet
+        expression: conversion_numerator_pallet
+      - column: phc_per_layer_2
+        expression: phc_per_layer_1
+
+  - kind: select
+    name: select_step_2
+    context_name: add_columns_step_22
+    params:
+      columns:
+        sales_org: sales_org
+        country: country
+        sap_code: sap_code
+        external_identification_of_data: external_identification_of_data
+        creation_date: creation_date
+        ean_retail_sales_unit: ean_retail_sales_unit
+        ean_inside_unit: ean_inside_unit
+        ean_piece: ean_piece
+        ean_pack: ean_pack
+        ean_case: ean_case
+        ean_pallet: ean_pallet
+        product_full_name_1: product_full_name_1
+        product_full_name_2: product_full_name_2
+        brand_number: brand_number
+        brand: brand
+        package_info_1: package_info_1
+        package_info_2: package_info_2
+        package_size_retail_1: package_size_retail_1
+        package_size_retail_2: package_size_retail_2
+        package_unit_1: package_unit_1
+        package_unit_2: package_unit_2
+        pc_per_phc: pc_per_phc
+        pc_per_layer: pc_per_layer
+        pc_per_pallet: pc_per_pallet
+        phc_per_layer_1: phc_per_layer_1
+        conversion_numerator_pallet: phc_per_pallet
+        layers_per_pallet_1: layers_per_pallet_1
+        height_piece_22: height_piece
+        width_piece_22: width_piece
+        depth_piece_22: depth_piece
+        brutto_weight_piece_22: brutto_weight_piece
+        netto_weight_piece_22: netto_weight_piece
+        height_pack_22: height_pack
+        width_pack_22: width_pack
+        depth_pack_22: depth_pack
+        brutto_weight_pack_22: brutto_weight_pack
+        netto_weight_pack_22: netto_weight_pack
+        conversion_denominator_piece: number_in_case
+        height_case_22: height_case
+        width_case_22: width_case
+        depth_case_22: depth_case
+        brutto_weight_case_22: brutto_weight_case
+        net_weight_case_22: net_weight_case
+        cases_on_pallet: cases_on_pallet
+        subunits_per_pallet_22: subunits_per_pallet
+        layers_per_pallet_2_22: layers_per_pallet_2
+        subunits_per_layer_22: subunits_per_layer
+        phc_per_layer_2: phc_per_layer_2
+        height_without_pallet_22: height_without_pallet
+        width_pallet_22: width_pallet
+        depth_pallet_22: depth_pallet
+        weight_brutto_pallet_22: weight_brutto_pallet
+        weight_netto_pallet_22: weight_netto_pallet
+        storage_and_use: storage_and_use
+        origin_production_country: origin_production_country
+        bbd: bbd
+        minimum_remaining_shelf_life: minimum_remaining_shelf_life
+      distinct: true
+
+  - kind: add
+    name: add_cast_as_strings
+    context_name: select_step_2
+    params:
+      - column: bbd
+        expression: CAST(bbd as string)
+        overwrite: true
+      - column: brutto_weight_case
+        expression: CAST (CASE WHEN ROUND(brutto_weight_case, 0) = brutto_weight_case THEN CAST(brutto_weight_case as int) ELSE TRIM(TRAILING '0' FROM CAST(brutto_weight_case as string)) END as string)
+        overwrite: true
+      - column: net_weight_case
+        expression: CAST (CASE WHEN ROUND(net_weight_case, 0) = net_weight_case THEN CAST(net_weight_case as int) ELSE TRIM(TRAILING '0' FROM CAST(net_weight_case as string)) END as string)
+        overwrite: true
+      - column: brutto_weight_pack
+        expression: CAST (CASE WHEN ROUND(brutto_weight_pack, 0) = brutto_weight_pack THEN CAST(brutto_weight_pack as int) ELSE TRIM(TRAILING '0' FROM CAST(brutto_weight_pack as string)) END as string)
+        overwrite: true
+      - column: netto_weight_pack
+        expression: CAST (CASE WHEN ROUND(netto_weight_pack, 0) = netto_weight_pack THEN CAST(netto_weight_pack as int) ELSE TRIM(TRAILING '0' FROM CAST(netto_weight_pack as string)) END as string)
+        overwrite: true
+      - column: brutto_weight_piece
+        expression: CAST (CASE WHEN ROUND(brutto_weight_piece, 0) = brutto_weight_piece THEN CAST(brutto_weight_piece as int) ELSE TRIM(TRAILING '0' FROM CAST(brutto_weight_piece as string)) END as string)
+        overwrite: true
+      - column: netto_weight_piece
+        expression: CAST (CASE WHEN ROUND(netto_weight_piece, 0) = netto_weight_piece THEN CAST(netto_weight_piece as int) ELSE TRIM(TRAILING '0' FROM CAST(netto_weight_piece as string)) END as string)
+        overwrite: true
+      - column: cases_on_pallet
+        expression: CAST(cases_on_pallet as string)
+        overwrite: true
+      - column: creation_date
+        expression: DATE_FORMAT(creation_date, "yyyy-MM-dd HH:mm:ss")
+        overwrite: true
+      - column: depth_case
+        expression: CAST (CASE WHEN ROUND(depth_case, 0) = depth_case THEN CAST(depth_case as int) ELSE TRIM(TRAILING '0' FROM CAST(depth_case as string)) END as string)
+        overwrite: true
+      - column: depth_pack
+        expression: CAST (CASE WHEN ROUND(depth_pack, 0) = depth_pack THEN CAST(depth_pack as int) ELSE TRIM(TRAILING '0' FROM CAST(depth_pack as string)) END as string)
+        overwrite: true
+      - column: depth_pallet
+        expression: CAST (CASE WHEN ROUND(depth_pallet, 0) = depth_pallet THEN CAST(depth_pallet as int) ELSE TRIM(TRAILING '0' FROM CAST(depth_pallet as string)) END as string)
+        overwrite: true
+      - column: depth_piece
+        expression: CAST (CASE WHEN ROUND(depth_piece, 0) = depth_piece THEN CAST(depth_piece as int) ELSE TRIM(TRAILING '0' FROM CAST(depth_piece as string)) END as string)
+        overwrite: true
+      - column: height_case
+        expression: CAST (CASE WHEN ROUND(height_case, 0) = height_case THEN CAST(height_case as int) ELSE TRIM(TRAILING '0' FROM CAST(height_case as string)) END as string)
+        overwrite: true
+      - column: height_pack
+        expression: CAST (CASE WHEN ROUND(height_pack, 0) = height_pack THEN CAST(height_pack as int) ELSE TRIM(TRAILING '0' FROM CAST(height_pack as string)) END as string)
+        overwrite: true
+      - column: height_piece
+        expression: CAST (CASE WHEN ROUND(height_piece, 0) = height_piece THEN CAST(height_piece as int) ELSE TRIM(TRAILING '0' FROM CAST(height_piece as string)) END as string)
+        overwrite: true
+      - column: height_without_pallet
+        expression: CAST (CASE WHEN ROUND(height_without_pallet, 0) = height_without_pallet THEN CAST(height_without_pallet as int) ELSE TRIM(TRAILING '0' FROM CAST(height_without_pallet as string)) END as string)
+        overwrite: true
+      - column: layers_per_pallet_1
+        expression: CAST (CASE WHEN ROUND(layers_per_pallet_1, 0) = layers_per_pallet_1 THEN CAST(layers_per_pallet_1 as int) ELSE TRIM(TRAILING '0' FROM CAST(layers_per_pallet_1 as string)) END as string)
+        overwrite: true
+      - column: layers_per_pallet_2
+        expression: CAST (CASE WHEN ROUND(layers_per_pallet_2, 0) = layers_per_pallet_2 THEN CAST(layers_per_pallet_2 as int) ELSE TRIM(TRAILING '0' FROM CAST(layers_per_pallet_2 as string)) END as string)
+        overwrite: true
+      - column: minimum_remaining_shelf_life
+        expression: CAST(minimum_remaining_shelf_life as string)
+        overwrite: true
+      - column: number_in_case
+        expression: CAST(number_in_case as string)
+        overwrite: true
+      - column: pc_per_layer
+        expression: CAST(pc_per_layer as string)
+        overwrite: true
+      - column: pc_per_pallet
+        expression: CAST(pc_per_pallet as string)
+        overwrite: true
+      - column: pc_per_phc
+        expression: CAST(pc_per_phc as string)
+        overwrite: true
+      - column: phc_per_layer_1
+        expression: CAST(phc_per_layer_1 as string)
+        overwrite: true
+      - column: phc_per_layer_2
+        expression: CAST(phc_per_layer_2 as string)
+        overwrite: true
+      - column: phc_per_pallet
+        expression: CAST(phc_per_pallet as string)
+        overwrite: true
+      - column: subunits_per_layer
+        expression: CAST(subunits_per_layer as string)
+        overwrite: true
+      - column: subunits_per_pallet
+        expression: CAST(subunits_per_pallet as string)
+        overwrite: true
+      - column: weight_brutto_pallet
+        expression: CAST (CASE WHEN ROUND(weight_brutto_pallet, 0) = weight_brutto_pallet THEN CAST(weight_brutto_pallet as int) ELSE TRIM(TRAILING '0' FROM CAST(weight_brutto_pallet as string)) END as string)
+        overwrite: true
+      - column: weight_netto_pallet
+        expression: CAST (CASE WHEN ROUND(weight_netto_pallet, 0) = weight_netto_pallet THEN CAST(weight_netto_pallet as int) ELSE TRIM(TRAILING '0' FROM CAST(weight_netto_pallet as string)) END as string)
+        overwrite: true
+      - column: width_case
+        expression: CAST (CASE WHEN ROUND(width_case, 0) = width_case THEN CAST(width_case as int) ELSE TRIM(TRAILING '0' FROM CAST(width_case as string)) END as string)
+        overwrite: true
+      - column: width_pack
+        expression: CAST (CASE WHEN ROUND(width_pack, 0) = width_pack THEN CAST(width_pack as int) ELSE TRIM(TRAILING '0' FROM CAST(width_pack as string)) END as string)
+        overwrite: true
+      - column: width_pallet
+        expression: CAST (CASE WHEN ROUND(width_pallet, 0) = width_pallet THEN CAST(width_pallet as int) ELSE TRIM(TRAILING '0' FROM CAST(width_pallet as string)) END as string)
+        overwrite: true
+      - column: width_piece
+        expression: CAST (CASE WHEN ROUND(width_piece, 0) = width_piece THEN CAST(width_piece as int) ELSE TRIM(TRAILING '0' FROM CAST(width_piece as string)) END as string)
+        overwrite: true
+      - column: ean_retail_sales_unit
+        expression: CASE WHEN ean_retail_sales_unit IS NULL THEN '' ELSE ean_retail_sales_unit END
+        overwrite: true
+      - column: ean_inside_unit
+        expression: CASE WHEN ean_inside_unit IS NULL THEN '' ELSE ean_inside_unit END
+        overwrite: true
+      - column: ean_piece
+        expression: CASE WHEN ean_piece IS NULL THEN '' ELSE ean_piece END
+        overwrite: true
+      - column: ean_pack
+        expression: CASE WHEN ean_pack IS NULL THEN '' ELSE ean_pack END
+        overwrite: true
+      - column: ean_case
+        expression: CASE WHEN ean_case IS NULL THEN '' ELSE ean_case END
+        overwrite: true
+      - column: ean_pallet
+        expression: CASE WHEN ean_pallet IS NULL THEN '' ELSE ean_pallet END
+        overwrite: true
+
+  - kind: write_local
+    name: write_to_raw
+    params:
+      format: csv
+      location: /mnt/datalake_idq/raw/data_quality/product_information_management/csv_output
+      refresh_mode: overwrite
+      options:
+        header: true
+        delimiter: ";"
+#      partition_by: None
+#      options: {"header": True}
+
+
+  - kind: write_dataio
+    name: write_pim_report
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_information_management
+      namespace: golden
+      object_name: pim_report
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

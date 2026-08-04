@@ -1,0 +1,823 @@
+transform:
+  name: vendor_general_conformity
+  operations:
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_contact_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_contact_address
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_partner
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_planning_group
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_planning_group
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_reconciliation_account
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_reconciliation_account
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        customer_code: customer_code
+        vendor_name1: vendor_name1
+        vendor_org_name1: vendor_org_name1
+        vendor_org_name3: vendor_org_name3
+        vendor_org_name4: vendor_org_name4
+        country_of_origin: country_of_origin
+        vendor_account_group_code: vendor_account_group_code
+        type_of_industry: type_of_industry
+        search_term: search_term
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        house_bank_code: house_bank_code
+        is_house_bank_code_allowed: is_house_bank_code_allowed
+        payment_methods_list: payment_methods_list
+        payment_method_code: payment_method_code
+        planning_group_code: planning_group_code
+        reconciliation_account_general_ledger: reconciliation_account_general_ledger
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_contact_address
+    context_name: read_dm_vendor_contact_address
+    params:
+      columns:
+        vendor_code: vendor_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        contact_medium_value_extension: contact_medium_value_extension
+      distinct: true
+
+  - kind: select
+    name: select_conf_planning_group
+    context_name: read_conf_planning_group
+    params:
+      columns:
+        vendor_account_group_code: vendor_account_group_code
+        planning_group_code: planning_group_code_conf
+      distinct: true
+
+  - kind: select
+    name: select_conf_reconciliation_account
+    context_name: read_conf_reconciliation_account
+    params:
+      columns:
+        account_group_code: vendor_account_group_code
+        reconciliation_account: reconciliation_account
+      distinct: true  
+
+
+  - kind: select
+    name: select_dm_customer_partner
+    context_name: read_dm_customer_partner
+    params:
+      columns:
+        customer_code: customer_code_cp
+        partner_function_code: partner_function_code
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_contact_address
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_customer_partner
+        how:
+          left
+        columns:
+          customer_code: customer_code_cp
+      - other:
+          select_conf_planning_group
+        how:
+          left
+        columns:
+          vendor_account_group_code: vendor_account_group_code
+          planning_group_code: planning_group_code_conf
+      - other:
+          select_conf_reconciliation_account
+        how:
+          left
+        columns:
+          vendor_account_group_code: vendor_account_group_code
+          reconciliation_account_general_ledger: reconciliation_account
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rvconf_101_1
+        expression: if(substring(upper(search_term), 0, 10) = substring(upper(vendor_name1), 0, 10), '1', '0')
+      - column: rvconf_12_1
+        expression: if(isnull(planning_group_code) or planning_group_code = '', '',
+                    if(isnull(planning_group_code_conf), '0', '1'))
+      - column: rvconf_25_1
+        expression: if((isnull(contact_medium_value) or contact_medium_value = '') 
+                    and (isnull(contact_medium_value_extension) or contact_medium_value_extension = ''), '0', '1')
+      - column: rvconf_25_3
+        expression: if((isnull(contact_medium_value) or contact_medium_value = '' or contact_medium_type <> 'fixed_tel_number'), '',
+                    if(regexp_like(contact_medium_value, '[^0-9]+'), '0', '1'))
+      - column: rvconf_27_1
+        expression: if((isnull(vendor_org_name1) or vendor_org_name1 = '') 
+                    and ((isnull(vendor_org_name4)or vendor_org_name4 = '') 
+                    or (isnull(vendor_org_name4) or vendor_org_name4 = '')), '', 
+                    if(vendor_org_name1 = vendor_org_name3 or vendor_org_name1 = vendor_org_name4, '1', '0'))
+      - column: rvconf_27_3
+        expression: if(isnull(contact_medium_value) or contact_medium_value = '' or contact_medium_type <> 'mobile_tel_number', '', 
+                    if(regexp_like(contact_medium_value, '[^0-9]+'), '0', '1'))
+      - column: rvconf_28_2
+        expression: if(isnull(reconciliation_account_general_ledger) or reconciliation_account_general_ledger = '', '',
+                    if(isnull(reconciliation_account), '0', '1'))
+      - column: rvconf_44_1
+        expression: if(vendor_account_group_code <> '9000' or isnull(customer_code) or customer_code = '', '', 
+                    if(isnull(customer_code_cp), '0', '1'))
+      - column: rvconf_47_1
+        expression: if(vendor_account_group_code <> '4000' or isnull(type_of_industry) or type_of_industry = '', '', 
+                    if(type_of_industry = 'ZZZ_OBSOLETE', '0', '1'))
+      - column: rvconf_6_1
+        expression: if(isnull(contact_medium_value) or contact_medium_value = '' or contact_medium_type <> 'fixed tel number', '',
+                    if(isnull(country_code) or country_code = '', '0', '1'))
+      - column: value
+        expression: explode(split(payment_methods_list, ''))   
+      - column: rvconf_68_3
+        expression: if((isnull(payment_methods_list) or payment_methods_list = ''), '', 
+                    if(instr(payment_method_code, value) > 0, '1', '0'))
+      - column: rvconf_68_3_1
+        expression: if(isnull(house_bank_code) or house_bank_code = '' 
+                    or company_code not in('0307', '0403', '0470', '0428', '0580', ' 0589', '0588', '0590', '0598', '0522', '0562', 
+                    '0563', '0526', '0528 0529', '0530', '0532', '0440', '0441', '0443', '0444', '0445,0450', '0457', '0456', '0594', 
+                    '0595', '0540', '0573 0570', '0480', '0491', '0416', '0415', '0417', '0520'), '',
+                    if((planning_group_code not in('ZZ_A027','ZZ_A029') and house_bank_code = 'IHCC1') 
+                    or (planning_group_code in('ZZ_A027','ZZ_A029') and house_bank_code <> 'IHCC1'), '1', '0'))
+      - column: rvconf_68_3_2
+        expression: if(isnull(house_bank_code) or house_bank_code = '' or is_house_bank_code_allowed = '0' 
+                    or company_code not in('0589', '0588', '0598', '0529', '0440', '0441', '0443', '0445', '0450', '0456', '0562', '0570', '0573', '0307', '0403', '0470'), '',
+                    if(is_house_bank_code_allowed = '1' and house_bank_code <> 'IHCC1', '1', '0'))
+      - column: rvconf_68_3_3
+        expression: if(isnull(house_bank_code) or house_bank_code = '' or is_house_bank_code_allowed = '0' or country_of_origin <> 'RS', '',
+                    if(house_bank_code <> 'IHCC1', '1', '0'))
+      - column: rvconf_7_2
+        expression: if(isnull(vendor_org_name1) or vendor_org_name1 = '', '', 
+                    if(regexp_like(vendor_org_name1, '[\\x7E\\x2A\\x3A\\x5E\\x2F\\x3C\\x3E\\x7C\\x2C\\x3B\\x22\\x27\\x40\\x3F\\x2B\\x23]|\\s{2,}'), '0', '1'))
+      - column: rvconf_8_1
+        expression: if(isnull(contact_medium_value_extension) or contact_medium_value_extension = '' or contact_medium_type <> 'fixed_tel_number', '',
+                    if(isnull(country_code) or country_code = '', '0', '1'))
+      - column: rvconf_8_2
+        expression: if(isnull(contact_medium_value_extension) or contact_medium_value_extension = '' or contact_medium_type <> 'fixed_tel_number', '',
+                    if(regexp_like(contact_medium_value_extension, '[^\\d]'), '0', '1'))
+      - column: rvconf_9_2
+        expression: if(isnull(contact_medium_value) or contact_medium_value = '' or contact_medium_type <> 'email_address', '', 
+                    if(regexp_like(contact_medium_value, '^[a-zA-Z0-9-_.]+[@][a-zA-Z0-9-_.]+[.][a-zA-Z0-9]+[.]*[a-zA-Z]*$'), '1', '0'))
+      - column: rvconf_9_3
+        expression: if(contact_medium_type not in('email_address', 'fixed_tel_number'), '',
+                    if(isnull(contact_medium_value) or contact_medium_value = '', '0', '1'))
+      - column: rule_code_rvconf_101_1
+        expression: '''RVCONF_101.1'''
+      - column: rule_code_rvconf_12_1
+        expression: '''RVCONF_12.1'''
+      - column: rule_code_rvconf_25_1
+        expression: '''RVCONF_25.1'''
+      - column: rule_code_rvconf_25_3
+        expression: '''RVCONF_25.3'''
+      - column: rule_code_rvconf_27_1
+        expression: '''RVCONF_27.1'''
+      - column: rule_code_rvconf_27_3
+        expression: '''RVCONF_27.3'''
+      - column: rule_code_rvconf_28_2
+        expression: '''RVCONF_28.2'''
+      - column: rule_code_rvconf_44_1
+        expression: '''RVCONF_44.1'''
+      - column: rule_code_rvconf_47_1
+        expression: '''RVCONF_47.1'''
+      - column: rule_code_rvconf_6_1
+        expression: '''RVCONF_6.1'''
+      - column: rule_code_rvconf_68_3
+        expression: '''RVCONF_63.3'''
+      - column: rule_code_rvconf_68_3_1
+        expression: '''RVCONF_68.3.1'''
+      - column: rule_code_rvconf_68_3_2
+        expression: '''RVCONF_68.3.2'''
+      - column: rule_code_rvconf_68_3_3
+        expression: '''RVCONF_68.3.3'''
+      - column: rule_code_rvconf_7_2
+        expression: '''RVCONF_7.2'''
+      - column: rule_code_rvconf_8_1
+        expression: '''RVCONF_8.1'''
+      - column: rule_code_rvconf_8_2
+        expression: '''RVCONF_8.2'''
+      - column: rule_code_rvconf_9_2
+        expression: '''RVCONF_9.2'''
+      - column: rule_code_rvconf_9_3
+        expression: '''RVCONF_9.3'''
+      - column: subdomain
+        expression: '''general_conformity'''
+      - column: check_date
+        expression: current_timestamp()
+      - column: search_term
+        expression: ''''''
+      - column: value_checked_country_code
+        expression: country_code
+
+  - kind: select
+    name: select_rvconf_101_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_101_1: rule_code
+        rvconf_101_1: check_status
+        vendor_code: vendor_code
+        search_term: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: group
+    name: group_rvconf_12_1
+    context_name: add_checks
+    params:
+      - aggs:
+          rvconf_12_1: max
+        by:
+        - rule_code_rvconf_12_1
+        - vendor_code
+        - planning_group_code
+        - country_code
+        - subdomain
+        - check_date
+
+  - kind: select
+    name: select_rvconf_12_1
+    context_name: group_rvconf_12_1
+    params:
+      columns:
+        rule_code_rvconf_12_1: rule_code
+        max_rvconf_12_1: check_status
+        vendor_code: vendor_code
+        planning_group_code: value_checked
+        country_code: country_code
+        subdomain: subdomain
+        check_date: check_date
+        
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_25_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_25_1: rule_code
+        rvconf_25_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_25_3
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_25_3: rule_code
+        rvconf_25_3: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_27_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_27_1: rule_code
+        rvconf_27_1: check_status
+        vendor_code: vendor_code
+        vendor_org_name1: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_27_3
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_27_3: rule_code
+        rvconf_27_3: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: group
+    name: group_rvconf_28_2
+    context_name: add_checks
+    params:
+      - aggs:
+          rvconf_28_2: max
+        by:
+        - rule_code_rvconf_28_2
+        - vendor_code
+        - reconciliation_account_general_ledger
+        - country_code
+        - subdomain
+        - check_date
+
+  - kind: select
+    name: select_rvconf_28_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_28_2: rule_code
+        rvconf_28_2: check_status
+        vendor_code: vendor_code
+        reconciliation_account_general_ledger: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_44_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_44_1: rule_code
+        rvconf_44_1: check_status
+        vendor_code: vendor_code
+        customer_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_47_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_47_1: rule_code
+        rvconf_47_1: check_status
+        vendor_code: vendor_code
+        type_of_industry: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_6_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_6_1: rule_code
+        rvconf_6_1: check_status
+        vendor_code: vendor_code
+        value_checked_country_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: group
+    name: group_rvconf_68_3
+    context_name: add_checks
+    params:
+      - aggs:
+          rvconf_68_3: min
+        by:
+        - rule_code_rvconf_68_3
+        - vendor_code
+        - payment_methods_list
+        - check_date
+        - country_code
+        - subdomain
+
+  - kind: select
+    name: select_rvconf_68_3
+    context_name: group_rvconf_68_3
+    params:
+      columns:
+        rule_code_rvconf_68_3: rule_code
+        min_rvconf_68_3: check_status
+        vendor_code: vendor_code
+        payment_methods_list: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_68_3_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_68_3_1: rule_code
+        rvconf_68_3_1: check_status
+        vendor_code: vendor_code
+        house_bank_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_68_3_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_68_3_2: rule_code
+        rvconf_68_3_2: check_status
+        vendor_code: vendor_code
+        house_bank_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_68_3_3
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_68_3_3: rule_code
+        rvconf_68_3_3: check_status
+        vendor_code: vendor_code
+        house_bank_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_7_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_7_2: rule_code
+        rvconf_7_2: check_status
+        vendor_code: vendor_code
+        vendor_org_name1: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+      
+  - kind: select
+    name: select_rvconf_8_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_8_1: rule_code
+        rvconf_8_1: check_status
+        vendor_code: vendor_code
+        value_checked_country_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_8_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_8_2: rule_code
+        rvconf_8_2: check_status
+        vendor_code: vendor_code
+        value_checked_country_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_9_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rvconf_9_2: rule_code
+        rvconf_9_2: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: filter
+    name: filter_email_address
+    context_name: add_checks
+    params:
+      - condition:
+          contact_medium_type = 'email_address'
+
+  - kind: filter
+    name: filter_fixed_tel_number
+    context_name: add_checks
+    params:
+      - condition:
+          contact_medium_type = 'fixed_tel_number'
+
+  - kind: select
+    name: select_rvconf_9_3_email_address
+    context_name: filter_email_address
+    params:
+      columns:
+        rule_code_rvconf_9_3: rule_code_rvconf_9_3
+        rvconf_9_3: rvconf_9_3_email_address
+        vendor_code: vendor_code
+        contact_medium_value: contact_medium_value
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rvconf_9_3_fixed_tel_number
+    context_name: filter_fixed_tel_number
+    params:
+      columns:
+        rule_code_rvconf_9_3: rule_code_rvconf_9_3
+        rvconf_9_3: rvconf_9_3_fixed_tel_number
+        vendor_code: vendor_code
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: join
+    name: join_rvconf_9_3
+    context_name: select_rvconf_9_3_email_address
+    params:
+      - other:
+          select_rvconf_9_3_fixed_tel_number
+        how:
+          left
+        columns:
+          rule_code_rvconf_9_3: rule_code_rvconf_9_3
+          vendor_code: vendor_code
+          check_date: check_date
+          country_code: country_code
+          subdomain: subdomain
+
+  - kind: add
+    name: add_rvconf_9_3
+    context_name: join_rvconf_9_3
+    params:
+      - column: check_status
+        expression: if(isnull(rvconf_9_3_email_address) or isnull(rvconf_9_3_fixed_tel_number), '0',
+                    if(rvconf_9_3_email_address = '1' or rvconf_9_3_fixed_tel_number = '1', '1', '0'))
+
+  - kind: select
+    name: select_rvconf_9_3
+    context_name: add_rvconf_9_3
+    params:
+      columns:
+        rule_code_rvconf_9_3: rule_code
+        check_status: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rvconf_101_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_12_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_25_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_25_3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_27_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_27_3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_28_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_44_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_47_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_6_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_68_3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_68_3_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_68_3_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_68_3_3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_7_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_8_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_8_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_9_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rvconf_9_3
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

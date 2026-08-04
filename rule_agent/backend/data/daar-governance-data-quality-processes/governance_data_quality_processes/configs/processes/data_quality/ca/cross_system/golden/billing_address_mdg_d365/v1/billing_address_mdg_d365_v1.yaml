@@ -1,0 +1,1455 @@
+transform:
+  name: billing_address_mdg_d365
+  operations:
+
+  # Read MDG but000 data
+  - kind: read_dataio
+    name: read_mdg_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  # Filter MDG but000 data
+  - kind: filter
+    name: filter_mdg_but000
+    context_name: read_mdg_but000
+    params:
+      - condition:
+          xpcpt <> 'X' and partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%')
+
+  # Select required columns from MDG but000
+  - kind: select
+    name: select_mdg_but000
+    context_name: filter_mdg_but000
+    params:
+      columns:
+        partner: partner_mdg
+      distinct: true
+
+  # Read MDG but020 data
+  - kind: read_dataio
+    name: read_mdg_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  # Select required columns from MDG but020
+  - kind: select
+    name: select_mdg_but020
+    context_name: read_mdg_but020
+    params:
+      columns:
+        partner: partner_mdg_but020
+        addrnumber: addrnumber_mdg
+      distinct: true
+
+  # Read MDG adrc data
+  - kind: read_dataio
+    name: read_mdg_adrc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adrc
+      schema_version: v1
+
+  # Filter MDG adrc data
+  - kind: filter
+    name: filter_mdg_adrc
+    context_name: read_mdg_adrc
+    params:
+      - condition:
+          nation = '' and (adrc_uuid <> '' and isnotnull(adrc_uuid))
+
+  # Select and clean MDG adrc data
+  - kind: select
+    name: select_mdg_adrc_regex
+    context_name: filter_mdg_adrc
+    params:
+      columns:
+        addrnumber: addrnumber_mdg
+        location: location_mdg_temp
+        city2: city2_mdg_temp
+        home_city: home_city_mdg_temp
+        NAME1: str_suppl3_mdg_temp
+      distinct: true
+
+
+  - kind: read_dataio
+    name: read_mdg_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+
+  - kind: filter
+    name: filter_knvv
+    context_name: read_mdg_knvv
+    params:
+      - condition: vtweg = '01' AND spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100)
+
+  - kind: select
+    name: select_mdg_knvv_checkpoint
+    context_name: filter_knvv
+    params:
+      columns:
+        kunnr: kunnr
+        kvgr4: kvgr4
+        vkorg: vkorg
+        vtweg: vtweg
+        spart: spart
+      distinct: true
+
+  - kind: checkpoint
+    name: select_knvv
+    context_name: select_mdg_knvv_checkpoint
+
+
+  # Join MDG tables
+  - kind: join
+    name: join_mdg
+    context_name: select_mdg_but000
+    params:
+      - other: select_mdg_but020
+        how: inner
+        columns:
+          partner_mdg: partner_mdg_but020
+      - other: select_knvv
+        how: inner
+        columns:
+          partner_mdg: kunnr
+      - other: select_mdg_adrc_regex
+        how: left
+        columns:
+          addrnumber_mdg: addrnumber_mdg
+
+
+  # Compute MDG hash
+  - kind: add
+    name: mdg
+    context_name: join_mdg
+    params:
+      - column: location_mdg
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(location_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: city2_mdg                     
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(city2_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: home_city_mdg                
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(home_city_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: str_suppl3_mdg               
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(str_suppl3_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: hash_mdg
+        expression: md5(concat(
+            regexp_replace(regexp_replace(partner_mdg, '\n', ''), '\r', ''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(location_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(city2_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(home_city_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(str_suppl3_mdg_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')))            
+            
+
+  - kind: select
+    name: checkpoint_mdg
+    context_name: mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        location_mdg: location_mdg
+        city2_mdg: city2_mdg
+        home_city_mdg: home_city_mdg
+        str_suppl3_mdg: str_suppl3_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  # Read D365 account data
+  - kind: read_dataio
+    name: read_d365_account
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: account
+      schema_version: v1
+
+  # Filter D365 account data
+  - kind: filter
+    name: filter_d365_account
+    context_name: read_d365_account
+    params:
+      - condition:
+          cch_sapid like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%')
+
+  # Select required columns from D365 account
+  - kind: select
+    name: select_d365_account
+    context_name: filter_d365_account
+    params:
+      columns:
+        cch_sapid: partner_d365
+        address2_line1: address2_line1_temp
+        address2_line2: address2_line2_temp
+        address2_line3: address2_line3_temp
+        cch_companyname: address2_name_temp
+        cch_distributionchannel: cch_distributionchannel        
+        cch_salesorganizationid: cch_salesorganizationid
+        cch_division: cch_division
+      distinct: true
+
+  - kind: add
+    name: add_d365_account
+    context_name: select_d365_account
+    params:
+      - column: address2_line1
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_line1_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: address2_line2
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_line2_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: address2_line3
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_line3_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+      - column: address2_name
+        expression: coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_name_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')
+
+  # Compute D365 hash
+  - kind: add
+    name: d365
+    context_name: add_d365_account
+    params:
+      - column: hash_d365
+        expression: md5(concat(partner_d365,
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_line1_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_line2_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_line3_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),''),
+            coalesce(trim(lower(regexp_replace(regexp_replace(regexp_replace(regexp_replace(address2_name_temp,'\t',''), '\n', ''), '\r', ''), '[\u00A0\u2000-\u200B\u202F\u205F\u3000]', ''))),'')))
+
+
+#################################################################################
+  - kind: read_dataio
+    name: read_cch_optionsetmapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: cch_optionsetmapping
+      schema_version: v1
+  
+  
+#####################################################
+  
+  - kind: filter
+    name: filter_cch_optionsetmapping_cd
+    context_name: read_cch_optionsetmapping
+    params:
+      - condition: cch_entityname = 'account' and cch_attributename = 'cch_division' 
+  
+  - kind: select
+    name: union_cte_division
+    context_name: filter_cch_optionsetmapping_cd
+    params:
+      columns:
+        cch_optionsetvalue: cd_cch_optionsetvalue
+        cch_externalvalue: cd_cch_externalvalue
+      distinct: true
+  
+#####################################################
+## distributionchannel
+  - kind: filter
+    name: filter_cch_optionsetmapping_dc
+    context_name: read_cch_optionsetmapping
+    params:
+      - condition: cch_entityname = 'account' and cch_attributename = 'cch_distributionchannel'
+  
+  - kind: select
+    name: union_cte_distributionchannel
+    context_name: filter_cch_optionsetmapping_dc
+    params:
+      columns:
+        cch_optionsetvalue: dc_cch_optionsetvalue
+        cch_externalvalue: dc_cch_externalvalue
+      distinct: true
+
+  - kind: read_dataio
+    name: read_d365_territory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: dataverse
+      namespace: d365
+      object_name: territory
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_territory
+    context_name: read_d365_territory
+    params:
+      - condition: 1 = 1
+  
+  - kind: select
+    name: select_d365_territory
+    context_name: filter_territory
+    params:
+      columns:
+        cch_sapid: territory_cch_sapid
+        id: territory_id
+      distinct: true        
+
+###########################
+
+  - kind: join
+    name: join_d365
+    context_name: d365
+    params:
+      - other:
+          union_cte_distributionchannel
+        how:
+          inner
+        columns:
+          cch_distributionchannel: dc_cch_optionsetvalue
+      - other:
+          union_cte_division
+        how:
+          inner
+        columns:
+          cch_division: cd_cch_optionsetvalue
+      - other:
+          select_d365_territory
+        how:
+          left
+        columns:
+          cch_salesorganizationid: territory_id
+
+  - kind: filter
+    name: filter_d365
+    context_name: join_d365
+    params:
+      - condition: dc_cch_externalvalue = '01' and cd_cch_externalvalue = '01' and territory_cch_sapid in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+
+  - kind: select
+    name: checkpoint_d365
+    context_name: filter_d365
+    params:
+      columns:
+        partner_d365: partner_d365
+        address2_line1: address2_line1_d365
+        address2_line2: address2_line2_d365
+        address2_line3: address2_line3_d365
+        address2_name: address2_name_d365
+        hash_d365: hash_d365
+      distinct: true
+
+
+
+  # Identify non-matching MDG records
+  - kind: join
+    name: join_non_matching_mdg
+    context_name: checkpoint_mdg
+    params:
+      - other: checkpoint_d365
+        how: full
+        columns:
+          hash_mdg: hash_d365
+
+  - kind: filter
+    name: filter_non_matching_mdg
+    context_name: join_non_matching_mdg
+    params:
+      - condition:
+          isnull(hash_d365) or hash_d365 = ''
+
+  # Identify non-matching D365 records
+  - kind: join
+    name: join_non_matching_d365
+    context_name: checkpoint_d365
+    params:
+      - other: checkpoint_mdg
+        how: full
+        columns:
+          hash_d365: hash_mdg
+
+  - kind: filter
+    name: filter_non_matching_d365
+    context_name: join_non_matching_d365
+    params:
+      - condition:
+          isnull(hash_mdg) or hash_mdg = ''
+
+  # Select non-matching MDG records
+  - kind: select
+    name: select_non_matching_mdg
+    context_name: filter_non_matching_mdg
+    params:
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        location_mdg: location_mdg
+        city2_mdg: city2_mdg
+        home_city_mdg: home_city_mdg
+        str_suppl3_mdg: str_suppl3_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  # Select non-matching D365 records
+  - kind: select
+    name: select_non_matching_d365
+    context_name: filter_non_matching_d365
+    params:
+    params:
+      columns:
+        partner_d365: partner_d365
+        address2_line1_d365: address2_line1_d365
+        address2_line2_d365: address2_line2_d365
+        address2_line3_d365: address2_line3_d365
+        address2_name_d365: address2_name_d365
+        hash_d365: hash_d365
+      distinct: true
+
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_mdg
+    context_name: select_non_matching_mdg
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_d365
+    context_name: select_non_matching_d365
+
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E' and sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvv4t
+    params:
+      - condition:
+         sap_cluster = 'CL1' and spras = 'E'
+
+  - kind: select
+    name: select_tvv4t
+    params:
+      columns:
+        kvgr4: kvgr4
+        bezei: bezei
+      distinct: true
+
+
+
+
+  - kind: join
+    name: join_non_matching
+    context_name: checkpoint_non_matching_mdg
+    params:
+      - other:
+          checkpoint_non_matching_d365
+        how:
+          full
+        columns:
+          partner_mdg: partner_d365
+
+
+  - kind: join
+    name: join_missing_from_mdg
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_d365: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_mdg
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+  - kind: join
+    name: join_missing_from_d365
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_mdg: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_d365
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+## data missing from mdg
+
+  - kind: filter
+    name: filter_missing_from_mdg
+    context_name: join_missing_from_mdg
+    params:
+      - condition:
+          isnull(partner_mdg)
+
+  - kind: add
+    name: add_missing_from_mdg
+    context_name: filter_missing_from_mdg
+    params:
+      - column: msg
+        expression: if(isnull(partner_mdg), 'data missing from mdg', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_d365, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BILLING ADDRESS'''
+      - column: src_system
+        expression: '''d365'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: loading_date
+        expression: current_date()
+
+
+## data missing from d365
+
+  - kind: filter
+    name: filter_missing_from_d365
+    context_name: join_missing_from_d365
+    params:
+      - condition:
+          isnull(partner_d365)
+
+  - kind: add
+    name: add_missing_from_d365
+    context_name: filter_missing_from_d365
+    params:
+      - column: msg
+        expression: if(isnull(partner_d365), 'data missing from d365', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BILLING ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''d365'''
+      - column: loading_date
+        expression: current_date()
+
+# attributes are mismatching
+
+  - kind: filter
+    name: filter_mismatched
+    context_name: join_missing_from_d365
+    params:
+      - condition:
+          partner_d365 = partner_mdg
+          and (address2_line1_d365 <> location_mdg
+          or address2_line2_d365 <> city2_mdg
+          or address2_line3_d365 <> home_city_mdg
+          or address2_name_d365 <> str_suppl3_mdg)
+
+  - kind: add
+    name: add_mismatched
+    context_name: filter_mismatched
+    params:
+      - column: msg_location
+        expression: if(partner_d365 = partner_mdg                     
+                    and address2_line1_d365 <> location_mdg, 'attributes are mismatching', '-')
+      - column: msg_city2
+        expression: if(partner_d365 = partner_mdg                     
+                    and address2_line2_d365 <> city2_mdg, 'attributes are mismatching', '-')
+      - column: msg_home_city
+        expression: if(partner_d365 = partner_mdg                     
+                    and address2_line3_d365 <> home_city_mdg, 'attributes are mismatching', '-')
+      - column: msg_str_suppl3
+        expression: if(partner_d365 = partner_mdg                     
+                    and address2_name_d365 <> str_suppl3_mdg, 'attributes are mismatching', '-')
+      - column: attr_name_location
+        expression: if(partner_d365 = partner_mdg                    
+                    and address2_line1_d365 <> location_mdg, concat('BILLING ADDRESS:', ' ', ' LOCATION'), '-')
+      - column: attr_name_city2
+        expression: if(partner_d365 = partner_mdg                    
+                    and address2_line2_d365 <> city2_mdg, concat('BILLING ADDRESS:', ' ', ' CITY2'), '-')
+      - column: attr_name_home_city
+        expression: if(partner_d365 = partner_mdg                    
+                    and address2_line3_d365 <> home_city_mdg, concat('BILLING ADDRESS:', ' ', ' HOME_CITY'), '-')
+      - column: attr_name_str_suppl3
+        expression: if(partner_d365 = partner_mdg                     
+                    and address2_name_d365 <> str_suppl3_mdg, concat('BILLING ADDRESS:', ' ', ' STR_SUPPL3'), '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''BILLING ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''d365'''
+      - column: loading_date
+        expression: current_date()
+
+
+  - kind: select
+    name: select_missing_from_mdg
+    context_name: add_missing_from_mdg
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_d365: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_missing_from_d365
+    context_name: add_missing_from_d365
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_location
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_location <> '-'
+
+  - kind: select
+    name: select_mismatched_location
+    context_name: filter_mismatched_location
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_location: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_location: compared_attribute
+        location_mdg: compared_src_attr_value
+        address2_line1_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_city2
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_city2 <> '-'
+
+  - kind: select
+    name: select_mismatched_city2
+    context_name: filter_mismatched_city2
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_city2: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_city2: compared_attribute
+        city2_mdg: compared_src_attr_value
+        address2_line2_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_home_city
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_home_city <> '-'
+
+  - kind: select
+    name: select_mismatched_home_city
+    context_name: filter_mismatched_home_city
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_home_city: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_home_city: compared_attribute
+        home_city_mdg: compared_src_attr_value
+        address2_line3_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_str_suppl3
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_str_suppl3 <> '-'
+
+  - kind: select
+    name: select_mismatched_str_suppl3
+    context_name: filter_mismatched_str_suppl3
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_str_suppl3: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_str_suppl3: compared_attribute
+        str_suppl3_mdg: compared_src_attr_value
+        address2_name_d365: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_billing_address_mismatched
+    context_name: select_mismatched_location
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_city2
+
+  - kind: union
+    name: union_billing_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_home_city
+
+  - kind: union
+    name: union_billing_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_str_suppl3
+
+  - kind: select
+    name: select_mismatched
+    context_name: union_billing_address_mismatched
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        primary_key_l1: primary_key_l1
+        attribute4: attribute4
+        attribute5: attribute5
+        attribute6: attribute6
+        attribute7: attribute7
+        attribute8: attribute8
+        attribute10: attribute10
+        country: country
+        compared_attribute: compared_attribute
+        compared_src_attr_value: compared_src_attr_value
+        compared_tgt_attr_value: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: union
+    name: union_billing_address
+    context_name: select_missing_from_mdg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_from_d365
+
+  - kind: union
+    name: union_billing_address
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched
+
+  - kind: write_dataio
+    name: write_billing_address
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True
+
+##agg
+
+  - kind: select
+    name: select_mdg
+    context_name: checkpoint_mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: select_mdg
+    params:
+      - column: table_name
+        expression: '''BILLING ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: hash_mdg
+      - column: mdg_country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##total d365
+  - kind: select
+    name: select_d365
+    context_name: checkpoint_d365
+    params:
+      columns:
+        partner_d365: partner_d365
+        hash_d365: hash_d365
+      distinct: true
+
+  - kind: add
+    name: add_d365_agg
+    context_name: select_d365
+    params:
+      - column: table_name
+        expression: '''BILLING ADDRESS'''
+      - column: src_system
+        expression: '''d365'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: d365
+        expression: hash_d365
+      - column: d365_country
+        expression: CASE substr(partner_d365, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_d365_agg
+    context_name: add_d365_agg
+    params:
+      - aggs:
+          d365: count
+        by:
+        - d365_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_d365_agg_loading_date
+    context_name: group_d365_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_d365 AS INT)
+
+  - kind: select
+    name: select_d365_agg
+    context_name: add_d365_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        d365_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from mdg
+
+  - kind: group
+    name: group_missing_from_mdg_agg
+    context_name: select_missing_from_mdg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_mdg_agg
+    context_name: group_missing_from_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM MDG'''
+
+  - kind: select
+    name: select_missing_from_mdg_agg
+    context_name: add_missing_from_mdg_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from d365
+
+  - kind: group
+    name: group_missing_from_d365_agg
+    context_name: select_missing_from_d365
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_d365_agg
+    context_name: group_missing_from_d365_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM D365'''
+
+  - kind: select
+    name: select_missing_from_d365_agg
+    context_name: add_missing_from_d365_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##mismatched aggr
+
+  - kind: filter
+    name: filter_mismatched_agg
+    context_name: union_billing_address
+    params:
+      - condition:
+          dimension = 'attributes are mismatching'
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: filter_mismatched_agg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''d365'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+
+  - kind: select
+    name: select_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,152 @@
+transform:
+  name: dm_product_valuation
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_mbew
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mbew
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t025t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t025t
+
+  - kind: filter
+    name: filter_t025t
+    params:
+      - condition:
+          spras = 'E'
+
+# Read plant_code_mapping
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster_pcm
+      distinct: true
+
+  - kind: select
+    name: select_mbew
+    context_name: read_mbew
+    params:
+      columns:
+        matnr: material_code
+        bklas: valuation_class_code
+        lvorm: deletion_flag
+        bwkey: valuation_area
+        bwtar: valuation_type
+        peinh: price_unit
+        stprs: price_standard
+        vprsv: price_control_indicator
+        zplpr: price_planned
+        sap_cluster: sap_cluster_m
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_substr_mbew
+    params:
+        - column: bwkey_substr
+          expression: substring(valuation_area,0,2)
+
+  - kind: select
+    name: select_t025t
+    context_name: filter_t025t
+    params:
+      columns:
+        bklas: bklas
+        bkbez: valuation_class_name
+        sap_cluster: sap_cluster_a1
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_mbew_t025t
+    context_name: add_substr_mbew
+    params:
+      - other:
+          select_t025t
+        how:
+          left
+        columns:
+          valuation_class_code: bklas
+          sap_cluster_m: sap_cluster_a1
+      - other:
+          select_pcm
+        how:
+          inner
+        columns:
+          bwkey_substr: plant_code_short
+          sap_cluster_m: sap_cluster_pcm
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        material_code: material_code
+        valuation_class_code: valuation_class_code
+        country_code: country_code
+        valuation_class_name: valuation_class_name
+        deletion_flag: deletion_flag
+        valuation_area: valuation_area
+        valuation_type: valuation_type
+        price_unit: price_unit
+        price_standard: price_standard
+        price_control_indicator: price_control_indicator
+        price_planned: price_planned
+        sap_cluster_m: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: write_dataio
+    name: write_dm_product_valuation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_valuation
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,136 @@
+transform:
+  name: dm_open_items
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read BSEG
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_bseg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: bseg
+
+  - kind: filter
+    name: filter_bseg
+    params:
+        - condition: year(h_budat) >= year(current_date()) - 2  AND koart IN ('D','K') AND augbl = '' AND h_bstat NOT IN ('D','M')
+
+
+  - kind: select
+    name: select_bseg
+    params:
+      columns:
+        lifnr: lifnr
+        bukrs: bukrs
+        kunnr: kunnr
+        h_budat: h_budat
+        belnr: belnr
+        augbl: augbl
+        augdt: augdt
+        h_bstat: h_bstat
+        umsks: umsks
+        koart: koart
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+# Read BSEG
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_bsak_bck
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: bsak_bck
+
+  - kind: filter
+    name: filter_bsak_bck
+    params:
+        - condition: year(budat) >= year(current_date()) - 2
+
+
+  - kind: select
+    name: select_bsak_bck
+    params:
+      columns:
+        bukrs: bukrs
+        lifnr: lifnr
+        budat: budat
+        belnr: belnr_bsak
+        augbl: augbl_bsak
+        augdt: augdt_bsak
+        xarch: xarch
+        bstat: bstat
+        umsks: umsks_bsak
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_bseg_bsak_bck
+    context_name: select_bseg
+    params:
+      - other:
+          select_bsak_bck
+        how:
+          left
+        columns:
+          lifnr: lifnr
+          bukrs: bukrs
+          belnr: belnr_bsak
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        kunnr: customer_code
+        bukrs: company_code
+        lifnr: vendor_code
+        h_budat: posting_date
+        budat: cleared_items_posting_date
+        belnr: accounting_document_number
+        belnr_bsak: cleared_items_accounting_document_number
+        augbl: document_number_of_clearing
+        augbl_bsak: cleared_items_document_number_of_clearing
+        augdt: clearing_date
+        augdt_bsak: cleared_items_clearing_date
+        xarch: cleared_items_archive_flag
+        h_bstat: document_status
+        bstat: cleared_items_document_status
+        umsks: transaction_type
+        umsks_bsak: cleared_items_transaction_type
+        koart: account_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_open_items
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_open_items
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

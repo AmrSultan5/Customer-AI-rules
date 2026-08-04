@@ -1,0 +1,47 @@
+transform:
+  name: dm_planning_location_equipment
+  operations:
+
+  # Read O4H_OSLC_EQU (location equipment assignments)
+  - kind: read_dataio
+    name: read_o4h_oslc_equ
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: otc_leo
+      object_name: o4h_oslc_equ
+      schema_version: v1
+
+  # Select and rename columns for final datamart schema
+  - kind: select
+    name: select_dm_planning_location_equipment
+    context_name: read_o4h_oslc_equ
+    params:
+      columns:
+        location: planning_location
+        operation: operation
+        role: location_role
+        eqnr: equipment_number
+        sap_cluster: sap_cluster
+        sap_read_timestamp: sap_read_timestamp
+      distinct: true
+
+  # Write to golden datamart
+  - kind: write_dataio
+    name: write_dm_planning_location_equipment
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_planning_location_equipment
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

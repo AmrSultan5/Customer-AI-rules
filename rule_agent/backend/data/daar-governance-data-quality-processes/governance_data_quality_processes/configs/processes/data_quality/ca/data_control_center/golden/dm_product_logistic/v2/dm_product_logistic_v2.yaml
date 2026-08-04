@@ -1,0 +1,178 @@
+transform:
+  name: dm_product_logistic
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lot_mmgt_marm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: lot_mmgt_marm
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lot_mm_stap
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: lot_mm_stap
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lot_mm_maeg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: lot_mm_maeg
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+
+
+  - kind: filter
+    name: filter_flag
+    params:
+        - condition: flag = 'DM_product_sales_org'
+
+  - kind: select
+    name: select_config_cluster_flag
+    params:
+      columns:
+        sales_org: sales_org_code
+        country_code: country_code
+        cluster: sap_cluster_config
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_lot_mmgt_marm
+    context_name: read_lot_mmgt_marm
+    params:
+      columns:
+        matnr: matnr
+        operation: operation
+        lot_mategid: lot_mategid
+        lot_stpgrid: lot_stpgrid
+        meinh: meinh
+        sap_cluster: sap_cluster_marm
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_lot_mm_stap
+    context_name: read_lot_mm_stap
+    params:
+      columns:
+        stpgrid: stpgrid
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: select
+    name: select_lot_mm_maeg
+    context_name: read_lot_mm_maeg
+    params:
+      columns:
+        mategid: mategid
+        sap_cluster: sap_cluster
+        ahoehe: height
+        abreit: width
+        alaeng: length
+        meabm: dimension_unit_code
+      distinct: true
+    skip_next: false
+
+
+
+  - kind: join
+    name: join_finall
+    context_name: select_lot_mmgt_marm
+    params:
+      - other:
+          select_config_cluster_flag
+        how:
+          inner
+        columns:
+          operation: sales_org_code
+          sap_cluster_marm: sap_cluster_config
+      - other:
+          select_lot_mm_stap
+        how:
+          left
+        columns:
+          lot_stpgrid: stpgrid
+          sap_cluster_marm: sap_cluster
+      - other:
+          select_lot_mm_maeg
+        how:
+          left
+        columns:
+          lot_mategid: mategid
+          sap_cluster_marm: sap_cluster
+
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        matnr: material_code
+        operation: operation_code
+        country_code: country_code
+        lot_mategid: leo_material_group
+        mategid: material_characteristic_group
+        lot_stpgrid: leo_stock_group
+        stpgrid: stackability_group
+        meinh: alternative_unit_of_measure_code
+        sap_cluster_marm: sap_cluster
+        height: height
+        width: width
+        length: length
+        dimension_unit_code: dimension_unit_code
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_product_logistic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_logistic
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

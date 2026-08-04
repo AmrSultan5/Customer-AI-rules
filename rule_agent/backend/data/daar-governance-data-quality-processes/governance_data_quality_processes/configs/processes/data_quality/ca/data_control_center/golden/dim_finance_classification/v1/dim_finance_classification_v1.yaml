@@ -1,0 +1,387 @@
+transform:
+  name: dim_finance_classification
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+  - kind: select
+    name: select_dm_finance_controlling_area
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts_code
+        sap_cluster: sap_cluster
+      distinct: true
+      
+      
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_chart_of_accounts
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_chart_of_accounts
+
+  - kind: select
+    name: select_dm_finance_chart_of_accounts
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        chart_of_accounts_description: chart_of_accounts_description
+        chart_of_accounts: chart_of_accounts_code
+        sap_cluster: sap_cluster
+      distinct: true
+ 
+
+ 
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_general_ledger
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_general_ledger
+
+  - kind: select
+    name: select_dm_finance_general_ledger
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        chart_of_accounts: chart_of_accounts_code
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true
+      
+ 
+
+ 
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_internal_order
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_internal_order
+
+  - kind: select
+    name: select_dm_finance_internal_order
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true
+      
+
+
+
+ 
+
+
+ 
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_asset
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset
+
+  - kind: select
+    name: select_dm_finance_asset
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true
+      
+               
+                
+
+ 
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center
+
+  - kind: select
+    name: select_dm_finance_cost_center
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        sap_cluster: sap_cluster
+      distinct: true
+ 
+
+
+ 
+  
+  - kind: join
+    name: join_finance_ca
+    context_name: select_dm_finance_controlling_area
+    params:
+      - other:
+          select_dm_finance_general_ledger
+        how:
+          inner
+        columns:
+          chart_of_accounts_code: chart_of_accounts_code
+          company_code: company_code
+          sap_cluster: sap_cluster              
+      - other:
+          select_dm_finance_internal_order
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster   
+      - other:
+          select_dm_finance_asset
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster          
+      - other:
+          select_dm_finance_cost_center
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster          
+      - other:
+          select_dm_finance_chart_of_accounts
+        how:
+          inner
+        columns:
+          chart_of_accounts_code: chart_of_accounts_code
+          g_l_account_number: g_l_account_number
+          sap_cluster: sap_cluster
+  
+
+
+  - kind: add
+    name: add_dim_finance_classification_expression_cc
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Cost Center'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      
+  - kind: add
+    name: add_dim_finance_classification_expression_fa
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Fixed Assets'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      
+  - kind: add
+    name: add_dim_finance_classification_expression_io
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Internal Order'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      
+  - kind: add
+    name: add_dim_finance_classification_expression_ios
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''Internal Order Settlement'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+      
+
+      
+  - kind: add
+    name: add_dim_finance_classification_expression_gl
+    context_name: join_finance_ca
+    params:
+      - column: object_type
+        expression: '''General Ledger'''
+      - column: finance_class_id
+        expression: MD5(
+                    ifnull(controlling_area_code, 'null') ||
+                    ifnull(company_code, 'null') ||
+                    ifnull(chart_of_accounts_code, 'null') ||
+                    object_type
+                    )
+      - column: controlling_area
+        expression: controlling_area_code || ' - ' || controlling_area_name
+      - column: company
+        expression: company_code || ' - ' || company_name   
+      - column: chart_of_accounts
+        expression: chart_of_accounts_code || ' - ' || chart_of_accounts_description
+
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dim_finance_classification_expression_cc
+
+
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dim_finance_classification_expression_fa
+      
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dim_finance_classification_expression_io
+      
+
+  - kind: union
+    name: union_finance_object_type
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dim_finance_classification_expression_ios
+
+  - kind: select
+    name: select_dm_finance_classification
+    params:
+      columns:
+        controlling_area: controlling_area
+        controlling_area_code: controlling_area_code
+        controlling_area_name: controlling_area_name
+        company: company
+        company_code: company_code
+        company_name: company_name
+        chart_of_accounts: chart_of_accounts
+        chart_of_accounts_code: chart_of_accounts_code
+        chart_of_accounts_description: chart_of_accounts_name
+        object_type: object_type
+        finance_class_id: finance_class_id
+      distinct: true
+      
+  - kind: write_dataio
+    name: write_dim_finance_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_finance_classification
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: incremental

@@ -1,0 +1,1232 @@
+transform:
+  name: f_leaflet_business_template
+  operations:
+
+###################################################### INITIAL XTEL DATA #########################################################################
+
+  - kind: read_dataio
+    name: read_dm_leaflet_xtel
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_leaflet_xtel
+      schema_version: v1
+          
+###################################################### CUSTOMER MAPPING - LDO XTEL 2 #########################################################################
+
+  - kind: read_dataio
+    name: read_md_customer_map_cedec_gnlc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_map_cedec_gnlc
+      schema_version: v2
+
+  - kind: add
+    name: add_null_cedec_cg
+    context_name: read_md_customer_map_cedec_gnlc
+    params:
+      - column: cedec_foldernet
+        expression: ifnull(cedec_foldernet, 'null')
+        overwrite: true
+
+  - kind: read_dataio
+    name: read_md_customer_map_most_sig_banner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_map_most_sig_banner
+      schema_version: v2
+
+  - kind: add
+    name: add_null_cedec_msb
+    context_name: read_md_customer_map_most_sig_banner
+    params:
+      - column: cedec_foldernet
+        expression: ifnull(cedec_foldernet, 'null')
+        overwrite: true
+
+  - kind: select
+    name: select_customer_msb
+    context_name: add_null_cedec_msb
+    params:
+      columns:
+        cpl_full: cpl_full_msb
+        ch6_code: ch6_code_msb
+        cedec_foldernet: cedec_foldernet_msb
+        most_significant_banner: most_significant_banner_msb
+      distinct: true
+
+  - kind: read_dataio
+    name: read_md_customer_map_nielsen_sc_market
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_map_nielsen_sc_market
+      schema_version: v2
+
+  - kind: add
+    name: add_null_cedec_nsm
+    context_name: read_md_customer_map_nielsen_sc_market
+    params:
+      - column: cedec_foldernet
+        expression: ifnull(cedec_foldernet, 'null')
+        overwrite: true
+
+  - kind: select
+    name: select_customer_nsm
+    context_name: add_null_cedec_nsm
+    params:
+      columns:
+        cpl_full: cpl_full_nsm
+        ch6_code: ch6_code_nsm
+        cedec_foldernet: cedec_foldernet_nsm
+        nielsen_scorecard_market: nielsen_scorecard_market_nsm
+      distinct: true
+
+  - kind: join
+    name: join_customer_mapping
+    context_name: add_null_cedec_cg
+    params:
+      - other:
+          select_customer_msb
+        how:
+          left
+        columns:
+          cpl_full: cpl_full_msb
+          ch6_code: ch6_code_msb
+          cedec_foldernet: cedec_foldernet_msb
+      - other:
+          select_customer_nsm
+        how:
+          left
+        columns:
+          cpl_full: cpl_full_nsm
+          ch6_code: ch6_code_nsm
+          cedec_foldernet: cedec_foldernet_nsm
+
+  - kind: add
+    name: add_replace_null
+    context_name: join_customer_mapping
+    params:
+      - column: cedec_foldernet
+        expression: if(cedec_foldernet = 'null', NULL, cedec_foldernet)
+        overwrite: true
+
+  - kind: select
+    name: select_customer_mapping
+    context_name: add_replace_null
+    params:
+      columns:
+        cpl_full: cpl_full_cm
+        cpl_code: cpl_code_cm
+        cpl_desc: cpl_desc_cm
+        ch6_code: ch6_code_cm
+        ch6: ch6_cm
+        cedec_foldernet: cedec_foldernet_cm
+        cedec_gnlc: cedec_gnlc_cm
+        most_significant_banner_msb: most_significant_banner_cm
+        nielsen_scorecard_market_nsm: nielsen_scorecard_market_cm
+        out_of_scope: out_of_scope_cm
+        country: country_cm
+      distinct: true
+
+  - kind: join
+    name: join_customer_mapping_2
+    context_name: read_dm_leaflet_xtel
+    params:
+      - other:
+          select_customer_mapping
+        how:
+          left
+        columns:
+          customer_number: ch6_code_cm
+
+  - kind: filter
+    name: filter_customer_out_of_scope
+    context_name: join_customer_mapping_2
+    params:
+      - condition:
+          out_of_scope_cm IS NULL OR out_of_scope_cm = ''
+
+###################################################### BANNER TAG - LDO XTEL 3 #########################################################################
+
+  - kind: read_dataio
+    name: read_dm_customer_score_gnlc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_customer_score_gnlc
+      schema_version: v1
+
+  - kind: select
+    name: select_csg
+    context_name: read_dm_customer_score_gnlc
+    params:
+      columns:
+        gruppo: gruppo_csg
+        cedec_gnlc: cedec_gnlc_csg
+        insegna: insegna_csg
+        gruppo_cedec_insegna: gruppo_cedec_insegna_csg
+        sum_of_potenziale_bevande_0_00: sum_of_potenziale_bevande_0_00_csg
+        aggregated_sum_glnc: aggregated_sum_glnc_csg
+        country: country_csg
+        insegna_btm: insegna_btm_csg
+        sum_of_potenziale_bevande_0_00_btm: sum_of_potenziale_bevande_0_00_btm_csg
+
+  - kind: read_dataio
+    name: read_banner_tags_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: banner_tags_mapping
+      schema_version: v3
+
+  - kind: add
+    name: add_banners_null_handling
+    context_name: read_banner_tags_mapping
+    params:
+      - column: customer_code
+        expression: ifnull(customer_code, 'null')
+        overwrite: true
+      - column: customer_name
+        expression: ifnull(customer_name, 'null')
+        overwrite: true
+      - column: tag
+        expression: ltrim(rtrim(tag))
+        overwrite: true
+
+  - kind: select
+    name: select_btm
+    context_name: add_banners_null_handling
+    params:
+      columns:
+        cpl_code: cpl_code
+        cpl_desc: cpl_desc
+        customer_code: customer_code
+        customer_name: customer_name
+        tag: tag
+        banners: banners
+        cedec_gnlc: cedec_gnlc
+        ranking_banner: ranking_banner
+      distinct: true
+
+  - kind: add
+    name: concat_banners
+    context_name: select_btm
+    params:
+      - column: banners_concat
+        expression: concat_ws(', ', transform(sort_array(collect_list(struct(ranking_banner, banners)) OVER (PARTITION BY cpl_code, cpl_desc, customer_code, customer_name, tag)), x -> x.banners))
+
+  - kind: filter
+    name: filter_not_null_cpl
+    context_name: concat_banners
+    params:
+      - condition:
+          customer_code = 'null'
+
+  - kind: filter
+    name: filter_not_null_cust_nbr
+    context_name: concat_banners
+    params:
+      - condition:
+          customer_code != 'null'
+
+  - kind: select
+    name: select_btm_cpl
+    context_name: filter_not_null_cpl
+    params:
+      columns:
+        cpl_code: cpl_code_btm_cpl
+        cpl_desc: cpl_desc_btm_cpl
+        customer_code: customer_code_btm_cpl
+        customer_name: customer_name_btm_cpl
+        tag: tag_btm_cpl
+        banners: banners_btm_cpl
+        cedec_gnlc: cedec_gnlc_btm_cpl
+        banners_concat: banners_concat_btm_cpl
+
+  - kind: select
+    name: select_btm_nbr
+    context_name: filter_not_null_cust_nbr
+    params:
+      columns:
+        cpl_code: cpl_code_btm_nbr
+        cpl_desc: cpl_desc_btm_nbr
+        customer_code: customer_code_btm_nbr
+        customer_name: customer_name_btm_nbr
+        tag: tag_btm_nbr
+        banners: banners_btm_nbr
+        cedec_gnlc: cedec_gnlc_btm_nbr
+        banners_concat: banners_concat_btm_nbr
+
+  - kind: join
+    name: join_xtel_banners
+    context_name: filter_customer_out_of_scope
+    params:
+      - other:
+          select_btm_cpl
+        how:
+          left
+        columns:
+          cpl_code: cpl_code_btm_cpl
+      - other:
+          select_btm_nbr
+        how:
+          left
+        columns:
+          customer_number: customer_code_btm_nbr
+      - other:
+          select_csg
+        how:
+          left
+        columns:
+          cedec_gnlc_cm: cedec_gnlc_csg
+
+  - kind: add
+    name: add_select_benners_data
+    context_name: join_xtel_banners
+    params:
+      - column: cpl_code_btm
+        expression: if(cpl_code_btm_cpl is null, cpl_code_btm_nbr, cpl_code_btm_cpl)
+      - column: cpl_desc_btm
+        expression: if(cpl_code_btm_cpl is null, cpl_desc_btm_nbr, cpl_desc_btm_cpl)
+      - column: customer_code_btm
+        expression: if(cpl_code_btm_cpl is null, customer_code_btm_nbr, customer_code_btm_cpl)
+      - column: customer_name_btm
+        expression: if(cpl_code_btm_cpl is null, customer_name_btm_nbr, customer_name_btm_cpl)
+      - column: tag_btm_cpl_nbr
+        expression: if(cpl_code_btm_cpl is null, tag_btm_nbr, tag_btm_cpl)
+      - column: banners_btm_cpl_nbr
+        expression: if(cpl_code_btm_cpl is null, banners_btm_nbr, banners_btm_cpl)
+      - column: cedec_gnlc_btm
+        expression: if(cpl_code_btm_cpl is null, cedec_gnlc_btm_nbr, cedec_gnlc_btm_cpl)
+      - column: banners_rank_btm
+        expression: if(cpl_code_btm_cpl is null, banners_concat_btm_nbr, banners_concat_btm_cpl)
+      - column: banners_btm_promo
+        expression: if(INSTR(UPPER(Promo_Desc), 'DOK') > 0 AND INSTR(UPPER(Promo_Desc),'HYPER') > 0,'IPERFAMILA, DOK',
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA') > 0 AND INSTR(UPPER(Promo_Desc), 'A&O') > 0, 'FAMILA SUPERSTORE, FAMILA, A&O, SPESA A&O, SUPER A&O, SUPERO', 
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA') > 0 AND INSTR(UPPER(Promo_Desc), 'HYPER') > 0,'IPERFAMILA, FAMILA SUPERSTORE, FAMILA', 
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA/DOK') > 0 AND INSTR(UPPER(Promo_Desc), 'HYPER') > 0, 'IPERFAMILA, FAMILA SUPERSTORE, FAMILA, DOK', banners_btm_cpl_nbr))))
+      - column: banners_btm_test
+        expression: if(INSTR(UPPER(Promo_Desc), 'DOK') > 0 AND INSTR(UPPER(Promo_Desc),'HYPER') > 0, 1,
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA') > 0 AND INSTR(UPPER(Promo_Desc), 'A&O') > 0, 1, 
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA') > 0 AND INSTR(UPPER(Promo_Desc), 'HYPER') > 0, 1, 
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA/DOK') > 0 AND INSTR(UPPER(Promo_Desc), 'HYPER') > 0, 1,
+                    if(INSTR(UPPER(Promo_Desc), '_' || UPPER(LTRIM(tag_btm_cpl_nbr)) || '_') > 0, 2,
+                    if(INSTR(UPPER(Promo_Desc), UPPER(LTRIM(tag_btm_cpl_nbr))) > 0, 1, 0))))))
+      - column: tag_btm
+        expression: if(banners_btm_test > 0, tag_btm_cpl_nbr, NULL)
+      - column: banners_btm
+        expression: if(banners_btm_test > 0, banners_btm_promo, NULL)
+      - column: tag_length
+        expression: if(banners_btm_test > 0, LENGTH(tag_btm_cpl_nbr), 0)
+      - column: banner_insegna_test_1
+        expression: if(banners_btm_test > 0, 1, 0)
+      - column: banner_insegna_test_2
+        expression: if(banners_btm_test > 0 AND banners_btm_cpl_nbr = insegna_btm_csg, 1, 0)
+      - column: insegna_csg
+        expression: if(banners_btm_test > 0 AND banners_btm_cpl_nbr = insegna_btm_csg, insegna_btm_csg, insegna_csg) 
+        overwrite: true    
+      - column: row_number
+        expression: row_number() OVER (PARTITION BY tpm_code, sku_code ORDER BY tpm_code ASC, sku_code ASC, banner_insegna_test_1 ASC, banner_insegna_test_2 ASC, sum_of_potenziale_bevande_0_00_btm_csg DESC, tag_length ASC)
+      - column: cedec_foldernet_cm
+        expression: ifnull(cedec_foldernet_cm, 'null')
+        overwrite: true
+
+  - kind: group
+    name: group_max_row_number
+    context_name: add_select_benners_data
+    params:
+      - aggs:
+          row_number: max
+          banners_btm_test: max
+        by:
+        - tpm_code
+        - sku_code
+        - cedec_foldernet_cm
+        
+  - kind: join
+    name: join_last_insegna_banner_tag
+    context_name: add_select_benners_data
+    params:
+      - other:
+          group_max_row_number
+        how:
+          inner
+        columns:
+          tpm_code: tpm_code
+          sku_code: sku_code
+          row_number: max_row_number
+          cedec_foldernet_cm: cedec_foldernet_cm
+
+  - kind: add
+    name: add_update_final_btm_data
+    context_name: join_last_insegna_banner_tag
+    params:
+      - column: tag_btm
+        expression: if(INSTR(UPPER(Promo_Desc), 'DOK') > 0 AND INSTR(UPPER(Promo_Desc),'HYPER') > 0,'IPERFAMILA, DOK',
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA') > 0 AND INSTR(UPPER(Promo_Desc), 'A&O') > 0, 'FAMILA SUPERSTORE, FAMILA, A&O, SPESA A&O, SUPER A&O, SUPERO', 
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA') > 0 AND INSTR(UPPER(Promo_Desc), 'HYPER') > 0,'IPERFAMILA, FAMILA SUPERSTORE, FAMILA', 
+                    if(INSTR(UPPER(Promo_Desc), 'FAMILA/DOK') > 0 AND INSTR(UPPER(Promo_Desc), 'HYPER') > 0, 'IPERFAMILA, FAMILA SUPERSTORE, FAMILA, DOK', tag_btm))))
+        overwrite: true
+      - column: max_banners_btm_test
+        expression: if(max_banners_btm_test = 2, 1, max_banners_btm_test)
+        overwrite: true
+
+  - kind: select
+    name: select_xtel_final
+    context_name: add_update_final_btm_data
+    params:
+      columns:
+        tpm_code: tpm_code
+        promo_desc: promo_desc
+        customer_planning_level: customer_planning_level
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+        customer_number: customer_number
+        customer_name: customer_name
+        start_sell_in: start_sell_in
+        end_sell_in: end_sell_in
+        start_sell_out: start_sell_out
+        end_sell_out: end_sell_out
+        status: status
+        category: category
+        brand: brand
+        pack_size: pack_size
+        sales_unit: sales_unit
+        sku_code: sku_code
+        sku_desc: sku_desc
+        promo_mechanic: promo_mechanic
+        a_volume_uc: a_volume_uc
+        a_country_gross_revenues: a_country_gross_revenues
+        a_promo_disc_on_invoice: a_promo_disc_on_invoice
+        a_promo_disc_off_in_rb_vv020_vv022: a_promo_disc_off_in_rb_vv020_vv022
+        a_promo_disc_off_invoice: a_promo_disc_off_invoice
+        a_total_promo_investment: a_total_promo_investment
+        channel: channel
+        notes_for_bd: notes_for_bd
+        general_notes: general_notes
+        country: country_xtel
+        actual_discount_in_invoice: actual_discount_in_invoice
+        actual_discount_off_invoice: actual_discount_off_invoice
+        actual_discount_total: actual_discount_total
+        pure_pna_check: pure_pna_check
+        ext_sku_desc: ext_sku_desc
+        ext_brand: ext_brand
+        ext_pack_size: ext_pack_size
+        pack_type: pack_type
+        units: units
+        ext_pack_type: ext_pack_type
+        ext_pack_size_default: ext_pack_size_default
+        promo_mechanic_no_ed: promo_mechanic_no_ed_xtel
+        promo_mechanic_ed: promo_mechanic_ed_xtel
+        promo_mechanic_flag: promo_mechanic_flag_xtel
+        promo_mechanic_tier_2: promo_mechanic_tier_2_xtel
+        ban_code: ban_code
+        ban_desc: ban_desc
+        start_sell_out_year: start_sell_out_year
+        start_sell_out_month: start_sell_out_month
+        start_sell_out_days: start_sell_out_days
+        end_sell_out_year: end_sell_out_year
+        end_sell_out_month: end_sell_out_month
+        end_sell_out_days: end_sell_out_days
+        sell_out_leading_month: sell_out_leading_month
+        sell_out_leading_year: sell_out_leading_year
+        sell_in_discount: sell_in_discount
+        sell_in_discount_general_notes: sell_in_discount_general_notes
+        sell_in_discount_notes_for_bd: sell_in_discount_notes_for_bd
+        sell_in_promo_description: sell_in_promo_description
+        sell_in_dod: sell_in_dod
+        dod_case: dod_case
+        pcs_per_phc: pcs_per_phc
+        zero_light_flag: zero_light_flag_xtel
+        banner_ranking: banner_ranking
+        cpl_full_cm: cpl_full_cm
+        cpl_code_cm: cpl_code_cm
+        cpl_desc_cm: cpl_desc_cm
+        ch6_code_cm: ch6_code_cm
+        ch6_cm: ch6_cm
+        cedec_foldernet_cm: cedec_foldernet_cm
+        cedec_gnlc_cm: cedec_gnlc_cm
+        most_significant_banner_cm: most_significant_banner_cm
+        nielsen_scorecard_market_cm: nielsen_scorecard_market_cm
+        out_of_scope_cm: out_of_scope_cm
+        country_cm: country_cm
+        gruppo_csg: gruppo_csg
+        cedec_gnlc_csg: cedec_gnlc_csg
+        insegna_csg: insegna_csg
+        gruppo_cedec_insegna_csg: gruppo_cedec_insegna_csg
+        sum_of_potenziale_bevande_0_00_csg: sum_of_potenziale_bevande_0_00_csg
+        aggregated_sum_glnc_csg: aggregated_sum_glnc_csg
+        country_csg: country_csg
+        insegna_btm_csg: insegna_btm_csg
+        sum_of_potenziale_bevande_0_00_btm_csg: sum_of_potenziale_bevande_0_00_btm_csg
+        cpl_code_btm: cpl_code_btm
+        cpl_desc_btm: cpl_desc_btm
+        customer_code_btm: customer_code_btm
+        customer_name_btm: customer_name_btm
+        cedec_gnlc_btm: cedec_gnlc_btm
+        banners_rank_btm: banners_rank_btm
+        banners_btm_promo: banners_btm_promo
+        banners_btm_test: banners_btm_test
+        tag_btm: tag_btm
+        banners_btm: banners_btm
+        tag_length: tag_length
+        banner_insegna_test_1: banner_insegna_test_1
+        banner_insegna_test_2: banner_insegna_test_2
+        row_number: row_number
+        max_row_number: max_row_number
+        max_banners_btm_test: max_banners_btm_test
+      distinct: true
+
+###################################################### DM_LEAFLET_FOLDERNET #########################################################################
+
+  - kind: read_dataio
+    name: read_dm_leaflet_foldernet
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_leaflet_foldernet
+      schema_version: v1
+  
+  - kind: select
+    name: select_dm_leaflet_foldernet
+    context_name: read_dm_leaflet_foldernet
+    params:
+      columns:
+        data_inizio: data_inizio
+        data_fine: data_fine
+        cedec: cedec
+        insegna: insegna
+        prodotto: prodotto
+        formato: formato
+        marca: marca
+        unita: unita
+        promozioni: promozioni
+        id_folder: id_folder
+        average_of_prezzo_intero_minimo: average_of_prezzo_intero_minimo
+        average_of_prezzo_promo_minimo: average_of_prezzo_promo_minimo
+        country: country
+        promo_mechanic_no_ed: promo_mechanic_no_ed
+        promo_mechanic_ed: promo_mechanic_ed
+        promo_mechanic_flag: promo_mechanic_flag
+        promo_mechanic_tier_2: promo_mechanic_tier_2
+        price_discount: price_discount_fn
+        zero_light_flag: zero_light_flag_fn
+      distinct: true
+
+###################################################### PRODUCT_SIZE_RANK #########################################################################
+
+  - kind: read_dataio
+    name: read_md_product_size_rank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_product_size_rank
+      schema_version: v2
+
+  - kind: select
+    name: select_psrfn
+    context_name: read_md_product_size_rank
+    params:
+      columns:
+        cpl_code: cpl_code_psrfn
+        foldernet_marca: foldernet_marca_psrfn
+        most_significant_foldernet_formato: most_significant_foldernet_format_psrfn
+      distinct: true
+
+  - kind: select
+    name: select_cmfn
+    context_name: add_replace_null
+    params:
+      columns:
+        cpl_full: cpl_full_cmfn
+        cpl_code: cpl_code_cmfn
+        cpl_desc: cpl_desc_cmfn
+        ch6_code: ch6_code_cmfn
+        ch6: ch6_cmfn
+        cedec_foldernet: cedec_foldernet_cmfn
+        cedec_gnlc: cedec_gnlc_cmfn
+      distinct: true
+
+  - kind: join
+    name: join_product_size_rank
+    context_name: select_dm_leaflet_foldernet
+    params:
+      - other:
+          select_cmfn
+        how:
+          left
+        columns:
+          cedec: cedec_foldernet_cmfn
+      - other:
+          select_psrfn
+        how:
+          left
+        columns:
+          cpl_code_cmfn: cpl_code_psrfn
+          marca: foldernet_marca_psrfn
+
+###################################################### PRODUCT_SIZE #########################################################################
+
+  - kind: read_dataio
+    name: read_md_product_size
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_product_size
+      schema_version: v3
+
+  - kind: select
+    name: select_psfn
+    context_name: read_md_product_size
+    params:
+      columns:
+        cch: cch_psfn
+        foldernet_prodotto: foldernet_prodotto_psfn
+        foldernet: foldernet_psfn
+        pack_type: pack_type_psfn
+      distinct: true
+
+  - kind: join
+    name: join_foldernet_mappings
+    context_name: join_product_size_rank
+    params:
+      - other:
+          select_psfn
+        how:
+          left
+        columns:
+          formato: foldernet_psfn
+  
+  - kind: add
+    name: add_pack_size_flag
+    context_name: join_foldernet_mappings
+    params:
+      - column: pack_size_flag
+        expression: if(foldernet_prodotto_psfn IS NOT NULL AND foldernet_prodotto_psfn != '' AND INSTR(prodotto, foldernet_prodotto_psfn) > 0 AND formato = foldernet_psfn, '2',
+                    if(foldernet_prodotto_psfn IS NOT NULL AND foldernet_prodotto_psfn != '' AND INSTR(prodotto, foldernet_prodotto_psfn) = 0 AND formato = foldernet_psfn, '0',
+                    if((foldernet_prodotto_psfn IS NULL OR foldernet_prodotto_psfn = '') AND formato = foldernet_psfn, '1', '0')))
+      - column: row_number_ps
+        expression: row_number() OVER (PARTITION BY data_inizio, data_fine, id_folder, insegna, prodotto, formato, promozioni, ch6_code_cmfn ORDER BY id_folder ASC, data_inizio ASC, data_fine ASC, prodotto ASC, ch6_code_cmfn ASC, pack_size_flag DESC, foldernet_prodotto_psfn ASC) #, foldernet_psfn ASC, cch_psfn ASC, pack_type_psfn ASC)
+      - column: formato
+        expression: if( formato = '1', ext_pack_size_default, formato)
+
+  - kind: filter
+    name: filter_duplicated_sizes
+    context_name: add_pack_size_flag
+    params:
+      - condition:
+          row_number_ps = '1'
+
+  - kind: join
+    name: join_xtel_foldernet
+    context_name: select_xtel_final
+    params:
+      - other:
+          filter_duplicated_sizes
+        how:
+          left
+        columns:
+          pack_type: pack_type_psfn
+          ext_pack_size: foldernet_psfn
+          units: unita
+          ext_brand: marca
+          customer_number: ch6_code_cmfn
+
+  - kind: checkpoint
+    name: checkpoint_xtel_foldernet
+    context_name: join_xtel_foldernet
+
+  - kind: add
+    name: add_leaflet_date_check
+    context_name: checkpoint_xtel_foldernet
+    params:
+      - column: leaflet_date_check
+        expression: if(data_inizio = start_sell_out AND data_fine = end_sell_out, '1',
+                    if(data_inizio BETWEEN date_add(start_sell_out, -5) AND date_add(start_sell_out, 5) AND data_fine BETWEEN date_add(end_sell_out, -5) AND date_add(end_sell_out, 5), '2', '3'))
+      - column: cedec_foldernet_flag
+        expression: if(cedec_foldernet_cm = cedec, '1', '0')
+
+  - kind: filter
+    name: filter_foldernet_leaflet
+    context_name: add_leaflet_date_check
+    params:
+      - condition:
+          leaflet_date_check IS NOT NULL AND leaflet_date_check != '3' AND cedec_foldernet_flag = '1'
+
+  - kind: select
+    name: select_sum_gnlc
+    context_name: filter_foldernet_leaflet
+    params:
+      columns:
+        tpm_code: tpm_code_sum_gnlc
+        sku_code: sku_code_sum_gnlc
+        leaflet_date_check: leaflet_date_check_sum_gnlc
+        aggregated_sum_glnc_csg: aggregated_sum_glnc_csg_sum_gnlc
+        cedec_foldernet_cm: cedec_foldernet_cm_sum_gnlc
+      distinct: true
+
+  - kind: add
+    name: add_rank_cedec_sum_gnlc
+    context_name: select_sum_gnlc
+    params:
+      - column: row_number_cedec_sum_gnlc
+        expression: row_number() OVER (PARTITION BY tpm_code_sum_gnlc, sku_code_sum_gnlc ORDER BY leaflet_date_check_sum_gnlc ASC, aggregated_sum_glnc_csg_sum_gnlc DESC) #, foldernet_psfn ASC, cch_psfn ASC, pack_type_psfn ASC)
+
+  - kind: filter
+    name: filter_rank_cedec_sum_gnlc
+    context_name: add_rank_cedec_sum_gnlc
+    params:
+      - condition:
+          row_number_cedec_sum_gnlc = '1'
+
+  - kind: join
+    name: join_sum_gnlc
+    context_name: filter_foldernet_leaflet
+    params:
+      - other:
+          filter_rank_cedec_sum_gnlc
+        how:
+          inner
+        columns:
+          tpm_code: tpm_code_sum_gnlc
+          sku_code: sku_code_sum_gnlc
+          leaflet_date_check: leaflet_date_check_sum_gnlc
+          aggregated_sum_glnc_csg: aggregated_sum_glnc_csg_sum_gnlc
+          cedec_foldernet_cm: cedec_foldernet_cm_sum_gnlc
+
+###################################################### CUSTOMER BANNER CONVENTION #########################################################################
+
+  - kind: read_dataio
+    name: read_md_customer_banner_convention
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_banner_convention
+      schema_version: v3
+
+  - kind: select
+    name: select_cbc
+    context_name: read_md_customer_banner_convention
+    params:
+      columns:
+        cpl_xtel_value: cpl_xtel_value_cbc
+        ranking_banner: ranking_banner_cbc
+        banner_ranking: banner_ranking_cbc
+      distinct: true
+
+  - kind: select
+    name: select_banner_rank_cbc
+    context_name: join_sum_gnlc
+    params:
+      columns:
+        tpm_code: tpm_code_cbc
+        sku_code: sku_code_cbc
+        insegna: insegna_cbc
+        customer_planning_level: customer_planning_level_cbc
+      distinct: true
+
+  - kind: join
+    name: join_cbc
+    context_name: select_banner_rank_cbc
+    params:
+      - other:
+          select_cbc
+        how:
+          inner
+        columns:
+          customer_planning_level_cbc: cpl_xtel_value_cbc
+
+  - kind: filter
+    name: filter_cbc
+    context_name: join_cbc
+    params:
+      - condition:
+          insegna_cbc =  ranking_banner_cbc
+
+  - kind: add
+    name: concat_banners_cbc
+    context_name: filter_cbc
+    params:
+      - column: banners_concat_cbc
+        expression: concat_ws(', ', transform(sort_array(collect_list(struct(banner_ranking_cbc, insegna_cbc)) OVER (PARTITION BY tpm_code_cbc, sku_code_cbc)), x -> x.insegna_cbc))
+
+  - kind: select
+    name: select_banner_rank_cbc
+    context_name: concat_banners_cbc
+    params:
+      columns:
+        tpm_code_cbc: tpm_code_cbc
+        sku_code_cbc: sku_code_cbc
+        banners_concat_cbc: banners_concat_cbc
+        ranking_banner_cbc: ranking_banner_cbc
+      distinct: true
+
+  - kind: join
+    name: join_banner_rank_cbc
+    context_name: join_sum_gnlc
+    params:
+      - other:
+          select_banner_rank_cbc
+        how:
+          inner
+        columns:
+          tpm_code: tpm_code_cbc
+          sku_code: sku_code_cbc
+          insegna: ranking_banner_cbc
+
+###################################################### CUSTOMER SCORE GNLC sum_of_potenziale_bevande_0_00 #########################################################################
+
+  - kind: read_dataio
+    name: read_md_customer_score_gnlc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_score_gnlc
+      schema_version: v2
+
+  - kind: select
+    name: select_csg_2
+    context_name: read_md_customer_score_gnlc
+    params:
+      columns:
+        cedec_gnlc: cedec_gnlc_csg_2
+        insegna: insegna_csg_2
+        sum_of_potenziale_bevande_0_00: sum_of_potenziale_bevande_0_00_csg_2
+      distinct: true
+
+  - kind: join
+    name: join_cedec_gnlc
+    context_name: join_banner_rank_cbc
+    params:
+      - other:
+          select_csg_2
+        how:
+          left
+        columns:
+          cedec_gnlc_cm: cedec_gnlc_csg_2
+
+  - kind: add
+    name: add_banner_insegna_flag
+    context_name: join_cedec_gnlc
+    params:
+      - column: banner_insegna_flag
+        expression: if(insegna = insegna_csg_2, '1', '0')
+      - column: average_of_prezzo_promo_minimo_rank
+        expression: ifnull(average_of_prezzo_promo_minimo, 0)
+      - column: row_number_insegna_flag
+        expression: row_number() OVER (PARTITION BY tpm_code, sku_code ORDER BY tpm_code ASC, sku_code ASC, banner_insegna_flag DESC, sum_of_potenziale_bevande_0_00_csg_2 DESC, average_of_prezzo_promo_minimo_rank ASC, id_folder ASC)
+
+  - kind: filter
+    name: filter_insegna_flag
+    context_name: add_banner_insegna_flag
+    params:
+      - condition:
+          row_number_insegna_flag = '1'
+
+######################################## SELECT FINAL PROMO MONTH - IF FOLDERNET PROMO DATE IS DIFFERENT THAN XTEL ##########################################
+
+  - kind: add
+    name: add_final_promo_month
+    context_name: filter_insegna_flag
+    params:
+      - column: data_inizio_year
+        expression: TO_CHAR(data_inizio, 'yyyy')
+      - column: data_inizio_month
+        expression: TO_CHAR(data_inizio, 'MM')
+      - column: data_inizio_days
+        expression: TO_CHAR(last_day(data_inizio), 'dd') - TO_CHAR(data_inizio, 'dd') + 1
+      - column: data_fine_year
+        expression: TO_CHAR(data_fine, 'yyyy')
+      - column: data_fine_month
+        expression: TO_CHAR(data_fine, 'MM')
+      - column: data_fine_days
+        expression: TO_CHAR(data_fine, 'dd')
+      - column: foldernet_leading_month
+        expression: if(data_inizio_month != data_fine_month AND data_inizio_days <= data_fine_days, data_fine_month, data_inizio_month)
+      - column: foldernet_leading_year
+        expression: if(data_inizio_year != data_fine_year AND data_inizio_days <= data_fine_days, data_fine_year, data_inizio_year)
+      - column: sell_out_leading_month
+        expression: if(foldernet_leading_month IS NOT NULL AND sell_out_leading_month != foldernet_leading_month, foldernet_leading_month, sell_out_leading_month)
+        overwrite: true
+      - column: sell_out_leading_year
+        expression: if(foldernet_leading_year IS NOT NULL AND sell_out_leading_year != foldernet_leading_year, foldernet_leading_year, sell_out_leading_year)
+        overwrite: true
+
+###################################################### SCORECARD CASE - NO LEAFLETS MATCHED #########################################################################
+
+  - kind: add
+    name: add_scorecard_transformations
+    context_name: add_leaflet_date_check
+    params:
+      - column: id_folder
+        expression: 'NULL'
+        overwrite: true
+      - column: row_number_scorecard
+        expression: row_number() OVER (PARTITION BY tpm_code, sku_code ORDER BY tpm_code ASC, sku_code ASC, leaflet_date_check ASC, aggregated_sum_glnc_csg DESC)
+
+  - kind: filter
+    name: filter_row_number_scorecard
+    context_name: add_scorecard_transformations
+    params:
+      - condition:
+          row_number_scorecard = '1'
+
+###################################################### SELECT BETWEEN FOLDERNET AND SCORECARD CASE #########################################################################
+
+############################################################ CHECK IF FOLDERNET DATA EXISTS ################################################################################
+
+  - kind: select
+    name: select_foldernet
+    context_name: add_final_promo_month
+    params:
+      columns:
+        tpm_code: tpm_code_foldernet
+        sku_code: sku_code_foldernet
+      distinct: true
+
+  - kind: join
+    name: join_scorecard_foldernet
+    context_name: filter_row_number_scorecard
+    params:
+      - other:
+          select_foldernet
+        how:
+          outer
+        columns:
+          tpm_code: tpm_code_foldernet
+          sku_code: sku_code_foldernet
+
+  - kind: filter
+    name: filter_scorecard_case
+    context_name: join_scorecard_foldernet
+    params:
+      - condition:
+          tpm_code != if(tpm_code_foldernet IS NULL, '0', tpm_code_foldernet) AND sku_code != if(sku_code_foldernet IS NULL, '0', sku_code_foldernet)
+
+  - kind: union
+    name: union_scorecard_foldernet
+    context_name: filter_scorecard_case
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_final_promo_month
+
+############################################################ CHECK IF FOLDERNET DATA EXISTS ################################################################################
+
+  - kind: read_dataio
+    name: read_dm_leaflet_scorecard
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_leaflet_scorecard
+      schema_version: v1
+
+  - kind: join
+    name: join_scorecard_data
+    context_name: union_scorecard_foldernet
+    params:
+      - other:
+          read_dm_leaflet_scorecard
+        how:
+          left
+        columns:
+          sell_out_leading_month: month
+          sell_out_leading_year: year
+          nielsen_scorecard_market_cm: market_level_1
+          ext_sku_desc: sku_text
+
+############################################################ BUSINESS TEMPLATE FINAL LOGIC ################################################################################
+
+  - kind: add
+    name: add_final_logic
+    context_name: join_scorecard_data
+    params:
+      - column: company_code
+        expression: '0594'
+      - column: key
+        expression: tpm_code || '-' || sku_code
+      - column: scorecard_no_promo_calculated
+        expression: ROUND(CAST((ext_pack_size / 1000) * units * price_no_promo AS DECIMAL(20, 4)), 2)
+      - column: scorecard_promo_calculated
+        expression: ROUND(CAST((ext_pack_size / 1000) * units * price_promo AS DECIMAL(20, 4)), 2)
+      - column: price_ratio
+        expression: if(scorecard_no_promo_calculated > 0, average_of_prezzo_intero_minimo / scorecard_no_promo_calculated, 0)
+      - column: final_no_promo_1
+        expression: if(average_of_prezzo_intero_minimo IS NULL OR average_of_prezzo_intero_minimo = 0, scorecard_no_promo_calculated,
+                    if(price_ratio < 0.70 AND price_ratio > 0, scorecard_no_promo_calculated, average_of_prezzo_intero_minimo))
+      - column: start_sell_out_date
+        expression: TO_CHAR(if(id_folder IS NULL AND data_inizio IS NULL, start_sell_out, data_inizio), 'yyyyMMdd')
+      - column: end_sell_out_date
+        expression: TO_CHAR(if(id_folder IS NULL AND data_fine IS NULL, end_sell_out, data_fine), 'yyyyMMdd')
+      - column: banners
+        expression: if(banners_concat_cbc IS NOT NULL, banners_concat_cbc,
+                    if(banners_rank_btm IS NOT NULL, banners_rank_btm, most_significant_banner_cm))
+      - column: do_d_pct_reg_nnr
+        expression: '0.2556'
+      - column: picture
+        expression: "'N' || CHR(47) || 'A'"
+      - column: note
+        expression: if(cpl_code_cm IN ('290690','290640','290610','290630') AND pure_pna_check = '1', 'PURE PNA', NULL)
+      - column: mechanic_extra_display_test
+        expression: if(INSTR(UPPER(promo_mechanic),'EXTRA DISPLAY') > 0, '1', '0')
+      - column: np_calculation
+        expression: if(id_folder IS NOT NULL AND average_of_prezzo_intero_minimo IS NOT NULL AND average_of_prezzo_intero_minimo > 0, (average_of_prezzo_intero_minimo - average_of_prezzo_promo_minimo) / average_of_prezzo_intero_minimo, NULL)
+      - column: if_promo_is_blank
+        expression: if(id_folder IS NOT NULL,
+                    if(average_of_prezzo_promo_minimo IS NULL OR average_of_prezzo_promo_minimo = 0,
+                    if(promo_mechanic_flag = '1', promo_mechanic_tier_2,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed, promo_mechanic_no_ed)),NULL),NULL)
+      - column: if_promo_between_0_5
+        expression: if(id_folder IS NOT NULL,
+                    if(average_of_prezzo_intero_minimo IS NOT NULL AND average_of_prezzo_intero_minimo > 0, 
+                    if(((average_of_prezzo_intero_minimo - average_of_prezzo_promo_minimo) / average_of_prezzo_intero_minimo) * 100 <= 5,
+                    if(promo_mechanic_flag = '1', promo_mechanic_tier_2,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed, promo_mechanic_no_ed)), NULL), NULL), NULL)
+      - column: if_promo_grater_than_5
+        expression: if(id_folder IS NOT NULL,
+                    if(average_of_prezzo_intero_minimo IS NOT NULL AND average_of_prezzo_intero_minimo > 0, 
+                    if(((average_of_prezzo_intero_minimo - average_of_prezzo_promo_minimo) / average_of_prezzo_intero_minimo) * 100 > 5,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed,  promo_mechanic_no_ed), NULL), NULL), NULL)
+      - column: if_np_is_blank_snp_less_than_5
+        expression: if(id_folder IS NOT NULL,
+                    if((average_of_prezzo_intero_minimo = 0 OR average_of_prezzo_intero_minimo IS NULL) AND scorecard_no_promo_calculated > 0,
+                    if(((scorecard_no_promo_calculated - average_of_prezzo_promo_minimo) / scorecard_no_promo_calculated) * 100 <= 5,
+                    if(promo_mechanic_flag = '1', promo_mechanic_tier_2,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed, promo_mechanic_no_ed)),
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed, promo_mechanic_no_ed)), NULL), NULL)
+      - column: promo_mechanic_scenario_3
+        expression: if(promo_mechanic_no_ed_xtel IS NULL, promo_mechanic_ed_xtel, promo_mechanic_no_ed_xtel)
+      - column: promo_mechanic_confirmed
+        expression: if(if_promo_is_blank IS NOT NULL, if_promo_is_blank,
+                    if(if_promo_between_0_5 IS NOT NULL, if_promo_between_0_5,
+                    if(if_promo_grater_than_5 IS NOT NULL, if_promo_grater_than_5,
+                    if(if_np_is_blank_snp_less_than_5 IS NOT NULL, if_np_is_blank_snp_less_than_5,
+                    if(promo_mechanic_scenario_3 IS NOT NULL, promo_mechanic_scenario_3, NULL)))))
+      - column: mechanic_t1_t2_flag
+        expression: if(promo_mechanic_confirmed = promo_mechanic_ed OR promo_mechanic_confirmed = promo_mechanic_no_ed, 'T1',
+                    if(promo_mechanic_confirmed = promo_mechanic_tier_2, 'T2', NULL))
+      - column: final_no_promo_2
+        expression: if(promo_mechanic_confirmed IN ('Collection/Leaflet', 'Collection/Leaflet/Artwork', 'Extra Display'), scorecard_no_promo_calculated,
+                    if(final_no_promo_1 IS NOT NULL AND id_folder IS NOT NULL, final_no_promo_1, scorecard_no_promo_calculated))
+      - column: final_promo_2
+        expression: if(promo_mechanic_confirmed IN ('Collection/Leaflet', 'Collection/Leaflet/Artwork', 'Extra Display'), scorecard_no_promo_calculated,
+                    if(id_folder IS NOT NULL AND average_of_prezzo_promo_minimo IS NOT NULL AND average_of_prezzo_promo_minimo > 0,
+                    if(INSTR(promo_mechanic_confirmed, 'VMB') > 0, average_of_prezzo_promo_minimo / 2, average_of_prezzo_promo_minimo), scorecard_promo_calculated))
+      - column: if_promo_is_blank_v2
+        expression: if(average_of_prezzo_promo_minimo IS NULL OR average_of_prezzo_promo_minimo = 0, NULL, 
+                    if(id_folder IS NOT NULL, 
+                    if(final_promo_2 IS NULL OR final_promo_2 = 0,
+                    if(promo_mechanic_flag = '1', promo_mechanic_tier_2,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed,  promo_mechanic_no_ed)),NULL),NULL))
+      - column: if_promo_between_0_5_v2
+        expression: if(average_of_prezzo_promo_minimo IS NULL OR average_of_prezzo_promo_minimo = 0, NULL, 
+                    if(id_folder IS NOT NULL,  
+                    if(final_no_promo_2 IS NOT NULL AND final_no_promo_2 > 0,
+                    if(((final_no_promo_2 - final_promo_2) / final_no_promo_2) * 100 <= 5,
+                    if(promo_mechanic_flag = '1', promo_mechanic_tier_2,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed,  promo_mechanic_no_ed)),NULL),NULL),NULL))
+      - column: if_promo_grater_than_5_v2
+        expression: if(average_of_prezzo_promo_minimo IS NULL OR average_of_prezzo_promo_minimo = 0, NULL, 
+                    if(id_folder IS NOT NULL,  
+                    if(final_no_promo_2 IS NOT NULL AND final_no_promo_2 > 0,
+                    if(((final_no_promo_2 - final_promo_2) / final_no_promo_2) * 100 > 5,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed,  promo_mechanic_no_ed),NULL),NULL),NULL))
+      - column: if_np_is_blank_snp_less_than_5_v2
+        expression: if(average_of_prezzo_promo_minimo IS NULL OR average_of_prezzo_promo_minimo = 0, NULL, 
+                    if(id_folder IS NOT NULL,  
+                    if(final_no_promo_2 IS NOT NULL AND final_no_promo_2 > 0,
+                    if(((final_no_promo_2 - final_promo_2) / final_no_promo_2) * 100 <= 5,
+                    if(promo_mechanic_flag = '1', promo_mechanic_tier_2,
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed, promo_mechanic_no_ed)),
+                    if(mechanic_extra_display_test = '1', promo_mechanic_ed, promo_mechanic_no_ed)),NULL), NULL))
+      - column: promo_mechanic_scenario_3_v2
+        expression: if(promo_mechanic_no_ed_xtel IS NULL, promo_mechanic_ed_xtel, promo_mechanic_no_ed_xtel)
+      - column: promo_mechanic_confirmed_v2
+        expression: if(if_promo_is_blank_v2 IS NOT NULL, if_promo_is_blank_v2,
+                    if(if_promo_between_0_5_v2 IS NOT NULL, if_promo_between_0_5_v2,
+                    if(if_promo_grater_than_5_v2 IS NOT NULL, if_promo_grater_than_5_v2,
+                    if(if_np_is_blank_snp_less_than_5_v2 IS NOT NULL, if_np_is_blank_snp_less_than_5_v2,
+                    if(promo_mechanic_scenario_3_v2 IS NOT NULL, promo_mechanic_scenario_3_v2, NULL)))))
+      - column: mechanic_t1_t2_flag_v2
+        expression: if(promo_mechanic_confirmed_v2 = promo_mechanic_ed OR promo_mechanic_confirmed_v2 = promo_mechanic_no_ed, 'T1',
+                    if(promo_mechanic_confirmed_v2 = promo_mechanic_tier_2, 'T2', NULL))
+      - column: mechanic_final
+        expression: if(promo_mechanic_confirmed = promo_mechanic_confirmed_v2, promo_mechanic_confirmed, promo_mechanic_confirmed_v2)
+      - column: promo_discount_from_scorecard
+        expression: if(scorecard_no_promo_calculated > 0 AND scorecard_no_promo_calculated <> 1, -1 * (scorecard_promo_calculated / (scorecard_no_promo_calculated - 1)), 0)
+      - column: retail_regular_selling_price_check
+        expression: if(id_folder IS NOT NULL AND final_no_promo_2 < final_promo_2 AND final_no_promo_2 > 0 AND final_promo_2 > 0 AND promo_discount_from_scorecard IS NOT NULL AND promo_discount_from_scorecard > 0, final_promo_2 / (1 - promo_discount_from_scorecard), final_no_promo_2)
+      - column: shopper_discount_calc
+        expression: if(retail_regular_selling_price_check > 0, 1 - final_promo_2 / retail_regular_selling_price_check, NULL)
+      - column: retail_regular_selling_price
+        expression: if(retail_regular_selling_price_check > final_promo_2, retail_regular_selling_price_check, NULL)
+      - column: retail_promo_selling_price
+        expression: if(retail_regular_selling_price_check > final_promo_2, final_promo_2, NULL)
+      - column: shopper_discount
+        expression: if(retail_regular_selling_price_check > final_promo_2, ROUND(shopper_discount_calc, 2), NULL)
+      - column: status
+        expression: 'NULL'
+
+  - kind: cast
+    name: cast_to_decimal
+    context_name: add_final_logic
+    params:
+      - column: id_folder
+        to: integer
+      - column: ban_code
+        to: integer
+      - column: a_volume_uc
+        to: decimal(15, 2)
+      - column: a_country_gross_revenues
+        to: double
+      - column: do_d_pct_reg_nnr
+        to: double
+      - column: a_total_promo_investment
+        to: double
+      - column: shopper_discount
+        to: double
+      - column: retail_promo_selling_price
+        to: double
+      - column: retail_regular_selling_price
+        to: double
+      - column: sell_in_dod
+        to: double
+      - column: cpl_code
+        to: integer
+      - column: customer_number
+        to: integer
+      - column: units
+        to: integer
+      - column: pcs_per_phc
+        to: integer
+      - column: sku_code
+        to: integer
+      - column: end_sell_out_date
+        to: date
+      - column: start_sell_out_date
+        to: date
+      - column: a_volume_uc
+        to: double
+
+  - kind: select
+    name: select_business_template_final
+    context_name: cast_to_decimal
+    params:
+      columns:
+        company_code: company_code
+        tpm_code: promotion_id
+        key: key
+        promo_desc: promotion_description
+        promo_mechanic: promo_mechanic
+        customer_planning_level: customer_planning_level
+        customer_number: customer_number
+        customer_name: customer_name
+        cpl_code: cust_planning_level_cmd
+        cpl_name: cpl_name
+        start_sell_in: start_sell_in
+        end_sell_in: end_sell_in
+        start_sell_out: start_sell_out_xtel
+        end_sell_out: end_sell_out_xtl
+        sku_code: sku_id
+        sku_text: sku_text
+        ban_code: ban_id
+        ban_desc: ban_text
+        brand: brand_text
+        pack_size: pack_size_text
+        sales_unit: sales_unit_id
+        pack_type: pack_type_text
+        units: mp
+        start_sell_out_date: start_sell_out_date
+        end_sell_out_date: end_sell_out_date
+        banners: banners
+        id_folder: leaflet
+        mechanic_final: shopper_mechanic
+        retail_regular_selling_price: retail_regular_selling_price
+        retail_promo_selling_price: retail_promo_selling_price
+        shopper_discount: shopper_discount_pct
+        do_d_pct_reg_nnr: do_d_pct_reg_nnr
+        picture: picture
+        # status: status
+        note: note
+        a_volume_uc: sell_out_sales_quantity_uc
+        pcs_per_phc: pcs_per_phc
+        a_country_gross_revenues: country_gross_revenues
+        a_total_promo_investment: promo_investment
+        sell_in_dod: sell_in_dod
+        country: country
+      distinct: true
+
+  - kind: write_dataio
+    name: f_leaflet_business_template
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: f_leaflet_business_template
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

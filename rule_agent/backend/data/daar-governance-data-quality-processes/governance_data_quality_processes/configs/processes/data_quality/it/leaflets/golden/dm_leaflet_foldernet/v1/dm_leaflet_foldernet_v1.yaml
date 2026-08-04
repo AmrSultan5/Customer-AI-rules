@@ -1,0 +1,133 @@
+transform:
+  name: dm_leaflet_foldernet
+  operations:
+
+  - kind: read_dataio
+    name: read_folder_net
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: folder_net
+      schema_version: v2
+
+  - kind: filter
+    name: filter_foldernet
+    context_name: read_folder_net
+    params:
+      - condition:
+          Marca IN('COCA COLA', 'MONSTER', 'LURISIA', 'ADEZ', 'BURN', 'COCA COLA ENERGY', 'FANTA', 'FUZE TEA', 'KINLEY', 'POWERADE', 'SPRITE') AND data_inizio >= TO_DATE(CONCAT(YEAR(current_date()) - 3, '-11-01'), 'yyyy-MM-dd') 
+
+  - kind: read_dataio
+    name: read_md_mechanics_folder_net
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_mechanics_folder_net
+      schema_version: v1
+
+  - kind: select
+    name: select_mechanics
+    context_name: read_md_mechanics_folder_net
+    params:
+      columns:
+        foldernet_mechanics: foldernet_mechanics
+        promo_mechanic_no_ed: promo_mechanic_no_ed
+        promo_mechanic_ed: promo_mechanic_ed
+        logic_flag: logic_flag
+        mechanic_tier_2: promo_mechanic_tier_2
+      distinct: true
+
+  - kind: join
+    name: join_foldernet
+    context_name: filter_foldernet
+    params:
+      - other:
+          select_mechanics
+        how:
+          left
+        columns:
+          promozioni: foldernet_mechanics
+
+  - kind: add
+    name: add_logic
+    context_name: join_foldernet
+    params:
+      - column: promo_mechanic_flag
+        expression: if(logic_flag = 'Y', '1', '0')
+      - column: price_discount
+        expression: if(average_of_prezzo_intero_minimo IS NOT NULL AND average_of_prezzo_intero_minimo !='' AND average_of_prezzo_intero_minimo > 0, (1 - average_of_prezzo_promo_minimo)/ average_of_prezzo_intero_minimo, 0)
+      - column: price_promo
+        expression: average_of_prezzo_promo_minimo
+      - column: price_no_promo
+        expression: average_of_prezzo_intero_minimo
+      - column: zero_light_flag
+        expression: if(Marca='COCA COLA' AND (Prodotto LIKE '%ZERO%' OR Prodotto LIKE '%SENZA ZUCCHERO%' OR Prodotto LIKE '%LEMON%'), 'ZERO',
+                    if(Marca='COCA COLA' AND (Prodotto LIKE '%LIGHT%'), 'LIGHT',
+                    if(Marca='COCA COLA' AND (Prodotto LIKE '%LIFE%' OR Prodotto LIKE '%STEVIA%' OR Prodotto LIKE '%ZERO STEVIA%'), 'REDUCED',
+                    if(Marca='FANTA' AND (Prodotto LIKE '%LIGHT%' OR Prodotto LIKE '%SENZA ZUCCHERI%' OR Prodotto LIKE '%ZERO%' OR Prodotto LIKE '%IGP%'), 'ZERO',
+                    if(Marca='SPRITE' AND (Prodotto LIKE '%LIGHT%' OR Prodotto LIKE '%SENZA ZUCCHERI%' OR Prodotto LIKE '%ZERO%'), 'ZERO', null)))))
+
+  - kind: cast
+    name: cast_to double
+    context_name: add_logic
+    params:
+      - column: average_of_prezzo_promo_minimo
+        to: double
+      - column: average_of_prezzo_intero_minimo
+        to: double
+      - column: price_promo
+        to: double
+      - column: price_no_promo
+        to: double
+
+  - kind: select
+    name: select_foldernet
+    context_name: cast_to double
+    params:
+      columns:
+        data_inizio: data_inizio
+        data_fine: data_fine
+        cedec: cedec
+        insegna: insegna
+        prodotto: prodotto
+        formato: formato
+        marca: marca
+        unita: unita
+        promozioni: promozioni
+        id_folder: id_folder
+        average_of_prezzo_intero_minimo: average_of_prezzo_intero_minimo
+        average_of_prezzo_promo_minimo: average_of_prezzo_promo_minimo
+        country: country
+        promo_mechanic_no_ed: promo_mechanic_no_ed
+        promo_mechanic_ed: promo_mechanic_ed
+        promo_mechanic_flag: promo_mechanic_flag
+        promo_mechanic_tier_2: promo_mechanic_tier_2
+        price_discount: price_discount
+        price_promo: price_promo
+        price_no_promo: price_no_promo
+        zero_light_flag: zero_light_flag
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_leaflet_foldernet
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_leaflet_foldernet
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

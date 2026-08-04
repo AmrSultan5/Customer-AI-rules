@@ -1,0 +1,80 @@
+transform:
+  name: dim_calendar
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read date
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_date
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_user_input
+      namespace: local
+      object_name: date
+
+  #Select date
+
+  - kind: select
+    name: select_date
+    context_name: read_date
+    params:
+      columns:
+        date_id: date_id_1
+        year_445: year
+        month_445: month
+        week_445: week
+      distinct: true
+
+
+  - kind: add
+    name: add_calendar
+    params:
+      - column: date_id
+        expression: "to_date(date_id_1,'YYYY-MM-DD')"
+      - column: week_sequential
+        expression: "DENSE_RANK() OVER ( ORDER BY concat(year,lpad(week,2,'0')) ASC)"
+      - column: year_week
+        expression: concat(year,'w',lpad(week,2,'0'))
+      - column: start_of_week
+        expression: "date_id - weekday(date_id)"  
+      - column: week_label
+        expression: concat('w', week) 
+
+  - kind: select
+    name: select_calendar
+    params:
+      columns:
+        date_id: date_id
+        year: year
+        month: month
+        week: week
+        week_sequential: week_sequential
+        year_week: year_week
+        start_of_week: start_of_week
+        week_label: week_label
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dim_calendar
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_calendar
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

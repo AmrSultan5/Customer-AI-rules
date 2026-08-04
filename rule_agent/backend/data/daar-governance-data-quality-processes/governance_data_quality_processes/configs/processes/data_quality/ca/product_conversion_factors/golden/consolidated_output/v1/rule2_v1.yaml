@@ -1,0 +1,1354 @@
+transform:
+  name: uc07_rule_2
+  operations:
+
+#READ dm_material
+  - kind: read_dataio
+    name: read_dm_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      schema_version: v6
+
+  - kind: select
+    name: select_dmm
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code_m
+        material_name: material_description
+        material_type_code: material_type_code
+        sales_organization: sales_org_code
+        unit_of_measure_code: base_unit_of_measure_code
+        unit_of_measure_name: base_unit_of_measure_name
+        distribution_channel: distribution_channel_code
+        brand_code: brand_code
+        brand_description: brand_name
+        flavour_code: flavour_code
+        flavour_description: flavour_name
+        package_type_code: pack_type_code
+        package_type_name: pack_type_name
+        package_size_code: pack_size_code
+        package_size_name: pack_size_name
+        sales_unit_code: sales_unit_code
+        sales_unit_name: sales_unit_name
+        pack_size_uom_unified: pack_size_uom_unified
+        pack_size_volume_unified: pack_size_volume_unified
+        total_sales_units: total_sales_units
+        product_hierarchy: product_hierarchy_code
+        product_hierarchy_name: product_hierarchy_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        sap_cluster: sap_cluster_m
+      distinct: true
+
+  - kind: filter
+    name: filter_dmm
+    context_name: select_dmm
+    params:
+      - condition:
+          material_type_code IN ('ZFG','ZFGS','ZFGC','ZFGA','ZFGM') AND brand_code NOT IN ('ZV7','ZYU','ZYV','Z88','Z99') AND sales_org_code = '0001' AND distribution_channel_code = '01' AND product_hierarchy_code IS NOT NULL AND product_hierarchy_code != '' AND product_hierarchy_level_5_code IS NOT NULL AND product_hierarchy_level_5_code != '' AND product_hierarchy IN ('010100121232123','010100121232124','010100121232125','010499929992999','010300523152315','010300523152316','010300523292329','010300523292330') 
+          # AND material_code_m = '000000000001124323'
+
+# Convert nulls and text to numbers
+  - kind: add
+    name: add_convert_null_to_zero
+    context_name: filter_dmm
+    params:
+      - column: total_sales_units
+        expression: "CASE WHEN total_sales_units IS NULL OR UPPER(total_sales_units) IN ('FOOD','OTHER','PMX BIB','PMX TANK','PRE TANK') THEN '0' ELSE total_sales_units END"
+        overwrite: true
+      - column: pack_size_volume_unified
+        expression: "CASE WHEN pack_size_volume_unified IS NULL OR UPPER(pack_size_volume_unified) IN ('UNKNOWN') THEN '0' ELSE pack_size_volume_unified END"
+        overwrite: true
+
+#READ unit_of_measure
+  - kind: read_dataio
+    name: read_dm_unit_of_measure
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_unit_of_measure
+      schema_version: v1
+
+  - kind: select
+    name: select_dmuom_initial
+    context_name: read_dm_unit_of_measure
+    params:
+      columns:
+        material_code: material_code_uom
+        conversion_numerator: conversion_numerator
+        conversion_denominator: conversion_denominator
+        alternative_unit_of_measure_code: alternative_unit_of_measure_code
+        sap_cluster: sap_cluster_uom
+      distinct: true
+
+# Add_dummy_id and convert UOM ST -> PC
+  - kind: add
+    name: add_dummy_id
+    context_name: select_dmuom_initial
+    params:
+      - column: id_uom
+        expression: "'1'"
+      - column: alternative_unit_of_measure_code
+        expression: "CASE WHEN alternative_unit_of_measure_code = 'ST' THEN 'PC' ELSE alternative_unit_of_measure_code END"
+        overwrite: true
+
+# --------------------------distinct_unit_of_measure-------------------------------------
+  - kind: select
+    name: select_distinct_uom
+    context_name: read_dm_unit_of_measure
+    params:
+      columns:
+        alternative_unit_of_measure_code: distinct_uom
+      distinct: true
+
+  - kind: filter
+    name: filter_distinct_uom
+    context_name: select_distinct_uom
+    params:
+      - condition: distinct_uom IN ('CS','CTR','EA','EC','KG','L','PAL','PC','SRV','UC','VCS','ZLI')
+
+# Add_dummy_id to distinct
+  - kind: add
+    name: add_dummy_id_distinct
+    context_name: filter_distinct_uom
+    params:
+      - column: id_uom_distinct
+        expression: "'1'"
+
+# --------------------------uom_material_list-------------------------------------
+  - kind: select
+    name: select_material_list
+    context_name: add_dummy_id
+    params:
+      columns:
+        id_uom: id_uom_material
+        material_code_uom: material_code_material
+        sap_cluster_uom: sap_cluster_material
+      distinct: true
+
+#JOIN uom_materials_with_full_list_of_uom
+  - kind: join
+    name: join_material_uom_final
+    context_name: select_material_list
+    params:
+      - other:
+          add_dummy_id_distinct
+        how:
+          left
+        columns:
+          id_uom_material: id_uom_distinct
+      - other:
+          add_dummy_id
+        how:
+          left
+        columns:
+          material_code_material: material_code_uom
+          sap_cluster_material: sap_cluster_uom
+          distinct_uom: alternative_unit_of_measure_code
+  
+  # -------------------final_select_after_uom_material_join
+  - kind: select
+    name: select_dmuom
+    context_name: join_material_uom_final
+    params:
+      columns:
+        material_code_material: material_code_uom
+        conversion_numerator: conversion_numerator
+        conversion_denominator: conversion_denominator
+        distinct_uom: alternative_unit_of_measure_code
+        sap_cluster_material: sap_cluster_uom
+      distinct: true
+
+#----------------------JOIN material and uom
+  - kind: join
+    name: join_rule_2
+    context_name: add_convert_null_to_zero
+    params:
+      - other:
+          select_dmuom
+        how:
+          inner
+        columns:
+          material_code_m: material_code_uom
+          sap_cluster_m: sap_cluster_uom
+
+# Convert ML -> L, G -> KG
+  - kind: add
+    name: add_convert
+    context_name: join_rule_2
+    params:
+      - column: pack_size_volume_unified
+        expression: "
+                    CASE 
+                      WHEN pack_size_uom_unified = 'ML' AND pack_size_volume_unified > 0 THEN pack_size_volume_unified/1000
+                      WHEN pack_size_uom_unified = 'G' AND pack_size_volume_unified > 0 THEN pack_size_volume_unified/1000 
+                    ELSE pack_size_volume_unified 
+                    END"
+        overwrite: true
+      - column: pack_size_uom_unified
+        expression: "
+                    CASE 
+                      WHEN pack_size_uom_unified = 'ML' THEN 'L'
+                      WHEN pack_size_uom_unified = 'G' THEN 'KG' 
+                    ELSE pack_size_uom_unified 
+                    END"
+        overwrite: true
+
+  - kind: cast
+    name: cast_to_decimal
+    context_name: add_convert
+    params:
+      - column: pack_size_volume_unified
+        to: decimal(7,5)
+      - column: total_sales_units
+        to: decimal(7,3)
+
+  - kind: add
+    name: add_uom
+    context_name: cast_to_decimal
+    params:
+      - column: uom_pal_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='PAL' THEN conversion_numerator ELSE NULL END"
+      - column: uom_pal_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='PAL' THEN conversion_denominator ELSE NULL END"
+      - column: uom_ea_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='EA' THEN conversion_numerator ELSE NULL END"
+      - column: uom_ea_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='EA' THEN conversion_denominator ELSE NULL END"
+      - column: uom_cs_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='CS' THEN conversion_numerator ELSE NULL END"
+      - column: uom_cs_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='CS' THEN conversion_denominator ELSE NULL END"
+      - column: uom_ec_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='EC' THEN conversion_numerator ELSE NULL END"
+      - column: uom_ec_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='EC' THEN conversion_denominator ELSE NULL END"
+      - column: uom_pc_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='PC' THEN conversion_numerator ELSE NULL END"
+      - column: uom_pc_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='PC' THEN conversion_denominator ELSE NULL END"
+      - column: uom_l_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='L' THEN conversion_numerator ELSE NULL END"
+      - column: uom_l_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='L' THEN conversion_denominator ELSE NULL END"
+      - column: uom_zli_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='ZLI' THEN conversion_numerator ELSE NULL END"
+      - column: uom_zli_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='ZLI' THEN conversion_denominator ELSE NULL END"
+      - column: uom_uc_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='UC' THEN conversion_numerator ELSE NULL END"
+      - column: uom_uc_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='UC' THEN conversion_denominator ELSE NULL END"
+      - column: uom_ctr_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='CTR' THEN conversion_numerator ELSE NULL END"
+      - column: uom_ctr_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='CTR' THEN conversion_denominator ELSE NULL END"
+      - column: uom_srv_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='SRV' THEN conversion_numerator ELSE NULL END"
+      - column: uom_srv_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='SRV' THEN conversion_denominator ELSE NULL END"
+      - column: uom_vcs_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='VCS' THEN conversion_numerator ELSE NULL END"
+      - column: uom_vcs_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='VCS' THEN conversion_denominator ELSE NULL END"
+      - column: uom_kg_conversion_numerator
+        expression: "CASE WHEN alternative_unit_of_measure_code='KG' THEN conversion_numerator ELSE NULL END"
+      - column: uom_kg_conversion_denominator
+        expression: "CASE WHEN alternative_unit_of_measure_code='KG' THEN conversion_denominator ELSE NULL END"
+      - column: rule_name
+        expression: "'Hot Drinks and Other'"
+      - column: rule_code
+        expression: "'rule_2_ca'"
+      - column: quality_category
+        expression: "'Completeness/Accuracy'"
+
+  - kind: group
+    name: agg_uom
+    context_name: add_uom
+    params:
+      - aggs:
+          uom_pal_conversion_numerator: max
+          uom_pal_conversion_denominator: max
+          uom_ea_conversion_numerator: max
+          uom_ea_conversion_denominator: max
+          uom_cs_conversion_numerator: max
+          uom_cs_conversion_denominator: max
+          uom_ec_conversion_numerator: max
+          uom_ec_conversion_denominator: max
+          uom_pc_conversion_numerator: max
+          uom_pc_conversion_denominator: max
+          uom_l_conversion_numerator: max
+          uom_l_conversion_denominator: max
+          uom_zli_conversion_numerator: max
+          uom_zli_conversion_denominator: max
+          uom_uc_conversion_numerator: max
+          uom_uc_conversion_denominator: max
+          uom_ctr_conversion_numerator: max
+          uom_ctr_conversion_denominator: max
+          uom_srv_conversion_numerator: max
+          uom_srv_conversion_denominator: max
+          uom_vcs_conversion_numerator: max
+          uom_vcs_conversion_denominator: max
+          uom_kg_conversion_numerator: max
+          uom_kg_conversion_denominator: max
+        by:
+        - material_code_m
+        - sap_cluster_m
+
+#----------------------JOIN aggregated nominators and denominators for uom
+  - kind: join
+    name: join_agg_uom
+    context_name: add_uom
+    params:
+      - other:
+          agg_uom
+        how:
+          left
+        columns:
+          material_code_m: material_code_m
+          sap_cluster_m: sap_cluster_m
+
+  - kind: select
+    name: select_uom
+    context_name: join_agg_uom
+    params:
+      columns:
+         material_code_m: material_code_m
+         material_description: material_description
+         material_type_code: material_type_code
+         sales_org_code: sales_org_code
+         base_unit_of_measure_code: base_unit_of_measure_code
+         base_unit_of_measure_name: base_unit_of_measure_name
+         distribution_channel_code: distribution_channel_code
+         brand_code: brand_code
+         brand_name: brand_name
+         flavour_code: flavour_code
+         flavour_name: flavour_name
+         pack_type_code: pack_type_code
+         pack_type_name: pack_type_name
+         pack_size_code: pack_size_code
+         pack_size_name: pack_size_name
+         sales_unit_code: sales_unit_code
+         sales_unit_name: sales_unit_name
+         pack_size_uom_unified: pack_size_uom_unified
+         pack_size_volume_unified: pack_size_volume_unified
+         total_sales_units: total_sales_units
+         product_hierarchy_code: product_hierarchy_code
+         product_hierarchy_name: product_hierarchy_name
+         product_hierarchy_level_5_code: product_hierarchy_level_5_code
+         sap_cluster_m: sap_cluster_m
+         conversion_numerator: conversion_numerator
+         conversion_denominator: conversion_denominator
+         alternative_unit_of_measure_code: alternative_unit_of_measure_code
+         max_uom_pal_conversion_numerator: uom_pal_conversion_numerator
+         max_uom_pal_conversion_denominator: uom_pal_conversion_denominator
+         max_uom_ea_conversion_numerator: uom_ea_conversion_numerator
+         max_uom_ea_conversion_denominator: uom_ea_conversion_denominator
+         max_uom_cs_conversion_numerator: uom_cs_conversion_numerator
+         max_uom_cs_conversion_denominator: uom_cs_conversion_denominator
+         max_uom_ec_conversion_numerator: uom_ec_conversion_numerator
+         max_uom_ec_conversion_denominator: uom_ec_conversion_denominator
+         max_uom_pc_conversion_numerator: uom_pc_conversion_numerator
+         max_uom_pc_conversion_denominator: uom_pc_conversion_denominator
+         max_uom_l_conversion_numerator: uom_l_conversion_numerator
+         max_uom_l_conversion_denominator: uom_l_conversion_denominator
+         max_uom_zli_conversion_numerator: uom_zli_conversion_numerator
+         max_uom_zli_conversion_denominator: uom_zli_conversion_denominator
+         max_uom_uc_conversion_numerator: uom_uc_conversion_numerator
+         max_uom_uc_conversion_denominator: uom_uc_conversion_denominator
+         max_uom_ctr_conversion_numerator: uom_ctr_conversion_numerator
+         max_uom_ctr_conversion_denominator: uom_ctr_conversion_denominator
+         max_uom_srv_conversion_numerator: uom_srv_conversion_numerator
+         max_uom_srv_conversion_denominator: uom_srv_conversion_denominator
+         max_uom_vcs_conversion_numerator: uom_vcs_conversion_numerator
+         max_uom_vcs_conversion_denominator: uom_vcs_conversion_denominator
+         max_uom_kg_conversion_numerator: uom_kg_conversion_numerator
+         max_uom_kg_conversion_denominator: uom_kg_conversion_denominator
+         rule_name: rule_name
+         rule_code: rule_code
+         quality_category: quality_category
+      distinct: true
+
+  - kind: add
+    name: add_conditions_1
+    context_name: select_uom
+    params:
+# --------------PAL
+      - column: uom_pal_check_flag
+        expression: "'-1'"
+      - column: uom_pal_dq_message_output
+        expression: "'N/A'"
+
+# --------------EA
+      - column: uom_ea_check_flag
+        expression: "
+                    CASE
+                      WHEN alternative_unit_of_measure_code='EA' THEN
+                        CASE 
+                          WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN '0'
+                          WHEN base_unit_of_measure_code = 'EA' AND (uom_ea_conversion_denominator != '1' OR uom_ea_conversion_numerator != 1) THEN '0'
+                        ELSE '1' 
+                      END
+                    END"
+      - column: uom_ea_dq_message_output
+        expression: "
+                    CASE
+                      WHEN alternative_unit_of_measure_code='EA' THEN
+                        CASE 
+                          WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN 'Missing unit of measure EA'
+                          WHEN base_unit_of_measure_code = 'EA' AND (uom_ea_conversion_denominator != '1' OR uom_ea_conversion_numerator != 1) THEN 'Wrong UMREN/UMREZ for EA'
+                        ELSE 'OK' 
+                      END
+                    END"
+
+# --------------CS
+      - column: uom_cs_check_flag
+        expression: "'-1'"
+      - column: uom_cs_dq_message_output
+        expression: "'N/A'"
+
+# --------------EC
+      - column: uom_ec_check_flag
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='EC' THEN
+                    	CASE
+                        WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN '0' 
+                        WHEN conversion_denominator !='1' OR conversion_numerator != '1' THEN '0'
+                    	ELSE '1' 
+                    	END
+                    END"
+      - column: uom_ec_dq_message_output
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='EC' THEN
+                    	CASE
+                        WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN 'Missing unit of measure EC' 
+                        WHEN conversion_denominator !='1' OR conversion_numerator != '1' THEN 'Wrong UMREN/UMREZ for EC' 
+                    	ELSE 'OK' 
+                    	END
+                    END"
+
+# --------------PC
+      - column: uom_pc_check_flag
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='PC' THEN
+                    	CASE
+		                    WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN '0'
+                    	ELSE '1' 
+                    	END
+                    END"
+      - column: uom_pc_dq_message_output
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='PC' THEN
+                    	CASE 
+		                    WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN 'Missing unit of measure PC' 
+                    	ELSE 'OK' 
+                    	END
+                    END"
+
+# -------------L
+      - column: uom_l_check_flag
+        expression: "'-1'"
+      - column: uom_l_dq_message_output
+        expression: "'N/A'"
+
+# --------------ZLI
+      - column: uom_zli_check_flag
+        expression: "'-1'"
+      - column: uom_zli_dq_message_output
+        expression: "'N/A'"
+
+# --------------UC
+      - column: uom_uc_check_flag
+        expression: "'-1'"
+      - column: uom_uc_dq_message_output
+        expression: "'N/A'"
+
+# --------------CTR
+      - column: uom_ctr_check_flag
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='CTR' THEN
+                    	CASE
+                        WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN '0'
+                        WHEN base_unit_of_measure_code = 'CTR' AND conversion_denominator/conversion_numerator !=1 THEN '0' 
+                        WHEN base_unit_of_measure_code != 'CTR' AND ROUND(uom_ctr_conversion_denominator/uom_ctr_conversion_numerator,1) != ROUND(uom_pc_conversion_denominator/uom_pc_conversion_numerator,1) THEN '0'
+                      ELSE '1'
+                      END
+                    END"
+      - column: uom_ctr_dq_message_output
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='CTR' THEN
+                    	CASE
+                        WHEN conversion_numerator IS NULL OR conversion_denominator IS NULL THEN 'Missing unit of measure CTR'
+                        WHEN base_unit_of_measure_code = 'CTR' AND conversion_denominator/conversion_numerator !=1 THEN 'Wrong UMREN/UMREZ for CTR' 
+                        WHEN base_unit_of_measure_code != 'CTR' AND ROUND(uom_ctr_conversion_denominator/uom_ctr_conversion_numerator,1) != ROUND(uom_pc_conversion_denominator/uom_pc_conversion_numerator,1) THEN 'Wrong UMREN/UMREZ for CTR'
+                      ELSE 'OK'
+                      END
+                    END"
+
+# --------------SRV
+      - column: uom_srv_check_flag
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='SRV' THEN
+                    	CASE
+                        WHEN product_hierarchy_code IN ('010100121232123','010100121232124','010100121232125') THEN 'Exception1'
+                      ELSE ''
+                      END
+                    END"
+      - column: uom_srv_dq_message_output
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='SRV' THEN
+                    	CASE
+                        WHEN product_hierarchy_code IN ('010100121232123','010100121232124','010100121232125') THEN 'Exception1'
+                      ELSE 'N/A'
+                      END
+                    END"
+
+# --------------VCS
+      - column: uom_vcs_check_flag
+        expression: "
+                    CASE 
+                      WHEN alternative_unit_of_measure_code='VCS' THEN
+                    	CASE
+                        WHEN product_hierarchy_code IN ('010100121232123','010100121232124','010100121232125') THEN 'Exception1'
+                      ELSE ''
+                      END
+                    END"
+      - column: uom_vcs_dq_message_output
+        expression: "
+                    CASE 
+                    WHEN alternative_unit_of_measure_code='VCS' THEN
+                    	CASE
+                        WHEN product_hierarchy_code IN ('010100121232123','010100121232124','010100121232125') THEN 'Exception1' 
+                      ELSE 'N/A'
+                      END
+                    END"      
+      
+# --------------KG
+      - column: uom_kg_check_flag
+        expression: "'-1'"
+      - column: uom_kg_dq_message_output
+        expression: "'N/A'"
+
+  - kind: group
+    name: agg_unit_of_measure
+    context_name: add_conditions_1
+    params:
+      - aggs:
+          uom_pal_conversion_numerator: max
+          uom_pal_conversion_denominator: max
+          uom_ea_conversion_numerator: max
+          uom_ea_conversion_denominator: max
+          uom_cs_conversion_numerator: max
+          uom_cs_conversion_denominator: max
+          uom_ec_conversion_numerator: max
+          uom_ec_conversion_denominator: max
+          uom_pc_conversion_numerator: max
+          uom_pc_conversion_denominator: max
+          uom_l_conversion_numerator: max
+          uom_l_conversion_denominator: max
+          uom_zli_conversion_numerator: max
+          uom_zli_conversion_denominator: max
+          uom_uc_conversion_numerator: max
+          uom_uc_conversion_denominator: max
+          uom_ctr_conversion_numerator: max
+          uom_ctr_conversion_denominator: max
+          uom_srv_conversion_numerator: max
+          uom_srv_conversion_denominator: max
+          uom_vcs_conversion_numerator: max
+          uom_vcs_conversion_denominator: max
+          uom_kg_conversion_numerator: max
+          uom_kg_conversion_denominator: max
+          uom_pal_check_flag: max
+          uom_pal_dq_message_output: max
+          uom_ea_check_flag: max
+          uom_ea_dq_message_output: max
+          uom_cs_check_flag: max
+          uom_cs_dq_message_output: max
+          uom_ec_check_flag: max
+          uom_ec_dq_message_output: max
+          uom_pc_check_flag: max
+          uom_pc_dq_message_output: max
+          uom_l_check_flag: max
+          uom_l_dq_message_output: max
+          uom_zli_check_flag: max
+          uom_zli_dq_message_output: max
+          uom_uc_check_flag: max
+          uom_uc_dq_message_output: max
+          uom_ctr_check_flag: max
+          uom_ctr_dq_message_output: max
+          uom_srv_check_flag: max
+          uom_srv_dq_message_output: max
+          uom_vcs_check_flag: max
+          uom_vcs_dq_message_output: max
+          uom_kg_check_flag: max
+          uom_kg_dq_message_output: max
+        by:
+        - material_code_m
+        - material_description
+        - material_type_code
+        - sales_org_code
+        - base_unit_of_measure_code
+        - base_unit_of_measure_name
+        - distribution_channel_code
+        - brand_code
+        - brand_name
+        - flavour_code
+        - flavour_name
+        - pack_type_code
+        - pack_type_name
+        - pack_size_code
+        - pack_size_name
+        - sales_unit_code
+        - sales_unit_name
+        - pack_size_uom_unified
+        - pack_size_volume_unified
+        - total_sales_units
+        - product_hierarchy_code
+        - product_hierarchy_name
+        - rule_name
+        - rule_code
+        - quality_category
+        - sap_cluster_m
+
+  - kind: add
+    name: add_exceptions
+    context_name: agg_unit_of_measure
+    params:
+# ------------------------------------------------SRV-------------------------------------------
+      - column: max_uom_srv_check_flag
+        expression: "
+                    CASE 
+                      WHEN max_uom_srv_check_flag = 'Exception1' THEN 
+                      CASE 
+                        WHEN max_uom_srv_conversion_numerator IS NULL OR max_uom_srv_conversion_denominator IS NULL THEN '0'
+                        WHEN ROUND(max_uom_srv_conversion_denominator/max_uom_srv_conversion_numerator,1) != ROUND(max_uom_pc_conversion_denominator/max_uom_pc_conversion_numerator,1) THEN '0' 
+                        ELSE '1' 
+                      END 
+                      ELSE max_uom_srv_check_flag
+                    END"
+        overwrite: true
+      - column: max_uom_srv_dq_message_output
+        expression: "
+                    CASE 
+                      WHEN max_uom_srv_dq_message_output = 'Exception1' THEN 
+                      CASE 
+                        WHEN max_uom_srv_conversion_numerator IS NULL OR max_uom_srv_conversion_denominator IS NULL THEN 'Missing unit of measure SRV'
+                        WHEN ROUND(max_uom_srv_conversion_denominator/max_uom_srv_conversion_numerator,1) != ROUND(max_uom_pc_conversion_denominator/max_uom_pc_conversion_numerator,1) THEN 'Wrong UMREN/UMREZ for SRV'
+                        ELSE 'OK' 
+                      END 
+                      ELSE max_uom_srv_dq_message_output
+                    END"
+        overwrite: true
+# ------------------------------------------------VCS-------------------------------------------
+      - column: max_uom_vcs_check_flag
+        expression: "
+                    CASE 
+                      WHEN max_uom_vcs_check_flag = 'Exception1' THEN 
+                      CASE 
+                        WHEN max_uom_vcs_conversion_numerator IS NULL OR max_uom_vcs_conversion_denominator IS NULL THEN '0'
+                        ELSE '1' 
+                      END 
+                      ELSE max_uom_vcs_check_flag
+                    END"
+        overwrite: true
+      - column: max_uom_vcs_dq_message_output
+        expression: "
+                    CASE 
+                      WHEN max_uom_vcs_dq_message_output = 'Exception1' THEN 
+                      CASE 
+                        WHEN max_uom_vcs_conversion_numerator IS NULL OR max_uom_vcs_conversion_denominator IS NULL THEN 'Missing unit of measure VCS'
+                        ELSE 'OK' 
+                      END 
+                      ELSE max_uom_vcs_dq_message_output
+                    END"
+        overwrite: true
+
+  - kind: select
+    name: select_exceptions
+    context_name: add_exceptions
+    params:
+      columns:
+        material_code_m: exc_material_code
+        max_uom_pal_conversion_numerator: exc_uom_pal_conversion_numerator
+        max_uom_pal_conversion_denominator: exc_uom_pal_conversion_denominator
+        max_uom_ea_conversion_numerator: exc_uom_ea_conversion_numerator
+        max_uom_ea_conversion_denominator: exc_uom_ea_conversion_denominator
+        max_uom_cs_conversion_numerator: exc_uom_cs_conversion_numerator
+        max_uom_cs_conversion_denominator: exc_uom_cs_conversion_denominator
+        max_uom_ec_conversion_numerator: exc_uom_ec_conversion_numerator
+        max_uom_ec_conversion_denominator: exc_uom_ec_conversion_denominator
+        max_uom_pc_conversion_numerator: exc_uom_pc_conversion_numerator
+        max_uom_pc_conversion_denominator: exc_uom_pc_conversion_denominator
+        max_uom_l_conversion_numerator: exc_uom_l_conversion_numerator
+        max_uom_l_conversion_denominator: exc_uom_l_conversion_denominator
+        max_uom_zli_conversion_numerator: exc_uom_zli_conversion_numerator
+        max_uom_zli_conversion_denominator: exc_uom_zli_conversion_denominator
+        max_uom_uc_conversion_numerator: exc_uom_uc_conversion_numerator
+        max_uom_uc_conversion_denominator: exc_uom_uc_conversion_denominator
+        max_uom_ctr_conversion_numerator: exc_uom_ctr_conversion_numerator
+        max_uom_ctr_conversion_denominator: exc_uom_ctr_conversion_denominator
+        max_uom_srv_conversion_numerator: exc_uom_srv_conversion_numerator
+        max_uom_srv_conversion_denominator: exc_uom_srv_conversion_denominator
+        max_uom_vcs_conversion_numerator: exc_uom_vcs_conversion_numerator
+        max_uom_vcs_conversion_denominator: exc_uom_vcs_conversion_denominator
+        max_uom_kg_conversion_numerator: exc_uom_kg_conversion_numerator
+        max_uom_kg_conversion_denominator: exc_uom_kg_conversion_denominator
+        max_uom_pal_check_flag: exc_uom_pal_check_flag
+        max_uom_pal_dq_message_output: exc_uom_pal_dq_message_output
+        max_uom_ea_check_flag: exc_uom_ea_check_flag
+        max_uom_ea_dq_message_output: exc_uom_ea_dq_message_output
+        max_uom_cs_check_flag: exc_uom_cs_check_flag
+        max_uom_cs_dq_message_output: exc_uom_cs_dq_message_output
+        max_uom_ec_check_flag: exc_uom_ec_check_flag
+        max_uom_ec_dq_message_output: exc_uom_ec_dq_message_output
+        max_uom_pc_check_flag: exc_uom_pc_check_flag
+        max_uom_pc_dq_message_output: exc_uom_pc_dq_message_output
+        max_uom_l_check_flag: exc_uom_l_check_flag
+        max_uom_l_dq_message_output: exc_uom_l_dq_message_output
+        max_uom_zli_check_flag: exc_uom_zli_check_flag
+        max_uom_zli_dq_message_output: exc_uom_zli_dq_message_output
+        max_uom_uc_check_flag: exc_uom_uc_check_flag
+        max_uom_uc_dq_message_output: exc_uom_uc_dq_message_output
+        max_uom_ctr_check_flag: exc_uom_ctr_check_flag
+        max_uom_ctr_dq_message_output: exc_uom_ctr_dq_message_output
+        max_uom_srv_check_flag: exc_uom_srv_check_flag
+        max_uom_srv_dq_message_output: exc_uom_srv_dq_message_output
+        max_uom_vcs_check_flag: exc_uom_vcs_check_flag
+        max_uom_vcs_dq_message_output: exc_uom_vcs_dq_message_output
+        max_uom_kg_check_flag: exc_uom_kg_check_flag
+        max_uom_kg_dq_message_output: exc_uom_kg_dq_message_output
+        rule_name: exc_rule_name
+        rule_code: exc_rule_code
+        quality_category: exc_quality_category
+        sap_cluster_m: exc_sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_consistency
+    context_name: join_rule_2
+    params:
+      columns:
+        material_code_m: cons_material_code
+        material_description: cons_material_description
+        material_type_code: cons_material_type_code
+        sales_org_code: cons_sales_org_code
+        base_unit_of_measure_code: cons_base_unit_of_measure_code
+        base_unit_of_measure_name: cons_base_unit_of_measure_name
+        distribution_channel_code: cons_distribution_channel_code
+        brand_code: cons_brand_code
+        brand_name: cons_brand_name
+        flavour_code: cons_flavour_code
+        flavour_name: cons_flavour_name
+        pack_type_code: cons_pack_type_code
+        pack_type_name: cons_pack_type_name
+        pack_size_code: cons_pack_size_code
+        pack_size_name: cons_pack_size_name
+        sales_unit_code: cons_sales_unit_code
+        sales_unit_name: cons_sales_unit_name
+        product_hierarchy_code: cons_product_hierarchy_code
+        product_hierarchy_name: cons_product_hierarchy_name
+        alternative_unit_of_measure_code: cons_alternative_unit_of_measure_code
+        sap_cluster_m: cons_sap_cluster
+      distinct: true
+
+#JOIN dm_cost_center
+  - kind: join
+    name: join_consistency
+    context_name: select_consistency
+    params:
+      - other:
+          select_exceptions
+        how:
+          left
+        columns:
+          cons_material_code: exc_material_code
+          cons_sap_cluster: exc_sap_cluster
+
+  - kind: add
+    name: add_completeness_checks
+    context_name: join_consistency
+    params:
+      - column: check_flag
+        expression: "CASE 
+                      WHEN cons_alternative_unit_of_measure_code='PAL' THEN exc_uom_pal_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='EA' THEN exc_uom_ea_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='CS' THEN exc_uom_cs_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='EC' THEN exc_uom_ec_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='PC' THEN exc_uom_pc_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='L' THEN exc_uom_l_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='ZLI' THEN exc_uom_zli_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='UC' THEN exc_uom_uc_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='CTR' THEN exc_uom_ctr_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='SRV' THEN exc_uom_srv_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='VCS' THEN exc_uom_vcs_check_flag
+                      WHEN cons_alternative_unit_of_measure_code='KG' THEN exc_uom_kg_check_flag
+                      ELSE ''
+                    END"
+      - column: dq_message_output
+        expression: "CASE 
+                      WHEN cons_alternative_unit_of_measure_code='PAL' THEN exc_uom_pal_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='EA' THEN exc_uom_ea_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='CS' THEN exc_uom_cs_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='EC' THEN exc_uom_ec_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='PC' THEN exc_uom_pc_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='L' THEN exc_uom_l_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='ZLI' THEN exc_uom_zli_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='UC' THEN exc_uom_uc_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='CTR' THEN exc_uom_ctr_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='SRV' THEN exc_uom_srv_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='VCS' THEN exc_uom_vcs_dq_message_output
+                      WHEN cons_alternative_unit_of_measure_code='KG' THEN exc_uom_kg_dq_message_output
+                      ELSE ''
+                    END"
+
+  - kind: filter
+    name: filter_cl1
+    context_name: join_consistency
+    params:
+      - condition:
+          cons_sap_cluster = 'CL1'
+  
+  - kind: select
+    name: select_cl1
+    context_name: filter_cl1
+    params:
+      columns:
+        cons_material_code: cl1_material_code
+        cons_material_description: cl1_material_description
+        cons_material_type_code: cl1_material_type_code
+        cons_sales_org_code: cl1_sales_org_code
+        cons_base_unit_of_measure_code: cl1_base_unit_of_measure_code
+        cons_base_unit_of_measure_name: cl1_base_unit_of_measure_name
+        cons_distribution_channel_code: cl1_distribution_channel_code
+        cons_brand_code: cl1_brand_code
+        cons_brand_name: cl1_brand_name
+        cons_flavour_code: cl1_flavour_code
+        cons_flavour_name: cl1_flavour_name
+        cons_pack_type_code: cl1_pack_type_code
+        cons_pack_type_name: cl1_pack_type_name
+        cons_pack_size_code: cl1_pack_size_code
+        cons_pack_size_name: cl1_pack_size_name
+        cons_sales_unit_code: cl1_sales_unit_code
+        cons_sales_unit_name: cl1_sales_unit_name
+        cons_product_hierarchy_code: cl1_product_hierarchy_code
+        cons_product_hierarchy_name: cl1_product_hierarchy_name
+        cons_alternative_unit_of_measure_code: cl1_alternative_unit_of_measure_code
+        cons_sap_cluster: cl1_sap_cluster
+        exc_uom_pal_conversion_numerator: cl1_uom_pal_conversion_numerator
+        exc_uom_pal_conversion_denominator: cl1_uom_pal_conversion_denominator
+        exc_uom_ea_conversion_numerator: cl1_uom_ea_conversion_numerator
+        exc_uom_ea_conversion_denominator: cl1_uom_ea_conversion_denominator
+        exc_uom_cs_conversion_numerator: cl1_uom_cs_conversion_numerator
+        exc_uom_cs_conversion_denominator: cl1_uom_cs_conversion_denominator
+        exc_uom_ec_conversion_numerator: cl1_uom_ec_conversion_numerator
+        exc_uom_ec_conversion_denominator: cl1_uom_ec_conversion_denominator
+        exc_uom_pc_conversion_numerator: cl1_uom_pc_conversion_numerator
+        exc_uom_pc_conversion_denominator: cl1_uom_pc_conversion_denominator
+        exc_uom_l_conversion_numerator: cl1_uom_l_conversion_numerator
+        exc_uom_l_conversion_denominator: cl1_uom_l_conversion_denominator
+        exc_uom_zli_conversion_numerator: cl1_uom_zli_conversion_numerator
+        exc_uom_zli_conversion_denominator: cl1_uom_zli_conversion_denominator
+        exc_uom_uc_conversion_numerator: cl1_uom_uc_conversion_numerator
+        exc_uom_uc_conversion_denominator: cl1_uom_uc_conversion_denominator
+        exc_uom_ctr_conversion_numerator: cl1_uom_ctr_conversion_numerator
+        exc_uom_ctr_conversion_denominator: cl1_uom_ctr_conversion_denominator
+        exc_uom_srv_conversion_numerator: cl1_uom_srv_conversion_numerator
+        exc_uom_srv_conversion_denominator: cl1_uom_srv_conversion_denominator
+        exc_uom_vcs_conversion_numerator: cl1_uom_vcs_conversion_numerator
+        exc_uom_vcs_conversion_denominator: cl1_uom_vcs_conversion_denominator
+        exc_uom_kg_conversion_numerator: cl1_uom_kg_conversion_numerator
+        exc_uom_kg_conversion_denominator: cl1_uom_kg_conversion_denominator
+        exc_uom_pal_check_flag: cl1_uom_pal_check_flag
+        exc_uom_ea_check_flag: cl1_uom_ea_check_flag
+        exc_uom_cs_check_flag: cl1_uom_cs_check_flag
+        exc_uom_ec_check_flag: cl1_uom_ec_check_flag
+        exc_uom_pc_check_flag: cl1_uom_pc_check_flag
+        exc_uom_l_check_flag: cl1_uom_l_check_flag
+        exc_uom_zli_check_flag: cl1_uom_zli_check_flag
+        exc_uom_uc_check_flag: cl1_uom_uc_check_flag
+        exc_uom_ctr_check_flag: cl1_uom_ctr_check_flag
+        exc_uom_srv_check_flag: cl1_uom_srv_check_flag
+        exc_uom_vcs_check_flag: cl1_uom_vcs_check_flag
+        exc_uom_kg_check_flag: cl1_uom_kg_check_flag
+        exc_rule_name: cl1_rule_name
+        exc_rule_code: cl1_rule_code
+        exc_quality_category: cl1_quality_category
+      distinct: true
+
+  - kind: filter
+    name: filter_cl2
+    context_name: join_consistency
+    params:
+      - condition:
+          cons_sap_cluster = 'CL2'
+
+  - kind: select
+    name: select_cl2
+    context_name: filter_cl2
+    params:
+      columns:
+        cons_material_code: cl2_material_code
+        cons_material_description: cl2_material_description
+        cons_material_type_code: cl2_material_type_code
+        cons_sales_org_code: cl2_sales_org_code
+        cons_base_unit_of_measure_code: cl2_base_unit_of_measure_code
+        cons_base_unit_of_measure_name: cl2_base_unit_of_measure_name
+        cons_distribution_channel_code: cl2_distribution_channel_code
+        cons_brand_code: cl2_brand_code
+        cons_brand_name: cl2_brand_name
+        cons_flavour_code: cl2_flavour_code
+        cons_flavour_name: cl2_flavour_name
+        cons_pack_type_code: cl2_pack_type_code
+        cons_pack_type_name: cl2_pack_type_name
+        cons_pack_size_code: cl2_pack_size_code
+        cons_pack_size_name: cl2_pack_size_name
+        cons_sales_unit_code: cl2_sales_unit_code
+        cons_sales_unit_name: cl2_sales_unit_name
+        cons_product_hierarchy_code: cl2_product_hierarchy_code
+        cons_product_hierarchy_name: cl2_product_hierarchy_name
+        cons_alternative_unit_of_measure_code: cl2_alternative_unit_of_measure_code
+        cons_sap_cluster: cl2_sap_cluster
+        exc_uom_pal_conversion_numerator: cl2_uom_pal_conversion_numerator
+        exc_uom_pal_conversion_denominator: cl2_uom_pal_conversion_denominator
+        exc_uom_ea_conversion_numerator: cl2_uom_ea_conversion_numerator
+        exc_uom_ea_conversion_denominator: cl2_uom_ea_conversion_denominator
+        exc_uom_cs_conversion_numerator: cl2_uom_cs_conversion_numerator
+        exc_uom_cs_conversion_denominator: cl2_uom_cs_conversion_denominator
+        exc_uom_ec_conversion_numerator: cl2_uom_ec_conversion_numerator
+        exc_uom_ec_conversion_denominator: cl2_uom_ec_conversion_denominator
+        exc_uom_pc_conversion_numerator: cl2_uom_pc_conversion_numerator
+        exc_uom_pc_conversion_denominator: cl2_uom_pc_conversion_denominator
+        exc_uom_l_conversion_numerator: cl2_uom_l_conversion_numerator
+        exc_uom_l_conversion_denominator: cl2_uom_l_conversion_denominator
+        exc_uom_zli_conversion_numerator: cl2_uom_zli_conversion_numerator
+        exc_uom_zli_conversion_denominator: cl2_uom_zli_conversion_denominator
+        exc_uom_uc_conversion_numerator: cl2_uom_uc_conversion_numerator
+        exc_uom_uc_conversion_denominator: cl2_uom_uc_conversion_denominator
+        exc_uom_ctr_conversion_numerator: cl2_uom_ctr_conversion_numerator
+        exc_uom_ctr_conversion_denominator: cl2_uom_ctr_conversion_denominator
+        exc_uom_srv_conversion_numerator: cl2_uom_srv_conversion_numerator
+        exc_uom_srv_conversion_denominator: cl2_uom_srv_conversion_denominator
+        exc_uom_vcs_conversion_numerator: cl2_uom_vcs_conversion_numerator
+        exc_uom_vcs_conversion_denominator: cl2_uom_vcs_conversion_denominator
+        exc_uom_kg_conversion_numerator: cl2_uom_kg_conversion_numerator
+        exc_uom_kg_conversion_denominator: cl2_uom_kg_conversion_denominator
+        exc_uom_pal_check_flag: cl2_uom_pal_check_flag
+        exc_uom_ea_check_flag: cl2_uom_ea_check_flag
+        exc_uom_cs_check_flag: cl2_uom_cs_check_flag
+        exc_uom_ec_check_flag: cl2_uom_ec_check_flag
+        exc_uom_pc_check_flag: cl2_uom_pc_check_flag
+        exc_uom_l_check_flag: cl2_uom_l_check_flag
+        exc_uom_zli_check_flag: cl2_uom_zli_check_flag
+        exc_uom_uc_check_flag: cl2_uom_uc_check_flag
+        exc_uom_ctr_check_flag: cl2_uom_ctr_check_flag
+        exc_uom_srv_check_flag: cl2_uom_srv_check_flag
+        exc_uom_vcs_check_flag: cl2_uom_vcs_check_flag
+        exc_uom_kg_check_flag: cl2_uom_kg_check_flag
+        exc_rule_name: cl2_rule_name
+        exc_rule_code: cl2_rule_code
+        exc_quality_category: cl2_quality_category
+      distinct: true
+
+#JOIN cl1_cl2
+  - kind: join
+    name: join_cl1_cl2
+    context_name: select_cl1
+    params:
+      - other:
+          select_cl2
+        how:
+          left
+        columns:
+          cl1_material_code: cl2_material_code
+          cl1_alternative_unit_of_measure_code: cl2_alternative_unit_of_measure_code
+
+  - kind: add
+    name: add_consistency_checks
+    context_name: join_cl1_cl2
+    params:
+      - column: rule_code
+        expression: "'rule_2_co'"
+      - column: quality_category
+        expression: "'Consistency'"
+# ------------------------------------------------PAL-------------------------------------------
+      - column: uom_pal_check_flag
+        expression: "'-1'"
+      - column: uom_pal_dq_message_output
+        expression: "'N/A'"
+# ------------------------------------------------EA-------------------------------------------
+      - column: uom_ea_check_flag
+        expression: "
+                    CASE 
+                      WHEN ((cl1_uom_ea_check_flag IS NULL OR cl1_uom_ea_check_flag = '') AND (cl2_uom_ea_check_flag IS NULL OR cl2_uom_ea_check_flag = '')) OR (cl1_uom_ea_check_flag = '0' AND cl2_uom_ea_check_flag = '0') THEN ''
+                        ELSE
+                        CASE
+                          WHEN cl1_uom_ea_conversion_numerator = cl2_uom_ea_conversion_numerator AND cl1_uom_ea_conversion_denominator = cl2_uom_ea_conversion_denominator THEN '1'
+                          ELSE '0'
+                        END 
+                    END"
+      - column: uom_ea_dq_message_output
+        expression: "CASE WHEN uom_ea_check_flag = '' THEN 'N/A' WHEN uom_ea_check_flag = '1' THEN 'OK' ELSE 'Inconsistent' END"
+# ------------------------------------------------CS-------------------------------------------
+      - column: uom_cs_check_flag
+        expression: "'-1'"
+      - column: uom_cs_dq_message_output
+        expression: "'N/A'"
+# ------------------------------------------------EC-------------------------------------------
+      - column: uom_ec_check_flag
+        expression: "
+                    CASE 
+                      WHEN ((cl1_uom_ec_check_flag IS NULL OR cl1_uom_ec_check_flag = '') AND (cl2_uom_ec_check_flag IS NULL OR cl2_uom_ec_check_flag = '')) OR (cl1_uom_ec_check_flag = '0' AND cl2_uom_ec_check_flag = '0') THEN ''
+                        ELSE
+                        CASE
+                          WHEN cl1_uom_ec_conversion_numerator = cl2_uom_ec_conversion_numerator AND cl1_uom_ec_conversion_denominator = cl2_uom_ec_conversion_denominator THEN '1'
+                          ELSE '0'
+                        END 
+                    END"
+      - column: uom_ec_dq_message_output
+        expression: "CASE WHEN uom_ec_check_flag = '' THEN 'N/A' WHEN uom_ec_check_flag = '1' THEN 'OK' ELSE 'Inconsistent' END"
+# ------------------------------------------------PC-------------------------------------------
+      - column: uom_pc_check_flag
+        expression: "
+                    CASE 
+                      WHEN ((cl1_uom_pc_check_flag IS NULL OR cl1_uom_pc_check_flag = '') AND (cl2_uom_pc_check_flag IS NULL OR cl2_uom_pc_check_flag = '')) OR (cl1_uom_pc_check_flag = '0' AND cl2_uom_pc_check_flag = '0') THEN ''
+                        ELSE
+                        CASE
+                          WHEN cl1_uom_pc_conversion_numerator = cl2_uom_pc_conversion_numerator AND cl1_uom_pc_conversion_denominator = cl2_uom_pc_conversion_denominator THEN '1'
+                          ELSE '0'
+                        END 
+                    END"
+      - column: uom_pc_dq_message_output
+        expression: "CASE WHEN uom_pc_check_flag = '' THEN 'N/A' WHEN uom_pc_check_flag = '1' THEN 'OK' ELSE 'Inconsistent' END"
+# ------------------------------------------------L-------------------------------------------
+      - column: uom_l_check_flag
+        expression: "'-1'"
+      - column: uom_l_dq_message_output
+        expression: "'N/A'"
+# ------------------------------------------------ZLI-------------------------------------------
+      - column: uom_zli_check_flag
+        expression: "'-1'"
+      - column: uom_zli_dq_message_output
+        expression: "'N/A'"
+# ------------------------------------------------UC-------------------------------------------
+      - column: uom_uc_check_flag
+        expression: "'-1'"
+      - column: uom_uc_dq_message_output
+        expression: "'N/A'"
+# ------------------------------------------------CTR-------------------------------------------
+      - column: uom_ctr_check_flag
+        expression: "
+                    CASE 
+                      WHEN ((cl1_uom_ctr_check_flag IS NULL OR cl1_uom_ctr_check_flag = '') AND (cl2_uom_ctr_check_flag IS NULL OR cl2_uom_ctr_check_flag = '')) OR (cl1_uom_ctr_check_flag = '0' AND cl2_uom_ctr_check_flag = '0') THEN ''
+                        ELSE
+                        CASE
+                          WHEN cl1_uom_ctr_conversion_numerator = cl2_uom_ctr_conversion_numerator AND cl1_uom_ctr_conversion_denominator = cl2_uom_ctr_conversion_denominator THEN '1'
+                          ELSE '0'
+                        END 
+                    END"
+      - column: uom_ctr_dq_message_output
+        expression: "CASE WHEN uom_ctr_check_flag = '' THEN 'N/A' WHEN uom_ctr_check_flag = '1' THEN 'OK' ELSE 'Inconsistent' END"
+# ------------------------------------------------SRV-------------------------------------------
+      - column: uom_srv_check_flag
+        expression: "
+                    CASE 
+                      WHEN ((cl1_uom_srv_check_flag IS NULL OR cl1_uom_srv_check_flag = '') AND (cl2_uom_srv_check_flag IS NULL OR cl2_uom_srv_check_flag = '')) OR (cl1_uom_srv_check_flag = '0' AND cl2_uom_srv_check_flag = '0') THEN ''
+                        ELSE
+                        CASE
+                          WHEN cl1_uom_srv_conversion_numerator = cl2_uom_srv_conversion_numerator AND cl1_uom_srv_conversion_denominator = cl2_uom_srv_conversion_denominator THEN '1'
+                          ELSE '0'
+                        END 
+                    END"
+      - column: uom_srv_dq_message_output
+        expression: "CASE WHEN uom_srv_check_flag = '' THEN 'N/A' WHEN uom_srv_check_flag = '1' THEN 'OK' ELSE 'Inconsistent' END"
+# ------------------------------------------------VCS-------------------------------------------
+      - column: uom_vcs_check_flag
+        expression: "
+                    CASE 
+                      WHEN ((cl1_uom_vcs_check_flag IS NULL OR cl1_uom_vcs_check_flag = '') AND (cl2_uom_vcs_check_flag IS NULL OR cl2_uom_vcs_check_flag = '')) OR (cl1_uom_vcs_check_flag = '0' AND cl2_uom_vcs_check_flag = '0') THEN ''
+                        ELSE
+                        CASE
+                          WHEN cl1_uom_vcs_conversion_numerator = cl2_uom_vcs_conversion_numerator AND cl1_uom_vcs_conversion_denominator = cl2_uom_vcs_conversion_denominator THEN '1'
+                          ELSE '0'
+                        END 
+                    END"
+      - column: uom_vcs_dq_message_output
+        expression: "CASE WHEN uom_vcs_check_flag = '' THEN 'N/A' WHEN uom_vcs_check_flag = '1' THEN 'OK' ELSE 'Inconsistent' END"
+# ------------------------------------------------KG-------------------------------------------
+      - column: uom_kg_check_flag
+        expression: "'-1'"
+      - column: uom_kg_dq_message_output
+        expression: "'N/A'"
+      - column: sap_cluster
+        expression: "'Both'"
+      - column: check_flag
+        expression: "CASE 
+                      WHEN cl1_alternative_unit_of_measure_code='PAL' THEN uom_pal_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='EA' THEN uom_ea_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='CS' THEN uom_cs_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='EC' THEN uom_ec_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='PC' THEN uom_pc_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='L' THEN uom_l_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='ZLI' THEN uom_zli_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='UC' THEN uom_uc_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='CTR' THEN uom_ctr_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='SRV' THEN uom_srv_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='VCS' THEN uom_vcs_check_flag
+                      WHEN cl1_alternative_unit_of_measure_code='KG' THEN uom_kg_check_flag
+                      ELSE ''
+                    END"
+      - column: dq_message_output
+        expression: "CASE 
+                      WHEN cl1_alternative_unit_of_measure_code='PAL' THEN uom_pal_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='EA' THEN uom_ea_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='CS' THEN uom_cs_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='EC' THEN uom_ec_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='PC' THEN uom_pc_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='L' THEN uom_l_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='ZLI' THEN uom_zli_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='UC' THEN uom_uc_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='CTR' THEN uom_ctr_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='SRV' THEN uom_srv_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='VCS' THEN uom_vcs_dq_message_output
+                      WHEN cl1_alternative_unit_of_measure_code='KG' THEN uom_kg_dq_message_output
+                      ELSE ''
+                    END"
+
+  - kind: filter
+    name: filter_consistency_uom_out_of_scope
+    context_name: add_consistency_checks
+    params:
+      - condition:
+          check_flag IS NOT NULL AND check_flag != '-1'
+
+  - kind: select
+    name: select_consistency_final
+    context_name: filter_consistency_uom_out_of_scope
+    params:
+      columns:
+        cl1_material_code: material_code
+        cl1_material_description: material_description
+        cl1_material_type_code: material_type_code
+        cl1_sales_org_code: sales_org_code
+        cl1_base_unit_of_measure_code: base_unit_of_measure_code
+        cl1_base_unit_of_measure_name: base_unit_of_measure_name
+        cl1_distribution_channel_code: distribution_channel_code
+        cl1_brand_code: brand_code
+        cl1_brand_name: brand_name
+        cl1_flavour_code: flavour_code
+        cl1_flavour_name: flavour_name
+        cl1_pack_type_code: pack_type_code
+        cl1_pack_type_name: pack_type_name
+        cl1_pack_size_code: pack_size_code
+        cl1_pack_size_name: pack_size_name
+        cl1_sales_unit_code: sales_unit_code
+        cl1_sales_unit_name: sales_unit_name
+        cl1_product_hierarchy_code: product_hierarchy_code
+        cl1_product_hierarchy_name: product_hierarchy_name
+        cl1_uom_pal_conversion_numerator: uom_pal_conversion_numerator
+        cl1_uom_pal_conversion_denominator: uom_pal_conversion_denominator
+        cl1_uom_ea_conversion_numerator: uom_ea_conversion_numerator
+        cl1_uom_ea_conversion_denominator: uom_ea_conversion_denominator
+        cl1_uom_cs_conversion_numerator: uom_cs_conversion_numerator
+        cl1_uom_cs_conversion_denominator: uom_cs_conversion_denominator
+        cl1_uom_ec_conversion_numerator: uom_ec_conversion_numerator
+        cl1_uom_ec_conversion_denominator: uom_ec_conversion_denominator
+        cl1_uom_pc_conversion_numerator: uom_pc_conversion_numerator
+        cl1_uom_pc_conversion_denominator: uom_pc_conversion_denominator
+        cl1_uom_l_conversion_numerator: uom_l_conversion_numerator
+        cl1_uom_l_conversion_denominator: uom_l_conversion_denominator
+        cl1_uom_zli_conversion_numerator: uom_zli_conversion_numerator
+        cl1_uom_zli_conversion_denominator: uom_zli_conversion_denominator
+        cl1_uom_uc_conversion_numerator: uom_uc_conversion_numerator
+        cl1_uom_uc_conversion_denominator: uom_uc_conversion_denominator
+        cl1_uom_ctr_conversion_numerator: uom_ctr_conversion_numerator
+        cl1_uom_ctr_conversion_denominator: uom_ctr_conversion_denominator
+        cl1_uom_srv_conversion_numerator: uom_srv_conversion_numerator
+        cl1_uom_srv_conversion_denominator: uom_srv_conversion_denominator
+        cl1_uom_vcs_conversion_numerator: uom_vcs_conversion_numerator
+        cl1_uom_vcs_conversion_denominator: uom_vcs_conversion_denominator
+        cl1_uom_kg_conversion_numerator: uom_kg_conversion_numerator
+        cl1_uom_kg_conversion_denominator: uom_kg_conversion_denominator
+        cl1_alternative_unit_of_measure_code: alternative_unit_of_measure_code
+        cl1_rule_name: rule_name
+        rule_code: rule_code
+        quality_category: quality_category
+        check_flag: check_flag
+        dq_message_output: dq_message_output
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_completeness_uom_out_of_scope
+    context_name: add_completeness_checks
+    params:
+      - condition:
+          check_flag IS NOT NULL AND check_flag != '-1'
+
+  - kind: select
+    name: select_completeness_final
+    context_name: filter_completeness_uom_out_of_scope
+    params:
+      columns:
+        cons_material_code: material_code
+        cons_material_description: material_description
+        cons_material_type_code: material_type_code
+        cons_sales_org_code: sales_org_code
+        cons_base_unit_of_measure_code: base_unit_of_measure_code
+        cons_base_unit_of_measure_name: base_unit_of_measure_name
+        cons_distribution_channel_code: distribution_channel_code
+        cons_brand_code: brand_code
+        cons_brand_name: brand_name
+        cons_flavour_code: flavour_code
+        cons_flavour_name: flavour_name
+        cons_pack_type_code: pack_type_code
+        cons_pack_type_name: pack_type_name
+        cons_pack_size_code: pack_size_code
+        cons_pack_size_name: pack_size_name
+        cons_sales_unit_code: sales_unit_code
+        cons_sales_unit_name: sales_unit_name
+        cons_product_hierarchy_code: product_hierarchy_code
+        cons_product_hierarchy_name: product_hierarchy_name
+        exc_uom_pal_conversion_numerator: uom_pal_conversion_numerator
+        exc_uom_pal_conversion_denominator: uom_pal_conversion_denominator
+        exc_uom_ea_conversion_numerator: uom_ea_conversion_numerator
+        exc_uom_ea_conversion_denominator: uom_ea_conversion_denominator
+        exc_uom_cs_conversion_numerator: uom_cs_conversion_numerator
+        exc_uom_cs_conversion_denominator: uom_cs_conversion_denominator
+        exc_uom_ec_conversion_numerator: uom_ec_conversion_numerator
+        exc_uom_ec_conversion_denominator: uom_ec_conversion_denominator
+        exc_uom_pc_conversion_numerator: uom_pc_conversion_numerator
+        exc_uom_pc_conversion_denominator: uom_pc_conversion_denominator
+        exc_uom_l_conversion_numerator: uom_l_conversion_numerator
+        exc_uom_l_conversion_denominator: uom_l_conversion_denominator
+        exc_uom_zli_conversion_numerator: uom_zli_conversion_numerator
+        exc_uom_zli_conversion_denominator: uom_zli_conversion_denominator
+        exc_uom_uc_conversion_numerator: uom_uc_conversion_numerator
+        exc_uom_uc_conversion_denominator: uom_uc_conversion_denominator
+        exc_uom_ctr_conversion_numerator: uom_ctr_conversion_numerator
+        exc_uom_ctr_conversion_denominator: uom_ctr_conversion_denominator
+        exc_uom_srv_conversion_numerator: uom_srv_conversion_numerator
+        exc_uom_srv_conversion_denominator: uom_srv_conversion_denominator
+        exc_uom_vcs_conversion_numerator: uom_vcs_conversion_numerator
+        exc_uom_vcs_conversion_denominator: uom_vcs_conversion_denominator
+        exc_uom_kg_conversion_numerator: uom_kg_conversion_numerator
+        exc_uom_kg_conversion_denominator: uom_kg_conversion_denominator
+        cons_alternative_unit_of_measure_code: alternative_unit_of_measure_code
+        exc_rule_name: rule_name
+        exc_rule_code: rule_code
+        exc_quality_category: quality_category
+        check_flag: check_flag
+        dq_message_output: dq_message_output
+        cons_sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_completeness_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_consistency_final
+
+# --------------------------------Write_DETAILED---------------------------------
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_conversion_factors
+      namespace: golden
+      object_name: rule2_ds
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+# ---------------------------------AGGREGATED------------------------------------
+
+  - kind: add
+    name: add_checks
+    context_name: union_all
+    params:
+      - column: total_checks
+        expression: IF(check_flag != '', 1, 0)
+      - column: invalid_checks
+        expression: IF(check_flag = '0', 1, 0)
+
+  - kind: group
+    name: aggregated_data
+    context_name: add_checks
+    params:
+      - aggs:
+          material_code: count
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - sap_cluster
+        - alternative_unit_of_measure_code
+        - rule_name
+        - rule_code
+        - quality_category
+
+  - kind: add
+    name: add_loading_date
+    context_name: aggregated_data
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_aggregated_data
+    context_name: add_loading_date
+    params:
+      columns:
+        sap_cluster: sap_cluster
+        alternative_unit_of_measure_code: alternative_unit_of_measure_code
+        rule_name: rule_name
+        rule_code: rule_code
+        count_material_code: total_records
+        sum_total_checks: total_checks
+        quality_category: quality_category
+        sum_invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+# --------------------------------Write_AGGREGATED---------------------------------
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_conversion_factors
+      namespace: golden
+      object_name: rule2_ah
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

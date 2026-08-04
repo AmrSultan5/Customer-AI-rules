@@ -1,0 +1,451 @@
+transform:
+  name: dm_product_universe
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+      schema_version: v5
+
+  - kind: filter
+    name: filter_pg_is_basic_scope
+    params:
+      - condition:
+          is_basic_scope='1'
+
+  - kind: select
+    name: select_dm_product_general
+    params:
+      columns:
+        material_code: material_code
+        material_status_code: material_status_code_pg
+        material_type_code: material_type_code_pg
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+      schema_version: v8
+
+  - kind: filter
+    name: filter_so_is_basic_scope
+    params:
+      - condition:
+          is_basic_scope='1'
+
+  - kind: select
+    name: select_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code
+        sales_org_code: sales_org_code
+        country_code: country_code
+        distribution_channel_code: distribution_channel_code
+        material_status_code: material_status_code_so
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_product_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_plant
+      schema_version: v8
+
+  - kind: filter
+    name: filter_pl_is_basic_scope
+    params:
+      - condition:
+          deletion_flag <> 'X' AND plant_code NOT IN ('4110','4111','4112','4113','4114','4115','4116','4117','4118','4119','4120','4121','4122')
+
+  - kind: select
+    name: select_dm_product_plant
+    params:
+      columns:
+        material_code: material_code
+        plant_code: plant_code
+        material_status_code: material_status_code_pp
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_pg_so_pp
+    context_name: select_dm_product_sales_organization
+    params:
+      - other:
+          select_dm_product_general
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_plant
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_conditions_sales_org_01
+    context_name: join_pg_so_pp
+    params:
+      - condition:
+          sales_org_code <> '0001' and distribution_channel_code = '01' and material_status_code_so <> '03'
+
+  - kind: group
+    name: group_sales_org_code_01
+    params:
+      - aggs:
+          sales_org_code: count
+        by:
+        -  material_code
+        -  country_code
+        -  sap_cluster
+
+  - kind: filter
+    name: filter_conditions_plant
+    context_name: join_pg_so_pp
+    params:
+      - condition:
+          material_status_code_pp not in('99', '97')
+
+  - kind: group
+    name: group_plant_code
+    params:
+      - aggs:
+          plant_code: count
+        by:
+        -  material_code
+        -  country_code
+        -  sap_cluster
+
+
+  - kind: filter
+    name: filter_conditions_sales_org_not_01
+    context_name: join_pg_so_pp
+    params:
+      - condition:
+          sales_org_code <> '0001' and distribution_channel_code = '01'
+
+  - kind: group
+    name: group_sales_org_code_not_01
+    params:
+      - aggs:
+          sales_org_code: count
+        by:
+        -  material_code
+        -  country_code
+        -  sap_cluster
+
+
+  - kind: select
+    name: select_sales_org_code_01
+    context_name: group_sales_org_code_01
+    params:
+      columns:
+        material_code: material_code
+        count_sales_org_code: count_sales_org_code_01
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_sales_org_code_not_01
+    context_name: group_sales_org_code_not_01
+    params:
+      columns:
+        material_code: material_code
+        count_sales_org_code: count_sales_org_code_not_01
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+  - kind: join
+    name: join_pg_so_with_counts
+    context_name: join_pg_so_pp
+    params:
+      - other:
+          select_sales_org_code_01
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_sales_org_code_not_01
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          group_plant_code
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+
+
+  - kind: filter
+    name: filter_condition_1
+    context_name: join_pg_so_with_counts
+    params:
+      - condition:
+          sales_org_code <> '0001' and distribution_channel_code = '01' and (count_sales_org_code_01 = 0 or isnull(count_sales_org_code_01)) and (count_plant_code = 0 or isnull(count_plant_code)) and material_type_code_pg LIKE ('ZFG%')
+
+  - kind: filter
+    name: filter_condition_2
+    context_name: join_pg_so_with_counts
+    params:
+      - condition:
+          sales_org_code <> '0001' and distribution_channel_code <> '01' and (count_sales_org_code_01 = 0 or isnull(count_sales_org_code_01)) and (count_plant_code = 0 or isnull(count_plant_code)) and material_type_code_pg LIKE ('ZFG%')
+
+  - kind: filter
+    name: filter_condition_3
+    context_name: join_pg_so_with_counts
+    params:
+      - condition:
+          material_status_code_pg IN('99', 'Z8', 'Z9')
+
+
+  - kind: filter
+    name: filter_condition_4
+    context_name: join_pg_so_with_counts
+    params:
+      - condition:
+          sales_org_code <> '0001'  and material_type_code_pg NOT LIKE ('ZFG%') and (count_plant_code = 0 or isnull(count_plant_code))
+
+
+
+
+  - kind: select
+    name: select_filter_condition_1
+    context_name: filter_condition_1
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_filter_condition_2
+    context_name: filter_condition_2
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_filter_condition_3
+    context_name: filter_condition_3
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_filter_condition_4
+    context_name: filter_condition_4
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: join
+    name: join_anti
+    context_name: join_pg_so_with_counts
+    params:
+      - other:
+          select_filter_condition_1
+        how:
+          anti
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_filter_condition_2
+        how:
+          anti
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_filter_condition_3
+        how:
+          anti
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_filter_condition_4
+        how:
+          anti
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_conditions
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        sales_org_code: sales_org_code
+      distinct: true
+
+
+  - kind: select
+    name: select_condition_5
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        sales_org_code: sales_org_code
+      distinct: true
+
+### check how much is sales_org = 0001 in the material at the country level
+  - kind: group
+    name: group_sales_org_code_0001
+    params:
+      - aggs:
+          sales_org_code: count
+        by:
+        -  material_code
+        -  country_code
+        -  sap_cluster
+
+#### check how much is sales_org = 0001 in the material at the sap_cluster level
+  - kind: group
+    name: group_sales_org_code_0001_only
+    context_name: select_condition_5
+    params:
+      - aggs:
+          sales_org_code: count
+        by:
+        -  material_code
+        -  sap_cluster
+
+  - kind: select
+    name: select_sales_org_code_0001_only
+    params:
+      columns:
+        material_code: material_code
+        sap_cluster: sap_cluster
+        count_sales_org_code: count_sales_org_code_0001
+      distinct: true
+
+  - kind: join
+    name: join_pg_so_with_counts_condition_5
+    context_name: select_conditions
+    params:
+      - other:
+          group_sales_org_code_0001
+        how:
+          left
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_sales_org_code_0001_only
+        how:
+          left
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+
+
+### Reject values where sales_org_code = 0001 and there is no other sales_org_code besides it
+  - kind: filter
+    name: filter_condition_5
+    params:
+      - condition:
+          sales_org_code = '0001' and count_sales_org_code = 1 and count_sales_org_code_0001 = 1
+
+  - kind: join
+    name: join_anti_final
+    context_name: join_pg_so_with_counts_condition_5
+    params:
+      - other:
+          filter_condition_5
+        how:
+          anti
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_product_universe
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_universe
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

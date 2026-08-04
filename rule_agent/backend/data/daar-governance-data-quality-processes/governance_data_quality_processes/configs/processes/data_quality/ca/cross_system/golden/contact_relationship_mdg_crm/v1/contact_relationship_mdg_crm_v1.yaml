@@ -1,0 +1,2750 @@
+transform:
+  name: cross_system_contact_relationship_mdg_crm
+  operations:
+
+  - kind: read_dataio
+    name: read_mdg_but000_1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_but051_1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: contact_person_relationships
+      object_name: but051
+      schema_version: v1
+
+  - kind: filter
+    name: read_mdg_but051
+    context_name: read_mdg_but051_1
+    params:
+      - condition: reltyp = 'BUR001' and partner1 like any ('96%','12%','28%','13%','27%','40%','18%','32%','35%','30%','25%','16%','34%','29%','42%','33%','31%','17%','15%','95%','94%','24%','26%','14%','21%','19%','22%','47%')
+
+########################################
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_mdg_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+      distinct: true
+
+  - kind: filter
+    name: filter_mdg_kna1
+    context_name: select_mdg_kna1
+    params:
+      - condition: ktokd LIKE ANY ('7%','9%') AND aufsd NOT IN ('E','G','S1','S','NH','S3','S4','SY','SP','R','U')
+
+
+########################################
+
+
+  - kind: read_dataio
+    name: read_mdg_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_adr2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr2
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_adr3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr3
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_mdg_adr6
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr6
+      schema_version: v1
+
+
+##################################################
+  - kind: filter
+    name: read_mdg_but000
+    context_name: read_mdg_but000_1
+    params:
+      - condition: persnumber <> ''
+##################################################
+  - kind: select
+    name: select_mdg_but000_columns
+    context_name: read_mdg_but000
+    params:
+      columns:
+        partner: partner
+        persnumber: persnumber
+        partner_guid: partner_guid
+        xdele: xdele_mdg_but000_temp
+        name_last: name_last_mdg_but000_temp
+        name_first: name_first_mdg_but000_temp
+        namcountry: namcountry_mdg_but000_temp
+      distinct: true
+
+  - kind: add
+    name: select_mdg_but000_cleanse
+    context_name: select_mdg_but000_columns
+    params:
+      - column: xdele_mdg_but000
+        expression: coalesce(xdele_mdg_but000_temp,'')
+      - column: name_last_mdg_but000
+        expression: coalesce(name_last_mdg_but000_temp,'')
+      - column: name_first_mdg_but000
+        expression: coalesce(name_first_mdg_but000_temp,'')
+      - column: namcountry_mdg_but000
+        expression: coalesce(namcountry_mdg_but000_temp,'')
+        
+  - kind: select
+    name: select_mdg_but000
+    context_name: select_mdg_but000_cleanse
+    params:
+      columns:
+        partner: partner_mdg_but000
+        persnumber: persnumber_mdg_but000
+        partner_guid: partner_guid_mdg_but000
+        xdele_mdg_but000: xdele_mdg_but000
+        name_last_mdg_but000: name_last_mdg_but000
+        name_first_mdg_but000: name_first_mdg_but000
+        namcountry_mdg_but000: namcountry_mdg_but000
+      distinct: true
+##################################################
+
+
+
+
+
+  - kind: select
+    name: select_mdg_but000_lookup_select
+    context_name: read_mdg_but000_1
+    params:
+      columns:
+        partner: partner_mdg_but000_lookup
+        bu_group: bu_group_mdg_but000_lookup
+      distinct: true
+
+
+
+
+##################################################
+  - kind: filter
+    name: select_mdg_but000_lookup
+    context_name: select_mdg_but000_lookup_select
+    params:
+      - condition: bu_group LIKE '7%' OR bu_group LIKE '9%'
+##################################################
+
+  - kind: select
+    name: mdg_but051_select
+    context_name: read_mdg_but051
+    params:
+      columns:
+        relnr: relnr_mdg_but051_temp
+        partner1: partner1
+        partner2: partner2
+        reltyp: reltyp
+        pafkt: pafkt_mdg_but051_temp
+      distinct: true
+
+  - kind: add
+    name: mdg_but051_cleanse
+    context_name: mdg_but051_select
+    params:
+      - column: relnr_mdg_but051
+        expression: coalesce(relnr_mdg_but051_temp,'')
+      - column: pafkt_mdg_but051
+        expression: coalesce(pafkt_mdg_but051_temp,'')
+
+  - kind: select
+    name: mdg_but051
+    context_name: mdg_but051_cleanse
+    params:
+      columns:
+        relnr_mdg_but051: relnr_mdg_but051
+        partner1: partner1_mdg_but051
+        partner2: partner2_mdg_but051
+        reltyp: reltyp_mdg_but051
+        pafkt_mdg_but051: pafkt_mdg_but051
+      distinct: true
+        
+
+###################################################
+  - kind: join
+    name: select_mdg_but051
+    context_name: mdg_but051
+    params:
+      - other:
+          filter_mdg_kna1
+        how:
+          inner
+        columns:
+          partner1_mdg_but051: kunnr
+###################################################
+
+
+
+
+
+  - kind: select
+    name: select_mdg_but020
+    context_name: read_mdg_but020
+    params:
+      columns:
+        partner: partner_mdg_but020
+        addrnumber: addrnumber_mdg_but020
+      distinct: true
+########################################################################
+  - kind: select
+    name: select_mdg_adr2_select
+    context_name: read_mdg_adr2
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        r3_user: r3_user_mdg_adr2_temp
+        telnr_long: telnr_long_mdg_adr2_temp
+        consnumber: consnumber_mdg_adr2_temp
+        flgdefault: flgdefault_mdg_adr2_temp     
+      distinct: true
+
+  - kind: add
+    name: select_mdg_adr2_cleanse
+    context_name: select_mdg_adr2_select
+    params:
+      - column: addrnumber_mdg_adr2
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_mdg_adr2
+        expression: coalesce(persnumber_temp,'')
+      - column: r3_user_mdg_adr2
+        expression: coalesce(r3_user_mdg_adr2_temp,'')
+      - column: telnr_long_mdg_adr2
+        expression: coalesce(telnr_long_mdg_adr2_temp,'')
+      - column: consnumber_mdg_adr2
+        expression: coalesce(consnumber_mdg_adr2_temp,'')
+      - column: flgdefault_mdg_adr2
+        expression: coalesce(flgdefault_mdg_adr2_temp,'')
+        
+  - kind: select
+    name: select_mdg_adr2
+    context_name: select_mdg_adr2_cleanse
+    params:
+      columns:
+        addrnumber_mdg_adr2: addrnumber_mdg_adr2
+        persnumber_mdg_adr2: persnumber_mdg_adr2
+        r3_user_mdg_adr2: r3_user_mdg_adr2
+        telnr_long_mdg_adr2: telnr_long_mdg_adr2
+        consnumber_mdg_adr2: consnumber_mdg_adr2
+        flgdefault_mdg_adr2: flgdefault_mdg_adr2     
+      distinct: true 
+
+##################################################################
+
+  - kind: select
+    name: select_mdg_adr3_select
+    context_name: read_mdg_adr3
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        fax_number: fax_number_mdg_adr3_temp
+        consnumber: consnumber_mdg_adr3_temp
+        flgdefault: flgdefault_mdg_adr3_temp   
+      distinct: true
+
+  - kind: add
+    name: select_mdg_adr3_cleanse
+    context_name: select_mdg_adr3_select
+    params:
+      - column: addrnumber_mdg_adr3
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_mdg_adr3
+        expression: coalesce(persnumber_temp,'')
+      - column: fax_number_mdg_adr3
+        expression: coalesce(fax_number_mdg_adr3_temp,'')
+      - column: consnumber_mdg_adr3
+        expression: coalesce(consnumber_mdg_adr3_temp,'')
+      - column: flgdefault_mdg_adr3
+        expression: coalesce(flgdefault_mdg_adr3_temp,'')
+        
+  - kind: select
+    name: select_mdg_adr3
+    context_name: select_mdg_adr3_cleanse
+    params:
+      columns:
+        addrnumber_mdg_adr3: addrnumber_mdg_adr3
+        persnumber_mdg_adr3: persnumber_mdg_adr3
+        fax_number_mdg_adr3: fax_number_mdg_adr3
+        consnumber_mdg_adr3: consnumber_mdg_adr3
+        flgdefault_mdg_adr3: flgdefault_mdg_adr3
+      distinct: true 
+
+##################################################################
+
+
+
+
+  - kind: select
+    name: select_mdg_adr6_select
+    context_name: read_mdg_adr6
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        smtp_addr: smtp_addr_mdg_adr6_temp
+        consnumber: consnumber_mdg_adr6_temp
+        flgdefault: flgdefault_mdg_adr6_temp
+      distinct: true
+
+  - kind: add
+    name: select_mdg_adr6_cleanse
+    context_name: select_mdg_adr6_select
+    params:
+      - column: addrnumber_mdg_adr6
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_mdg_adr6
+        expression: coalesce(persnumber_temp,'')
+      - column: smtp_addr_mdg_adr6
+        expression: coalesce(smtp_addr_mdg_adr6_temp,'')
+      - column: consnumber_mdg_adr6
+        expression: coalesce(consnumber_mdg_adr6_temp,'')
+      - column: flgdefault_mdg_adr6
+        expression: coalesce(flgdefault_mdg_adr6_temp,'')
+        
+  - kind: select
+    name: select_mdg_adr6
+    context_name: select_mdg_adr6_cleanse
+    params:
+      columns:
+        addrnumber_mdg_adr6: addrnumber_mdg_adr6
+        persnumber_mdg_adr6: persnumber_mdg_adr6
+        smtp_addr_mdg_adr6: smtp_addr_mdg_adr6
+        consnumber_mdg_adr6: consnumber_mdg_adr6
+        flgdefault_mdg_adr6: flgdefault_mdg_adr6
+      distinct: true 
+
+##################################################################
+
+
+
+
+
+  - kind: add
+    name: add_mdg_but051
+    context_name: select_mdg_but051
+    params:
+      - column: initials_mdg_but051
+        expression: if(substr(partner1_mdg_but051, 1, 1) = 'P',3 ,
+                    if(substr(partner1_mdg_but051, 1, 3) = '000', 5, 2))
+      - column: mdg_country_mdg_but051
+        expression: CASE 
+                      WHEN initials_mdg_but051 = 2 THEN 
+                        CASE SUBSTRING(partner1_mdg_but051, 1, 2)
+                          WHEN '96' THEN 'AM'
+                          WHEN '12' THEN 'AT'
+                          WHEN '28' THEN 'BA'
+                          WHEN '13' THEN 'BG'
+                          WHEN '23' THEN 'BY'
+                          WHEN '27' THEN 'CH'
+                          WHEN '18' THEN 'CZ'
+                          WHEN '32' THEN 'EE'
+                          WHEN '35' THEN 'GB'
+                          WHEN '30' THEN 'GR'
+                          WHEN '25' THEN 'HR'
+                          WHEN '16' THEN 'HU'
+                          WHEN '34' THEN 'IE'
+                          WHEN '29' THEN 'IT'
+                          WHEN '42' THEN 'KV'
+                          WHEN '33' THEN 'LT'
+                          WHEN '31' THEN 'LV'
+                          WHEN '17' THEN 'MD'
+                          WHEN '15' THEN 'ME'
+                          WHEN '95' THEN 'MK'
+                          WHEN '94' THEN 'NG'
+                          WHEN '24' THEN 'PL'
+                          WHEN '26' THEN 'RO'
+                          WHEN '38' THEN 'RU'
+                          WHEN '21' THEN 'SI'
+                          WHEN '19' THEN 'SK'
+                          WHEN '14' THEN 'RS'
+                          WHEN '22' THEN 'UA'
+                          WHEN '40' THEN 'CY'
+                          WHEN '47' THEN 'EG'
+                          ELSE NULL
+                        END
+                      WHEN initials_mdg_but051 = 3 THEN 
+                        CASE SUBSTRING(partner1_mdg_but051, 1, 3)
+                          WHEN 'P96' THEN 'AM'
+                          WHEN 'P11' THEN 'AT'
+                          WHEN 'P86' THEN 'BA'
+                          WHEN 'P49' THEN 'BG'
+                          WHEN 'P23' THEN 'BY'
+                          WHEN 'P55' THEN 'CH'
+                          WHEN 'P51' THEN 'CY'
+                          WHEN 'P45' THEN 'CZ'
+                          WHEN 'P32' THEN 'EE'
+                          WHEN 'P79' THEN 'GB'
+                          WHEN 'P12' THEN 'GR'
+                          WHEN 'P80' THEN 'HR'
+                          WHEN 'P28' THEN 'HU'
+                          WHEN 'P78' THEN 'IE'
+                          WHEN 'P63' THEN 'IT'
+                          WHEN 'P92' THEN 'KV'
+                          WHEN 'P33' THEN 'LT'
+                          WHEN 'P31' THEN 'LV'
+                          WHEN 'P20' THEN 'MD'
+                          WHEN 'P82' THEN 'ME'
+                          WHEN 'P95' THEN 'MK'
+                          WHEN 'P94' THEN 'NG'
+                          WHEN 'P61' THEN 'PL'
+                          WHEN 'P91' THEN 'RO'
+                          WHEN 'P25' THEN 'RS'
+                          WHEN 'P85' THEN 'SI'
+                          WHEN 'P41' THEN 'SK'
+                          WHEN 'P72' THEN 'UA'
+                          WHEN 'P47' THEN 'EG'
+                          WHEN 'E96' THEN 'AM'
+                          WHEN 'E12' THEN 'AT'
+                          WHEN 'E28' THEN 'BA'
+                          WHEN 'E13' THEN 'BG'
+                          WHEN 'E23' THEN 'BY'
+                          WHEN 'E27' THEN 'CH'
+                          WHEN 'E40' THEN 'CY'
+                          WHEN 'E18' THEN 'CZ'
+                          WHEN 'E32' THEN 'EE'
+                          WHEN 'E47' THEN 'EG'
+                          WHEN 'E35' THEN 'GB'
+                          WHEN 'E30' THEN 'GR'
+                          WHEN 'E25' THEN 'HR'
+                          WHEN 'E16' THEN 'HU'
+                          WHEN 'E34' THEN 'IE'
+                          WHEN 'E29' THEN 'IT'
+                          WHEN 'E42' THEN 'KV'
+                          WHEN 'E33' THEN 'LT'
+                          WHEN 'E31' THEN 'LV'
+                          WHEN 'E17' THEN 'MD'
+                          WHEN 'E15' THEN 'ME'
+                          WHEN 'E95' THEN 'MK'
+                          WHEN 'E94' THEN 'NG'
+                          WHEN 'E24' THEN 'PL'
+                          WHEN 'E26' THEN 'RO'
+                          WHEN 'E14' THEN 'RS'
+                          WHEN 'E21' THEN 'SI'
+                          WHEN 'E19' THEN 'SK'
+                          WHEN 'E22' THEN 'UA'
+                          ELSE NULL
+                        END
+                        WHEN initials_mdg_but051 = 5 THEN 
+                          CASE SUBSTRING(partner1_mdg_but051, 1, 5)
+                            WHEN '00096' THEN 'AM'
+                            WHEN '00012' THEN 'AT'
+                            WHEN '00028' THEN 'BA'
+                            WHEN '00013' THEN 'BG'
+                            WHEN '00023' THEN 'BY'
+                            WHEN '00027' THEN 'CH'
+                            WHEN '00018' THEN 'CZ'
+                            WHEN '00032' THEN 'EE'
+                            WHEN '00035' THEN 'GB'
+                            WHEN '00030' THEN 'GR'
+                            WHEN '00025' THEN 'HR'
+                            WHEN '00016' THEN 'HU'
+                            WHEN '00034' THEN 'IE'
+                            WHEN '00029' THEN 'IT'
+                            WHEN '00042' THEN 'KV'
+                            WHEN '00033' THEN 'LT'
+                            WHEN '00031' THEN 'LV'
+                            WHEN '00017' THEN 'MD'
+                            WHEN '00015' THEN 'ME'
+                            WHEN '00095' THEN 'MK'
+                            WHEN '00094' THEN 'NG'
+                            WHEN '00024' THEN 'PL'
+                            WHEN '00026' THEN 'RO'
+                            WHEN '00038' THEN 'RU'
+                            WHEN '00021' THEN 'SI'
+                            WHEN '00019' THEN 'SK'
+                            WHEN '00014' THEN 'RS'
+                            WHEN '00022' THEN 'UA'
+                            WHEN '00040' THEN 'CY'
+                            WHEN '00047' THEN 'EG'
+                            ELSE NULL
+                          END
+                    END
+
+  - kind: join
+    name: join_mdg_but051_lookup
+    context_name: add_mdg_but051
+    params:
+      - other:
+          select_mdg_but000_lookup
+        how:
+          left
+        columns:
+          partner1_mdg_but051: partner_mdg_but000_lookup
+
+  - kind: add
+    name: add_mdg_but051_lookup
+    context_name: join_mdg_but051_lookup
+    params:
+      - column: var_d_account_group_code_mdg_but051
+        expression: CASE bu_group_mdg_but000_lookup
+                      WHEN '7012' THEN 'CCHBC Beverage     Vending  AT'
+                      WHEN '7016' THEN 'CCHBC Beverage     Vending  HU'
+                      WHEN '7018' THEN 'CCHBC Beverage     Vending  CZ'
+                      WHEN '7019' THEN 'CCHBC Beverage     Vending  SK'
+                      WHEN '7024' THEN 'CCHBC Beverage     Vending  PL'
+                      WHEN '7025' THEN 'CCHBC Beverage     Vending  HR'
+                      WHEN '7026' THEN 'CCHBC Beverage     Vending  RO'
+                      WHEN '7027' THEN 'CCHBC Beverage   Vending  CH'
+                      WHEN '7029' THEN 'CCHBC Beverage     Vending  IT'
+                      WHEN '7030' THEN 'CCHBC Beverage     Vending  GR'
+                      WHEN '7034' THEN 'CCHBC Beverage     Vending  RI'
+                      WHEN '7035' THEN 'CCHBC Beverage     Vending  NI'
+                      WHEN '7038' THEN 'CCHBC Beverage     Vending  RU'
+                      WHEN '7112' THEN 'CCHBC Cup           Vending AT'
+                      WHEN '7116' THEN 'CCHBC Cup           Vending HU'
+                      WHEN '7118' THEN 'CCHBC Cup           Vending CZ'
+                      WHEN '7119' THEN 'CCHBC Cup           Vending SK'
+                      WHEN '7124' THEN 'CCHBC Cup           Vending PL'
+                      WHEN '7126' THEN 'CCHBC Cup           Vending RO'
+                      WHEN '7127' THEN 'CCHBC Cup           Vending CH'
+                      WHEN '7129' THEN 'CCHBC Cup           Vending IT'
+                      WHEN '7130' THEN 'CCHBC Cup           Vending GR'
+                      WHEN '7134' THEN 'CCHBC Cup           Vending RI'
+                      WHEN '7135' THEN 'CCHBC Cup           Vending NI'
+                      WHEN '7138' THEN 'CCHBC Cup           Vending RU'
+                      WHEN '7212' THEN 'CCHBC Snack         Vending AT'
+                      WHEN '7216' THEN 'CCHBC Snack         Vending HU'
+                      WHEN '7218' THEN 'CCHBC Snack         Vending CZ'
+                      WHEN '7219' THEN 'CCHBC Snack         Vending SK'
+                      WHEN '7229' THEN 'CCHBC Snack         Vending IT'
+                      WHEN '7230' THEN 'CCHBC Snack         Vending GR'
+                      WHEN '7234' THEN 'CCHBC Snack         Vending RI'
+                      WHEN '7235' THEN 'CCHBC Snack         Vending NI'
+                      WHEN '7312' THEN 'CCHBC Combined      Vending AT'
+                      WHEN '7316' THEN 'CCHBC Combined      Vending HU'
+                      WHEN '7318' THEN 'CCHBC Combined      Vending CZ'
+                      WHEN '7319' THEN 'CCHBC Combined      Vending SK'
+                      WHEN '7329' THEN 'CCHBC Combined      Vending IT'
+                      WHEN '7330' THEN 'CCHBC Combined      Vending GR'
+                      WHEN '7334' THEN 'CCHBC Combined      Vending RI'
+                      WHEN '7335' THEN 'CCHBC Combined      Vending NI'
+                      WHEN '9012' THEN 'CCHBC Trade customers AT'
+                      WHEN '9013' THEN 'CCHBC Trade customers BG'
+                      WHEN '9014' THEN 'CCHBC Trade customers RS'
+                      WHEN '9015' THEN 'CCHBC Trade customers ME'
+                      WHEN '9016' THEN 'CCHBC Trade customers HU'
+                      WHEN '9017' THEN 'CCHBC Trade customers MD'
+                      WHEN '9018' THEN 'CCHBC Trade customers CZ'
+                      WHEN '9019' THEN 'CCHBC Trade customers SK'
+                      WHEN '9021' THEN 'CCHBC Trade customers SI'
+                      WHEN '9022' THEN 'CCHBC Trade customers UA'
+                      WHEN '9023' THEN 'CCHBC Trade customers BY'
+                      WHEN '9024' THEN 'CCHBC Trade customers PL'
+                      WHEN '9025' THEN 'CCHBC Trade customers HR'
+                      WHEN '9026' THEN 'CCHBC Trade customers RO'
+                      WHEN '9027' THEN 'CCHBC Trade customers CH'
+                      WHEN '9028' THEN 'CCHBC Trade customers BA'
+                      WHEN '9029' THEN 'CCHBC Trade customers IT'
+                      WHEN '9030' THEN 'CCHBC Trade customers GR'
+                      WHEN '9031' THEN 'CCHBC Trade customers LV'
+                      WHEN '9032' THEN 'CCHBC Trade customers EE'
+                      WHEN '9033' THEN 'CCHBC Trade customers LT'
+                      WHEN '9034' THEN 'CCHBC Trade customers RI'
+                      WHEN '9035' THEN 'CCHBC Trade customers NI'
+                      WHEN '9037' THEN 'CCHBC Trade customers CH Valser'
+                      WHEN '9038' THEN 'CCHBC Trade customers RU'
+                      WHEN '9040' THEN 'CCHBC Trade customers CY'
+                      WHEN '9041' THEN 'CCHBC Trade customers BG SHS'
+                      WHEN '9042' THEN 'CCHBC Trade customers XK'
+                      WHEN '9047' THEN 'CCHBC Trade customers EG'
+                      WHEN '9088' THEN 'CCHBC Trade customers GR HO'
+                      WHEN '9094' THEN 'CCHBC Trade customers NG'
+                      WHEN '9095' THEN 'CCHBC Trade customers MK'
+                      WHEN '9096' THEN 'CCHBC Trade customers AM'
+                      WHEN '9999' THEN 'CCH Sochi Olympics Customers'
+                      ELSE 'NOT AVAILABLE'
+                    END
+      - column: account_group_mdg_but051
+        expression: concat(bu_group_mdg_but000_lookup, ' - ', regexp_replace(var_d_account_group_code_mdg_but051, '\\s+', ' '))
+
+  - kind: filter
+    name: filter_mdg_but051_lookup
+    context_name: add_mdg_but051_lookup
+    params:
+      - condition:
+          mdg_country_mdg_but051 in ('AM', 'BG', 'MD', 'UA','BA','GB','HR','IE','LT','LV','EE','CH','RS','ME','KV','CZ','RO','SI','SK','GR','PL','CY','HU','AT','MK','NG','IT') and account_group_mdg_but051 is not null
+
+  - kind: join
+    name: join_mdg_but051_but000
+    context_name: filter_mdg_but051_lookup
+    params:
+      - other:
+          select_mdg_but000
+        how:
+          inner
+        columns:
+          partner2_mdg_but051: partner_mdg_but000
+
+  - kind: join
+    name: join_mdg_but051_but020
+    context_name: select_mdg_but020
+    params:
+      - other:
+          join_mdg_but051_but000
+        how:
+          inner
+        columns:
+          partner_mdg_but020: partner1_mdg_but051
+
+  - kind: join
+    name: join_mdg_but051_adr2
+    context_name: join_mdg_but051_but020
+    params:
+      - other:
+          select_mdg_adr2
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adr2
+          persnumber_mdg_but000: persnumber_mdg_adr2
+
+  - kind: join
+    name: join_mdg_but051_adr3
+    context_name: join_mdg_but051_but020
+    params:
+      - other:
+          select_mdg_adr3
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adr3
+          persnumber_mdg_but000: persnumber_mdg_adr3
+
+  - kind: join
+    name: join_mdg_but051_adr6
+    context_name: join_mdg_but051_but020
+    params:
+      - other:
+          select_mdg_adr6
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adr6
+          persnumber_mdg_but000: persnumber_mdg_adr6
+
+  - kind: add
+    name: add_mdg_but051_adr2
+    context_name: join_mdg_but051_adr2
+    params:
+      - column: name_last_mdg_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce( name_last_mdg_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: name_first_mdg_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_first_mdg_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: mdg_hash
+        expression: md5(concat(partner1_mdg_but051, coalesce(reltyp_mdg_but051,''), coalesce(pafkt_mdg_but051,''), coalesce(r3_user_mdg_adr2,''), coalesce(telnr_long_mdg_adr2,''), partner_guid_mdg_but000, coalesce(xdele_mdg_but000,''),coalesce( name_last_mdg_but000,''), coalesce(name_first_mdg_but000,''), coalesce(flgdefault_mdg_adr2,'')))
+      - column: mdg_pk
+        expression: concat(partner1_mdg_but051, partner_guid_mdg_but000)
+
+  - kind: add
+    name: add_mdg_but051_adr3
+    context_name: join_mdg_but051_adr3
+    params:
+      - column: name_last_mdg_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_last_mdg_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: name_first_mdg_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_first_mdg_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: mdg_hash
+        expression: md5(concat(partner1_mdg_but051, partner_guid_mdg_but000, coalesce( name_last_mdg_but000,''), coalesce(name_first_mdg_but000,''), coalesce(xdele_mdg_but000,''), coalesce(pafkt_mdg_but051,''), coalesce(reltyp_mdg_but051,''), coalesce(fax_number_mdg_adr3,''), coalesce(flgdefault_mdg_adr3,'')))
+      - column: mdg_pk
+        expression: concat(partner1_mdg_but051, partner_guid_mdg_but000)
+
+  - kind: add
+    name: add_mdg_but051_adr6
+    context_name: join_mdg_but051_adr6
+    params:
+      - column: name_last_mdg_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_last_mdg_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: name_first_mdg_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_first_mdg_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: mdg_hash
+        expression: md5(concat(partner1_mdg_but051, partner_guid_mdg_but000, coalesce(name_last_mdg_but000,''), coalesce(name_first_mdg_but000,''), coalesce(xdele_mdg_but000,''), coalesce(pafkt_mdg_but051,''), coalesce(reltyp_mdg_but051,''), lower(coalesce(smtp_addr_mdg_adr6,'')), coalesce(flgdefault_mdg_adr6,'')))
+      - column: mdg_pk
+        expression: concat(partner1_mdg_but051, partner_guid_mdg_but000)
+      - column: mdg_email
+        expression: lower(coalesce(smtp_addr_mdg_adr6,''))
+
+  - kind: select
+    name: select_mdg_but051_adr2
+    context_name: add_mdg_but051_adr2
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+      distinct: true
+
+  - kind: select
+    name: select_mdg_but051_adr3
+    context_name: add_mdg_but051_adr3
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+      distinct: true
+
+  - kind: select
+    name: select_mdg_but051_adr6
+    context_name: add_mdg_but051_adr6
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+      distinct: true
+
+  - kind: union
+    name: union_mdg_agg
+    context_name: select_mdg_but051_adr2
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_mdg_but051_adr3
+
+  - kind: union
+    name: union_mdg_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_mdg_but051_adr6
+
+  - kind: checkpoint
+    name: checkpoint_mdg_agg
+    context_name: union_mdg_agg
+
+
+########################################################################################################
+
+
+  - kind: read_dataio
+    name: read_crm_but000_1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_crm_but051_1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: contact_person_relationships
+      object_name: but051
+      schema_version: v1
+
+
+  - kind: filter
+    name: read_crm_but051
+    context_name: read_crm_but051_1
+    params:
+      - condition: reltyp = 'BUR001' and if(sap_cluster='CL1',  partner1 like any ('12%','13%','40%','18%','30%','16%','29%','17%','24%','26%','21%','19%'), partner1 like any ('96%','28%','27%','32%','35%','25%','34%','42%','33%','31%','15%','95%','94%','14%','22%','47%'))
+
+
+
+########################################
+  - kind: read_dataio
+    name: read_crm_crmm_but_frg0100
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: business_partner
+      object_name: crmm_but_frg0100
+      schema_version: v1
+
+  - kind: select
+    name: select_crm_crmm_but_frg0100
+    context_name: read_crm_crmm_but_frg0100
+    params:
+      columns:
+        partner_guid: partner_guid_crmm_but_frg0100
+        ord_block_reason: aufsd
+        sap_cluster: sap_cluster_crmm_but_frg0100
+      distinct: true
+
+  - kind: filter
+    name: filter_crm_crmm_but_frg0100
+    context_name: select_crm_crmm_but_frg0100
+    params:
+      - condition: aufsd NOT IN ('E','G','S1','S','NH','S3','S4','SY','SP','R','U')
+
+
+  - kind: join
+    name: join_but000
+    context_name: read_crm_but000_1
+    params:
+      - other:
+          filter_crm_crmm_but_frg0100
+        how:
+          inner
+        columns:
+          partner_guid: partner_guid_crmm_but_frg0100
+          sap_cluster: sap_cluster_crmm_but_frg0100
+      - other:
+          read_crm_but051
+        how:
+          inner
+        columns:
+          partner: partner1
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_crm_but000_contacts
+    context_name: join_but000
+    params:
+      columns:
+        partner1: partner1
+        partner2: partner2
+        sap_cluster: sap_cluster
+      distinct: true
+########################################
+
+  - kind: read_dataio
+    name: read_crm_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_crm_adr2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: address_and_communication_data
+      object_name: adr2
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_crm_adr3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: address_and_communication_data
+      object_name: adr3
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_crm_adr6
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: address_and_communication_data
+      object_name: adr6
+      schema_version: v1
+
+
+
+##################################################
+
+  - kind: filter
+    name: read_crm_but000
+    context_name: read_crm_but000_1
+    params:
+      - condition: persnumber <> ''      
+      
+          
+          
+##################################################
+
+
+  - kind: select
+    name: select_crm_but000_columns
+    context_name: read_crm_but000
+    params:
+      columns:
+        partner: partner
+        persnumber: persnumber
+        partner_guid: partner_guid_crm_but000
+        xdele: xdele_crm_but000_temp
+        name_last: name_last_crm_but000_temp
+        name_first: name_first_crm_but000_temp
+        namcountry: namcountry_crm_but000_temp
+        sap_cluster: sap_cluster_crm_but000
+      distinct: true
+
+
+
+
+  - kind: add
+    name: select_crm_but000_cleanse
+    context_name: select_crm_but000_columns
+    params:
+      - column: xdele_crm_but000
+        expression: coalesce(xdele_crm_but000_temp,'')
+      - column: name_last_crm_but000
+        expression: coalesce(name_last_crm_but000_temp,'')
+      - column: name_first_crm_but000
+        expression: coalesce(name_first_crm_but000_temp,'')
+      - column: namcountry_crm_but000
+        expression: coalesce(namcountry_crm_but000_temp,'')
+        
+  - kind: select
+    name: select_crm_but000_pre_join
+    context_name: select_crm_but000_cleanse
+    params:
+      columns:
+        partner: partner_crm_but000
+        persnumber: persnumber_crm_but000
+        partner_guid_crm_but000: partner_guid_crm_but000
+        xdele_crm_but000: xdele_crm_but000
+        name_last_crm_but000: name_last_crm_but000
+        name_first_crm_but000: name_first_crm_but000
+        namcountry_crm_but000: namcountry_crm_but000
+        sap_cluster_crm_but000: sap_cluster_crm_but000
+      distinct: true
+
+
+  - kind: join
+    name: select_crm_but000
+    context_name: select_crm_but000_pre_join
+    params:
+      - other:
+          select_crm_but000_contacts
+        how:
+          inner
+        columns:
+          partner_crm_but000: partner2
+          sap_cluster_crm_but000: sap_cluster
+########################################################################
+
+
+
+
+  - kind: select
+    name: select_crm_but000_lookup_select
+    context_name: read_crm_but000_1
+    params:
+      columns:
+        partner: partner_crm_but000_lookup
+        bu_group: bu_group_crm_but000_lookup
+        sap_cluster: sap_cluster_but000_lookup
+      distinct: true
+
+##################################################
+  - kind: filter
+    name: select_crm_but000_lookup
+    context_name: select_crm_but000_lookup_select
+    params:
+      - condition: bu_group  LIKE ANY ('ZAT' ,   'ZBG' ,   'ZRS' ,   'ZME' ,   'ZHU' ,   'ZMD' ,   'ZCZ' ,   'ZSK' ,   'ZSI' ,   'ZUA' ,   'ZBY' ,   'ZPL' ,   'ZHR' ,   'ZRO' ,   'ZCH' ,   'ZBA' ,   'ZIT' ,   'ZGR' ,   'ZLV' ,   'ZEE' ,   'ZLT' ,   'ZIE' ,   'ZNI' ,   'ZRU' ,   'ZCY' ,   'ZKV' ,   'ZNG' ,   'ZMK' ,   'ZAM')
+##################################################
+
+
+
+  - kind: select
+    name: crm_but051_select
+    context_name: read_crm_but051
+    params:
+      columns:
+        relnr: relnr_temp
+        partner1: partner1
+        partner2: partner2
+        reltyp: reltyp
+        pafkt: pafkt_temp
+        sap_cluster: sap_cluster_crm_but051
+      distinct: true
+
+  - kind: add
+    name: crm_but051_cleanse
+    context_name: crm_but051_select
+    params:
+      - column: relnr_crm_but051
+        expression: coalesce(relnr_temp,'')
+      - column: pafkt_crm_but051
+        expression: coalesce(pafkt_temp,'')
+
+  - kind: select
+    name: select_crm_but051
+    context_name: crm_but051_cleanse
+    params:
+      columns:
+        relnr_crm_but051: relnr_crm_but051
+        partner1: partner1_crm_but051
+        partner2: partner2_crm_but051
+        reltyp: reltyp_crm_but051
+        pafkt_crm_but051: pafkt_crm_but051
+        sap_cluster_crm_but051: sap_cluster_crm_but051
+      distinct: true
+      
+
+###################################################
+
+  - kind: select
+    name: select_crm_but020
+    context_name: read_crm_but020
+    params:
+      columns:
+        partner: partner_crm_but020
+        addrnumber: addrnumber_crm_but020
+        sap_cluster: sap_cluster_crm_but020
+      distinct: true
+
+########################################################################
+  - kind: select
+    name: select_crm_adr2_select
+    context_name: read_crm_adr2
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        r3_user: r3_user_crm_adr2_temp
+        telnr_long: telnr_long_crm_adr2_temp
+        consnumber: consnumber_crm_adr2_temp
+        flgdefault: flgdefault_crm_adr2_temp
+        sap_cluster: sap_cluster_crm_adr2          
+      distinct: true
+
+  - kind: add
+    name: select_crm_adr2_cleanse
+    context_name: select_crm_adr2_select
+    params:
+      - column: addrnumber_crm_adr2
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_crm_adr2
+        expression: coalesce(persnumber_temp,'')
+      - column: r3_user_crm_adr2
+        expression: coalesce(r3_user_crm_adr2_temp,'')
+      - column: telnr_long_crm_adr2
+        expression: coalesce(telnr_long_crm_adr2_temp,'')
+      - column: consnumber_crm_adr2
+        expression: coalesce(consnumber_crm_adr2_temp,'')
+      - column: flgdefault_crm_adr2
+        expression: coalesce(flgdefault_crm_adr2_temp,'')
+        
+  - kind: select
+    name: select_crm_adr2
+    context_name: select_crm_adr2_cleanse
+    params:
+      columns:
+        addrnumber_crm_adr2: addrnumber_crm_adr2
+        persnumber_crm_adr2: persnumber_crm_adr2
+        r3_user_crm_adr2: r3_user_crm_adr2
+        telnr_long_crm_adr2: telnr_long_crm_adr2
+        consnumber_crm_adr2: consnumber_crm_adr2
+        flgdefault_crm_adr2: flgdefault_crm_adr2 
+        sap_cluster_crm_adr2: sap_cluster_crm_adr2        
+      distinct: true 
+
+
+#################################################################
+
+
+  - kind: select
+    name: select_crm_adr3_select
+    context_name: read_crm_adr3
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        fax_number: fax_number_crm_adr3_temp
+        consnumber: consnumber_crm_adr3_temp
+        flgdefault: flgdefault_crm_adr3_temp
+        sap_cluster: sap_cluster_crm_adr3 
+      distinct: true
+
+  - kind: add
+    name: select_crm_adr3_cleanse
+    context_name: select_crm_adr3_select
+    params:
+      - column: addrnumber_crm_adr3
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_crm_adr3
+        expression: coalesce(persnumber_temp,'')
+      - column: fax_number_crm_adr3
+        expression: coalesce(fax_number_crm_adr3_temp,'')
+      - column: consnumber_crm_adr3
+        expression: coalesce(consnumber_crm_adr3_temp,'')
+      - column: flgdefault_crm_adr3
+        expression: coalesce(flgdefault_crm_adr3_temp,'')
+        
+  - kind: select
+    name: select_crm_adr3
+    context_name: select_crm_adr3_cleanse
+    params:
+      columns:
+        addrnumber_crm_adr3: addrnumber_crm_adr3
+        persnumber_crm_adr3: persnumber_crm_adr3
+        fax_number_crm_adr3: fax_number_crm_adr3
+        consnumber_crm_adr3: consnumber_crm_adr3
+        flgdefault_crm_adr3: flgdefault_crm_adr3
+        sap_cluster_crm_adr3: sap_cluster_crm_adr3
+      distinct: true 
+
+##################################################################
+
+
+  - kind: select
+    name: select_crm_adr6_select
+    context_name: read_crm_adr6
+    params:
+      columns:
+        addrnumber: addrnumber_temp
+        persnumber: persnumber_temp
+        smtp_addr: smtp_addr_crm_adr6_temp
+        consnumber: consnumber_crm_adr6_temp
+        flgdefault: flgdefault_crm_adr6_temp
+        sap_cluster: sap_cluster_crm_adr6
+      distinct: true
+
+  - kind: add
+    name: select_crm_adr6_cleanse
+    context_name: select_crm_adr6_select
+    params:
+      - column: addrnumber_crm_adr6
+        expression: coalesce(addrnumber_temp,'')
+      - column: persnumber_crm_adr6
+        expression: coalesce(persnumber_temp,'')
+      - column: smtp_addr_crm_adr6
+        expression: coalesce(smtp_addr_crm_adr6_temp,'')
+      - column: consnumber_crm_adr6
+        expression: coalesce(consnumber_crm_adr6_temp,'')
+      - column: flgdefault_crm_adr6
+        expression: coalesce(flgdefault_crm_adr6_temp,'')
+        
+  - kind: select
+    name: select_crm_adr6
+    context_name: select_crm_adr6_cleanse
+    params:
+      columns:
+        addrnumber_crm_adr6: addrnumber_crm_adr6
+        persnumber_crm_adr6: persnumber_crm_adr6
+        smtp_addr_crm_adr6: smtp_addr_crm_adr6
+        consnumber_crm_adr6: consnumber_crm_adr6
+        flgdefault_crm_adr6: flgdefault_crm_adr6
+        sap_cluster_crm_adr6: sap_cluster_crm_adr6
+      distinct: true 
+
+
+##################################################################
+
+
+  - kind: add
+    name: add_crm_but051
+    context_name: select_crm_but051
+    params:
+      - column: initials_crm_but051
+        expression: if(substr(partner1_crm_but051, 1, 1) = 'P',3 ,
+                    if(substr(partner1_crm_but051, 1, 3) = '000', 5, 2))
+      - column: crm_country_crm_but051
+        expression: CASE 
+                      WHEN initials_crm_but051 = 2 THEN 
+                        CASE SUBSTRING(partner1_crm_but051, 1, 2)
+                          WHEN '96' THEN 'AM'
+                          WHEN '12' THEN 'AT'
+                          WHEN '28' THEN 'BA'
+                          WHEN '13' THEN 'BG'
+                          WHEN '23' THEN 'BY'
+                          WHEN '27' THEN 'CH'
+                          WHEN '18' THEN 'CZ'
+                          WHEN '32' THEN 'EE'
+                          WHEN '35' THEN 'GB'
+                          WHEN '30' THEN 'GR'
+                          WHEN '25' THEN 'HR'
+                          WHEN '16' THEN 'HU'
+                          WHEN '34' THEN 'IE'
+                          WHEN '29' THEN 'IT'
+                          WHEN '42' THEN 'KV'
+                          WHEN '33' THEN 'LT'
+                          WHEN '31' THEN 'LV'
+                          WHEN '17' THEN 'MD'
+                          WHEN '15' THEN 'ME'
+                          WHEN '95' THEN 'MK'
+                          WHEN '94' THEN 'NG'
+                          WHEN '24' THEN 'PL'
+                          WHEN '26' THEN 'RO'
+                          WHEN '38' THEN 'RU'
+                          WHEN '21' THEN 'SI'
+                          WHEN '19' THEN 'SK'
+                          WHEN '14' THEN 'RS'
+                          WHEN '22' THEN 'UA'
+                          WHEN '40' THEN 'CY'
+                          WHEN '47' THEN 'EG'
+                          ELSE NULL
+                        END
+                      WHEN initials_crm_but051 = 3 THEN 
+                        CASE SUBSTRING(partner1_crm_but051, 1, 3)
+                          WHEN 'P96' THEN 'AM'
+                          WHEN 'P11' THEN 'AT'
+                          WHEN 'P86' THEN 'BA'
+                          WHEN 'P49' THEN 'BG'
+                          WHEN 'P23' THEN 'BY'
+                          WHEN 'P55' THEN 'CH'
+                          WHEN 'P51' THEN 'CY'
+                          WHEN 'P45' THEN 'CZ'
+                          WHEN 'P32' THEN 'EE'
+                          WHEN 'P79' THEN 'GB'
+                          WHEN 'P12' THEN 'GR'
+                          WHEN 'P80' THEN 'HR'
+                          WHEN 'P28' THEN 'HU'
+                          WHEN 'P78' THEN 'IE'
+                          WHEN 'P63' THEN 'IT'
+                          WHEN 'P92' THEN 'KV'
+                          WHEN 'P33' THEN 'LT'
+                          WHEN 'P31' THEN 'LV'
+                          WHEN 'P20' THEN 'MD'
+                          WHEN 'P82' THEN 'ME'
+                          WHEN 'P95' THEN 'MK'
+                          WHEN 'P94' THEN 'NG'
+                          WHEN 'P61' THEN 'PL'
+                          WHEN 'P91' THEN 'RO'
+                          WHEN 'P25' THEN 'RS'
+                          WHEN 'P85' THEN 'SI'
+                          WHEN 'P41' THEN 'SK'
+                          WHEN 'P72' THEN 'UA'
+                          WHEN 'P47' THEN 'EG'
+                          WHEN 'E96' THEN 'AM'
+                          WHEN 'E12' THEN 'AT'
+                          WHEN 'E28' THEN 'BA'
+                          WHEN 'E13' THEN 'BG'
+                          WHEN 'E23' THEN 'BY'
+                          WHEN 'E27' THEN 'CH'
+                          WHEN 'E40' THEN 'CY'
+                          WHEN 'E18' THEN 'CZ'
+                          WHEN 'E32' THEN 'EE'
+                          WHEN 'E47' THEN 'EG'
+                          WHEN 'E35' THEN 'GB'
+                          WHEN 'E30' THEN 'GR'
+                          WHEN 'E25' THEN 'HR'
+                          WHEN 'E16' THEN 'HU'
+                          WHEN 'E34' THEN 'IE'
+                          WHEN 'E29' THEN 'IT'
+                          WHEN 'E42' THEN 'KV'
+                          WHEN 'E33' THEN 'LT'
+                          WHEN 'E31' THEN 'LV'
+                          WHEN 'E17' THEN 'MD'
+                          WHEN 'E15' THEN 'ME'
+                          WHEN 'E95' THEN 'MK'
+                          WHEN 'E94' THEN 'NG'
+                          WHEN 'E24' THEN 'PL'
+                          WHEN 'E26' THEN 'RO'
+                          WHEN 'E14' THEN 'RS'
+                          WHEN 'E21' THEN 'SI'
+                          WHEN 'E19' THEN 'SK'
+                          WHEN 'E22' THEN 'UA'
+                          ELSE NULL
+                        END
+                        WHEN initials_crm_but051 = 5 THEN 
+                          CASE SUBSTRING(partner1_crm_but051, 1, 5)
+                            WHEN '00096' THEN 'AM'
+                            WHEN '00012' THEN 'AT'
+                            WHEN '00028' THEN 'BA'
+                            WHEN '00013' THEN 'BG'
+                            WHEN '00023' THEN 'BY'
+                            WHEN '00027' THEN 'CH'
+                            WHEN '00018' THEN 'CZ'
+                            WHEN '00032' THEN 'EE'
+                            WHEN '00035' THEN 'GB'
+                            WHEN '00030' THEN 'GR'
+                            WHEN '00025' THEN 'HR'
+                            WHEN '00016' THEN 'HU'
+                            WHEN '00034' THEN 'IE'
+                            WHEN '00029' THEN 'IT'
+                            WHEN '00042' THEN 'KV'
+                            WHEN '00033' THEN 'LT'
+                            WHEN '00031' THEN 'LV'
+                            WHEN '00017' THEN 'MD'
+                            WHEN '00015' THEN 'ME'
+                            WHEN '00095' THEN 'MK'
+                            WHEN '00094' THEN 'NG'
+                            WHEN '00024' THEN 'PL'
+                            WHEN '00026' THEN 'RO'
+                            WHEN '00038' THEN 'RU'
+                            WHEN '00021' THEN 'SI'
+                            WHEN '00019' THEN 'SK'
+                            WHEN '00014' THEN 'RS'
+                            WHEN '00022' THEN 'UA'
+                            WHEN '00040' THEN 'CY'
+                            WHEN '00047' THEN 'EG'
+                            ELSE NULL
+                          END
+                    END
+
+  - kind: join
+    name: join_crm_but051_lookup
+    context_name: add_crm_but051
+    params:
+      - other:
+          select_crm_but000_lookup
+        how:
+          inner
+        columns:
+          partner1_crm_but051: partner_crm_but000_lookup
+          sap_cluster_crm_but051: sap_cluster_but000_lookup
+
+  - kind: add
+    name: add_crm_but051_lookup
+    context_name: join_crm_but051_lookup
+    params:
+      - column: var_d_account_group_code_crm_but051
+        expression: CASE bu_group_crm_but000_lookup
+                      WHEN '7012' THEN 'CCHBC Beverage     Vending  AT'
+                      WHEN '7016' THEN 'CCHBC Beverage     Vending  HU'
+                      WHEN '7018' THEN 'CCHBC Beverage     Vending  CZ'
+                      WHEN '7019' THEN 'CCHBC Beverage     Vending  SK'
+                      WHEN '7024' THEN 'CCHBC Beverage     Vending  PL'
+                      WHEN '7025' THEN 'CCHBC Beverage     Vending  HR'
+                      WHEN '7026' THEN 'CCHBC Beverage     Vending  RO'
+                      WHEN '7027' THEN 'CCHBC Beverage   Vending  CH'
+                      WHEN '7029' THEN 'CCHBC Beverage     Vending  IT'
+                      WHEN '7030' THEN 'CCHBC Beverage     Vending  GR'
+                      WHEN '7034' THEN 'CCHBC Beverage     Vending  RI'
+                      WHEN '7035' THEN 'CCHBC Beverage     Vending  NI'
+                      WHEN '7038' THEN 'CCHBC Beverage     Vending  RU'
+                      WHEN '7112' THEN 'CCHBC Cup           Vending AT'
+                      WHEN '7116' THEN 'CCHBC Cup           Vending HU'
+                      WHEN '7118' THEN 'CCHBC Cup           Vending CZ'
+                      WHEN '7119' THEN 'CCHBC Cup           Vending SK'
+                      WHEN '7124' THEN 'CCHBC Cup           Vending PL'
+                      WHEN '7126' THEN 'CCHBC Cup           Vending RO'
+                      WHEN '7127' THEN 'CCHBC Cup           Vending CH'
+                      WHEN '7129' THEN 'CCHBC Cup           Vending IT'
+                      WHEN '7130' THEN 'CCHBC Cup           Vending GR'
+                      WHEN '7134' THEN 'CCHBC Cup           Vending RI'
+                      WHEN '7135' THEN 'CCHBC Cup           Vending NI'
+                      WHEN '7138' THEN 'CCHBC Cup           Vending RU'
+                      WHEN '7212' THEN 'CCHBC Snack         Vending AT'
+                      WHEN '7216' THEN 'CCHBC Snack         Vending HU'
+                      WHEN '7218' THEN 'CCHBC Snack         Vending CZ'
+                      WHEN '7219' THEN 'CCHBC Snack         Vending SK'
+                      WHEN '7229' THEN 'CCHBC Snack         Vending IT'
+                      WHEN '7230' THEN 'CCHBC Snack         Vending GR'
+                      WHEN '7234' THEN 'CCHBC Snack         Vending RI'
+                      WHEN '7235' THEN 'CCHBC Snack         Vending NI'
+                      WHEN '7312' THEN 'CCHBC Combined      Vending AT'
+                      WHEN '7316' THEN 'CCHBC Combined      Vending HU'
+                      WHEN '7318' THEN 'CCHBC Combined      Vending CZ'
+                      WHEN '7319' THEN 'CCHBC Combined      Vending SK'
+                      WHEN '7329' THEN 'CCHBC Combined      Vending IT'
+                      WHEN '7330' THEN 'CCHBC Combined      Vending GR'
+                      WHEN '7334' THEN 'CCHBC Combined      Vending RI'
+                      WHEN '7335' THEN 'CCHBC Combined      Vending NI'
+                      WHEN '9012' THEN 'CCHBC Trade customers AT'
+                      WHEN '9013' THEN 'CCHBC Trade customers BG'
+                      WHEN '9014' THEN 'CCHBC Trade customers RS'
+                      WHEN '9015' THEN 'CCHBC Trade customers ME'
+                      WHEN '9016' THEN 'CCHBC Trade customers HU'
+                      WHEN '9017' THEN 'CCHBC Trade customers MD'
+                      WHEN '9018' THEN 'CCHBC Trade customers CZ'
+                      WHEN '9019' THEN 'CCHBC Trade customers SK'
+                      WHEN '9021' THEN 'CCHBC Trade customers SI'
+                      WHEN '9022' THEN 'CCHBC Trade customers UA'
+                      WHEN '9023' THEN 'CCHBC Trade customers BY'
+                      WHEN '9024' THEN 'CCHBC Trade customers PL'
+                      WHEN '9025' THEN 'CCHBC Trade customers HR'
+                      WHEN '9026' THEN 'CCHBC Trade customers RO'
+                      WHEN '9027' THEN 'CCHBC Trade customers CH'
+                      WHEN '9028' THEN 'CCHBC Trade customers BA'
+                      WHEN '9029' THEN 'CCHBC Trade customers IT'
+                      WHEN '9030' THEN 'CCHBC Trade customers GR'
+                      WHEN '9031' THEN 'CCHBC Trade customers LV'
+                      WHEN '9032' THEN 'CCHBC Trade customers EE'
+                      WHEN '9033' THEN 'CCHBC Trade customers LT'
+                      WHEN '9034' THEN 'CCHBC Trade customers RI'
+                      WHEN '9035' THEN 'CCHBC Trade customers NI'
+                      WHEN '9037' THEN 'CCHBC Trade customers CH Valser'
+                      WHEN '9038' THEN 'CCHBC Trade customers RU'
+                      WHEN '9040' THEN 'CCHBC Trade customers CY'
+                      WHEN '9041' THEN 'CCHBC Trade customers BG SHS'
+                      WHEN '9042' THEN 'CCHBC Trade customers XK'
+                      WHEN '9047' THEN 'CCHBC Trade customers EG'
+                      WHEN '9088' THEN 'CCHBC Trade customers GR HO'
+                      WHEN '9094' THEN 'CCHBC Trade customers NG'
+                      WHEN '9095' THEN 'CCHBC Trade customers MK'
+                      WHEN '9096' THEN 'CCHBC Trade customers AM'
+                      WHEN '9999' THEN 'CCH Sochi Olympics Customers'
+                      ELSE bu_group_crm_but000_lookup
+                    END
+      - column: account_group_crm_but051
+        expression: coalesce(concat(bu_group_crm_but000_lookup, ' - ', regexp_replace(var_d_account_group_code_crm_but051, '\\s+', ' ')),'')
+
+  - kind: filter
+    name: filter_crm_but051_lookup
+    context_name: add_crm_but051_lookup
+    params:
+      - condition:
+          crm_country_crm_but051 in ('AM', 'BG', 'MD', 'UA','BA','GB','HR','IE','LT','LV','EE','CH','RS','ME','KV','CZ','RO','SI','SK','GR','PL','CY','HU','AT','MK','NG','IT') and account_group_crm_but051 is not null
+
+  - kind: join
+    name: join_crm_but051_but000
+    context_name: filter_crm_but051_lookup
+    params:
+      - other:
+          select_crm_but000
+        how:
+          inner
+        columns:
+          partner2_crm_but051: partner_crm_but000
+          sap_cluster_crm_but051: sap_cluster_crm_but000
+
+  - kind: join
+    name: join_crm_but051_but020
+    context_name: select_crm_but020
+    params:
+      - other:
+          join_crm_but051_but000
+        how:
+          inner
+        columns:
+          partner_crm_but020: partner1_crm_but051
+          sap_cluster_crm_but020: sap_cluster_crm_but051
+
+
+
+  - kind: join
+    name: join_crm_but051_adr2
+    context_name: join_crm_but051_but020
+    params:
+      - other:
+          select_crm_adr2
+        how:
+          left
+        columns:
+          addrnumber_crm_but020: addrnumber_crm_adr2
+          persnumber_crm_but000: persnumber_crm_adr2
+          sap_cluster_crm_but020: sap_cluster_crm_adr2
+
+  - kind: join
+    name: join_crm_but051_adr3
+    context_name: join_crm_but051_but020
+    params:
+      - other:
+          select_crm_adr3
+        how:
+          left
+        columns:
+          addrnumber_crm_but020: addrnumber_crm_adr3
+          persnumber_crm_but000: persnumber_crm_adr3
+          sap_cluster_crm_but020: sap_cluster_crm_adr3
+
+  - kind: join
+    name: join_crm_but051_adr6
+    context_name: join_crm_but051_but020
+    params:
+      - other:
+          select_crm_adr6
+        how:
+          left
+        columns:
+          addrnumber_crm_but020: addrnumber_crm_adr6
+          persnumber_crm_but000: persnumber_crm_adr6
+          sap_cluster_crm_but020: sap_cluster_crm_adr6
+
+  - kind: add
+    name: add_crm_but051_adr2
+    context_name: join_crm_but051_adr2
+    params:
+      - column: name_last_crm_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_last_crm_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: name_first_crm_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_first_crm_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: crm_hash
+        expression: md5(concat(partner1_crm_but051, coalesce(reltyp_crm_but051,''), coalesce(pafkt_crm_but051,''), coalesce(r3_user_crm_adr2,''), coalesce(telnr_long_crm_adr2,''), partner_guid_crm_but000, coalesce(xdele_crm_but000,''), coalesce(name_last_crm_but000,''), coalesce(name_first_crm_but000,''), coalesce(flgdefault_crm_adr2,'')))
+      - column: crm_pk
+        expression: concat(partner1_crm_but051, partner_guid_crm_but000)
+
+  - kind: add
+    name: add_crm_but051_adr3
+    context_name: join_crm_but051_adr3
+    params:
+      - column: name_last_crm_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_last_crm_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: name_first_crm_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_first_crm_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: crm_hash
+        expression: md5(concat(partner1_crm_but051, partner_guid_crm_but000, coalesce(name_last_crm_but000,''), coalesce(name_first_crm_but000,''), coalesce(xdele_crm_but000,''), coalesce(pafkt_crm_but051,''), coalesce(reltyp_crm_but051,''), coalesce(fax_number_crm_adr3,''), coalesce(flgdefault_crm_adr3,'')))
+      - column: crm_pk
+        expression: concat(partner1_crm_but051, partner_guid_crm_but000)
+
+  - kind: add
+    name: add_crm_but051_adr6
+    context_name: join_crm_but051_adr6
+    params:
+      - column: name_last_crm_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_last_crm_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: name_first_crm_but000
+        expression: lower(regexp_replace(regexp_replace(coalesce(name_first_crm_but000,''), '\\n', ' '), '\\r', ' '))
+      - column: crm_hash
+        expression: md5(concat(partner1_crm_but051, partner_guid_crm_but000, coalesce(name_last_crm_but000,''), coalesce(name_first_crm_but000,''), coalesce(xdele_crm_but000,''), coalesce(pafkt_crm_but051,''), coalesce(reltyp_crm_but051,''), lower(coalesce(smtp_addr_crm_adr6,'')), coalesce(flgdefault_crm_adr6,'')))
+      - column: crm_pk
+        expression: concat(partner1_crm_but051, partner_guid_crm_but000)
+      - column: crm_email
+        expression: lower(coalesce(smtp_addr_crm_adr6,''))
+
+  - kind: select
+    name: select_crm_but051_adr2
+    context_name: add_crm_but051_adr2
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_country_crm_but051: crm_country
+        partner1_crm_but051: crm_partner
+        partner2_crm_but051: crm_partner_contact
+        pafkt_crm_but051: crm_relationship
+        name_last_crm_but000: crm_name_last
+        name_first_crm_but000: crm_name_first
+        account_group_crm_but051: crm_account_group
+      distinct: true
+
+  - kind: select
+    name: select_crm_but051_adr3
+    context_name: add_crm_but051_adr3
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_country_crm_but051: crm_country
+        partner1_crm_but051: crm_partner
+        partner2_crm_but051: crm_partner_contact
+        pafkt_crm_but051: crm_relationship
+        name_last_crm_but000: crm_name_last
+        name_first_crm_but000: crm_name_first
+        account_group_crm_but051: crm_account_group
+      distinct: true
+
+  - kind: select
+    name: select_crm_but051_adr6
+    context_name: add_crm_but051_adr6
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_country_crm_but051: crm_country
+        partner1_crm_but051: crm_partner
+        partner2_crm_but051: crm_partner_contact
+        pafkt_crm_but051: crm_relationship
+        name_last_crm_but000: crm_name_last
+        name_first_crm_but000: crm_name_first
+        account_group_crm_but051: crm_account_group
+      distinct: true
+
+  - kind: union
+    name: union_crm_agg
+    context_name: select_crm_but051_adr2
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_crm_but051_adr3
+
+  - kind: union
+    name: union_crm_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_crm_but051_adr6
+
+
+  - kind: checkpoint
+    name: checkpoint_crm_agg
+    context_name: union_crm_agg
+######################################################################the end###################################################################
+  - kind: join
+    name: join_mdg_crm
+    context_name: checkpoint_mdg_agg
+    params:
+      - other:
+          checkpoint_crm_agg
+        how:
+          full
+        columns:
+          mdg_pk: crm_pk
+
+  - kind: select
+    name: select_mdg_telephone
+    context_name: add_mdg_but051_adr2
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        xdele_mdg_but000: mdg_archiving_flag
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+        telnr_long_mdg_adr2: mdg_telnr_long
+        r3_user_mdg_adr2: mdg_r3_user
+        flgdefault_mdg_adr2: mdg_flgdefault
+      distinct: true
+
+  - kind: select
+    name: select_mdg_fax
+    context_name: add_mdg_but051_adr3
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        xdele_mdg_but000: mdg_archiving_flag
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+        fax_number_mdg_adr3: mdg_fax_number
+        flgdefault_mdg_adr3: mdg_flgdefault
+      distinct: true
+
+  - kind: select
+    name: select_mdg_email
+    context_name: add_mdg_but051_adr6
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country_mdg_but051: mdg_country
+        partner1_mdg_but051: mdg_partner
+        partner2_mdg_but051: mdg_partner_contact
+        pafkt_mdg_but051: mdg_relationship
+        xdele_mdg_but000: mdg_archiving_flag
+        name_last_mdg_but000: mdg_name_last
+        name_first_mdg_but000: mdg_name_first
+        account_group_mdg_but051: mdg_account_group
+        mdg_email: mdg_email
+        flgdefault_mdg_adr6: mdg_flgdefault
+      distinct: true
+
+  - kind: select
+    name: select_crm_telephone
+    context_name: add_crm_but051_adr2
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_hash: crm_hash
+        crm_country_crm_but051: crm_country
+        partner1_crm_but051: crm_partner
+        partner2_crm_but051: crm_partner_contact
+        pafkt_crm_but051: crm_relationship
+        xdele_crm_but000: crm_archiving_flag
+        name_last_crm_but000: crm_name_last
+        name_first_crm_but000: crm_name_first
+        account_group_crm_but051: crm_account_group
+        telnr_long_crm_adr2: crm_telnr_long
+        r3_user_crm_adr2: crm_r3_user
+        flgdefault_crm_adr2: crm_flgdefault
+      distinct: true
+
+  - kind: select
+    name: select_crm_fax
+    context_name: add_crm_but051_adr3
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_hash: crm_hash
+        crm_country_crm_but051: crm_country
+        partner1_crm_but051: crm_partner
+        partner2_crm_but051: crm_partner_contact
+        pafkt_crm_but051: crm_relationship
+        xdele_crm_but000: crm_archiving_flag
+        name_last_crm_but000: crm_name_last
+        name_first_crm_but000: crm_name_first
+        account_group_crm_but051: crm_account_group
+        fax_number_crm_adr3: crm_fax_number
+        flgdefault_crm_adr3: crm_flgdefault
+      distinct: true
+
+  - kind: select
+    name: select_crm_email
+    context_name: add_crm_but051_adr6
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_hash: crm_hash
+        crm_country_crm_but051: crm_country
+        partner1_crm_but051: crm_partner
+        partner2_crm_but051: crm_partner_contact
+        pafkt_crm_but051: crm_relationship
+        xdele_crm_but000: crm_archiving_flag
+        name_last_crm_but000: crm_name_last
+        name_first_crm_but000: crm_name_first
+        account_group_crm_but051: crm_account_group
+        crm_email: crm_email
+        flgdefault_crm_adr6: crm_flgdefault
+      distinct: true
+
+  - kind: join
+    name: join_mdg_crm_telephone
+    context_name: select_mdg_telephone
+    params:
+      - other:
+          select_crm_telephone
+        how:
+          full
+        columns:
+          mdg_hash: crm_hash
+###########################################################
+
+  - kind: join
+    name: join_mdg_crm_fax
+    context_name: select_mdg_fax
+    params:
+      - other:
+          select_crm_fax
+        how:
+          full
+        columns:
+          mdg_hash: crm_hash
+###########################################################
+  - kind: join
+    name: join_mdg_crm_email
+    context_name: select_mdg_email
+    params:
+      - other:
+          select_crm_email
+        how:
+          full
+        columns:
+          mdg_hash: crm_hash
+###########################################################
+  - kind: union
+    name: union_mdg_crm
+    context_name: join_mdg_crm_telephone
+    params:
+      allow_missing: true
+      by_name: true
+      other: join_mdg_crm_fax
+
+  - kind: union
+    name: union_mdg_crm
+    params:
+      allow_missing: true
+      by_name: true
+      other: join_mdg_crm_email
+
+  - kind: checkpoint
+    name: checkpoint_mdg_crm
+    context_name: union_mdg_crm
+###########################################################
+
+
+  - kind: add
+    name: add_mdg_crm
+    context_name: checkpoint_mdg_crm
+    params:
+      - column: comparison_mdg
+        expression: CASE 
+                      WHEN mdg_telnr_long IS NOT NULL AND mdg_r3_user IN ('', '1') THEN 'Telephone'
+                      WHEN mdg_telnr_long IS NOT NULL AND mdg_r3_user IN ('2', '3') THEN 'Mobile Number'
+                      WHEN mdg_email IS NOT NULL THEN 'E-mail'
+                      WHEN mdg_fax_number IS NOT NULL THEN 'Fax'
+                      ELSE 'No address info available'
+                    END
+      - column: comparison_crm
+        expression: CASE 
+                      WHEN crm_telnr_long IS NOT NULL AND crm_r3_user IN ('', '1') THEN 'Telephone'
+                      WHEN crm_telnr_long IS NOT NULL AND crm_r3_user IN ('2', '3') THEN 'Mobile Number'
+                      WHEN crm_email IS NOT NULL THEN 'E-mail'
+                      WHEN crm_fax_number IS NOT NULL THEN 'Fax'
+                      ELSE 'No address info available'
+                    END
+      - column: mdg_r3_user_out
+        expression: CASE 
+                      WHEN comparison_mdg IN ('E-mail', 'Fax', 'No contact info available') THEN '0'
+                      ELSE mdg_r3_user
+                    END
+      - column: crm_r3_user_out
+        expression: CASE 
+                      WHEN comparison_crm IN ('E-mail', 'Fax', 'No contact info available') THEN '0'
+                      ELSE crm_r3_user
+                    END
+
+
+########not in crm###############
+  - kind: filter
+    name: filter_mdg
+    context_name: add_mdg_crm
+    params:
+      - condition:
+          isnull(crm_hash)
+###########not in mdg############
+  - kind: filter
+    name: filter_crm
+    context_name: add_mdg_crm
+    params:
+      - condition:
+          isnull(mdg_hash)
+
+  - kind: select
+    name: select_mdg
+    context_name: filter_mdg
+    params:
+      columns:
+        mdg_pk: mdg_pk
+        mdg_hash: mdg_hash
+        mdg_country: mdg_country
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_relationship: mdg_relationship
+        mdg_archiving_flag: mdg_archiving_flag
+        mdg_name_last: mdg_name_last
+        mdg_name_first: mdg_name_first
+        mdg_account_group: mdg_account_group
+        mdg_telnr_long: mdg_telnr_long
+        mdg_fax_number: mdg_fax_number
+        mdg_email: mdg_email
+        comparison_mdg: comparison_mdg
+        mdg_r3_user_out: mdg_r3_user
+        mdg_flgdefault: mdg_flgdefault
+      distinct: true
+
+  - kind: select
+    name: select_crm
+    context_name: filter_crm
+    params:
+      columns:
+        crm_pk: crm_pk
+        crm_hash: crm_hash
+        crm_country: crm_country
+        crm_partner: crm_partner
+        crm_partner_contact: crm_partner_contact
+        crm_relationship: crm_relationship
+        crm_archiving_flag: crm_archiving_flag
+        crm_name_last: crm_name_last
+        crm_name_first: crm_name_first
+        crm_account_group: crm_account_group
+        crm_telnr_long: crm_telnr_long
+        crm_fax_number: crm_fax_number
+        crm_email: crm_email
+        comparison_crm: comparison_crm
+        crm_r3_user_out: crm_r3_user
+        crm_flgdefault: crm_flgdefault
+      distinct: true
+
+  - kind: join
+    name: join_mdg_crm_remaining
+    context_name: select_mdg
+    params:
+      - other:
+          select_crm
+        how:
+          full
+        columns:
+          mdg_pk: crm_pk
+          comparison_mdg: comparison_crm
+          mdg_r3_user: crm_r3_user
+
+  - kind: checkpoint
+    name: checkpoint_mdg_crm_remaining
+    context_name: join_mdg_crm_remaining
+
+  - kind: filter
+    name: filter_name_first
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and mdg_name_first <> crm_name_first
+
+  - kind: filter
+    name: filter_name_last
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and mdg_name_last <> crm_name_last
+
+  - kind: filter
+    name: filter_relationship
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and mdg_relationship <> crm_relationship
+
+  - kind: filter
+    name: filter_archiving_flag
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and mdg_archiving_flag <> crm_archiving_flag
+
+  - kind: filter
+    name: filter_telnr
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and comparison_crm = 'Telephone' and mdg_r3_user = crm_r3_user
+          and (mdg_telnr_long <> crm_telnr_long or mdg_flgdefault <> crm_flgdefault)
+
+  - kind: filter
+    name: filter_mobile
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and comparison_mdg = 'Mobile Number' and mdg_r3_user = crm_r3_user
+          and (mdg_telnr_long <> crm_telnr_long or mdg_flgdefault <> crm_flgdefault)
+
+  - kind: filter
+    name: filter_email
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and comparison_crm = 'E-mail' and (mdg_email <> crm_email or mdg_flgdefault <> crm_flgdefault)
+
+  - kind: filter
+    name: filter_fax_number
+    context_name: checkpoint_mdg_crm_remaining
+    params:
+      - condition:
+          mdg_pk = crm_pk and comparison_mdg = 'Fax' and (mdg_fax_number <> crm_fax_number or mdg_flgdefault <> crm_flgdefault)
+
+  - kind: add
+    name: add_name_first
+    context_name: filter_name_first
+    params:
+      - column: attr_name
+        expression: '''First Name'''
+
+  - kind: add
+    name: add_name_last
+    context_name: filter_name_last
+    params:
+      - column: attr_name
+        expression: '''Last Name'''
+
+  - kind: add
+    name: add_telnr
+    context_name: filter_telnr
+    params:
+      - column: attr_name
+        expression: '''Telephone'''
+
+  - kind: add
+    name: add_mobile
+    context_name: filter_mobile
+    params:
+      - column: attr_name
+        expression: '''Mobile Number'''
+
+  - kind: add
+    name: add_email
+    context_name: filter_email
+    params:
+      - column: attr_name
+        expression: '''E-mail'''
+
+  - kind: add
+    name: add_fax_number
+    context_name: filter_fax_number
+    params:
+      - column: attr_name
+        expression: '''Fax'''
+
+  - kind: add
+    name: add_relationship
+    context_name: filter_relationship
+    params:
+      - column: attr_name
+        expression: '''Function'''
+
+  - kind: add
+    name: add_archiving_flag
+    context_name: filter_archiving_flag
+    params:
+      - column: attr_name
+        expression: '''Archiving Flag'''
+
+  - kind: union
+    name: union_attribute_mismatch
+    context_name: add_name_first
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_name_last
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_telnr
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_mobile
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_email
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_fax_number
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_relationship
+
+  - kind: union
+    name: union_attribute_mismatch
+    params:
+      allow_missing: true
+      by_name: true
+      other: add_archiving_flag
+
+  - kind: filter
+    name: filter_mdg_crm_non_null
+    context_name: join_mdg_crm
+    params:
+      - condition:
+          isnotnull(mdg_pk) and isnotnull(crm_pk)
+
+  - kind: select
+    name: select_mdg_pk
+    context_name: filter_mdg_crm_non_null
+    params:
+      columns:
+        mdg_pk: mdg_pk
+      distinct: true
+
+  - kind: join
+    name: join_mismatched
+    context_name: select_mdg_pk
+    params:
+      - other:
+          union_attribute_mismatch
+        how:
+          inner
+        columns:
+          mdg_pk: mdg_pk
+
+  - kind: add
+    name: add_mismatched_detailed
+    context_name: join_mismatched
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: dimension
+        expression: '''attributes are mismatching'''
+      - column: partner_function_description
+        expression: CASE mdg_relationship
+                      WHEN 'Z2' THEN 'BY VAT E-invoicing'
+                      WHEN 'F4' THEN 'Cash receipt'
+                      WHEN 'F5' THEN 'Commercial Contract'
+                      WHEN 'Z4' THEN 'Contact Person E & SMS'
+                      WHEN 'Z1' THEN 'Contact Person HHT'
+                      WHEN 'Z3' THEN 'Customer Portal User'
+                      WHEN 'DF' THEN 'Default contact'
+                      WHEN '0001' THEN 'Executive Board'
+                      WHEN 'FX' THEN 'Fax recepient'
+                      WHEN 'F1' THEN 'Finance Contact'
+                      WHEN 'Z5' THEN 'Commercial'
+                      WHEN 'Z6' THEN 'Legal'
+                      WHEN 'Z7' THEN 'Logistics'
+                      WHEN 'F2' THEN 'Finance Contact BalC'
+                      WHEN 'F3' THEN 'Finance Contact BonN'
+                      WHEN '0009' THEN 'Financial Accounting Manager'
+                      WHEN '0004' THEN 'Head of Personnel'
+                      WHEN '0008' THEN 'IT Manager'
+                      WHEN '0010' THEN 'Marketing Manager'
+                      WHEN '0007' THEN 'Personal Assistant'
+                      WHEN '0006' THEN 'Production Manager'
+                      WHEN '0002' THEN 'Purchasing Manager'
+                      WHEN '0005' THEN 'Quality Officer'
+                      WHEN '0003' THEN 'Sales Manager'
+                      ELSE NULL
+                    END
+      - column: loading_date
+        expression: current_date()
+      - column: src_attr_value
+        expression: CASE attr_name
+                      WHEN 'Telephone' THEN concat('Tel Nr ', mdg_telnr_long, ' | Def Flg ', CAST(mdg_flgdefault AS STRING))
+                      WHEN 'Mobile Number' THEN concat('Tel Nr ', mdg_telnr_long, ' | Def Flg ', CAST(mdg_flgdefault AS STRING))
+                      WHEN 'E-mail' THEN concat('Email ', mdg_email, ' | Def Flg ', CAST(mdg_flgdefault AS STRING))
+                      WHEN 'Fax' THEN concat('Fax ', mdg_fax_number, ' | Def Flg ', CAST(mdg_flgdefault AS STRING)) 
+                      WHEN 'First Name' THEN mdg_name_first
+                      WHEN 'Last Name' THEN mdg_name_last
+                      WHEN 'Function' THEN mdg_relationship
+                      WHEN 'Archiving Flag' THEN mdg_archiving_flag
+                      ELSE ''
+                      END                                        
+      - column: tgt_attr_value
+        expression: CASE attr_name
+                      WHEN 'Telephone' THEN concat('Tel Nr ', crm_telnr_long, ' | Def Flg ', CAST(crm_flgdefault AS STRING))
+                      WHEN 'Mobile Number' THEN concat('Tel Nr ', crm_telnr_long, ' | Def Flg ', CAST(crm_flgdefault AS STRING))
+                      WHEN 'E-mail' THEN concat('Email ', crm_email, ' | Def Flg ', CAST(crm_flgdefault AS STRING))
+                      WHEN 'Fax' THEN concat('Fax ', crm_fax_number, ' | Def Flg ', CAST(crm_flgdefault AS STRING))
+                      WHEN 'First Name' THEN crm_name_first
+                      WHEN 'Last Name' THEN crm_name_last
+                      WHEN 'Function' THEN crm_relationship
+                      WHEN 'Archiving Flag' THEN crm_archiving_flag
+                      ELSE ''                      
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+
+  - kind: select
+    name: select_mismatched_detailed
+    context_name: add_mismatched_detailed
+    params:
+      columns:
+        domain: domain      
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        mdg_partner: primary_key_l1
+        mdg_partner_contact: primary_key_src_l2
+        crm_partner_contact: primary_key_tgt_l2
+        mdg_account_group: attribute10
+        mdg_relationship: attribute3
+        mdg_country: country
+        attr_name: compared_attribute
+        src_attr_value: compared_src_attr_value
+        tgt_attr_value: compared_tgt_attr_value
+        mdg_name_first: attribute2
+        mdg_name_last: attribute1
+        partner_function_description: attribute4
+        loading_date: loading_date
+      distinct: true
+
+
+
+
+
+##############################################################
+  - kind: filter
+    name: filter_missing_in_mdg
+    context_name: join_mdg_crm
+    params:
+      - condition:
+          isnull(mdg_pk)
+
+###################################################################
+
+
+  - kind: add
+    name: add_missing_in_mdg_detailed
+    context_name: filter_missing_in_mdg
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''crm'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: dimension_detailed
+        expression: '''data missing from mdg'''
+      - column: attr_name
+        expression: ''''''
+      - column: partner_function_description
+        expression: CASE crm_relationship
+                      WHEN 'Z2' THEN 'BY VAT E-invoicing'
+                      WHEN 'F4' THEN 'Cash receipt'
+                      WHEN 'F5' THEN 'Commercial Contract'
+                      WHEN 'Z4' THEN 'Contact Person E & SMS'
+                      WHEN 'Z1' THEN 'Contact Person HHT'
+                      WHEN 'Z3' THEN 'Customer Portal User'
+                      WHEN 'DF' THEN 'Default contact'
+                      WHEN '0001' THEN 'Executive Board'
+                      WHEN 'FX' THEN 'Fax recepient'
+                      WHEN 'F1' THEN 'Finance Contact'
+                      WHEN 'Z5' THEN 'Commercial'
+                      WHEN 'Z6' THEN 'Legal'
+                      WHEN 'Z7' THEN 'Logistics'
+                      WHEN 'F2' THEN 'Finance Contact BalC'
+                      WHEN 'F3' THEN 'Finance Contact BonN'
+                      WHEN '0009' THEN 'Financial Accounting Manager'
+                      WHEN '0004' THEN 'Head of Personnel'
+                      WHEN '0008' THEN 'IT Manager'
+                      WHEN '0010' THEN 'Marketing Manager'
+                      WHEN '0007' THEN 'Personal Assistant'
+                      WHEN '0006' THEN 'Production Manager'
+                      WHEN '0002' THEN 'Purchasing Manager'
+                      WHEN '0005' THEN 'Quality Officer'
+                      WHEN '0003' THEN 'Sales Manager'
+                      ELSE ''
+                    END
+      - column: loading_date
+        expression: current_date()
+      - column: src_attr_value
+        expression: ''''''
+      - column: tgt_attr_value
+        expression: ''''''
+      - column: partner_contact
+        expression: ''''''
+      - column: domain
+        expression: '''CUSTOMER'''
+
+  - kind: select
+    name: select_missing_in_mdg_detailed
+    context_name: add_missing_in_mdg_detailed
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_detailed: dimension
+        crm_partner: primary_key_l1
+        partner_contact: primary_key_src_l2
+        crm_partner_contact: primary_key_tgt_l2
+        crm_account_group: attribute10
+        crm_relationship: attribute3
+        crm_country: country
+        attr_name: compared_attribute
+        src_attr_value: compared_src_attr_value
+        tgt_attr_value: compared_tgt_attr_value
+        crm_name_first: attribute2
+        crm_name_last: attribute1
+        partner_function_description: attribute4
+        loading_date: loading_date
+      distinct: true
+      
+  - kind: add
+    name: add_missing_in_mdg_agg
+    context_name: select_missing_in_mdg_detailed
+    params:
+      - column: mdg
+        expression: concat(primary_key_l1, primary_key_tgt_l2)
+      - column: dimension_aggr
+        expression: '''DATA MISSING FROM MDG'''
+###################################################################
+
+
+  - kind: filter
+    name: filter_missing_in_crm
+    context_name: join_mdg_crm
+    params:
+      - condition:
+          isnull(crm_pk)    
+
+  - kind: add
+    name: add_missing_in_crm_detailed
+    context_name: filter_missing_in_crm
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''crm'''
+      - column: dimension_detailed
+        expression: '''data missing from crm'''
+      - column: attr_name
+        expression: ''''''
+      - column: partner_function_description
+        expression: CASE mdg_relationship
+                      WHEN 'Z2' THEN 'BY VAT E-invoicing'
+                      WHEN 'F4' THEN 'Cash receipt'
+                      WHEN 'F5' THEN 'Commercial Contract'
+                      WHEN 'Z4' THEN 'Contact Person E & SMS'
+                      WHEN 'Z1' THEN 'Contact Person HHT'
+                      WHEN 'Z3' THEN 'Customer Portal User'
+                      WHEN 'DF' THEN 'Default contact'
+                      WHEN '0001' THEN 'Executive Board'
+                      WHEN 'FX' THEN 'Fax recepient'
+                      WHEN 'F1' THEN 'Finance Contact'
+                      WHEN 'Z5' THEN 'Commercial'
+                      WHEN 'Z6' THEN 'Legal'
+                      WHEN 'Z7' THEN 'Logistics'
+                      WHEN 'F2' THEN 'Finance Contact BalC'
+                      WHEN 'F3' THEN 'Finance Contact BonN'
+                      WHEN '0009' THEN 'Financial Accounting Manager'
+                      WHEN '0004' THEN 'Head of Personnel'
+                      WHEN '0008' THEN 'IT Manager'
+                      WHEN '0010' THEN 'Marketing Manager'
+                      WHEN '0007' THEN 'Personal Assistant'
+                      WHEN '0006' THEN 'Production Manager'
+                      WHEN '0002' THEN 'Purchasing Manager'
+                      WHEN '0005' THEN 'Quality Officer'
+                      WHEN '0003' THEN 'Sales Manager'
+                      ELSE ''
+                    END
+      - column: loading_date
+        expression: current_date()
+      - column: src_attr_value
+        expression: ''''''
+      - column: tgt_attr_value
+        expression: ''''''
+      - column: partner_contact
+        expression: ''''''
+      - column: domain
+        expression: '''CUSTOMER'''                   
+
+  - kind: select
+    name: select_missing_in_crm_detailed
+    context_name: add_missing_in_crm_detailed
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_detailed: dimension
+        mdg_partner: primary_key_l1
+        mdg_partner_contact: primary_key_src_l2
+        partner_contact: primary_key_tgt_l2
+        mdg_account_group: attribute10
+        mdg_relationship: attribute3
+        mdg_country: country
+        attr_name: compared_attribute
+        src_attr_value: compared_src_attr_value
+        tgt_attr_value: compared_tgt_attr_value
+        mdg_name_first: attribute2
+        mdg_name_last: attribute1
+        partner_function_description: attribute4
+        loading_date: loading_date
+      distinct: true
+
+  - kind: add
+    name: add_missing_in_crm_agg
+    context_name: select_missing_in_crm_detailed
+    params:
+      - column: crm
+        expression: concat(primary_key_l1, primary_key_src_l2)
+      - column: dimension_aggr
+        expression: '''DATA MISSING FROM CRM'''
+####
+  - kind: group
+    name: group_missing_in_mdg_agg
+    context_name: add_missing_in_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension_aggr
+
+  - kind: add
+    name: add_missing_in_mdg_agg_loading_date
+    context_name: group_missing_in_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_missing_in_mdg_agg
+    context_name: add_missing_in_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_aggr: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: group
+    name: group_missing_in_crm_agg
+    context_name: add_missing_in_crm_agg
+    params:
+      - aggs:
+          crm: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension_aggr
+
+  - kind: add
+    name: add_missing_in_crm_agg_loading_date
+    context_name: group_missing_in_crm_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''crm'''
+      - column: cnt
+        expression: CAST(count_crm AS INT)
+
+  - kind: select
+    name: select_missing_in_crm_agg
+    context_name: add_missing_in_crm_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension_aggr: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: add_mdg_agg_pre_aggr
+    context_name: checkpoint_mdg_agg
+    params:
+      columns:
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_country: country
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: add_mdg_agg_pre_aggr
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: concat(mdg_partner, mdg_partner_contact)    
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''crm'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: select
+    name: add_crm_agg_pre_aggr
+    context_name: checkpoint_crm_agg
+    params:
+      columns:
+        crm_partner: crm_partner
+        crm_partner_contact: crm_partner_contact
+        crm_country: country
+      distinct: true
+
+
+  - kind: add
+    name: add_crm_agg
+    context_name: add_crm_agg_pre_aggr
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''crm'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: crm
+        expression: concat(crm_partner, crm_partner_contact)    
+
+  - kind: group
+    name: group_crm_agg
+    context_name: add_crm_agg
+    params:
+      - aggs:
+          crm: count
+        by:
+        - country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_crm_agg_loading_date
+    context_name: group_crm_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_crm AS INT)
+
+  - kind: select
+    name: select_crm_agg
+    context_name: add_crm_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: add_mismatched_agg_distinct
+    context_name: join_mismatched
+    params:
+      columns:
+        mdg_partner: mdg_partner
+        mdg_partner_contact: mdg_partner_contact
+        mdg_country: mdg_country
+      distinct: true
+
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: add_mismatched_agg_distinct
+    params:
+      - column: table_name
+        expression: '''CONTACT AND RELATIONSHIP'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+      - column: mdg
+        expression: concat(mdg_partner, mdg_partner_contact)
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_mismatched_agg_loading_date
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''crm'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_mismatched_agg
+    context_name: add_mdg_mismatched_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_agg
+    context_name: select_mdg_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_crm_agg
+
+  - kind: union
+    name: union_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mdg_mismatched_agg
+
+  - kind: union
+    name: union_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_mdg_agg
+
+  - kind: union
+    name: union_agg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_crm_agg
+
+
+  - kind: write_dataio
+    name: write_aggregated
+    context_name: union_agg
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: partition
+      convert_to_target_schema: True  
+
+
+  - kind: union
+    name: union_detailed
+    context_name: select_mismatched_detailed
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_mdg_detailed
+
+  - kind: union
+    name: union_detailed
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_in_crm_detailed
+
+  - kind: write_dataio
+    name: write_detailed
+    context_name: union_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: partition
+      convert_to_target_schema: True

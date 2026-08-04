@@ -1,0 +1,1396 @@
+transform:
+  name: correspondence_address_mdg_s4hana
+  operations:
+
+  # Read MDG but000 data
+  - kind: read_dataio
+    name: read_mdg_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  # Filter MDG but000 data
+  - kind: filter
+    name: filter_mdg_but000
+    context_name: read_mdg_but000
+    params:
+      - condition:
+          xpcpt <> 'X' and partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%')
+
+  # Select required columns from MDG but000
+  - kind: select
+    name: select_mdg_but000
+    context_name: filter_mdg_but000
+    params:
+      columns:
+        partner: partner_mdg
+      distinct: true
+
+  # Read MDG but020 data
+  - kind: read_dataio
+    name: read_mdg_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  # Select required columns from MDG but020
+  - kind: select
+    name: select_mdg_but020
+    context_name: read_mdg_but020
+    params:
+      columns:
+        partner: partner_mdg_but020
+        addrnumber: addrnumber_mdg
+      distinct: true
+
+  # Read MDG adrc data
+  - kind: read_dataio
+    name: read_mdg_adrc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adrc
+      schema_version: v1
+
+  # Filter MDG adrc data
+  - kind: filter
+    name: filter_mdg_adrc
+    context_name: read_mdg_adrc
+    params:
+      - condition:
+          nation = '' and (adrc_uuid <> '' and isnotnull(adrc_uuid))
+
+  # Select and clean MDG adrc data
+  - kind: select
+    name: select_mdg_adrc_regex
+    context_name: filter_mdg_adrc
+    params:
+      columns:
+        addrnumber: addrnumber_mdg
+        STR_SUPPL1: STR_SUPPL1_mdg_temp
+        STR_SUPPL2: STR_SUPPL2_mdg_temp
+        NAME_CO: NAME_CO_mdg_temp
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_mdg_knvv
+    context_name: read_mdg_knvv
+    params:
+      - condition:
+          vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+  
+  - kind: select
+    name: select_knvv_pre_checkpoint
+    context_name: filter_mdg_knvv
+    params:          
+      columns:
+        kunnr: kunnr
+        kvgr4: kvgr4
+        vkorg: vkorg
+        vtweg: vtweg
+        spart: spart
+      distinct: true
+
+  - kind: checkpoint
+    name: select_knvv
+    context_name: select_knvv_pre_checkpoint
+
+
+  # Join MDG tables
+  - kind: join
+    name: join_mdg
+    context_name: select_mdg_but000
+    params:
+      - other: select_mdg_but020
+        how: inner
+        columns:
+          partner_mdg: partner_mdg_but020
+      - other:
+          select_knvv
+        how:
+          inner
+        columns:
+          partner_mdg: kunnr
+      - other: select_mdg_adrc_regex
+        how: left
+        columns:
+          addrnumber_mdg: addrnumber_mdg
+
+
+  # Compute MDG hash
+  - kind: add
+    name: mdg
+    context_name: join_mdg
+    params:
+      - column: STR_SUPPL1_mdg
+        expression: regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL1_mdg_temp,'')), '\n', ''), '\r', '')
+      - column: STR_SUPPL2_mdg                    
+        expression: regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL2_mdg_temp,'')), '\n', ''), '\r', '')
+      - column: NAME_CO_mdg                
+        expression: regexp_replace(regexp_replace(lower(coalesce(NAME_CO_mdg_temp,'')), '\n', ''), '\r', '')
+      - column: hash_mdg
+        expression: md5(concat(
+            regexp_replace(regexp_replace(partner_mdg, '\n', ''), '\r', ''),
+            regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL1_mdg_temp,'')), '\n', ''), '\r', ''),
+            regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL2_mdg_temp,'')), '\n', ''), '\r', ''),
+            regexp_replace(regexp_replace(lower(coalesce(NAME_CO_mdg_temp,'')), '\n', ''), '\r', '')))
+
+  - kind: select
+    name: checkpoint_mdg
+    context_name: mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        STR_SUPPL1_mdg: STR_SUPPL1_mdg
+        STR_SUPPL2_mdg: STR_SUPPL2_mdg
+        NAME_CO_mdg: NAME_CO_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+
+  # Read s4hana but000 data
+  - kind: read_dataio
+    name: read_s4hana_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  # Filter s4hana but000 data
+  - kind: filter
+    name: filter_s4hana_but000
+    context_name: read_s4hana_but000
+    params:
+      - condition:
+          xpcpt <> 'X' and if(sap_cluster = 'CL1', partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'),partner like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%'))
+
+  # Select required columns from s4hana but000
+  - kind: select
+    name: select_s4hana_but000
+    context_name: filter_s4hana_but000
+    params:
+      columns:
+        partner: partner_s4hana
+        sap_cluster: sap_cluster_but000
+      distinct: true
+
+  # Read s4hana but020 data
+  - kind: read_dataio
+    name: read_s4hana_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  # Select required columns from s4hana but020
+  - kind: select
+    name: select_s4hana_but020
+    context_name: read_s4hana_but020
+    params:
+      columns:
+        partner: partner_s4hana_but020
+        addrnumber: addrnumber_s4hana_but020
+        sap_cluster: sap_cluster_but020
+      distinct: true
+
+  # Read s4hana adrc data
+  - kind: read_dataio
+    name: read_s4hana_adrc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: adrc
+      schema_version: v1
+
+  # Filter s4hana adrc data
+  - kind: filter
+    name: filter_s4hana_adrc
+    context_name: read_s4hana_adrc
+    params:
+      - condition:
+          nation = '' and (adrc_uuid <> '' and isnotnull(adrc_uuid))
+
+  # Select and clean s4hana adrc data
+  - kind: select
+    name: select_s4hana_adrc_regex
+    context_name: filter_s4hana_adrc
+    params:
+      columns:
+        addrnumber: addrnumber_s4hana_adrc
+        STR_SUPPL1: STR_SUPPL1_s4hana_temp
+        STR_SUPPL2: STR_SUPPL2_s4hana_temp
+        NAME_CO: NAME_CO_s4hana_temp
+        sap_cluster: sap_cluster_adrc
+      distinct: true
+
+  - kind: read_dataio
+    name: read_knvv_sap
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_knvv_sap
+    context_name: read_knvv_sap
+    params:
+      - condition:
+          vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+  
+  - kind: select
+    name: select_knvv_sap
+    context_name: filter_knvv_sap
+    params:          
+      columns:
+        kunnr: kunnr_knvv
+        kvgr4: kvgr4_knvv
+        vkorg: vkorg_knvv
+        vtweg: vtweg_knvv
+        spart: spart_knvv
+        sap_cluster: sap_cluster_knvv
+      distinct: true
+
+  # Join s4hana tables
+  - kind: join
+    name: join_s4hana
+    context_name: select_s4hana_but000
+    params:
+      - other: select_s4hana_but020
+        how: inner
+        columns:
+          partner_s4hana: partner_s4hana_but020
+          sap_cluster_but000: sap_cluster_but020
+      - other:
+          select_knvv_sap
+        how:
+          inner
+        columns:
+          partner_s4hana: kunnr_knvv
+          sap_cluster_but000: sap_cluster_knvv
+      - other: select_s4hana_adrc_regex
+        how: left
+        columns:
+          addrnumber_s4hana_but020: addrnumber_s4hana_adrc
+          sap_cluster_but020: sap_cluster_adrc
+
+  # Compute s4hana hash
+  - kind: add
+    name: s4hana
+    context_name: join_s4hana
+    params:
+      - column: STR_SUPPL1_s4hana
+        expression: regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL1_s4hana_temp,'')), '\n', ''), '\r', '')
+      - column: STR_SUPPL2_s4hana                    
+        expression: regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL2_s4hana_temp,'')), '\n', ''), '\r', '')
+      - column: NAME_CO_s4hana                
+        expression: regexp_replace(regexp_replace(lower(coalesce(NAME_CO_s4hana_temp,'')), '\n', ''), '\r', '')
+      - column: hash_s4hana
+        expression: md5(concat(
+            regexp_replace(regexp_replace(partner_s4hana, '\n', ''), '\r', ''),
+            regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL1_s4hana_temp,'')), '\n', ''), '\r', ''),
+            regexp_replace(regexp_replace(lower(coalesce(STR_SUPPL2_s4hana_temp,'')), '\n', ''), '\r', ''),
+            regexp_replace(regexp_replace(lower(coalesce(NAME_CO_s4hana_temp,'')), '\n', ''), '\r', '')))
+
+  - kind: select
+    name: checkpoint_s4hana
+    context_name: s4hana
+    params:
+      columns:
+        partner_s4hana: partner_s4hana
+        STR_SUPPL1_s4hana: STR_SUPPL1_s4hana
+        STR_SUPPL2_s4hana: STR_SUPPL2_s4hana
+        NAME_CO_s4hana: NAME_CO_s4hana
+        hash_s4hana: hash_s4hana
+      distinct: true
+
+  # Identify non-matching MDG records
+  - kind: join
+    name: join_non_matching_mdg
+    context_name: checkpoint_mdg
+    params:
+      - other: checkpoint_s4hana
+        how: full
+        columns:
+          hash_mdg: hash_s4hana
+
+  - kind: filter
+    name: filter_non_matching_mdg
+    context_name: join_non_matching_mdg
+    params:
+      - condition:
+          isnull(hash_s4hana) or hash_s4hana = ''
+
+  # Identify non-matching s4hana records
+  - kind: join
+    name: join_non_matching_s4hana
+    context_name: checkpoint_s4hana
+    params:
+      - other: checkpoint_mdg
+        how: full
+        columns:
+          hash_s4hana: hash_mdg
+
+  - kind: filter
+    name: filter_non_matching_s4hana
+    context_name: join_non_matching_s4hana
+    params:
+      - condition:
+          isnull(hash_mdg) or hash_mdg = ''
+
+  # Select non-matching MDG records
+  - kind: select
+    name: select_non_matching_mdg
+    context_name: filter_non_matching_mdg
+    params:
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        STR_SUPPL1_mdg: STR_SUPPL1_mdg
+        STR_SUPPL2_mdg: STR_SUPPL2_mdg
+        NAME_CO_mdg: NAME_CO_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  # Select non-matching s4hana records
+  - kind: select
+    name: select_non_matching_s4hana
+    context_name: filter_non_matching_s4hana
+    params:
+    params:
+      columns:
+        partner_s4hana: partner_s4hana
+        STR_SUPPL1_s4hana: STR_SUPPL1_s4hana
+        STR_SUPPL2_s4hana: STR_SUPPL2_s4hana
+        NAME_CO_s4hana: NAME_CO_s4hana
+        hash_s4hana: hash_s4hana
+      distinct: true
+
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_mdg
+    context_name: select_non_matching_mdg
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_s4hana
+    context_name: select_non_matching_s4hana
+
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E' and sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvv4t
+    params:
+      - condition:
+         sap_cluster = 'CL1' and spras = 'E'
+
+  - kind: select
+    name: select_tvv4t
+    params:
+      columns:
+        kvgr4: kvgr4
+        bezei: bezei
+      distinct: true
+
+
+  - kind: join
+    name: join_non_matching
+    context_name: checkpoint_non_matching_mdg
+    params:
+      - other:
+          checkpoint_non_matching_s4hana
+        how:
+          full
+        columns:
+          partner_mdg: partner_s4hana
+
+
+  - kind: join
+    name: join_missing_from_mdg
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_s4hana: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_mdg
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+  - kind: join
+    name: join_missing_from_s4hana
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_mdg: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_s4hana
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+## data missing from mdg
+
+  - kind: filter
+    name: filter_missing_from_mdg
+    context_name: join_missing_from_mdg
+    params:
+      - condition:
+          isnull(partner_mdg)
+
+  - kind: add
+    name: add_missing_from_mdg
+    context_name: filter_missing_from_mdg
+    params:
+      - column: msg
+        expression: if(isnull(partner_mdg), 'data missing from mdg', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_s4hana, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CORRESPONDENCE ADDRESS'''
+      - column: src_system
+        expression: '''sap'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: loading_date
+        expression: current_date()
+
+
+## data missing from s4hana
+
+  - kind: filter
+    name: filter_missing_from_s4hana
+    context_name: join_missing_from_s4hana
+    params:
+      - condition:
+          isnull(partner_s4hana)
+
+  - kind: add
+    name: add_missing_from_s4hana
+    context_name: filter_missing_from_s4hana
+    params:
+      - column: msg
+        expression: if(isnull(partner_s4hana), 'data missing from sap', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CORRESPONDENCE ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''sap'''
+      - column: loading_date
+        expression: current_date()
+
+# attributes are mismatching
+
+  - kind: filter
+    name: filter_mismatched
+    context_name: join_missing_from_s4hana
+    params:
+      - condition:
+          partner_s4hana = partner_mdg
+          and (STR_SUPPL1_s4hana <> STR_SUPPL1_mdg
+          or STR_SUPPL2_s4hana <> STR_SUPPL2_mdg
+          or NAME_CO_s4hana <> NAME_CO_mdg)
+
+  - kind: add
+    name: add_mismatched
+    context_name: filter_mismatched
+    params:
+      - column: msg_STREET_2
+        expression: if(partner_s4hana = partner_mdg                     
+                    and STR_SUPPL1_s4hana <> STR_SUPPL1_mdg, 'attributes are mismatching', '-')   
+      - column: msg_STREET_3
+        expression: if(partner_s4hana = partner_mdg                     
+                    and STR_SUPPL2_s4hana <> STR_SUPPL2_mdg, 'attributes are mismatching', '-')
+      - column: msg_home_NAME_1
+        expression: if(partner_s4hana = partner_mdg                     
+                    and NAME_CO_s4hana <> NAME_CO_mdg, 'attributes are mismatching', '-')
+      - column: attr_name_STREET_2
+        expression: if(partner_s4hana = partner_mdg                    
+                    and STR_SUPPL1_s4hana <> STR_SUPPL1_mdg, concat('CORRESPONDENCE ADDRESS:', ' ', ' STREET_2'), '-')
+      - column: attr_name_STREET_3
+        expression: if(partner_s4hana = partner_mdg                    
+                    and STR_SUPPL2_s4hana <> STR_SUPPL2_mdg, concat('CORRESPONDENCE ADDRESS:', ' ', ' STREET_3'), '-')
+      - column: attr_name_NAME_1
+        expression: if(partner_s4hana = partner_mdg                    
+                    and NAME_CO_s4hana <> NAME_CO_mdg, concat('CORRESPONDENCE ADDRESS:', ' ', ' NAME_1'), '-')
+                    
+                    
+                    
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CORRESPONDENCE ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''sap'''
+      - column: loading_date
+        expression: current_date()
+
+
+  - kind: select
+    name: select_missing_from_mdg
+    context_name: add_missing_from_mdg
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_s4hana: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_missing_from_s4hana
+    context_name: add_missing_from_s4hana
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_street2
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_STREET_2 <> '-'
+
+  - kind: select
+    name: select_mismatched_street2
+    context_name: filter_mismatched_street2
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_STREET_2: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_STREET_2: compared_attribute
+        STR_SUPPL1_mdg: compared_src_attr_value
+        STR_SUPPL1_s4hana: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_STREET_3
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_STREET_3 <> '-'
+
+  - kind: select
+    name: select_mismatched_STREET_3
+    context_name: filter_mismatched_STREET_3
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_STREET_3: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_STREET_3: compared_attribute
+        STR_SUPPL2_mdg: compared_src_attr_value
+        STR_SUPPL2_s4hana: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_home_NAME_1
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_home_NAME_1 <> '-'
+
+  - kind: select
+    name: select_mismatched_home_NAME_1
+    context_name: filter_mismatched_home_NAME_1
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_home_NAME_1: dimension
+        partner_mdg: primary_key_l1
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_NAME_1: compared_attribute
+        NAME_CO_mdg: compared_src_attr_value
+        NAME_CO_s4hana: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_correspondence_address_mismatched
+    context_name: select_mismatched_street2
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_STREET_3
+
+  - kind: union
+    name: union_correspondence_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_home_NAME_1
+
+  - kind: select
+    name: select_mismatched
+    context_name: union_correspondence_address_mismatched
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        primary_key_l1: primary_key_l1
+        attribute4: attribute4
+        attribute5: attribute5
+        attribute6: attribute6
+        attribute7: attribute7
+        attribute8: attribute8
+        attribute10: attribute10
+        country: country
+        compared_attribute: compared_attribute
+        compared_src_attr_value: compared_src_attr_value
+        compared_tgt_attr_value: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: union
+    name: union_correspondence_address
+    context_name: select_missing_from_mdg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_from_s4hana
+
+  - kind: union
+    name: union_correspondence_address
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched
+
+  - kind: write_dataio
+    name: write_correspondence_address
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True
+
+##agg
+
+  - kind: select
+    name: select_mdg
+    context_name: checkpoint_mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: select_mdg
+    params:
+      - column: table_name
+        expression: '''CORRESPONDENCE ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: hash_mdg
+      - column: mdg_country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##total s4hana
+  - kind: select
+    name: select_s4hana
+    context_name: checkpoint_s4hana
+    params:
+      columns:
+        partner_s4hana: partner_s4hana
+        hash_s4hana: hash_s4hana
+      distinct: true
+
+  - kind: add
+    name: add_s4hana_agg
+    context_name: select_s4hana
+    params:
+      - column: table_name
+        expression: '''CORRESPONDENCE ADDRESS'''
+      - column: src_system
+        expression: '''sap'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: s4hana
+        expression: hash_s4hana
+      - column: s4hana_country
+        expression: CASE substr(partner_s4hana, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_s4hana_agg
+    context_name: add_s4hana_agg
+    params:
+      - aggs:
+          s4hana: count
+        by:
+        - s4hana_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_s4hana_agg_loading_date
+    context_name: group_s4hana_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_s4hana AS INT)
+
+  - kind: select
+    name: select_s4hana_agg
+    context_name: add_s4hana_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        s4hana_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from mdg
+
+  - kind: group
+    name: group_missing_from_mdg_agg
+    context_name: select_missing_from_mdg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_mdg_agg
+    context_name: group_missing_from_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM MDG'''
+
+  - kind: select
+    name: select_missing_from_mdg_agg
+    context_name: add_missing_from_mdg_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from s4hana
+
+  - kind: group
+    name: group_missing_from_s4hana_agg
+    context_name: select_missing_from_s4hana
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_s4hana_agg
+    context_name: group_missing_from_s4hana_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM SAP'''
+
+  - kind: select
+    name: select_missing_from_s4hana_agg
+    context_name: add_missing_from_s4hana_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##mismatched aggr
+
+  - kind: filter
+    name: filter_mismatched_agg
+    context_name: select_mismatched
+    params:
+      - condition:
+          dimension = 'attributes are mismatching'
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: filter_mismatched_agg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+
+  - kind: select
+    name: select_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

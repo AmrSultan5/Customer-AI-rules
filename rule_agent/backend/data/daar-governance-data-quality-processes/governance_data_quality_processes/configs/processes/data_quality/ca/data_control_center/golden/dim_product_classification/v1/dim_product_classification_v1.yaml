@@ -1,0 +1,454 @@
+transform:
+  name: dim_product_classification
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#dm_product_general
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+
+  - kind: select
+    name: select_dm_product_general
+    params:
+      columns:
+        material_code: material_code_pg
+        material_group_code: material_group_code
+        material_group_name: material_group_name
+        material_type_code: material_type_code
+        material_type_name: material_type_name
+        bpp_code: bpp_code
+        bpp_name: bpp_name
+        bpp_package_code: bpp_package_code
+        bpp_package_name: bpp_package_name
+        sap_cluster: sap_cluster_pg
+      distinct: true
+
+#dm_product_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+
+  - kind: select
+    name: select_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code
+        flavour_code: flavour_code
+        flavour_name: flavour_name
+        pack_size_code: pack_size_code
+        pack_size_name: pack_size_name
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l1_code: product_hierarchy_l1_code
+        product_hierarchy_l1_name: product_hierarchy_l1_name
+        product_hierarchy_l2_code: product_hierarchy_l2_code
+        product_hierarchy_l2_name: product_hierarchy_l2_name
+        product_hierarchy_l3_code: product_hierarchy_l3_code
+        product_hierarchy_l3_name: product_hierarchy_l3_name
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        product_hierarchy_l4_name: product_hierarchy_l4_name
+        product_hierarchy_l5_code: product_hierarchy_l5_code
+        product_hierarchy_l5_name: product_hierarchy_l5_name
+        sales_org_code: sales_org_code
+        sales_org_name: sales_org_name
+        sales_unit_code: sales_unit_code
+        sales_unit_name: sales_unit_name
+        brand_code: brand_code
+        brand_name: brand_name
+        distribution_channel_code: distribution_channel_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_product_general
+    context_name: select_dm_product_sales_organization
+    params:
+      - other:
+          select_dm_product_general
+        how:
+          inner
+        columns:
+          material_code: material_code_pg
+          sap_cluster: sap_cluster_pg
+
+  - kind: select
+    name: select_dm_product_classification
+    params:
+      columns:
+        flavour_code: flavour_code
+        flavour_name: flavour_name
+        material_group_code: material_group_code
+        material_group_name: material_group_name
+        material_type_code: material_type_code
+        material_type_name: material_type_name
+        pack_size_code: pack_size_code
+        pack_size_name: pack_size_name
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l1_code: product_hierarchy_l1_code
+        product_hierarchy_l1_name: product_hierarchy_l1_name
+        product_hierarchy_l2_code: product_hierarchy_l2_code
+        product_hierarchy_l2_name: product_hierarchy_l2_name
+        product_hierarchy_l3_code: product_hierarchy_l3_code
+        product_hierarchy_l3_name: product_hierarchy_l3_name
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        product_hierarchy_l4_name: product_hierarchy_l4_name
+        product_hierarchy_l5_code: product_hierarchy_l5_code
+        product_hierarchy_l5_name: product_hierarchy_l5_name
+        sales_unit_code: sales_unit_code
+        sales_unit_name: sales_unit_name
+        brand_code: brand_code
+        brand_name: brand_name
+        bpp_code: bpp_code
+        bpp_name: bpp_name
+        bpp_package_code: bpp_package_code
+        bpp_package_name: bpp_package_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dim_product_classification_expression
+    params:
+      - column: prod_class_id
+        expression: MD5(
+                    ifnull(flavour_code, 'null') ||
+                    ifnull(material_group_code, 'null') ||
+                    ifnull(material_type_code, 'null') ||
+                    ifnull(pack_size_code, 'null') ||
+                    ifnull(pack_type_code, 'null') ||
+                    ifnull(product_hierarchy_code, 'null') ||
+                    ifnull(product_hierarchy_l1_code, 'null') ||
+                    ifnull(product_hierarchy_l2_code, 'null') ||
+                    ifnull(product_hierarchy_l3_code, 'null') ||
+                    ifnull(product_hierarchy_l4_code, 'null') ||
+                    ifnull(product_hierarchy_l5_code, 'null') ||
+                    ifnull(sales_unit_code, 'null') ||
+                    ifnull(brand_code, 'null') ||
+                    ifnull(bpp_code, 'null') ||
+                    ifnull(bpp_name, 'null') ||
+                    ifnull(bpp_package_code, 'null') ||
+                    ifnull(bpp_package_name, 'null')
+                    )
+      - column: flavour
+        expression: flavour_code || ' - ' || flavour_name
+      - column: material_group
+        expression: material_group_code || ' - ' || material_group_name
+      - column: material_type
+        expression: material_type_code || ' - ' || material_type_name
+      - column: pack_size
+        expression: pack_size_code || ' - ' || pack_size_name
+      - column: pack_type
+        expression: pack_type_code || ' - ' || pack_type_name
+      - column: product_hierarchy_l1
+        expression: product_hierarchy_l1_code || ' - ' || product_hierarchy_l1_name
+      - column: product_hierarchy_l2
+        expression: product_hierarchy_l2_code || ' - ' || product_hierarchy_l2_name
+      - column: product_hierarchy_l3
+        expression: product_hierarchy_l3_code || ' - ' || product_hierarchy_l3_name
+      - column: product_hierarchy_l4
+        expression: product_hierarchy_l4_code || ' - ' || product_hierarchy_l4_name
+      - column: product_hierarchy_l5
+        expression: product_hierarchy_l5_code || ' - ' || product_hierarchy_l5_name
+      - column: sales_unit
+        expression: sales_unit_code || ' - ' || sales_unit_name
+      - column: brand
+        expression: brand_code || ' - ' || brand_name
+      - column: bpp
+        expression: bpp_code || ' - ' || bpp_name
+      - column: bpp_package
+        expression: bpp_package_code || ' - ' || bpp_package_name
+
+  - kind: select
+    name: select_dm_product_classification
+    params:
+      columns:
+        flavour: flavour
+        flavour_code: flavour_code
+        flavour_name: flavour_name
+        material_group: material_group
+        material_group_code: material_group_code
+        material_group_name: material_group_name
+        material_type: material_type
+        material_type_code: material_type_code
+        material_type_name: material_type_name
+        pack_size: pack_size
+        pack_size_code: pack_size_code
+        pack_size_name: pack_size_name
+        pack_type: pack_type
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        prod_class_id: prod_class_id
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l1: product_hierarchy_l1
+        product_hierarchy_l1_code: product_hierarchy_l1_code
+        product_hierarchy_l1_name: product_hierarchy_l1_name
+        product_hierarchy_l2: product_hierarchy_l2
+        product_hierarchy_l2_code: product_hierarchy_l2_code
+        product_hierarchy_l2_name: product_hierarchy_l2_name
+        product_hierarchy_l3: product_hierarchy_l3
+        product_hierarchy_l3_code: product_hierarchy_l3_code
+        product_hierarchy_l3_name: product_hierarchy_l3_name
+        product_hierarchy_l4: product_hierarchy_l4
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        product_hierarchy_l4_name: product_hierarchy_l4_name
+        product_hierarchy_l5: product_hierarchy_l5
+        product_hierarchy_l5_code: product_hierarchy_l5_code
+        product_hierarchy_l5_name: product_hierarchy_l5_name
+        sales_unit: sales_unit
+        sales_unit_code: sales_unit_code
+        sales_unit_name: sales_unit_name
+        brand: brand
+        brand_code: brand_code
+        brand_name: brand_name
+        bpp_code: bpp_code
+        bpp_name: bpp_name
+        bpp: bpp
+        bpp_package_code: bpp_package_code
+        bpp_package_name: bpp_package_name
+        bpp_package: bpp_package
+      distinct: true
+
+  - kind: add
+    name: add_static_row
+    params:
+      - column: flavour_1
+        expression: '''N/A'''
+      - column: flavour_code_1
+        expression: '''N/A'''
+      - column: flavour_name_1
+        expression: '''N/A'''
+      - column: material_group_1
+        expression: '''N/A'''
+      - column: material_group_code_1
+        expression: '''N/A'''
+      - column: material_group_name_1
+        expression: '''N/A'''
+      - column: material_type_1
+        expression: '''N/A'''
+      - column: material_type_code_1
+        expression: '''N/A'''
+      - column: material_type_name_1
+        expression: '''N/A'''
+      - column: pack_size_1
+        expression: '''N/A'''
+      - column: pack_size_code_1
+        expression: '''N/A'''
+      - column: pack_size_name_1
+        expression: '''N/A'''
+      - column: pack_type_1
+        expression: '''N/A'''
+      - column: pack_type_code_1
+        expression: '''N/A'''
+      - column: pack_type_name_1
+        expression: '''N/A'''
+      - column: prod_class_id_1
+        expression: '''-1'''
+      - column: product_hierarchy_code_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l1_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l1_code_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l1_name_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l2_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l2_code_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l2_name_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l3_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l3_code_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l3_name_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l4_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l4_code_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l4_name_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l5_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l5_code_1
+        expression: '''N/A'''
+      - column: product_hierarchy_l5_name_1
+        expression: '''N/A'''
+      - column: sales_unit_1
+        expression: '''N/A'''
+      - column: sales_unit_code_1
+        expression: '''N/A'''
+      - column: sales_unit_name_1
+        expression: '''N/A'''
+      - column: brand_1
+        expression: '''N/A'''
+      - column: brand_code_1
+        expression: '''N/A'''
+      - column: brand_name_1
+        expression: '''N/A'''
+        expression: '''N/A'''
+      - column: bpp_code_1
+        expression: '''N/A'''
+      - column: bpp_name_1
+        expression: '''N/A'''
+      - column: bpp_1
+        expression: '''N/A'''
+      - column: bpp_package_code_1
+        expression: '''N/A'''
+      - column: bpp_package_name_1
+        expression: '''N/A'''
+      - column: bpp_package_1
+        expression: '''N/A'''
+
+  - kind: select
+    name: select_static_row
+    params:
+      columns:
+        flavour_1: flavour
+        flavour_code_1: flavour_code
+        flavour_name_1: flavour_name
+        material_group_1: material_group
+        material_group_code_1: material_group_code
+        material_group_name_1: material_group_name
+        material_type_1: material_type
+        material_type_code_1: material_type_code
+        material_type_name_1: material_type_name
+        pack_size_1: pack_size
+        pack_size_code_1: pack_size_code
+        pack_size_name_1: pack_size_name
+        pack_type_1: pack_type
+        pack_type_code_1: pack_type_code
+        pack_type_name_1: pack_type_name
+        prod_class_id_1: prod_class_id
+        product_hierarchy_code_1: product_hierarchy_code
+        product_hierarchy_l1_1: product_hierarchy_l1
+        product_hierarchy_l1_code_1: product_hierarchy_l1_code
+        product_hierarchy_l1_name_1: product_hierarchy_l1_name
+        product_hierarchy_l2_1: product_hierarchy_l2
+        product_hierarchy_l2_code_1: product_hierarchy_l2_code
+        product_hierarchy_l2_name_1: product_hierarchy_l2_name
+        product_hierarchy_l3_1: product_hierarchy_l3
+        product_hierarchy_l3_code_1: product_hierarchy_l3_code
+        product_hierarchy_l3_name_1: product_hierarchy_l3_name
+        product_hierarchy_l4_1: product_hierarchy_l4
+        product_hierarchy_l4_code_1: product_hierarchy_l4_code
+        product_hierarchy_l4_name_1: product_hierarchy_l4_name
+        product_hierarchy_l5_1: product_hierarchy_l5
+        product_hierarchy_l5_code_1: product_hierarchy_l5_code
+        product_hierarchy_l5_name_1: product_hierarchy_l5_name
+        sales_unit_1: sales_unit
+        sales_unit_code_1: sales_unit_code
+        sales_unit_name_1: sales_unit_name
+        brand_1: brand
+        brand_code_1: brand_code
+        brand_name_1: brand_name
+        bpp_code_1: bpp_code
+        bpp_name_1: bpp_name
+        bpp_1: bpp
+        bpp_package_code_1: bpp_package_code
+        bpp_package_name_1: bpp_package_name
+        bpp_package_1: bpp_package
+      distinct: true
+
+
+  - kind: union
+    name: union_dm_product_classification_static_row
+    context_name: select_dm_product_classification
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_static_row
+
+  - kind: select
+    name: select_dm_product_classification_final
+    params:
+      columns:
+        flavour: flavour
+        flavour_code: flavour_code
+        flavour_name: flavour_name
+        material_group: material_group
+        material_group_code: material_group_code
+        material_group_name: material_group_name
+        material_type: material_type
+        material_type_code: material_type_code
+        material_type_name: material_type_name
+        pack_size: pack_size
+        pack_size_code: pack_size_code
+        pack_size_name: pack_size_name
+        pack_type: pack_type
+        pack_type_code: pack_type_code
+        pack_type_name: pack_type_name
+        prod_class_id: prod_class_id
+        product_hierarchy_code: product_hierarchy_code
+        product_hierarchy_l1: product_hierarchy_l1
+        product_hierarchy_l1_code: product_hierarchy_l1_code
+        product_hierarchy_l1_name: product_hierarchy_l1_name
+        product_hierarchy_l2: product_hierarchy_l2
+        product_hierarchy_l2_code: product_hierarchy_l2_code
+        product_hierarchy_l2_name: product_hierarchy_l2_name
+        product_hierarchy_l3: product_hierarchy_l3
+        product_hierarchy_l3_code: product_hierarchy_l3_code
+        product_hierarchy_l3_name: product_hierarchy_l3_name
+        product_hierarchy_l4: product_hierarchy_l4
+        product_hierarchy_l4_code: product_hierarchy_l4_code
+        product_hierarchy_l4_name: product_hierarchy_l4_name
+        product_hierarchy_l5: product_hierarchy_l5
+        product_hierarchy_l5_code: product_hierarchy_l5_code
+        product_hierarchy_l5_name: product_hierarchy_l5_name
+        sales_unit: sales_unit
+        sales_unit_code: sales_unit_code
+        sales_unit_name: sales_unit_name
+        brand: brand
+        brand_code: brand_code
+        brand_name: brand_name
+        bpp_code: bpp_code
+        bpp_name: bpp_name
+        bpp: bpp
+        bpp_package_code: bpp_package_code
+        bpp_package_name: bpp_package_name
+        bpp_package: bpp_package       
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dim_product_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_product_classification
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: incremental

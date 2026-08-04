@@ -1,0 +1,375 @@
+transform:
+  name: dm_vendor_tax
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t005
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t005
+
+  - kind: select
+    name: select_t005_0
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_0
+      distinct: true
+
+  - kind: select
+    name: select_t005_1
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_1
+      distinct: true
+
+  - kind: select
+    name: select_t005_2
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_2
+      distinct: true
+
+  - kind: select
+    name: select_t005_3
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_3
+      distinct: true
+
+  - kind: select
+    name: select_t005_4
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_4
+      distinct: true
+
+  - kind: select
+    name: select_t005_5
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_5
+      distinct: true
+
+  - kind: select
+    name: select_t005_6
+    context_name: read_t005
+    params:
+      columns:
+        land1: t005_land1_6
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dfkkbptaxnum
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: dfkkbptaxnum
+
+  - kind: add
+    name: add_dfkkbptaxnum
+    context_name: read_dfkkbptaxnum
+    params:
+      - column: substring_taxtype
+        expression: substring(taxtype, 0, 2)
+
+  - kind: select
+    name: select_dfkkbptaxnum
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_0
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%0'
+
+  - kind: select
+    name: select_dfkkbptaxnum_0
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_0
+        taxnum: taxnum_0
+        substring_taxtype: substring_taxtype_0
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_1
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%1'
+
+  - kind: select
+    name: select_dfkkbptaxnum_1
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_1
+        taxnum: taxnum_1
+        substring_taxtype: substring_taxtype_1
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_2
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%2'
+
+  - kind: select
+    name: select_dfkkbptaxnum_2
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_2
+        taxnum: taxnum_2
+        substring_taxtype: substring_taxtype_2
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_3
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%3'
+
+  - kind: select
+    name: select_dfkkbptaxnum_3
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_3
+        taxnum: taxnum_3
+        substring_taxtype: substring_taxtype_3
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_4
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%4'
+
+  - kind: select
+    name: select_dfkkbptaxnum_4
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_4
+        taxnum: taxnum_4
+        substring_taxtype: substring_taxtype_4
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_5
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%5'
+
+  - kind: select
+    name: select_dfkkbptaxnum_5
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_5
+        taxnum: taxnum_5
+        substring_taxtype: substring_taxtype_5
+      distinct: true
+
+  - kind: filter
+    name: filter_dfkkbptaxnum_6
+    context_name: add_dfkkbptaxnum
+    params:
+      - condition:
+          taxtype LIKE '%6'
+
+  - kind: select
+    name: select_dfkkbptaxnum_6
+    params:
+      columns:
+        partner: dfkkbptaxnum_partner
+        taxtype: taxtype_6
+        taxnum: taxnum_6
+        substring_taxtype: substring_taxtype_6
+      distinct: true
+
+  - kind: join
+    name: join_dfkkbptaxnum_0_1_2_3_4_5_6
+    context_name: select_dfkkbptaxnum
+    params:
+      - other:
+          select_dfkkbptaxnum_0
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_dfkkbptaxnum_1
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_dfkkbptaxnum_2
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_dfkkbptaxnum_3
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_dfkkbptaxnum_4
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_dfkkbptaxnum_5
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_dfkkbptaxnum_6
+        how:
+          left
+        columns:
+          dfkkbptaxnum_partner: dfkkbptaxnum_partner
+      - other:
+          select_t005_0
+        how:
+          left
+        columns:
+          substring_taxtype_0: t005_land1_0
+      - other:
+          select_t005_1
+        how:
+          left
+        columns:
+          substring_taxtype_1: t005_land1_1
+      - other:
+          select_t005_2
+        how:
+          left
+        columns:
+          substring_taxtype_2: t005_land1_2
+      - other:
+          select_t005_3
+        how:
+          left
+        columns:
+          substring_taxtype_3: t005_land1_3
+      - other:
+          select_t005_4
+        how:
+          left
+        columns:
+          substring_taxtype_4: t005_land1_4
+      - other:
+          select_t005_5
+        how:
+          left
+        columns:
+          substring_taxtype_5: t005_land1_5
+      - other:
+          select_t005_6
+        how:
+          left
+        columns:
+          substring_taxtype_6: t005_land1_6
+
+  - kind: add
+    name: add_expressions
+    params:
+      - column: vendor_code
+        expression: IF(dfkkbptaxnum_partner LIKE 'V43%', REPLACE(dfkkbptaxnum_partner, LEFT(dfkkbptaxnum_partner,3),'430'), IF(dfkkbptaxnum_partner LIKE 'V40%', REPLACE(dfkkbptaxnum_partner, LEFT(dfkkbptaxnum_partner,3),'400'), IF(dfkkbptaxnum_partner LIKE 'V90%', REPLACE(dfkkbptaxnum_partner, LEFT(dfkkbptaxnum_partner,3),'900'), dfkkbptaxnum_partner)))
+      - column: is_allowed_tax_0_country_code
+        expression: IF(isnull(t005_land1_0), '0', '1')
+      - column: is_allowed_tax_1_country_code
+        expression: IF(isnull(t005_land1_1), '0', '1')
+      - column: is_allowed_tax_2_country_code
+        expression: IF(isnull(t005_land1_2), '0', '1')
+      - column: is_allowed_tax_3_country_code
+        expression: IF(isnull(t005_land1_3), '0', '1')
+      - column: is_allowed_tax_4_country_code
+        expression: IF(isnull(t005_land1_4), '0', '1')
+      - column: is_allowed_tax_5_country_code
+        expression: IF(isnull(t005_land1_5), '0', '1')
+      - column: is_allowed_tax_6_country_code
+        expression: IF(isnull(t005_land1_6), '0', '1')
+
+  - kind: select
+    name: select_dm_vendor_tax
+    params:
+      columns:
+        dfkkbptaxnum_partner: partner_code
+        vendor_code: vendor_code        
+        taxtype_0: tax_0_type
+        is_allowed_tax_0_country_code: is_allowed_tax_0_country_code
+        taxnum_0: tax_0_value
+        taxtype_1: tax_1_type
+        is_allowed_tax_1_country_code: is_allowed_tax_1_country_code
+        taxnum_1: tax_1_value
+        taxtype_2: tax_2_type
+        is_allowed_tax_2_country_code: is_allowed_tax_2_country_code
+        taxnum_2: tax_2_value
+        taxtype_3: tax_3_type
+        is_allowed_tax_3_country_code: is_allowed_tax_3_country_code
+        taxnum_3: tax_3_value
+        taxtype_4: tax_4_type
+        is_allowed_tax_4_country_code: is_allowed_tax_4_country_code
+        taxnum_4: tax_4_value
+        taxtype_5: tax_5_type
+        is_allowed_tax_5_country_code: is_allowed_tax_5_country_code
+        taxnum_5: tax_5_value
+        taxtype_6: tax_6_type
+        is_allowed_tax_6_country_code: is_allowed_tax_6_country_code
+        taxnum_6: tax_6_value
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_tax
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full

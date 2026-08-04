@@ -1,0 +1,630 @@
+transform:
+  name: edvs_contact_customer_country_code
+  operations:
+
+# -----------------------1st_part_SAP_data_processing______contact_customer_general_country_code______----------------------
+
+   - kind: read_dataio
+     name: read_adr2
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: address_and_communication_data
+       object_name: adr2
+       schema_version: v1
+
+   - kind: filter
+     name: filter_adr2_landline
+     context_name: read_adr2
+     params:
+       - condition:
+           r3_user IN ('1','') AND persnumber = '' AND (((valid_from is null or valid_from = '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is not null and valid_to != '' and substr(valid_to,1,8) >= date_format(current_date(), 'yyyyMMdd'))))
+
+   - kind: select
+     name: select_adr2_landline
+     context_name: filter_adr2_landline
+     params:
+       columns:
+         client: client_adr2_land
+         addrnumber: addrnumber_adr2_land
+         persnumber: persnumber_adr2_land
+         country: country_adr2_land
+         tel_number: tel_number_adr2_land
+         sap_cluster: sap_cluster_adr2_land
+       distinct: true
+
+   - kind: filter
+     name: filter_adr2_mobile
+     context_name: read_adr2
+     params:
+       - condition:
+           r3_user NOT IN ('1','') AND persnumber = '' AND (((valid_from is null or valid_from = '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is not null and valid_to != '' and substr(valid_to,1,8) >= date_format(current_date(), 'yyyyMMdd'))))
+
+   - kind: select
+     name: select_adr2_mobile
+     context_name: filter_adr2_mobile
+     params:
+       columns:
+         client: client_adr2_mob
+         addrnumber: addrnumber_adr2_mob
+         persnumber: persnumber_adr2_mob
+         country: country_adr2_mob
+         tel_number: tel_number_adr2_mob
+         sap_cluster: sap_cluster_adr2_mob
+       distinct: true
+  
+   - kind: read_dataio
+     name: read_adr6
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: address_and_communication_data
+       object_name: adr6
+       schema_version: v1
+
+   - kind: add
+     name: add_lower_email
+     context_name: read_adr6
+     params:
+       - column: smtp_addr
+         expression: lower(smtp_addr)
+         overwrite: true
+
+   - kind: filter
+     name: filter_adr6
+     context_name: add_lower_email
+     params:
+       - condition:
+           persnumber = ''
+
+   - kind: select
+     name: select_adr6
+     context_name: filter_adr6
+     params:
+       columns:
+         addrnumber: addrnumber_adr6
+         persnumber: persnumber_adr6
+         smtp_addr: smtp_addr_adr6
+         valid_to: valid_to_adr6
+         sap_cluster: sap_cluster_adr6
+       distinct: true
+
+   - kind: read_dataio
+     name: read_but020
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: business_partner
+       object_name: but020
+       schema_version: v1
+
+   - kind: select
+     name: select_but020
+     context_name: read_but020
+     params:
+       columns:
+         addrnumber: addrnumber_but020
+         partner: partner_but020
+         sap_cluster: sap_cluster_but020
+       distinct: true
+
+   - kind: read_dataio
+     name: read_but051
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: contact_person_relationships
+       object_name: but051
+       schema_version: v1
+
+   - kind: filter
+     name: filter_but051
+     context_name: read_but051
+     params:
+       - condition:
+           reltyp ='BUR001'
+
+   - kind: select
+     name: select_but051
+     context_name: filter_but051
+     params:
+       columns:
+         client: client_but051
+         relnr: relnr_but051
+         partner1: partner1_but051
+         partner2: partner2_but051
+         date_to: date_to_but051
+         reltyp: reltyp_but051
+         sap_cluster: sap_cluster_but051
+       distinct: true
+
+   - kind: read_dataio
+     name: read_kna1
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: customer
+       object_name: kna1
+       schema_version: v1
+
+   - kind: filter
+     name: filter_kna1
+     context_name: read_kna1
+     params:
+       - condition:
+           NOT (LOEVM ='X' OR AUFSD IN ('S', 'NH', 'S3', 'S4', 'SY','S1')) AND (KTOKD LIKE '7%' OR KTOKD LIKE '9%') # AND kunnr='1200036926' # AND (LAND1 IN ('{{myinputcountry}}')) 
+
+   - kind: select
+     name: select_kna1
+     context_name: filter_kna1
+     params:
+       columns:
+         kunnr: kunnr_kna1
+         land1: land1_kna1
+         ktokd: ktokd_kna1
+         aufsd: aufsd_kna1
+         sap_cluster: sap_cluster_kna1
+       distinct: true
+
+   - kind: read_dataio
+     name: read_knvv
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: customer
+       object_name: knvv
+       schema_version: v1
+
+   - kind: filter
+     name: filter_knvv
+     context_name: read_knvv
+     params:
+       - condition:
+           (kvgr4 IN ('AWM', 'WH', 'WHN', 'DE','DEC', 'DI', 'DTS') AND loevm != 'X') AND aufsd NOT IN('S','NH','S3','S4','SY','S1')
+
+   - kind: select
+     name: select_knvv
+     context_name: filter_knvv
+     params:
+       columns:
+         kunnr: kunnr_knvv
+         kvgr4: kvgr4_knvv
+         sap_cluster: sap_cluster_knvv
+       distinct: true
+
+   - kind: read_dataio
+     name: read_cluster_config
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: data_quality
+       namespace: data_control_center
+       object_name: cluster_config
+       schema_version: v2
+
+   - kind: select
+     name: select_cc
+     context_name: read_cluster_config
+     params:
+       columns:
+         country_code: country_code_cc
+         cluster: cluster_cc
+       distinct: true
+
+   - kind: filter
+     context_name: select_cc
+     name: filter_cc
+     params:
+       - condition:
+           country_code_cc IS NOT NULL
+
+#JOIN customer_general
+   - kind: join
+     name: join_customer_general
+     context_name: select_kna1
+     params:
+       - other:
+           filter_cc
+         how:
+           inner
+         columns:
+           land1_kna1: country_code_cc
+           sap_cluster_kna1: cluster_cc
+       - other:
+           select_knvv
+         how:
+           inner
+         columns:
+           kunnr_kna1: kunnr_knvv
+           sap_cluster_kna1: sap_cluster_knvv
+       - other:
+           select_but051
+         how:
+           left
+         columns:
+           kunnr_kna1: partner1_but051
+           sap_cluster_kna1: sap_cluster_but051
+       - other:
+           select_but020
+         how:
+           left
+         columns:
+           kunnr_kna1: partner_but020
+           sap_cluster_kna1: sap_cluster_but020
+       - other:
+           select_adr2_landline
+         how:
+           left
+         columns:
+           addrnumber_but020: addrnumber_adr2_land
+           sap_cluster_kna1: sap_cluster_adr2_land
+       - other:
+           select_adr2_mobile
+         how:
+           left
+         columns:
+           addrnumber_but020: addrnumber_adr2_mob
+           sap_cluster_kna1: sap_cluster_adr2_mob
+       - other:
+           select_adr6
+         how:
+           left
+         columns:
+           addrnumber_but020: addrnumber_adr6
+           sap_cluster_kna1: sap_cluster_adr6
+
+   - kind: add
+     name: add_customer_general
+     context_name: join_customer_general
+     params:
+       - column: category
+         expression: '"Customer General Data"'
+       - column: first_name
+         expression: '""'
+       - column: last_name
+         expression: '""'
+       - column: last_update
+         expression: current_timestamp()
+
+   - kind: select
+     name: select_customer_general
+     context_name: add_customer_general
+     params:
+       columns:
+         kunnr_kna1: kunnr
+         land1_kna1: land1
+         country_adr2_land: country_landline
+         tel_number_adr2_land: landline
+         country_adr2_mob: country_mobile
+         tel_number_adr2_mob: mobile
+         smtp_addr_adr6: email
+         sap_cluster_kna1: sap_cluster
+         aufsd_kna1: aufsd
+         kvgr4_knvv: kvgr4
+         ktokd_kna1: ktokd
+         persnumber_adr2_land: persnumber
+         addrnumber_but020: addrnumber
+         category: category
+         first_name: first_name
+         last_name: last_name
+         last_update: last_update
+       distinct: true
+
+# -----------------------2nd_part_SAP_data_processing______contact_person_relationship_country_code______----------------------
+
+   - kind: read_dataio
+     name: read_but000
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: business_partner
+       object_name: but000
+       schema_version: v1
+
+   - kind: select
+     name: select_but000
+     context_name: read_but000
+     params:
+       columns:
+         partner: partner_but000
+         persnumber: persnumber_but000
+         name_first: name_first_but000
+         name_last: name_last_but000
+         sap_cluster: sap_cluster_but000
+       distinct: true
+
+   - kind: filter
+     name: filter_adr2_landline_relationship
+     context_name: read_adr2
+     params:
+       - condition:
+           r3_user IN ('1','') AND (((valid_from is null or valid_from = '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is not null and valid_to != '' and substr(valid_to,1,8) >= date_format(current_date(), 'yyyyMMdd'))))
+
+   - kind: select
+     name: select_adr2_landline_relationship
+     context_name: filter_adr2_landline_relationship
+     params:
+       columns:
+         client: client_adr2_land
+         addrnumber: addrnumber_adr2_land
+         persnumber: persnumber_adr2_land
+         country: country_adr2_land
+         tel_number: tel_number_adr2_land
+         sap_cluster: sap_cluster_adr2_land
+       distinct: true
+
+   - kind: filter
+     name: filter_adr2_mobile_relationship
+     context_name: read_adr2
+     params:
+       - condition:
+           r3_user NOT IN ('1','') AND (((valid_from is null or valid_from = '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is null or valid_to = '')) OR ((valid_from is not null and valid_from != '') and (valid_to is not null and valid_to != '' and substr(valid_to,1,8) >= date_format(current_date(), 'yyyyMMdd'))))
+
+   - kind: select
+     name: select_adr2_mobile_relationship
+     context_name: filter_adr2_mobile_relationship
+     params:
+       columns:
+         client: client_adr2_mob
+         addrnumber: addrnumber_adr2_mob
+         persnumber: persnumber_adr2_mob
+         country: country_adr2_mob
+         tel_number: tel_number_adr2_mob
+         sap_cluster: sap_cluster_adr2_mob
+       distinct: true
+
+   - kind: select
+     name: select_adr6_2
+     context_name: add_lower_email
+     params:
+       columns:
+         persnumber: persnumber_adr6
+         smtp_addr: smtp_addr_adr6
+         valid_to: valid_to_adr6
+         sap_cluster: sap_cluster_adr6
+       distinct: true
+
+#JOIN sap_data
+   - kind: join
+     name: join_person_relationship
+     context_name: select_kna1
+     params:
+       - other:
+           filter_cc
+         how:
+           inner
+         columns:
+           land1_kna1: country_code_cc
+           sap_cluster_kna1: cluster_cc
+       - other:
+           select_knvv
+         how:
+           inner
+         columns:
+           kunnr_kna1: kunnr_knvv
+           sap_cluster_kna1: sap_cluster_knvv
+       - other:
+           select_but051
+         how:
+           left
+         columns:
+           kunnr_kna1: partner1_but051
+           sap_cluster_kna1: sap_cluster_but051
+       - other:
+           select_but000
+         how:
+           left
+         columns:
+           partner2_but051: partner_but000
+           sap_cluster_kna1: sap_cluster_but000
+       - other:
+           select_adr2_landline_relationship
+         how:
+           left
+         columns:
+           persnumber_but000: persnumber_adr2_land
+           sap_cluster_kna1: sap_cluster_adr2_land
+       - other:
+           select_adr2_mobile_relationship
+         how:
+           left
+         columns:
+           persnumber_but000: persnumber_adr2_mob
+           sap_cluster_kna1: sap_cluster_adr2_mob
+       - other:
+           select_adr6_2
+         how:
+           left
+         columns:
+           persnumber_but000: persnumber_adr6
+           sap_cluster_kna1: sap_cluster_adr6
+
+   - kind: add
+     name: add_person_relationship
+     context_name: join_person_relationship
+     params:
+       - column: category
+         expression: '"Contact Person Relationship Data"'
+       - column: addrnumber
+         expression: '""'
+       - column: last_update
+         expression: current_timestamp()
+
+   - kind: select
+     name: select_person_relationship
+     context_name: add_person_relationship
+     params:
+       columns:
+         kunnr_kna1: kunnr
+         land1_kna1: land1
+         country_adr2_land: country_landline
+         tel_number_adr2_land: landline
+         country_adr2_mob: country_mobile
+         tel_number_adr2_mob: mobile
+         smtp_addr_adr6: email
+         sap_cluster_kna1: sap_cluster
+         aufsd_kna1: aufsd
+         kvgr4_knvv: kvgr4
+         ktokd_kna1: ktokd
+         persnumber_adr2_land: persnumber
+         addrnumber: addrnumber
+         category: category
+         name_first_but000: first_name
+         name_last_but000: last_name
+         last_update: last_update
+       distinct: true
+
+# # -----------------------3rd_part_SAP_data_processing______contact_person_general_country_code______----------------------
+
+#JOIN sap_data 3rd
+   - kind: join
+     name: join_person_general
+     context_name: select_kna1
+     params:
+       - other:
+           filter_cc
+         how:
+           inner
+         columns:
+           land1_kna1: country_code_cc
+           sap_cluster_kna1: cluster_cc
+       - other:
+           select_knvv
+         how:
+           inner
+         columns:
+           kunnr_kna1: kunnr_knvv
+           sap_cluster_kna1: sap_cluster_knvv
+       - other:
+           select_but051
+         how:
+           left
+         columns:
+           kunnr_kna1: partner1_but051
+           sap_cluster_kna1: sap_cluster_but051
+       - other:
+           select_but020
+         how:
+           left
+         columns:
+           partner2_but051: partner_but020
+           sap_cluster_kna1: sap_cluster_but020
+       - other:
+           select_but000
+         how:
+           left
+         columns:
+           partner2_but051: partner_but000
+           sap_cluster_kna1: sap_cluster_but000
+       - other:
+           select_adr2_landline
+         how:
+           left
+         columns:
+           addrnumber_but020: addrnumber_adr2_land
+           sap_cluster_kna1: sap_cluster_adr2_land
+       - other:
+           select_adr2_mobile
+         how:
+           left
+         columns:
+           addrnumber_but020: addrnumber_adr2_mob
+           sap_cluster_kna1: sap_cluster_adr2_mob
+       - other:
+           select_adr6
+         how:
+           left
+         columns:
+           addrnumber_but020: addrnumber_adr6
+           sap_cluster_kna1: sap_cluster_adr6
+
+   - kind: add
+     name: add_person_general
+     context_name: join_person_general
+     params:
+       - column: category
+         expression: '"Contact Person General Data"'
+       - column: first_name
+         expression: '""'
+       - column: last_name
+         expression: '""'
+       - column: last_update
+         expression: current_timestamp()
+
+   - kind: select
+     name: select_person_general
+     context_name: add_person_general
+     params:
+       columns:
+         kunnr_kna1: kunnr
+         land1_kna1: land1
+         country_adr2_land: country_landline
+         tel_number_adr2_land: landline
+         country_adr2_mob: country_mobile
+         tel_number_adr2_mob: mobile
+         smtp_addr_adr6: email
+         sap_cluster_kna1: sap_cluster
+         aufsd_kna1: aufsd
+         kvgr4_knvv: kvgr4
+         ktokd_kna1: ktokd
+         persnumber_adr2_land: persnumber
+         addrnumber_but020: addrnumber
+         category: category
+         first_name: first_name
+         last_name: last_name
+         last_update: last_update
+       distinct: true
+
+   - kind: union
+     name: union_sap_data
+     context_name: select_customer_general
+     params:
+       - other: select_person_relationship
+         allow_missing: false
+         by_name: true
+
+   - kind: union
+     name: union_sap_data
+     params:
+       - other: select_person_general
+         allow_missing: false
+         by_name: true
+
+   - kind: write_dataio
+     name: write_dm_sap_contact_country_code
+     params:
+       dataio:
+         ad_id: "{{dataio.ad_id}}"
+         layer: application
+         storage_id: "{{dataio.storage_id}}"
+       application_name: data_quality
+       country: ca
+       module: edvs
+       namespace: golden
+       object_name: dm_sap_contact_country_code
+       process_run_id: "{{process_run_id}}"
+       schema_version: v1
+       refresh_mode: full

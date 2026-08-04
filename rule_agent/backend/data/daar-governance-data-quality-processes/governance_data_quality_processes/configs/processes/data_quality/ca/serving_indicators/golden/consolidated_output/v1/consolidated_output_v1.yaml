@@ -1,0 +1,625 @@
+transform:
+  name: detailed
+  operations:
+
+  - kind: read_dataio
+    name: read_du
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: serving_indicators
+      schema_version: v1
+
+
+  - kind: add
+    name: add_du_serving_indicators
+    params:
+      - column: dq_material_pricing_group_completeness_output
+        expression: if(dq_material_pricing_group_completeness_flag = '1', 'OK', 'Missing material pricing group')
+      - column: dq_incr_ss_ms_param_completeness_output
+        expression: if(dq_incr_ss_ms_param_completeness_flag = '1', 'OK', 'Missing incremental SS_MS parameter')
+      - column: dq_coffee_attributes_completeness_output
+        expression: if(dq_coffee_channel_completeness_flag = '1' and dq_coffee_format_completeness_flag = '1' , 'OK', 
+                    if(dq_coffee_channel_completeness_flag = '0' and dq_coffee_format_completeness_flag = '1' , 'Missing coffee channel attribute', 
+                    if(dq_coffee_channel_completeness_flag = '1' and dq_coffee_format_completeness_flag = '0' , 'Missing coffee format attribute', 
+                    if(dq_coffee_channel_completeness_flag = '0' and dq_coffee_format_completeness_flag = '0' , 'Missing coffee format and channel attributes', 
+                    null))))
+      - column: dq_incr_ss_ms_accuracy_rule_output
+        expression: if(isnull(dq_incr_ss_ms_accuracy_rule_1_flag) and isnull(dq_incr_ss_ms_accuracy_rule_2_flag) and isnull(dq_incr_ss_ms_accuracy_rule_3_flag) , 'Missing product hierarchy or rule not defined for this product hierarchy', 
+                    if(dq_incr_ss_ms_accuracy_rule_1_flag = '3' or dq_incr_ss_ms_accuracy_rule_2_flag = '3' or dq_incr_ss_ms_accuracy_rule_3_flag = '3', 'Failed at completeness', 
+                    if(dq_incr_ss_ms_accuracy_rule_1_flag = '1', 'OK', 
+                    if(dq_incr_ss_ms_accuracy_rule_2_flag = '1', 'OK', 
+                    if(dq_incr_ss_ms_accuracy_rule_3_flag = '1', 'OK', 
+                    if(dq_incr_ss_ms_accuracy_rule_3_flag = '2', 'Combination coffee format and coffee channel is not defined in the quality rule', 
+                    'Wrongly assigned Incremental SS/MS'))))))
+      - column: dq_material_group_accuracy_rule_output
+        expression: if(isnull(dq_material_group_accuracy_rule_flag), 'Failed at completeness', 
+                    if(dq_material_group_accuracy_rule_flag = '1', 'OK', 
+                    if(dq_material_group_accuracy_rule_flag = '2', 'Combination coffee format and coffee channel is not defined in the quality rule', 
+                    'Wrongly assigned Material Pricing Group')))
+      - column: dq_material_pricing_group_cluster_compare_output
+        expression: if(dq_material_pricing_group_cluster_compare_flag = '1', 'OK', 'Mismatch between Material Product Group between clusters')
+      - column: dq_incr_ss_ms_param_cluster_compare_output
+        expression: if(dq_incr_ss_ms_param_cluster_compare_flag = '1', 'OK', 'Mismatch between Incremental SS MS between clusters')
+      - column: dq_coffee_attributes_completeness_flag
+        expression: if(dq_coffee_channel_completeness_flag = '1' and dq_coffee_format_completeness_flag = '1', '1', if(isnull(dq_coffee_channel_completeness_flag) or isnull(dq_coffee_format_completeness_flag ), null, '0'))
+      - column: dq_incr_ss_ms_accuracy_rule_flag
+        expression: if(isnull(dq_incr_ss_ms_accuracy_rule_1_flag) and isnull(dq_incr_ss_ms_accuracy_rule_2_flag) and isnull(dq_incr_ss_ms_accuracy_rule_3_flag) , '0', 
+                    if(dq_incr_ss_ms_accuracy_rule_1_flag = '3' or dq_incr_ss_ms_accuracy_rule_2_flag = '3' or dq_incr_ss_ms_accuracy_rule_3_flag = '3', null, 
+                    if(dq_incr_ss_ms_accuracy_rule_1_flag = '1', '1', 
+                    if(dq_incr_ss_ms_accuracy_rule_2_flag = '1', '1', 
+                    if(dq_incr_ss_ms_accuracy_rule_3_flag = '1', '1', 
+                    if(dq_incr_ss_ms_accuracy_rule_3_flag = '2', '0', 
+                    '0'))))))
+      - column: dq_material_group_accuracy_rule_flag
+        expression: if(isnull(dq_material_group_accuracy_rule_flag), null, 
+                    if(dq_material_group_accuracy_rule_flag = '1', '1', 
+                    if(dq_material_group_accuracy_rule_flag = '2', '0', 
+                    '0')))
+        overwrite: true
+
+        
+
+  - kind: select
+    name: select_dq_material_pricing_group_completeness
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_material_pricing_group_completeness_output: dq_message_output
+        dq_material_pricing_group_completeness_flag: quality_check_flag
+      distinct: true
+
+  - kind: select
+    name: select_dq_incr_ss_ms_param_completeness
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_incr_ss_ms_param_completeness_output: dq_message_output
+        dq_incr_ss_ms_param_completeness_flag: quality_check_flag
+      distinct: true
+
+  - kind: select
+    name: select_dq_coffee_attributes_completeness
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_coffee_attributes_completeness_output: dq_message_output
+        dq_coffee_attributes_completeness_flag: quality_check_flag
+      distinct: true
+
+  - kind: select
+    name: select_dq_incr_ss_ms_accuracy_rule
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_incr_ss_ms_accuracy_rule_output: dq_message_output
+        dq_incr_ss_ms_accuracy_rule_flag: quality_check_flag
+      distinct: true
+
+  - kind: select
+    name: select_dq_material_group_accuracy_rule
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_material_group_accuracy_rule_output: dq_message_output
+        dq_material_group_accuracy_rule_flag: quality_check_flag
+      distinct: true
+
+  - kind: select
+    name: select_dq_material_pricing_group_cluster_compare
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_material_pricing_group_cluster_compare_output: dq_message_output
+        dq_material_pricing_group_cluster_compare_flag: quality_check_flag
+      distinct: true
+
+  - kind: select
+    name: select_dq_incr_ss_ms_param_cluster_compare
+    context_name: add_du_serving_indicators
+    params:
+      columns:
+        material_code: material_code
+        material_name: material_name
+        material_type: material_type
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand_code: brand_code
+        brand_description: brand_description
+        tccc_indicator: tccc_indicator
+        flavour_code: flavour_code
+        flavour_description: flavour_description
+        package_type_code: package_type_code
+        package_type_name: package_type_name
+        package_size_code: package_size_code
+        package_size_name: package_size_name
+        bpp_code: bpp_code
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        product_hierarchy_level_5_code: product_hierarchy_level_5_code
+        product_hierarchy_level_5_name: product_hierarchy_level_5_name
+        coffee_channel_code: coffee_channel_code
+        coffee_class_code: coffee_class_code
+        coffee_format_code: coffee_format_code
+        coffee_method_code: coffee_method_code
+        material_pricing_group: material_pricing_group
+        ss_sm_flag: ss_sm_flag
+        sap_cluster: sap_cluster
+        unit_of_measure: unit_of_measure
+        volume: volume
+        dq_incr_ss_ms_param_cluster_compare_output: dq_message_output
+        dq_incr_ss_ms_param_cluster_compare_flag: quality_check_flag
+      distinct: true
+
+  - kind: add
+    name: add_dq_material_pricing_group_completeness
+    context_name: select_dq_material_pricing_group_completeness
+    params:
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: rule_name
+        expression: '''Material Pricing Group'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: add
+    name: add_dq_incr_ss_ms_param_completeness
+    context_name: select_dq_incr_ss_ms_param_completeness
+    params:
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: rule_name
+        expression: '''Incr. SS/MS'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: add
+    name: add_dq_coffee_attributes_completeness
+    context_name: select_dq_coffee_attributes_completeness
+    params:
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: rule_name
+        expression: '''Coffee Attributes'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: add
+    name: add_dq_incr_ss_ms_accuracy_rule
+    context_name: select_dq_incr_ss_ms_accuracy_rule
+    params:
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: rule_name
+        expression: '''Incr. SS/MS'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: add
+    name: add_dq_material_group_accuracy_rule
+    context_name: select_dq_material_group_accuracy_rule
+    params:
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: rule_name
+        expression: '''Material Pricing Group'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: add
+    name: add_dq_material_pricing_group_cluster_compare
+    context_name: select_dq_material_pricing_group_cluster_compare
+    params:
+      - column: quality_category
+        expression: '''Consistency'''
+      - column: rule_name
+        expression: '''Material Pricing Group'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: add
+    name: add_dq_incr_ss_ms_param_cluster_compare
+    context_name: select_dq_incr_ss_ms_param_cluster_compare
+    params:
+      - column: quality_category
+        expression: '''Consistency'''
+      - column: rule_name
+        expression: '''Incr. SS/MS'''
+      - column: quality_rule
+        expression: concat_ws(' ', rule_name, quality_category)
+
+  - kind: union
+    name: union_serving_indicators
+    context_name: add_dq_material_pricing_group_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dq_incr_ss_ms_param_completeness
+
+  - kind: union
+    name: union_serving_indicators
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dq_coffee_attributes_completeness
+
+  - kind: union
+    name: union_serving_indicators
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dq_incr_ss_ms_accuracy_rule
+
+  - kind: union
+    name: union_serving_indicators
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dq_material_group_accuracy_rule
+
+  - kind: union
+    name: union_serving_indicators
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dq_material_pricing_group_cluster_compare
+
+  - kind: union
+    name: union_serving_indicators
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_dq_incr_ss_ms_param_cluster_compare
+
+  - kind: filter
+    name: filter_irrelevant_checks
+    context_name: union_serving_indicators
+    params:
+      - condition:
+          isnotnull(quality_check_flag)
+
+  - kind: filter
+    name: filter_cl2_consistency_checks
+    context_name: union_serving_indicators
+    params:
+      - condition:
+          sap_cluster = 'CL2' and quality_category = 'Consistency'
+
+  - kind: select
+    name: select_cl2_consistency_checks
+    context_name: filter_cl2_consistency_checks
+    params:
+      columns:
+        material_code: material_code_cl2
+        material_name: material_name_cl2
+        material_pricing_group: material_pricing_group_cl2
+        ss_sm_flag: ss_sm_flag_cl2
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name_cl2
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name_cl2
+        quality_category: quality_category
+        rule_name: rule_name
+      distinct: true
+
+  - kind: join
+    name: join_detailed
+    context_name: filter_irrelevant_checks
+    params:
+      - other:
+          select_cl2_consistency_checks
+        how:
+          left
+        columns:
+          material_code: material_code_cl2
+          quality_category: quality_category
+          rule_name: rule_name
+
+  - kind: filter
+    name: filter_consistency_from_detailed_if_cl2
+    context_name: join_detailed
+    params:
+      - condition:
+          if(sap_cluster = 'CL2' and quality_category = 'Consistency', false, true)
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: serving_indicators
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#aggregated
+
+  - kind: select
+    name: select_serving_indicators
+    context_name: filter_consistency_from_detailed_if_cl2
+    params:
+      columns:
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        quality_category: quality_category
+        quality_rule: quality_rule
+        rule_name: rule_name
+        quality_check_flag: total_flag
+        sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_serving_indicators
+    context_name: select_serving_indicators
+    params:
+      - column: valid_flag
+        expression: total_flag
+      - column: product_hierarchy_level_3_name
+        expression: ifnull(product_hierarchy_level_3_name, '')
+        overwrite: true
+      - column: product_hierarchy_level_4_name
+        expression: ifnull(product_hierarchy_level_4_name, '')
+        overwrite: true
+      - column: sap_cluster
+        expression: if(quality_category = 'Consistency', 'Both', sap_cluster)
+        overwrite: true
+
+  - kind: group
+    name: group_serving_indicators
+    context_name: add_serving_indicators
+    params:
+      - aggs:
+          valid_flag: sum
+          total_flag: count
+        by:
+        - product_hierarchy_level_3_code
+        - product_hierarchy_level_3_name
+        - product_hierarchy_level_4_code
+        - product_hierarchy_level_4_name
+        - quality_category
+        - quality_rule
+        - rule_name
+        - sap_cluster
+
+  - kind: add
+    name: add_customer_loading_date
+    context_name: group_serving_indicators
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: count_total_flag - sum_valid_flag
+      - column: total_checks
+        expression: count_total_flag
+      - column: invalid_checks
+        expression: CAST(invalid_checks AS INT)
+        overwrite: true
+      - column: total_checks
+        expression: CAST(total_checks AS INT)
+        overwrite: true
+
+  - kind: select
+    name: select_serving_indicators_aggregated
+    context_name: add_customer_loading_date
+    params:
+      columns:
+        product_hierarchy_level_3_code: product_hierarchy_level_3_code
+        product_hierarchy_level_3_name: product_hierarchy_level_3_name
+        product_hierarchy_level_4_code: product_hierarchy_level_4_code
+        product_hierarchy_level_4_name: product_hierarchy_level_4_name
+        loading_date: loading_date
+        quality_category: quality_category
+        quality_rule: quality_rule
+        rule_name: rule_name
+        invalid_checks: invalid_checks
+        total_checks: total_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: serving_indicators
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

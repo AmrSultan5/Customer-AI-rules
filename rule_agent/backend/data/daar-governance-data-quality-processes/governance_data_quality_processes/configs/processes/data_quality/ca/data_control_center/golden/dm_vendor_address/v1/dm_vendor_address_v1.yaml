@@ -1,0 +1,211 @@
+transform:
+  name: dm_vendor_address
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read but020
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+
+  - kind: filter
+    name: filter_but020
+    params:
+      - condition:
+          ( substring(partner,0,3) IN('V43', 'V40', '400', '900', '200', '300', '700') AND addr_valid_to = '99991231235959')
+
+
+  - kind: select
+    name: select_but020
+    params:
+      columns:
+        partner: partner
+        addrnumber: addrnumber
+      distinct: true
+
+# Read adrc
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_adrc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adrc
+
+  - kind: filter
+    name: filter_adrc
+    params:
+      - condition:
+          ( nation is null or nation ='' )
+
+  - kind: select
+    name: select_adrc
+    params:
+      columns:
+        addrnumber: addrnumber
+        country: country
+        date_from: date_from
+        date_to: date_to
+        city1: city1
+        city2: city2
+        home_city: home_city
+        post_code1: post_code1
+        street: street
+        transpzone: transpzone
+        house_num1: house_num1
+        str_suppl1: str_suppl1
+        str_suppl2: str_suppl2
+        str_suppl3: str_suppl3
+        location: location
+        region: region
+        nation: nation
+        addr_group: addr_group
+        sort1: search_term_1
+        sort2: search_term_2
+        name1: vendor_name_1
+        name2: vendor_name_2
+        name3: vendor_name_3
+        name4: vendor_name_4
+        langu: communication_language
+        po_box: po_box
+        po_box_loc: po_box_city
+        po_box_num: po_box_without_number_flag
+        post_code2: po_box_postal_code
+        post_code3: company_postal_code
+      distinct: true
+
+# Read t005u
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t005u
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t005u
+
+  - kind: filter
+    name: filter_t005u
+    params:
+      - condition:
+          ( spras ='E' )
+
+  - kind: select
+    name: select_t005u
+    params:
+      columns:
+        bland: bland
+        land1: land1
+        bezei: bezei
+      distinct: true
+
+
+  - kind: join
+    name: join_but20
+    context_name: select_but020
+    params:
+      - other:
+          select_adrc
+        how:
+          inner
+        columns:
+          addrnumber: addrnumber
+      - other:
+          select_t005u
+        how:
+          left
+        columns:
+          region: bland
+          country: land1
+
+  - kind: add
+    name: add_vendor_code
+    params:
+      - column: vendor_code
+        expression: "CASE
+                    WHEN substring(partner,0,3) ='V43' THEN replace(partner,LEFT(partner,3),'430')
+                    WHEN substring(partner,0,3) ='V40' THEN REPLACE(partner,LEFT(partner,3),'400')
+                    WHEN substring(partner,0,3) ='V90' THEN REPLACE(partner,LEFT(partner,3),'900')
+                    ELSE partner END"
+      - column: address_valid_from
+        expression: cast(from_unixtime(unix_timestamp(date_from) / 1000000) AS timestamp)
+      - column: address_valid_to
+        expression: cast(from_unixtime(unix_timestamp(date_to) / 1000000) AS timestamp)
+                  
+  - kind: select
+    name: select_adrc
+    params:
+      columns:
+        partner: partner_code
+        vendor_code: vendor_code
+        addrnumber: address_number
+        address_valid_from: address_valid_from
+        address_valid_to: address_valid_to
+        city1: city
+        city2: district
+        home_city: city_billing
+        post_code1: postal_code
+        street: street
+        transpzone: goods_transportation_zone
+        house_num1: house_number
+        country: country_code
+        str_suppl1: street_supplement_1
+        str_suppl2: street_supplement_2
+        str_suppl3: street_supplement_3
+        location: location
+        region: region_code
+        bezei: region_description
+        nation: international_address
+        addr_group: address_group
+        search_term_1: search_term_1
+        search_term_2: search_term_2
+        vendor_name_1: vendor_name_1
+        vendor_name_2: vendor_name_2
+        vendor_name_3: vendor_name_3
+        vendor_name_4: vendor_name_4
+        communication_language: communication_language
+        po_box: po_box
+        po_box_city: po_box_city
+        po_box_without_number_flag: po_box_without_number_flag
+        po_box_postal_code: po_box_postal_code
+        company_postal_code: company_postal_code
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_dm_vendor_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_address
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full

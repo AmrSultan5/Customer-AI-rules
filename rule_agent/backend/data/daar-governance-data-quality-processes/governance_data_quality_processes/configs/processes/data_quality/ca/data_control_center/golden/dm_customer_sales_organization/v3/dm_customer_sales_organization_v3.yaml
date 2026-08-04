@@ -1,0 +1,633 @@
+transform:
+  name: dm_customer_sales_organization
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#KNVV - KV
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvv
+
+  - kind: filter
+    name: filter_knvh
+    params:
+      - condition:
+          (spart = '01' AND vtweg = '01' AND  kvgr4 != 'ZIN')
+
+  - kind: select
+    name: select_kv
+    params:
+      columns:
+        kunnr: kunnr_kv
+        vkorg: vkorg_kv
+        vtweg: vtweg_kv
+        spart: spart_kv
+        aufsd: aufsd_kv
+        kdgrp: kdgrp_kv
+        ktgrd: ktgrd_kv
+        zterm: zterm_kv
+        inco1: inco1_kv
+        konda: konda_kv
+        kvgr4: kvgr4_kv
+        vkbur: vkbur_kv
+        vwerk: vwerk_kv
+        vkgrp: vkgrp_kv
+        vsbed: vsbed_kv
+        sap_cluster: sap_cluster_kv
+      distinct: true
+
+
+
+#TVSBT - A1   Waiting for curated data
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvsbt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvsbt
+
+  - kind: filter
+    name: filter_a1
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a1
+    params:
+      columns:
+        vsbed: vsbed_a1
+        vtext: vtext_a1
+        sap_cluster: sap_cluster_a1
+      distinct: true
+
+#T188T - A2
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t188t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t188t
+
+  - kind: filter
+    name: filter_a2
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a2
+    params:
+      columns:
+        konda: konda_a2
+        vtext: vtext_a2
+        sap_cluster: sap_cluster_a2
+      distinct: true
+
+#T151T - A3
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t151t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t151t
+
+  - kind: filter
+    name: filter_a3
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a3
+    params:
+      columns:
+        kdgrp: kdgrp_a3
+        ktext: ktext_a3
+        sap_cluster: sap_cluster_a3
+      distinct: true
+
+
+#TINCT - A4 - Waiting for curated data
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tinct
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tinct
+
+  - kind: filter
+    name: filter_a4
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a4
+    params:
+      columns:
+        inco1: inco1_a4
+        bezei: bezei_a4
+        sap_cluster: sap_cluster_a4
+      distinct: true
+
+
+#TVKWZ - A5
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvkwz
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvkwz
+
+
+  - kind: select
+    name: select_a5
+    params:
+      columns:
+        werks: werks_a5
+        vkorg: vkorg_a5
+        vtweg: vtweg_a5
+        sap_cluster: sap_cluster_a5
+      distinct: true
+
+
+#TVKTT - A6
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvktt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvktt
+
+  - kind: filter
+    name: filter_a6
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a6
+    params:
+      columns:
+        ktgrd: ktgrd_a6
+        vtext: vtext_a6
+        sap_cluster: sap_cluster_a6
+      distinct: true
+
+
+#TVV4T - A7
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+
+  - kind: filter
+    name: filter_a7
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a7
+    params:
+      columns:
+        kvgr4: kvgr4_a7
+        bezei: bezei_a7
+        sap_cluster: sap_cluster_a7
+      distinct: true
+
+
+#TVBVK - A8
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvbvk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvbvk
+
+
+  - kind: select
+    name: select_a8
+    params:
+      columns:
+        vkgrp: vkgrp_a8
+        vkbur: vkbur_a8
+        sap_cluster: sap_cluster_a8
+      distinct: true
+
+
+  - kind: select
+    name: select_a11
+    context_name: read_tvbvk
+    params:
+      columns:
+        vkgrp: vkgrp_a11
+        sap_cluster: sap_cluster_a11
+      distinct: true
+
+
+#TVKBT - A9
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvkbt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvkbt
+
+  - kind: filter
+    name: filter_a9
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a9
+    params:
+      columns:
+        vkbur: vkbur_a9
+        bezei: bezei_a9
+        sap_cluster: sap_cluster_a9
+      distinct: true
+
+
+#T052u - A10
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t052u
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t052u
+
+  - kind: filter
+    name: filter_a10
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a10
+    params:
+      columns:
+        zterm: zterm_a10
+        text1: text1_a10
+        sap_cluster: sap_cluster_a10
+      distinct: true
+
+# Cluster_Config - CC
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+
+  - kind: filter
+    name: filter_cluster_config
+    params:
+      - condition:
+          flag = 'DM_sales_org'
+
+  - kind: select
+    name: select_cluster_config
+    params:
+      columns:
+        sales_org: sales_org_cc
+        cluster: cluster_cc
+        country_code: country_code_cc
+      distinct: true
+
+# customer_link_payer
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_customer_link_payer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: customer_link_payer
+      namespace: golden
+      object_name: detailed_status
+
+  - kind: select
+    name: select_customer_link_payer
+    params:
+      columns:
+        customer_code: customer_code_du
+        sales_org_code: sales_org_code_du
+        customer_group_4_code: customer_group_4_code_du
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ca_is_02m_direct_indirect_sales
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'  
+      subdomain: rtm
+      namespace: is
+      domain: comm
+      object_name: ca_is_02m_direct_indirect_sales
+
+  - kind: filter
+    name: filter_ca_is_02m_direct_indirect_sales
+    params:
+      - condition:
+          calday >= add_months(current_date(), -24)
+
+  - kind: group
+    name: group_ca_is_02m_direct_indirect_sales
+    params:
+      - aggs:
+          bic_cbillq_u: sum
+        by:
+        - customer
+        - salesorg
+
+  - kind: join
+    name: join_dm_sales_documents
+    context_name: select_kv
+    params:
+      - other:
+          select_cluster_config
+        how:
+          inner
+        columns:
+          vkorg_kv: sales_org_cc
+          sap_cluster_kv: cluster_cc
+      - other:
+          select_a1
+        how:
+          left
+        columns:
+          vsbed_kv: vsbed_a1
+          sap_cluster_kv: sap_cluster_a1
+      - other:
+          select_a2
+        how:
+          left
+        columns:
+          konda_kv: konda_a2
+          sap_cluster_kv: sap_cluster_a2
+      - other:
+          select_a3
+        how:
+          left
+        columns:
+          kdgrp_kv: kdgrp_a3
+          sap_cluster_kv: sap_cluster_a3
+      - other:
+          select_a4
+        how:
+          left
+        columns:
+          inco1_kv: inco1_a4
+          sap_cluster_kv: sap_cluster_a4
+      - other:
+          select_a5
+        how:
+          left
+        columns:
+          vwerk_kv: werks_a5
+          vkorg_kv: vkorg_a5
+          vtweg_kv: vtweg_a5
+          sap_cluster_kv: sap_cluster_a5
+      - other:
+          select_a6
+        how:
+          left
+        columns:
+          ktgrd_kv: ktgrd_a6
+          sap_cluster_kv: sap_cluster_a6
+      - other:
+          select_a7
+        how:
+          left
+        columns:
+          kvgr4_kv: kvgr4_a7
+          sap_cluster_kv: sap_cluster_a7
+      - other:
+          select_a8
+        how:
+          left
+        columns:
+          vkgrp_kv: vkgrp_a8
+          vkbur_kv: vkbur_a8
+          sap_cluster_kv: sap_cluster_a8
+      - other:
+          select_a9
+        how:
+          left
+        columns:
+          vkbur_kv: vkbur_a9
+          sap_cluster_kv: sap_cluster_a9
+      - other:
+          select_a10
+        how:
+          left
+        columns:
+          zterm_kv: zterm_a10
+          sap_cluster_kv: sap_cluster_a10
+      - other:
+          select_a11
+        how:
+          left
+        columns:
+          vkgrp_kv: vkgrp_a11
+          sap_cluster_kv: sap_cluster_a11
+      - other:
+          group_ca_is_02m_direct_indirect_sales
+        how:
+          left
+        columns:
+          kunnr_kv: customer
+          vkorg_kv: salesorg
+
+  - kind: filter
+    name: filter_vtweg_spart
+    params:
+      - condition:
+          vtweg_kv ='01' and spart_kv = '01'
+
+  - kind: join
+    name: join_customer_link_payer
+    params:
+      - other:
+          select_customer_link_payer
+        how:
+          left
+        columns:
+          kunnr_kv: customer_code_du
+          vkorg_kv: sales_org_code_du
+          kvgr4_kv: customer_group_4_code_du
+
+  - kind: select
+    name: select_customer_link_payer_join
+    params:
+      columns:
+        customer_code_du: customer_code_du
+        sales_org_code_du: sales_org_code_du
+        customer_group_4_code_du: customer_group_4_code_du
+        vtweg_kv: vtweg_du
+        spart_kv: spart_du
+      distinct: true
+
+  - kind: join
+    name: join_customer_link_payer_dm_sales_org
+    context_name: join_dm_sales_documents
+    params:
+      - other:
+          select_customer_link_payer_join
+        how:
+          left
+        columns:
+          kunnr_kv: customer_code_du
+          vkorg_kv: sales_org_code_du
+          kvgr4_kv: customer_group_4_code_du
+          vtweg_kv: vtweg_du
+          spart_kv: spart_du
+
+
+
+  - kind: add
+    name: add_a5_a8_a11_idq
+    params:
+      - column: is_delivering_plant_allowed_a5
+        expression: "CASE WHEN werks_a5 IS NOT NULL THEN '1' ELSE '0' END"
+      - column: is_sales_group_office_allowed_a8
+        expression: "CASE WHEN vkgrp_a8 IS NOT NULL THEN '1' ELSE '0' END"
+      - column: is_sales_group_allowed_a11
+        expression: "CASE WHEN vkgrp_a11 IS NOT NULL THEN '1' ELSE '0' END"
+      - column: payer_partner_function_flag
+        expression: "CASE WHEN customer_code_du IS NOT NULL THEN 'Payer' ELSE 'Non-Payer' END"
+      - column: l4_customer_code_exp
+        expression: "CASE WHEN (kvgr4_kv IS NULL OR kvgr4_kv = '') THEN '-1' ELSE kvgr4_kv END"
+      - column: l4_customer_name_exp
+        expression: "CASE WHEN (kvgr4_kv IS NULL OR kvgr4_kv = '') THEN 'Not assigned to Customer Group 4' ELSE bezei_a7 END"
+
+
+  - kind: select
+    name: select_dm_customer_sales_organization
+    params:
+      columns:
+        kunnr_kv: customer_code
+        vkorg_kv: sale_org_code
+        vtweg_kv: distribution_channel_code
+        spart_kv: division_code
+        country_code_cc: country_code
+        aufsd_kv: order_block_sales_code
+        kdgrp_kv: customer_group_code
+        ktext_a3: customer_group_name
+        ktgrd_kv: account_assignment_group_code
+        vtext_a6: account_assignment_group_name
+        zterm_kv: terms_of_payment_code
+        text1_a10: terms_of_payment_name
+        inco1_kv: trading_term_1_code
+        bezei_a4: trading_term_1_name
+        konda_kv: customer_price_group_code
+        vtext_a2: customer_price_group_name
+        l4_customer_code_exp: customer_group_4_code
+        l4_customer_name_exp: customer_group_4_name
+        vkbur_kv: sales_office_code
+        bezei_a9: sales_office_name
+        vwerk_kv: delivering_plant_code
+        is_delivering_plant_allowed_a5: is_delivering_plant_allowed
+        vkgrp_kv: sales_group_code
+        is_sales_group_office_allowed_a8: is_sales_group_office_allowed
+        is_sales_group_allowed_a11: is_sales_group_allowed
+        vsbed_kv: shipping_condition_code
+        vtext_a1: shipping_condition_name
+        payer_partner_function_flag: payer_partner_function_flag
+        sum_bic_cbillq_u: ext_sales_uc_qty_24m
+        sap_cluster_kv: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full

@@ -1,0 +1,746 @@
+transform:
+  name: dm_vendor_check_results_uniqueness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: filter
+    name: filter_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      - condition:
+          corporate_vendor_code = ''
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: filter_dm_vendor_general
+    params:
+      columns:
+        vendor_code : vendor_code
+        vendor_account_group_code: vendor_account_group_code
+      distinct: true 
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code : vendor_code
+        country_code: country_code
+        company_code: company_code
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_tax
+
+  - kind: select
+    name: select_dm_vendor_tax
+    context_name: read_dm_vendor_tax
+    params:
+      columns:
+        vendor_code : vendor_code
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        tax_4_value: tax_4_value
+        tax_5_value: tax_5_value
+      distinct: true   
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_bank
+
+  - kind: select
+    name: select_dm_vendor_bank
+    context_name: read_dm_vendor_bank
+    params:
+      columns:
+        vendor_code : vendor_code
+        bank_code: bank_code
+        bank_country_code: bank_country_code
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+        iban: iban
+        partner_bank_type: partner_bank_type
+      distinct: true
+
+  - kind: join
+    name: join_dm_vendor_check_results_uniqueness
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_tax
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_bank
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: filter
+    name: filter_tax_0_value
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          isnotnull(tax_0_value) and tax_0_value <> ''
+
+  - kind: filter
+    name: filter_tax_1_value
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          isnotnull(tax_1_value) and tax_1_value <> ''
+
+  - kind: filter
+    name: filter_tax_2_value
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          isnotnull(tax_2_value) and tax_2_value <> ''
+
+  - kind: filter
+    name: filter_tax_3_value
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          isnotnull(tax_3_value) and tax_3_value <> ''
+
+  - kind: filter
+    name: filter_bank_account_number
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          isnotnull(bank_account_number) and bank_account_number <> ''
+
+  - kind: filter
+    name: filter_iban
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          isnotnull(iban) and iban <> ''
+
+  - kind: select
+    name: select_tax_0_value
+    context_name: filter_tax_0_value
+    params:
+      columns:
+        vendor_code : duplicated_vendor_code_tax_0_value
+        company_code: company_code
+        tax_0_value: duplicated_tax_0_value_t0
+        vendor_account_group_code: duplicated_vendor_account_group_code_tax_0_value
+        country_code: duplicated_country_code_tax_0_value
+      distinct: true
+
+  - kind: select
+    name: select_tax_1_value
+    context_name: filter_tax_1_value
+    params:
+      columns:
+        vendor_code : duplicated_vendor_code_tax_1_value
+        company_code: company_code
+        tax_1_value: duplicated_tax_1_value_t1
+        vendor_account_group_code: duplicated_vendor_account_group_code_tax_1_value
+        country_code: duplicated_country_code_tax_1_value
+      distinct: true
+
+  - kind: select
+    name: select_tax_2_value
+    context_name: filter_tax_2_value
+    params:
+      columns:
+        vendor_code : duplicated_vendor_code_tax_2_value
+        company_code: company_code
+        tax_2_value: duplicated_tax_2_value_t2
+        vendor_account_group_code: duplicated_vendor_account_group_code_tax_2_value
+        country_code: duplicated_country_code_tax_2_value
+      distinct: true
+
+  - kind: select
+    name: select_tax_3_value
+    context_name: filter_tax_3_value
+    params:
+      columns:
+        vendor_code : duplicated_vendor_code_tax_3_value
+        company_code: company_code
+        tax_3_value: duplicated_tax_3_value_t3
+        vendor_account_group_code: duplicated_vendor_account_group_code_tax_3_value
+        country_code: duplicated_country_code_tax_3_value
+      distinct: true
+
+  - kind: select
+    name: select_bank_account_number
+    context_name: filter_bank_account_number
+    params:
+      columns:
+        vendor_code : duplicated_vendor_code_bank_account_number
+        company_code: company_code
+        bank_account_number: duplicated_bank_account_number
+        vendor_account_group_code: duplicated_vendor_account_group_code_bank_account_number
+        country_code: duplicated_country_code_bank_account_number
+      distinct: true
+
+
+  - kind: select
+    name: select_iban
+    context_name: filter_iban
+    params:
+      columns:
+        vendor_code : duplicated_vendor_code_iban
+        company_code: company_code
+        iban: duplicated_iban
+        vendor_account_group_code: duplicated_vendor_account_group_code_iban
+        country_code: duplicated_country_code_iban
+      distinct: true
+
+  - kind: join
+    name: join_dm_vendor_check_results_uniqueness_duplicates
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      - other:
+          select_tax_0_value
+        how:
+          left
+        columns:
+          company_code: company_code
+          tax_0_value: duplicated_tax_0_value_t0
+      - other:
+          select_tax_1_value
+        how:
+          left
+        columns:
+          company_code: company_code
+          tax_1_value: duplicated_tax_1_value_t1
+      - other:
+          select_tax_2_value
+        how:
+          left
+        columns:
+          company_code: company_code
+          tax_2_value: duplicated_tax_2_value_t2
+      - other:
+          select_tax_3_value
+        how:
+          left
+        columns:
+          company_code: company_code
+          tax_3_value: duplicated_tax_3_value_t3
+      - other:
+          select_bank_account_number
+        how:
+          left
+        columns:
+          company_code: company_code
+          bank_account_number: duplicated_bank_account_number
+      - other:
+          select_iban
+        how:
+          left
+        columns:
+          company_code: company_code
+          iban: duplicated_iban
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_t0
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code_tax_0_value: duplicated_vendor_code
+        duplicated_tax_0_value_t0: duplicated_tax_0_value
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code_tax_0_value: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code_tax_0_value: duplicated_country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_t1
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code_tax_1_value: duplicated_vendor_code
+        duplicated_tax_1_value_t1: duplicated_tax_1_value
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code_tax_1_value: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code_tax_1_value: duplicated_country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_t2
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code_tax_2_value: duplicated_vendor_code
+        duplicated_tax_2_value_t2: duplicated_tax_2_value
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code_tax_2_value: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code_tax_2_value: duplicated_country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_t3
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code_tax_3_value: duplicated_vendor_code
+        duplicated_tax_3_value_t3: duplicated_tax_3_value
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code_tax_3_value: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code_tax_3_value: duplicated_country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_ban
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code_bank_account_number: duplicated_vendor_code
+        duplicated_bank_account_number: duplicated_bank_account_number
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code_bank_account_number: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code_bank_account_number: duplicated_country_code
+      distinct: true 
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_iban
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code_iban: duplicated_vendor_code
+        duplicated_iban: duplicated_iban
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code_iban: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code_iban: duplicated_country_code
+      distinct: true 
+
+  - kind: add
+    name: add_stack_duplicated_vendor_code
+    context_name: join_dm_vendor_check_results_uniqueness_duplicates
+    params:
+      - column: duplicated_vendor_code
+        expression: stack(6, duplicated_vendor_code_tax_0_value, duplicated_vendor_code_tax_1_value, 
+                    duplicated_vendor_code_tax_2_value, duplicated_vendor_code_tax_3_value, 
+                    duplicated_vendor_code_bank_account_number, duplicated_vendor_code_iban)
+
+  - kind: add
+    name: add_stack_account_group_code
+    context_name: add_stack_duplicated_vendor_code
+    params:
+      - column: duplicated_vendor_account_group_code
+        expression: stack(6, duplicated_vendor_account_group_code_tax_0_value, 
+                    duplicated_vendor_account_group_code_tax_1_value, 
+                    duplicated_vendor_account_group_code_tax_2_value, 
+                    duplicated_vendor_account_group_code_tax_3_value, 
+                    duplicated_vendor_account_group_code_bank_account_number, 
+                    duplicated_vendor_account_group_code_iban)
+
+  - kind: add
+    name: add_stack_country_code
+    context_name: add_stack_account_group_code
+    params:
+      - column: duplicated_country_code
+        expression: stack(6, duplicated_country_code_tax_0_value, 
+                    duplicated_country_code_tax_1_value, 
+                    duplicated_country_code_tax_2_value, 
+                    duplicated_country_code_tax_3_value, 
+                    duplicated_country_code_bank_account_number, 
+                    duplicated_country_code_iban)
+
+  - kind: select
+    name: select_distinct_vendor_pairs
+    context_name: add_stack_country_code
+    params:
+      columns:
+        vendor_code: vendor_code
+        duplicated_vendor_code: duplicated_vendor_code
+        vendor_account_group_code: vendor_account_group_code
+        duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+        country_code: country_code
+        duplicated_country_code: duplicated_country_code
+      distinct: true
+
+  - kind: filter
+    name: filter_self_join
+    context_name: select_distinct_vendor_pairs
+    params:
+      - condition:
+          isnotnull(vendor_code) and isnotnull(duplicated_vendor_code) 
+          and isnotnull(vendor_account_group_code) and isnotnull(duplicated_vendor_account_group_code) 
+          and isnotnull(country_code) and isnotnull(duplicated_country_code)
+
+  - kind: join
+    name: join_dm_vendor_check_results_duplicated_attributes
+    context_name: filter_self_join
+    params:
+      - other:
+          select_dm_vendor_check_results_uniqueness_t0
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          duplicated_vendor_code: duplicated_vendor_code
+          vendor_account_group_code: vendor_account_group_code
+          duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+          country_code: country_code
+          duplicated_country_code: duplicated_country_code
+      - other:
+          select_dm_vendor_check_results_uniqueness_t1
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          duplicated_vendor_code: duplicated_vendor_code
+          vendor_account_group_code: vendor_account_group_code
+          duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+          country_code: country_code
+          duplicated_country_code: duplicated_country_code
+      - other:
+          select_dm_vendor_check_results_uniqueness_t2
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          duplicated_vendor_code: duplicated_vendor_code
+          vendor_account_group_code: vendor_account_group_code
+          duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+          country_code: country_code
+          duplicated_country_code: duplicated_country_code
+      - other:
+          select_dm_vendor_check_results_uniqueness_t3
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          duplicated_vendor_code: duplicated_vendor_code
+          vendor_account_group_code: vendor_account_group_code
+          duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+          country_code: country_code
+          duplicated_country_code: duplicated_country_code
+      - other:
+          select_dm_vendor_check_results_uniqueness_ban
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          duplicated_vendor_code: duplicated_vendor_code
+          vendor_account_group_code: vendor_account_group_code
+          duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+          country_code: country_code
+          duplicated_country_code: duplicated_country_code
+      - other:
+          select_dm_vendor_check_results_uniqueness_iban
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          duplicated_vendor_code: duplicated_vendor_code
+          vendor_account_group_code: vendor_account_group_code
+          duplicated_vendor_account_group_code: duplicated_vendor_account_group_code
+          country_code: country_code
+          duplicated_country_code: duplicated_country_code
+
+  - kind: checkpoint
+    name: checkpoint_dm_vendor_check_results_duplicated_attributes
+    context_name: join_dm_vendor_check_results_duplicated_attributes
+
+  - kind: add
+    name: add_expressions
+    context_name: checkpoint_dm_vendor_check_results_duplicated_attributes
+    params:
+      - column: rule_code
+        expression: '''RVUNIQ_1'''
+      - column: check_status 
+        expression: if(vendor_code = duplicated_vendor_code, '1', 
+                    if((vendor_account_group_code = '7000' and duplicated_vendor_account_group_code = '7000') 
+                    or (vendor_account_group_code = '4000' and duplicated_vendor_account_group_code = '9000') 
+                    or (vendor_account_group_code = '9000' and duplicated_vendor_account_group_code = '4000'), 
+                    '1', 
+                    if(isnotnull(duplicated_tax_0_value) 
+                    or isnotnull(duplicated_tax_1_value) 
+                    or isnotnull(duplicated_tax_2_value) 
+                    or isnotnull(duplicated_tax_3_value) 
+                    or isnotnull(duplicated_bank_account_number) 
+                    or isnotnull(duplicated_iban),
+                    '0', '1')))
+      - column: value_checked
+        expression: regexp_replace(concat_ws(', ', 
+                    if(isnotnull(duplicated_tax_1_value), concat_ws(' ', 'TAX 1', duplicated_tax_1_value), ''), 
+                    if(isnotnull(duplicated_tax_2_value), concat_ws(' ', 'TAX 2', duplicated_tax_2_value), ''), 
+                    if(isnotnull(duplicated_tax_3_value), concat_ws(' ', 'TAX 3', duplicated_tax_3_value), ''), 
+                    if(isnotnull(duplicated_tax_0_value), concat_ws(' ', 'VAT', duplicated_tax_0_value), ''), 
+                    if(isnotnull(duplicated_bank_account_number), concat_ws(' ', 'Bank Account', duplicated_bank_account_number), ''), 
+                    if(isnotnull(duplicated_iban), concat_ws(' ', 'IBAN', duplicated_iban), '')), '^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$', '')                       
+      - column: message_output
+        expression: if(vendor_code = duplicated_vendor_code, 'OK', 
+                    if((vendor_account_group_code = '7000' and duplicated_vendor_account_group_code = '7000') 
+                    or (vendor_account_group_code = '4000' and duplicated_vendor_account_group_code = '9000') 
+                    or (vendor_account_group_code = '9000' and duplicated_vendor_account_group_code = '4000'), 
+                    'Account Groups Pairs are never duplicated', 
+                    if(isnotnull(duplicated_tax_0_value) 
+                    or isnotnull(duplicated_tax_1_value) 
+                    or isnotnull(duplicated_tax_2_value) 
+                    or isnotnull(duplicated_tax_3_value) 
+                    or isnotnull(duplicated_bank_account_number) 
+                    or isnotnull(duplicated_iban),
+                    value_checked, 'OK')))
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: checkpoint
+    name: checkpoint_add_expressions
+    context_name: add_expressions
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness
+    context_name: checkpoint_add_expressions
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        vendor_code: vendor_code
+        duplicated_vendor_code: duplicated_vendor_code
+        check_date: check_date
+        country_code: country_code
+        duplicated_country_code: duplicated_country_code
+        message_output: message_output
+      distinct: true 
+
+  - kind: filter
+    name: filter_output_to_get_only_one_vendor_code_duplicate_pair
+    context_name: select_dm_vendor_check_results_uniqueness
+    params:
+      - condition:
+          if((isnull(duplicated_vendor_code) and check_status = '0'), false, true) 
+
+  - kind: select
+    name: select_unique_vendor_pairs
+    context_name: filter_output_to_get_only_one_vendor_code_duplicate_pair
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        vendor_code: vendor_code
+        duplicated_vendor_code: duplicated_vendor_code
+        check_date: check_date
+        country_code: country_code
+        duplicated_country_code: duplicated_country_code
+        message_output: message_output
+      distinct: true
+
+  - kind: select
+    name: select_unique_vendor_attributes
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        tax_4_value: tax_4_value
+        tax_5_value: tax_5_value
+        bank_code: bank_key
+        partner_bank_type: partner_bank_type
+        bank_country_code: bank_country_code
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+        iban: iban
+      distinct: true
+
+  - kind: select
+    name: select_unique_vendor_attributes_duplicated
+    context_name: join_dm_vendor_check_results_uniqueness
+    params:
+      columns:
+        vendor_code: duplicated_vendor_code
+        country_code: duplicated_country_code
+        tax_0_value: duplicated_tax_0_value
+        tax_1_value: duplicated_tax_1_value
+        tax_2_value: duplicated_tax_2_value
+        tax_3_value: duplicated_tax_3_value
+        tax_4_value: duplicated_tax_4_value
+        tax_5_value: duplicated_tax_5_value
+        bank_code: duplicated_bank_key
+        bank_country_code: duplicated_bank_country_code
+        bank_account_number: duplicated_bank_account_number
+        bank_control_key: duplicated_bank_control_key
+        iban: duplicated_iban
+      distinct: true
+
+  - kind: join
+    name: join_dm_vendor_check_results_attributes
+    context_name: select_unique_vendor_pairs
+    params:
+      - other:
+          select_unique_vendor_attributes
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          country_code: country_code
+      - other:
+          select_unique_vendor_attributes_duplicated
+        how:
+          left
+        columns:
+          duplicated_vendor_code: duplicated_vendor_code
+          duplicated_country_code: duplicated_country_code
+
+  - kind: add
+    name: add_dm_vendor_check_results_uniqueness_final
+    context_name: join_dm_vendor_check_results_attributes
+    params:
+      - column: check_status_out
+        expression: if(check_status  = '0'
+                    and (partner_bank_type = 'BGNS' or bank_key LIKE '%CITI%'),
+                    '1', check_status)
+      - column: message_output_out
+        expression: if(check_status  = '0'
+                    and (partner_bank_type = 'BGNS' or bank_key LIKE '%CITI%'),
+                    'OK', message_output)
+
+  - kind: select
+    name: select_dm_vendor_check_results_uniqueness_final
+    context_name: add_dm_vendor_check_results_uniqueness_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status_out: check_status
+        vendor_code: vendor_code
+        duplicated_vendor_code: duplicated_vendor_code
+        check_date: check_date
+        country_code: country_code
+        message_output_out: message_output
+        tax_0_value: vat_number
+        tax_1_value: tax_number_1
+        tax_2_value: tax_number_2
+        tax_3_value: tax_number_3
+        tax_4_value: tax_number_4
+        tax_5_value: tax_number_5
+        bank_country_code: bank_country_code
+        bank_key: bank_key
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+        iban: iban
+        duplicated_tax_0_value: duplicated_vat_number
+        duplicated_tax_1_value: duplicated_tax_number_1
+        duplicated_tax_2_value: duplicated_tax_number_2
+        duplicated_tax_3_value: duplicated_tax_number_3
+        duplicated_tax_4_value: duplicated_tax_number_4
+        duplicated_tax_5_value: duplicated_tax_number_5
+        duplicated_bank_country_code: duplicated_bank_country_code
+        duplicated_bank_key: duplicated_bank_key
+        duplicated_bank_account_number: duplicated_bank_account_number
+        duplicated_bank_control_key: duplicated_bank_control_key
+        duplicated_iban: duplicated_iban
+      distinct: true 
+
+  - kind: filter
+    name: filter_dm_vendor_check_results_uniqueness_final
+    context_name: select_dm_vendor_check_results_uniqueness_final
+    params:
+      - condition:
+          if((check_status = '0' 
+          and (vat_number = duplicated_vat_number 
+          and tax_number_1 = duplicated_tax_number_1 
+          and tax_number_2 = duplicated_tax_number_2 
+          and tax_number_3 = duplicated_tax_number_3
+          and bank_account_number = duplicated_bank_account_number
+          and iban = duplicated_iban)) 
+          or (check_status = '0' 
+          and ((instr(message_output, 'VAT') > 0 and vat_number <> duplicated_vat_number)
+          or (instr(message_output, 'TAX 1') > 0 and tax_number_1 <> duplicated_tax_number_1) 
+          or (instr(message_output, 'TAX 2') > 0 and tax_number_2 <> duplicated_tax_number_2) 
+          or (instr(message_output, 'TAX 3') > 0 and tax_number_3 <> duplicated_tax_number_3)
+          or (instr(message_output, 'Bank Account') > 0 and bank_account_number <> duplicated_bank_account_number)
+          or (instr(message_output, 'IBAN') > 0 and iban <> duplicated_iban))), false, true)
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results_uniqueness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results_uniqueness
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

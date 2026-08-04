@@ -1,0 +1,409 @@
+transform:
+  name: dm_customer_equipment
+  operations:
+  - kind: read_dataio
+    name: read_v_equi
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: transactional_data
+      object_name: v_equi
+      schema_version: v1
+
+  - kind: filter
+    name: filter_datbi_spras
+    params:
+      - condition:
+          (datbi = '9999-12-31 00:00:00.0000000' AND spras = 'E' AND isnotnull(kunde) AND kunde <> '')
+
+  - kind: select
+    name: select_v_equi
+    params:
+      columns:
+        objnr: objnr
+        matnr: matnr
+        kunde: kunde
+        equnr: equnr
+        eqtyp: eqtyp
+        serge: serge
+        ansdt: ansdt
+        eqktx: eqktx
+        typbz: typbz
+        inbdt: inbdt
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_jest
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: finance
+      object_name: jest
+      schema_version: v1
+
+  - kind: filter
+    name: filter_jest
+    params:
+      - condition:
+          inact <> 'X'
+
+  - kind: select
+    name: select_jest
+    params:
+      columns:
+        objnr: objnr
+        stat: stat
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tj30t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: reference_data
+      object_name: tj30t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_jt30t
+    params:
+      - condition:
+          spras = 'E' AND stsma = 'CSEQ01'
+
+  - kind: select
+    name: select_tj30t
+    params:
+      columns:
+        estat: estat
+        txt04: txt04
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_inob
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: transactional_data
+      object_name: inob
+      schema_version: v1
+
+  - kind: select
+    name: select_inob
+    params:
+      columns:
+        objek: objek
+        cuobj: cuobj
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_ausp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: material_master
+      object_name: ausp
+      schema_version: v1
+
+  - kind: select
+    name: select_ausp
+    params:
+      columns:
+        objek: objek
+        atinn: atinn
+        atwrt: atwrt
+        atflv: atflv
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_ltrim_ausp
+    params:
+      - column: ltrim_objek
+        expression: ltrim('0', objek)
+
+  - kind: filter
+    name: filter_ausp_24
+    context_name: add_ltrim_ausp
+    params:
+      - condition:
+          atinn = '24'
+
+  - kind: filter
+    name: filter_ausp_30
+    context_name: add_ltrim_ausp
+    params:
+      - condition:
+          atinn = '30'
+
+  - kind: filter
+    name: filter_ausp_52
+    context_name: add_ltrim_ausp
+    params:
+      - condition:
+          atinn = '52'
+
+  - kind: filter
+    name: filter_ausp_27
+    context_name: add_ltrim_ausp
+    params:
+      - condition:
+          atinn = '27'
+
+  - kind: select
+    name: select_ausp_24
+    context_name: filter_ausp_24
+    params:
+      columns:
+        ltrim_objek: ltrim_objek_24
+        atwrt: atwrt_24
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_ausp_30
+    context_name: filter_ausp_30
+    params:
+      columns:
+        ltrim_objek: ltrim_objek_30
+        atwrt: atwrt_30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_ausp_52
+    context_name: filter_ausp_52
+    params:
+      columns:
+        ltrim_objek: ltrim_objek_52
+        atflv: atflv
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_ausp_27
+    context_name: filter_ausp_27
+    params:
+      columns:
+        ltrim_objek: ltrim_objek_27
+        atwrt: atwrt_27
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cawn_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm     
+      namespace: reference_data
+      object_name: cawn
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cawn_crm
+    params:
+      - condition:
+          atinn = '1'
+
+  - kind: select
+    name: select_cawn_crm
+    params:
+      columns:
+        atinn: atinn
+        atwrt: atwrt_30
+        atzhl: atzhl
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_cawnt_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm     
+      namespace: reference_data
+      object_name: cawnt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_cawnt_crm
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_cawnt_crm
+    params:
+      columns:
+        atinn: atinn
+        atzhl: atzhl
+        atwtb: atwtb
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_makt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: material_master
+      object_name: makt
+      schema_version: v1
+
+  - kind: filter
+    name: filter_makt
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_makt
+    params:
+      columns:
+        matnr: matnr
+        maktx: maktx
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_customer_equipment
+    context_name: select_v_equi
+    params:
+      - other:
+          select_jest
+        how:
+          left
+        columns:
+          objnr: objnr
+          sap_cluster: sap_cluster
+      - other:
+          select_tj30t
+        how:
+          left
+        columns:
+          stat: estat
+          sap_cluster: sap_cluster
+      - other:
+          select_inob
+        how:
+          left
+        columns:
+          matnr: objek
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_24
+        how:
+          left
+        columns:
+          cuobj: ltrim_objek_24
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_30
+        how:
+          left
+        columns:
+          cuobj: ltrim_objek_30
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_52
+        how:
+          left
+        columns:
+          cuobj: ltrim_objek_52
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_27
+        how:
+          left
+        columns:
+          cuobj: ltrim_objek_27
+          sap_cluster: sap_cluster
+      - other:
+          select_cawn_crm
+        how:
+          left
+        columns:
+          atwrt_30: atwrt_30
+          sap_cluster: sap_cluster
+      - other:
+          select_cawnt_crm
+        how:
+          left
+        columns:
+          atinn: atinn
+          atzhl: atzhl
+          sap_cluster: sap_cluster
+      - other:
+          select_makt
+        how:
+          left
+        columns:
+          matnr: matnr
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_dm_customer_equipment
+    params:
+      columns:
+        kunde: customer_code
+        equnr: equipment_number
+        ansdt: acquisition_date
+        eqktx: equipment_description
+        typbz: equipment_model
+        inbdt: installation_date
+        eqtyp: equipment_category_code
+        txt04: equipment_status_code
+        txt30: equipment_status_description
+        atwrt_24: cde_type
+        atwrt_30: cde_category_code
+        atwtb: cde_category_description
+        serge: manufacturer_serial_number
+        atwrt_27: cs_branding
+        atflv: number_of_doors
+        matnr: material_code
+        sap_cluster: sap_cluster
+        maktx: material_description
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_equipment
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_equipment
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

@@ -1,0 +1,190 @@
+transform:
+  name: customer_bank_type
+  operations:
+
+#DETAILED
+#read customer_bank_type
+  - kind: read_dataio
+    name: read_du_customer_bank_type
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: customer_bank_type
+      schema_version: v1
+
+  - kind: add
+    name: add_replace_null_with_blank
+    params:
+      - column: order_block_code
+        expression: if(order_block_code is null, '', order_block_code)
+        overwrite: true
+      - column: order_block_name
+        expression: if(order_block_name is null, '', order_block_name)
+        overwrite: true
+      - column: customer_hier_3_code
+        expression: if(customer_hier_3_code is null, '', customer_hier_3_code)
+        overwrite: true
+      - column: customer_hier_3_name
+        expression: if(customer_hier_3_name is null, '', customer_hier_3_name)
+        overwrite: true
+      - column: customer_group_4_code
+        expression: if(customer_group_4_code is null, '', customer_group_4_code)
+        overwrite: true
+      - column: customer_group_4_name
+        expression: if(customer_group_4_name is null, '', customer_group_4_name)
+        overwrite: true
+      - column: account_group_code
+        expression: if(account_group_code is null, '', account_group_code)
+        overwrite: true
+      - column: account_group_name
+        expression: if(account_group_name is null, '', account_group_name)
+        overwrite: true
+
+  - kind: add
+    name: add_dq_message_output
+    params:
+      - column: order_block
+        expression: CONCAT(order_block_code, " - ", order_block_name)
+      - column: customer_hier_3
+        expression: CONCAT(customer_hier_3_code, " - ", customer_hier_3_name)
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, " - ", customer_group_4_name)
+      - column: account_group
+        expression: CONCAT(account_group_code, " - ", account_group_name)
+      - column: dq_message_output
+        expression: IF(completeness_bank_type_flag = '0', 'Bank Type Missing','OK')
+
+
+  - kind: select
+    name: select_g_customer_bank_type_detailed
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block: order_block
+        customer_hier_3: customer_hier_3
+        customer_group_4: customer_group_4
+        account_group: account_group
+        country_code: country_code
+        sales_org_code: sales_org_code
+        bank_key: bank_key
+        bank_account: bank_account
+        iban: iban
+        bank_country: bank_country
+        bank_type: bank_type
+        completeness_bank_type_flag: completeness_bank_type_flag
+        dq_message_output: dq_message_output
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: customer_bank_type
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#AGGREGATED
+#read customer_bank_type
+  - kind: read_dataio
+    name: read_du_customer_bank_type
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: customer_bank_type
+      schema_version: v1
+
+
+  - kind: select
+    name: select_du_completeness
+    params:
+      columns:
+        country_code: country_code
+        completeness_bank_type_flag : completeness_bank_type_flag 
+
+
+  - kind: add
+    name: add_aggregated_completeness
+    params:
+      - column: quality_category
+        expression: '"completeness"'
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(completeness_bank_type_flag!='', 1, NULL)
+      - column: invalid_checks
+        expression: IF(completeness_bank_type_flag = '0', 1, NULL)
+
+
+  - kind: group
+    name: group_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_category
+
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: count_total_records
+        to: integer
+      - column: count_total_checks
+        to: integer    
+      - column: count_invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        country_code: country_code
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: customer_bank_type
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

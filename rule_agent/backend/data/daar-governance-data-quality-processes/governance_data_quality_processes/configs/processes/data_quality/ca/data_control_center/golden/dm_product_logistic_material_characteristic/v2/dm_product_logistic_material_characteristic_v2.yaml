@@ -1,0 +1,138 @@
+transform:
+  name: dm_product_logistic_material_characteristic
+  operations:
+    - name: initialize_schema_configuration
+      kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+      params:
+        module_name: governance_data_quality_processes
+        config_name: dcc_schema_versions
+    - name: zleo_po_comp_dis
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        dataio:
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: zleo_po_comp_dis
+    - name: zleo_po_comp_dis
+      kind: select
+      params:
+        columns:
+          compid: compatibility_matrix_id
+          mategid: material_characteristic_group
+          display: display_flag
+          sap_cluster: sap_cluster
+    - name: zleo_po_comp_dis
+      kind: filter
+      params:
+        - condition:
+            display_flag = 'X' AND compatibility_matrix_id NOT LIKE '%2%' AND compatibility_matrix_id NOT LIKE '%3%'
+    - name: zleo_po_comp_dis
+      kind: add
+      params:
+        - column: country_code
+          expression: CASE WHEN RIGHT(compatibility_matrix_id, 3) = 'ROI' THEN 'IE'
+            WHEN RIGHT(compatibility_matrix_id, 2) = 'NI' THEN 'GB'
+            WHEN RIGHT(compatibility_matrix_id, 5) = 'CZECH' THEN 'CZ'
+            WHEN REGEXP_LIKE(RIGHT(compatibility_matrix_id, 2), '^[A-Za-z]+$') THEN RIGHT(compatibility_matrix_id, 2)
+            ELSE '' END
+        - column: matrix_number
+          expression: SUBSTRING(compatibility_matrix_id,0,2)
+        - column: material_characteristic_group_copy
+          expression: material_characteristic_group
+    - name: zleo_po_comp_dis
+      kind: cast
+      params:
+        - column: matrix_number
+          to: integer
+
+    - name: zleo_po_compmatr
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        dataio:
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        source: sap_s4hana
+        namespace: otc_leo
+        object_name: zleo_po_compmatr
+    - name: zleo_po_compmatr
+      kind: select
+      params:
+        columns:
+          compid: compatibility_matrix_id_comp_copy
+          comp_from: compatibility_source
+          comp_to: compatibility_destination
+          compatible: compatible_flag
+          sap_cluster: sap_cluster
+
+    - name: zleo_po_compmatr
+      kind: add
+      params:          
+        - column: country_code
+          expression: CASE WHEN RIGHT(compatibility_matrix_id_comp_copy, 3) = 'ROI' THEN 'IE'
+            WHEN RIGHT(compatibility_matrix_id_comp_copy, 2) = 'NI' THEN 'GB'
+            WHEN REGEXP_LIKE(RIGHT(compatibility_matrix_id_comp_copy, 2), '^[A-Za-z]+$') THEN RIGHT(compatibility_matrix_id_comp_copy, 2)
+            ELSE '' END
+
+    - name: zleo_po_compmatr
+      kind: filter
+      params:
+        - condition:
+            compatible_flag = 'X'
+
+    - name: dm_product_logistic_material_characteristic
+      kind: join
+      context_name: zleo_po_comp_dis
+      params:
+        - other:
+            zleo_po_compmatr
+          how:
+            left
+          columns:
+            material_characteristic_group: compatibility_source
+            material_characteristic_group_copy: compatibility_destination
+            sap_cluster: sap_cluster
+            country_code: country_code
+
+    - name: dm_product_logistic_material_characteristic
+      kind: add
+      params:
+        - column: from_to_same_flag
+          expression: CASE WHEN compatibility_source IS NULL OR compatibility_source = "" OR compatibility_destination IS NULL OR compatibility_destination = "" THEN "0"
+            ELSE "1" END
+    - name: dm_product_logistic_material_characteristic
+      kind: cast
+      params:
+        - column: from_to_same_flag
+          to: integer
+        - column: matrix_number
+          to: integer
+
+    - name: dm_product_logistic_material_characteristic
+      kind: drop
+      params:
+        - column: material_characteristic_group_copy
+        - column: compatibility_source
+        - column: compatibility_destination
+        - column: compatibility_matrix_id_comp_copy
+
+    - name: write_dm_product_logistic_material_characteristic
+      kind: write_dataio
+      params:
+        dataio:
+          layer: application
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: golden
+        object_name: dm_product_logistic_material_characteristic
+        process_run_id: "{{process_run_id}}"
+        schema_version: v2
+        refresh_mode: full

@@ -1,0 +1,972 @@
+transform:
+  name: customer_grouping_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_general_v3
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        global_customer_code: global_customer_code
+        global_customer_standard_name: global_customer_standard_name
+        trading_standard_name: trading_standard_name
+        trading_group_code: trading_group_code
+        is_allowed_trading_group_code: is_allowed_trading_group_code
+      distinct: true
+
+#READ dm_customer_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: select
+    context_name: read_dm_customer_sales_organization
+    name: select_dcso
+    params:
+      columns:
+        customer_code: customer_code
+        customer_price_group_code: customer_price_group_code
+        customer_price_group_name: customer_price_group_name
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        sale_org_code: sales_org_code
+        customer_group_4_code: customer_group_4_code
+        sap_cluster: sap_cluster
+      distinct: true     
+
+#READ dm_customer_hierarchy
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+  - kind: select
+    context_name: read_dm_customer_hierarchy
+    name: select_dch
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_valid_from: l7_customer_valid_from
+        l7_customer_valid_to: l7_customer_valid_to
+        l6_customer_code: l6_customer_code
+        l5_customer_code: l5_customer_code
+        l6_sales_org_code: l6_sales_org_code
+        l6_distribution_channel_code: l6_distribution_channel_code
+        l6_division_code: l6_division_code
+        l7_sales_org_code: l7_sales_org_code
+        l7_distribution_channel_code: l7_distribution_channel_code
+        l7_division_code: l7_division_code
+        l7_is_allowed_assignment: l7_is_allowed_assignment
+        l3_customer_code: l3_customer_code
+        l4_customer_code: l4_customer_code
+        sap_cluster: sap_cluster
+      distinct: true 
+
+#READ dm_customer_high_level
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_high_level
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_high_level
+
+  - kind: select
+    context_name: read_dm_customer_high_level
+    name: select_dm_customer_high_level_c
+    params:
+      columns:
+        customer_code: customer_code_c
+        global_customer_code: global_customer_code_c
+        trading_group_code: trading_group_code_c
+        trading_standard_name: trading_standard_name_c
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_high_level_c
+    params:
+      - condition:
+          global_customer_code_c in('9007699', '9001157', '9000896', '9000017', '9000010', '9000013', '9001331', '9001332', '9001333', '9000981', '9000902', '9001202', '9001394', '9001351', '9001503', '9000030', '9000031', '9001176', '9001372', '9000004', '9000034', '9000901', '9000037', '9000040', '9000042', '9002255', '9001399', '9000045', '9001178', '9006012', '9000018', '9001408', '9001927', '9000023', '9001337', '9005552', '9005555', '9001359', '9000007', '9007123')
+
+  - kind: select
+    context_name: read_dm_customer_high_level
+    name: select_dm_customer_high_level_d
+    params:
+      columns:
+        customer_code: customer_code_d
+        global_customer_code: global_customer_code_d
+        trading_group_code: trading_group_code_d
+        trading_standard_name: trading_standard_name_d
+        sap_cluster: sap_cluster
+      distinct: true 
+
+  - kind: filter
+    name: filter_dm_customer_high_level_d
+    params:
+      - condition:
+          global_customer_code_d in('9007699', '9001157', '9000896', '9000017', '9000010', '9000013', '9001331', '9001332', '9001333', '9000981', '9000902', '9001202', '9001394', '9001351', '9001503', '9000030', '9000031', '9001176', '9001372', '9000004', '9000034', '9000901', '9000037', '9000040', '9000042', '9002255', '9001399', '9000045', '9001178', '9006012', '9000018', '9001408', '9001927', '9000023', '9001337', '9005552', '9005555', '9001359', '9000007', '9007123')
+
+
+#JOIN dcg and dcso
+  - kind: join
+    name: join_dcso_dcg
+    context_name: select_dcso
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dch
+  - kind: join
+    name: join_dch_dcg
+    context_name: select_dch
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          l7_customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg , dch and dcso
+  - kind: join
+    name: join_dcso_dcg_dch
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcso
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dch
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          division_code: l7_division_code
+          distribution_channel_code: l7_distribution_channel_code
+          sales_org_code: l7_sales_org_code
+          sap_cluster: sap_cluster
+
+#JOIN for global customer and trading group
+  - kind: join
+    name: join_global_customer_trading_group
+    context_name: select_dcg
+    params:
+      - other:
+          select_dch
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_dm_customer_high_level_c
+        how:
+          left
+        columns:
+          l6_customer_code: customer_code_c
+          sap_cluster: sap_cluster
+      - other:
+          filter_dm_customer_high_level_d
+        how:
+          left
+        columns:
+          l5_customer_code: customer_code_d
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_global_customer_trading_group
+    params:
+      - condition:
+          global_customer_code in('9007699', '9001157', '9000896', '9000017', '9000010', '9000013', '9001331', '9001332', '9001333', '9000981', '9000902', '9001202', '9001394', '9001351', '9001503', '9000030', '9000031', '9001176', '9001372', '9000004', '9000034', '9000901', '9000037', '9000040', '9000042', '9002255', '9001399', '9000045', '9001178', '9006012', '9000018', '9001408', '9001927', '9000023', '9001337', '9005552', '9005555', '9001359', '9000007', '9007123')
+
+
+#SELECT RCCONF_244.3
+  - kind: select
+    name: select_rcconf_244_3
+    context_name: filter_global_customer_trading_group
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        account_group_code: account_group_code
+        trading_group_code: trading_group_code
+        trading_group_code_c: trading_group_code_c
+        global_customer_code: global_customer_code
+        global_customer_code_c: global_customer_code_c
+        global_customer_code_d: global_customer_code_d
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_244_3
+    context_name: select_rcconf_244_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_244.3'"
+      - column: check_status
+        expression: if(central_order_block_code in('S1', 'E', 'G', 'R', 'U', 'S', 'S3', 'S4', 'SP', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9') 
+                    or account_group_code like '7%' or isnull(global_customer_code) or isnull(global_customer_code_c) or isnull(global_customer_code_d), '', 
+                    if(global_customer_code  = global_customer_code_c and global_customer_code  = global_customer_code_d, '1', '0'))     
+
+  - kind: select
+    name: select_rcconf_244_3_final
+    context_name: add_rcconf_244_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        global_customer_code: value_checked
+      distinct: true  
+
+#SELECT RCCONF_246.2
+  - kind: select
+    name: select_rcconf_246_2
+    context_name: filter_global_customer_trading_group
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        account_group_code: account_group_code
+        trading_group_code: trading_group_code
+        trading_group_code_c: trading_group_code_c
+        trading_group_code_d: trading_group_code_d
+        global_customer_code: global_customer_code
+        global_customer_code_c: global_customer_code_c
+        global_customer_code_d: global_customer_code_d
+      distinct: true   
+
+  - kind: group
+    name: group_trading_group_246_2
+    params:
+      - aggs:
+          trading_group_code_c: count
+        by:
+        - global_customer_code_d
+
+  - kind: join
+    name: join_rcconf_246_2
+    context_name: select_rcconf_246_2
+    params:
+      - other:
+          group_trading_group_246_2
+        how:
+          left
+        columns:
+          global_customer_code_d: global_customer_code_d
+
+  - kind: add
+    name: add_rcconf_246_2
+    context_name: join_rcconf_246_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_246.2'"
+      - column: check_status
+        expression: if(central_order_block_code in('S1', 'E', 'G', 'R', 'U', 'S', 'S3', 'S4', 'SP', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9') 
+                    or account_group_code like '7%' or isnull(trading_group_code) or isnull(trading_group_code_c), '', 
+                    if(trading_group_code  = trading_group_code_c and trading_group_code = trading_group_code_d, '1', 
+                    if(trading_group_code  = trading_group_code_c and isnull(trading_group_code_d)
+                    and (isnotnull(global_customer_code_c) and isnotnull(global_customer_code_d) and global_customer_code = global_customer_code_c
+                    and global_customer_code = global_customer_code_d) and count_trading_group_code_c > 1, '1', '0')))     
+
+  - kind: select
+    name: select_rcconf_246_2_final
+    context_name: add_rcconf_246_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        trading_group_code: value_checked
+      distinct: true  
+
+#SELECT RCCONF_244.4
+  - kind: select
+    name: select_rcconf_244_4
+    context_name: filter_global_customer_trading_group
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        account_group_code: account_group_code
+        trading_group_code: trading_group_code
+        trading_group_code_c: trading_group_code_c
+        trading_group_code_d: trading_group_code_d
+        trading_standard_name: trading_standard_name
+        trading_standard_name_c: trading_standard_name_c
+        trading_standard_name_d: trading_standard_name_d
+        global_customer_code: global_customer_code
+        global_customer_code_c: global_customer_code_c
+        global_customer_code_d: global_customer_code_d
+      distinct: true   
+
+  - kind: group
+    name: group_trading_group_244_4
+    params:
+      - aggs:
+          trading_group_code_c: count
+        by:
+        - global_customer_code_d
+
+  - kind: join
+    name: join_rcconf_244_4
+    context_name: select_rcconf_244_4
+    params:
+      - other:
+          group_trading_group_244_4
+        how:
+          left
+        columns:
+          global_customer_code_d: global_customer_code_d
+
+  - kind: add
+    name: add_rcconf_244_4
+    context_name: join_rcconf_244_4
+    params:
+      - column: rule_code
+        expression: "'RCCONF_244.4'"
+      - column: check_status
+        expression: if(central_order_block_code in('S1', 'E', 'G', 'R', 'U', 'S', 'S3', 'S4', 'SP', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9') 
+                    or account_group_code like '7%' or isnull(trading_group_code) or isnull(trading_group_code_c) 
+                    or isnull(global_customer_code) or isnull(global_customer_code_c) or isnull(global_customer_code_d), '', 
+                    if(isnotnull(trading_standard_name) and isnotnull(trading_standard_name_c) and isnotnull(trading_standard_name_d), '1',
+                    if(isnotnull(trading_standard_name) and isnotnull(trading_standard_name_c)
+                    and ((trading_group_code  = trading_group_code_c and trading_group_code  = trading_group_code_d)
+                    or (trading_group_code = trading_group_code_c and isnull(trading_group_code_d) 
+                    and isnotnull(global_customer_code_c) and isnotnull(global_customer_code_d) and global_customer_code = global_customer_code_c
+                    and global_customer_code = global_customer_code_d) and count_trading_group_code_c > 1), '1', '0')))
+      - column: rcconf_244_4
+        expression: concat_ws('_', global_customer_code, trading_group_code)
+
+  - kind: select
+    name: select_rcconf_244_4_final
+    context_name: add_rcconf_244_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        rcconf_244_4: value_checked
+      distinct: true 
+
+#RULE 148_1
+  - kind: select
+    name: select_rcconf_148_1
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_price_group_code: customer_price_group_code
+        customer_price_group_name: customer_price_group_name
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_148_1
+    context_name: select_rcconf_148_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_148.1'"
+      - column: check_status
+        expression: "CASE WHEN customer_price_group_code is null OR customer_price_group_code = '' THEN '' WHEN customer_price_group_name is null OR customer_price_group_name = '' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_148_1_final
+    context_name: add_rcconf_148_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        customer_price_group_name: value_checked
+      distinct: true
+
+#RULE 148_4
+  - kind: select
+    name: select_rcconf_148_4
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_price_group_code: customer_price_group_code
+        account_group_code: account_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_148_4
+    context_name: select_rcconf_148_4
+    params:
+      - column: rule_code
+        expression: "'RCCONF_148.4'"
+      - column: check_status
+        expression: "CASE WHEN SUBSTR(account_group_code, 0, 2) IN ('70','71','72','73','90') AND (customer_price_group_code is null OR customer_price_group_code = '') THEN '0' WHEN SUBSTR(account_group_code, 0, 2) IN ('70','71','72','73','90') AND (customer_price_group_code is not null AND customer_price_group_code != '') THEN '1' ELSE '' END"
+
+  - kind: select
+    name: select_rcconf_148_4_final
+    context_name: add_rcconf_148_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        customer_price_group_code: value_checked
+      distinct: true
+
+#RULE 148_5
+  - kind: select
+    name: select_rcconf_148_5
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        customer_price_group_code: customer_price_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_148_5
+    context_name: select_rcconf_148_5
+    params:
+      - column: rule_code
+        expression: "'RCCONF_148.5'"
+      - column: check_status
+        expression: "CASE WHEN distribution_channel_code = '04' AND division_code = '02' AND (customer_price_group_code is null OR customer_price_group_code = '') THEN '1' WHEN distribution_channel_code = '04' AND division_code = '02' AND (customer_price_group_code is not null AND customer_price_group_code = '') THEN '0' ELSE '' END"
+
+  - kind: select
+    name: select_rcconf_148_5_final
+    context_name: add_rcconf_148_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        customer_price_group_code: value_checked
+      distinct: true
+
+#RULE 233_1
+  - kind: select
+    name: select_rcconf_233_1
+    context_name: join_dch_dcg
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_sales_org_code: l7_sales_org_code
+        l6_distribution_channel_code: l6_distribution_channel_code
+        l7_division_code: l7_division_code
+        l7_is_allowed_assignment: l7_is_allowed_assignment
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_233_1
+    context_name: select_rcconf_233_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_233.1'"
+      - column: check_status
+        expression: "CASE WHEN l7_sales_org_code is null OR l7_sales_org_code = '' OR l6_distribution_channel_code is null OR l6_distribution_channel_code = '' OR l7_division_code is null OR l7_division_code = '' THEN '' WHEN l7_is_allowed_assignment = '1' THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_233_1_final
+    context_name: add_rcconf_233_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        l7_customer_code: customer_code
+        l7_sales_org_code: value_checked
+      distinct: true
+
+#RULE 236_1
+  - kind: select
+    name: select_rcconf_236_1
+    context_name: join_dch_dcg
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_valid_from: l7_customer_valid_from
+        l7_customer_valid_to: l7_customer_valid_to
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_236_1
+    context_name: select_rcconf_236_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_236.1'"
+      - column: check_status
+        expression: "CASE WHEN l7_customer_valid_from is null OR TO_TIMESTAMP(l7_customer_valid_from, 'yyyy-MM-dd') = '1900-01-01 00:00:00' OR l7_customer_valid_to is null OR TO_TIMESTAMP(l7_customer_valid_to, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' WHEN l7_customer_valid_from > l7_customer_valid_to THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_236_1_final
+    context_name: add_rcconf_236_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        l7_customer_code: customer_code
+        l7_customer_valid_from: value_checked
+      distinct: true
+
+#RULE 236_2
+  - kind: select
+    name: select_rcconf_236_2
+    context_name: join_dch_dcg
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_valid_from: l7_customer_valid_from
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_236_2
+    context_name: select_rcconf_236_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_236.2'"
+      - column: check_status
+        expression: "CASE WHEN l7_customer_valid_from is null OR TO_TIMESTAMP(l7_customer_valid_from, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' WHEN TO_TIMESTAMP(l7_customer_valid_from, 'yyyy-MM-dd') is null THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "DATE_FORMAT(l7_customer_valid_from, 'yyyyMMdd')"
+
+  - kind: select
+    name: select_rcconf_236_2_final
+    context_name: add_rcconf_236_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        l7_customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 236_3
+  - kind: select
+    name: select_rcconf_236_3
+    context_name: join_dch_dcg
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_valid_from: l7_customer_valid_from
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_236_3
+    context_name: select_rcconf_236_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_236.3'"
+      - column: check_status
+        expression: "CASE WHEN l7_customer_valid_from is null OR DATE_FORMAT(l7_customer_valid_from, 'yyyy-MM-dd') = '' THEN '' WHEN DATE_FORMAT(l7_customer_valid_from, 'yyyy-MM-dd') > DATE_FORMAT(ADD_MONTHS(current_timestamp(), 2), 'yyyy-MM-dd') THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "DATE_FORMAT(l7_customer_valid_from, 'yyyy-MM-dd')"
+
+  - kind: select
+    name: select_rcconf_236_3_final
+    context_name: add_rcconf_236_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        l7_customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 237_2
+  - kind: select
+    name: select_rcconf_237_2
+    context_name: join_dch_dcg
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_customer_valid_to: l7_customer_valid_to
+        l7_customer_valid_from: l7_customer_valid_from
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_237_2
+    context_name: select_rcconf_237_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_237.2'"
+      - column: check_status
+        expression: "CASE WHEN l7_customer_valid_to is null THEN '' WHEN (l7_customer_valid_to != TO_TIMESTAMP('9999-12-31', 'yyyy-MM-dd')) OR l7_customer_valid_to < l7_customer_valid_from THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_237_2_final
+    context_name: add_rcconf_237_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        l7_customer_code: customer_code
+        l7_customer_valid_to: value_checked
+      distinct: true
+
+#RULE 238_1
+  - kind: select
+    name: select_rcconf_238_1
+    context_name: join_dcso_dcg_dch
+    params:
+      columns:
+        customer_code: customer_code
+        customer_group_4_code: customer_group_4_code
+        l3_customer_code: l3_customer_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_238_1
+    context_name: select_rcconf_238_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_238.1'"
+      - column: check_status
+        expression: "CASE WHEN customer_group_4_code NOT IN ('DEC', 'DTS') OR (l3_customer_code IS NULL OR l3_customer_code = '-1' ) THEN '' WHEN l3_customer_code IN ('KA0B', 'KA0A', 'NK0B', 'NK0A','NK0Z', 'NK0T', 'NK0V') THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_238_1_final
+    context_name: add_rcconf_238_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        l3_customer_code: value_checked
+      distinct: true
+
+#RULE 238_2
+  - kind: select
+    name: select_rcconf_238_2
+    context_name: join_dcso_dcg_dch
+    params:
+      columns:
+        customer_code: customer_code
+        customer_group_4_code: customer_group_4_code
+        l3_customer_code: l3_customer_code
+        l4_customer_code: l4_customer_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_238_2
+    context_name: select_rcconf_238_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_238.2'"
+      - column: check_status
+        expression: if((l3_customer_code is null OR l4_customer_code is null ) 
+                    or (l3_customer_code = '-1' OR l4_customer_code = '-1' ) 
+                    or (customer_group_4_code NOT IN ('IN')), '',
+                    if(l3_customer_code = 'KA0A' AND l4_customer_code in('0000010100','0000010101','0000010102','0000010103', '00000101004'), '1', 
+                    if(l3_customer_code = 'KA0B' AND l4_customer_code in('0000010200','0000010201','0000010202','0000010203', '0000010204', '0000010205', '0000010206', '0000010207', '0000010208', '0000010209'), '1',
+                    if(l3_customer_code = 'NK0A' AND l4_customer_code in('0000010300','0000010301','0000010302','0000010303'), '1',
+                    if(l3_customer_code = 'NK0B' AND l4_customer_code in('0000010400','0000010401','0000010402','0000010403','0000010405','0000010406', '0000010404'), '1',
+                    if(l3_customer_code = 'NK0V' AND l4_customer_code in('0000010500', '0000010501', '0000010502', '0000010503', '0000010504', '0000010505'), '1',
+                    if(l3_customer_code = 'NK0T' AND l4_customer_code in('0000010600','0000010601', '0000010602'), '1',
+                    if(l3_customer_code = 'NK0Z' AND l4_customer_code in('0000010700','0000010701','0000010702','0000010703', '0000010704'), '1',
+                    '0'))))))))
+      - column: value_checked
+        expression: l3_customer_code|| '_' || l4_customer_code
+
+  - kind: select
+    name: select_rcconf_238_2_final
+    context_name: add_rcconf_238_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 244_1
+  - kind: select
+    name: select_rcconf_244_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        global_customer_code: global_customer_code
+        global_customer_standard_name: global_customer_standard_name
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_244_1
+    context_name: select_rcconf_244_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_244.1'"
+      - column: check_status
+        expression: "CASE WHEN global_customer_code is null OR global_customer_code = '' THEN '' WHEN global_customer_standard_name is null OR global_customer_standard_name = '' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_244_1_final
+    context_name: add_rcconf_244_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        global_customer_standard_name: value_checked
+      distinct: true
+
+#RULE 244_2
+  - kind: select
+    name: select_rcconf_244_2
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        global_customer_code: global_customer_code
+        trading_group_code: trading_group_code
+        trading_standard_name: trading_standard_name
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_244_2
+    context_name: select_rcconf_244_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_244.2'"
+      - column: check_status
+        expression: "CASE WHEN global_customer_code is null OR trading_group_code is null THEN '' WHEN trading_standard_name is null THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_244_2_final
+    context_name: add_rcconf_244_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        trading_standard_name: value_checked
+      distinct: true
+
+#RULE 246_1
+  - kind: select
+    name: select_rcconf_246_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        trading_group_code: trading_group_code
+        is_allowed_trading_group_code: is_allowed_trading_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_246_1
+    context_name: select_rcconf_246_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_246.1'"
+      - column: check_status
+        expression: "CASE WHEN trading_group_code is null OR trading_group_code = '' THEN '' WHEN is_allowed_trading_group_code = '0' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_246_1_final
+    context_name: add_rcconf_246_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        trading_group_code: value_checked
+      distinct: true
+
+#Union all
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    context_name: select_rcconf_244_3_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_246_2_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_244_4_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_148_1_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_148_4_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_148_5_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_233_1_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_236_1_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_236_2_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_236_3_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_237_2_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_238_1_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_238_2_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_244_1_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_244_2_final
+
+  - kind: union
+    name: union_customer_groupipng_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_246_1_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_grouping_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_grouping_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

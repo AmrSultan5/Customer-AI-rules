@@ -28,8 +28,9 @@ load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -1015,3 +1016,44 @@ app.include_router(
     prefix="/api",
     generate_unique_id_function=lambda route: f"api_{route.name}",
 )
+
+
+# ── Static frontend ────────────────────────────────────────────────────────────
+# Single-origin deployments (Databricks Apps, a container, anything that serves
+# one process on one port) build the Vite bundle into ./static and let FastAPI
+# serve it. When ./static is absent — local dev, where Vite serves the frontend
+# on :5173 and proxies /api here — none of this registers and the app is
+# API-only, exactly as before.
+#
+# MUST stay last: the catch-all route below would shadow any route declared
+# after it.
+
+_STATIC_DIR = Path(__file__).parent / "static"
+
+if _STATIC_DIR.is_dir():
+    _STATIC_ROOT = _STATIC_DIR.resolve()
+    _INDEX_HTML = _STATIC_DIR / "index.html"
+
+    _assets_dir = _STATIC_DIR / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str) -> FileResponse:
+        """Serve the built frontend, falling back to index.html for SPA routes.
+
+        Unknown /api paths still 404 rather than returning the HTML shell, so a
+        typo'd endpoint fails loudly instead of handing the caller a page.
+        """
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail={"error": "Not found"})
+
+        if full_path:
+            candidate = (_STATIC_DIR / full_path).resolve()
+            # is_relative_to guards against ../ traversal out of the static root.
+            if candidate.is_file() and candidate.is_relative_to(_STATIC_ROOT):
+                return FileResponse(candidate)
+
+        return FileResponse(_INDEX_HTML)
+
+    log.info("[INFO] Serving static frontend from %s", _STATIC_DIR)

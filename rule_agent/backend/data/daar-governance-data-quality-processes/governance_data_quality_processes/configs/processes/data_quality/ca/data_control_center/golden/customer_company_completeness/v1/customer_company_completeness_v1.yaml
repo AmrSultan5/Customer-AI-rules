@@ -1,0 +1,2321 @@
+transform:
+  name: customer_company_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_company_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_company
+
+  - kind: select
+    context_name: read_dm_customer_company
+    name: select_dcc
+    params:
+      columns:
+        customer_code: customer_code
+        company_code: company_code
+        dunning_procedure_code: dunning_procedure_code
+        dunning_block_code: dunning_block_code
+        reconciliation_account: reconciliation_account
+        planning_group_code: planning_group_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dm_customer_bank_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_bank
+
+  - kind: select
+    context_name: read_dm_customer_bank
+    name: select_dcb
+    params:
+      columns:
+        customer_code: customer_code
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+        bank_details_id: bank_details_id
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dm_customer_credit_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_credit
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_credit
+
+  - kind: select
+    context_name: read_dm_customer_credit
+    name: select_dccr
+    params:
+      columns:
+        customer_code: customer_code
+        credit_group_code: credit_group_code
+        credit_segment_code: credit_segment_code
+        credit_limit: credit_limit
+        risk_class_code: risk_class_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dm_customer_partner_v2
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_partner
+
+  - kind: select
+    context_name: read_dm_customer_partner
+    name: select_dcp
+    params:
+      columns:
+        customer_code: customer_code
+        partner_function_code: partner_function_code
+        partner_code: partner_code
+        partner_function_code_alternative: partner_function_code_alternative
+        division_code: division_code_dcp
+        sales_org_code: sales_org_code_dcp
+        distribution_channel_code: distribution_channel_code_dcp
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dcp
+    context_name: select_dcp
+    params:
+      - condition:
+          partner_function_code = 'RG' and division_code_dcp = '01' and distribution_channel_code_dcp = '01'
+
+  - kind: filter
+    name: filter_dcp_149_2
+    context_name: select_dcp
+    params:
+      - condition:
+          partner_function_code = 'ZW' and division_code_dcp = '01' and distribution_channel_code_dcp = '01'
+
+#READ dm_customer_sales_organization_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: select
+    context_name: read_dm_customer_sales_organization
+    name: select_dcso
+    params:
+      columns:
+        customer_code: customer_code
+        order_block_sales_code: order_block_sales_code
+        account_assignment_group_code: account_assignment_group_code
+        customer_group_4_code: customer_group_4_code
+        terms_of_payment_code: terms_of_payment_code
+        sale_org_code: sale_org_code
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        organization_1_name: organization_1_name
+        organization_2_name: organization_2_name
+        organization_3_name: organization_3_name
+        organization_4_name: organization_4_name
+        tax_0_type: tax_0_type
+        tax_0_value: tax_0_value
+        tax_1_type: tax_1_type
+        tax_1_value: tax_1_value
+        tax_2_type: tax_2_type
+        tax_2_value: tax_2_value
+        tax_3_type: tax_3_type
+        tax_3_value: tax_3_value
+        tax_4_type: tax_4_type
+        tax_4_value: tax_4_value
+        tax_5_type: tax_5_type
+        tax_5_value: tax_5_value
+        tax_6_type: tax_6_type
+        tax_6_value: tax_6_value
+        vendor_code: vendor_code
+        rating_value: rating_value
+        natural_person_flag: natural_person_flag
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        legal_name: legal_name
+        name_above_door: name_above_door
+        legal_form_code: legal_form_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dm_customer_hierarchy
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+  - kind: select
+    name: select_dch
+    context_name: read_dm_customer_hierarchy
+    params:
+      columns:
+        l2_customer_code: l2_customer_code
+        l7_customer_code: l7_customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+#READ dm_customer_address_v2
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code_dca
+        legal_name: legal_name_dca
+        name_above_door: name_above_door_dca
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ conf_tax_standard_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_tax_standard
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_tax_standard
+
+  - kind: select
+    context_name: read_conf_tax_standard
+    name: select_cts
+    params:
+      columns:
+        country_code: country_code_conf
+        tax_0: tax_0
+        tax_1: tax_1
+        tax_2: tax_2
+        tax_3: tax_3
+      distinct: true
+
+#READ conf_dunning_procedure_block
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_dunning_procedure_block
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_dunning_procedure_block
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_tax_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_tax_classification
+  
+  - kind: select
+    name: select_dctc
+    context_name: read_dm_customer_tax_classification
+    params:
+      columns:
+        customer_code: customer_code
+        country_tax_code: country_tax_code
+        tax_classification: tax_classification
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ conf_tax_classification_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_tax_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_tax_calssification
+
+  - kind: select
+    name: select_ctc
+    context_name: read_conf_tax_classification
+    params:
+      columns:
+        country_of_sales: country_of_sales
+        country_tax: country_tax
+      distinct: true
+
+#JOIN 166_1
+  - kind: join
+    name: join_166_1_left
+    context_name: select_dcg
+    params:
+      - other:
+          select_dctc
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN 166_1
+  - kind: join
+    name: join_166_1
+    context_name: join_166_1_left
+    params:
+      - other:
+          select_ctc
+        how:
+          inner
+        columns:
+          country_tax_code: country_tax
+          country_code: country_of_sales
+
+#JOIN dcg and dcc
+  - kind: join
+    name: join_dcc_dcg
+    context_name: select_dcc
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dccr
+  - kind: join
+    name: join_dccr_dcg
+    context_name: select_dccr
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dcso
+  - kind: join
+    name: join_dcso_dcg
+    context_name: select_dcso
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dcb
+  - kind: join
+    name: join_dcb_dcg
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcb
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg - dcb - dcp - dcso
+  - kind: join
+    name: join_178
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcb
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dcp
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dcso
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and cts
+  - kind: join
+    name: join_cts_dcg
+    context_name: select_dcg
+    params:
+      - other:
+          select_cts
+        how:
+          inner
+        columns:
+          country_code: country_code_conf
+
+#JOIN dcg and dca
+  - kind: join
+    name: join_dca_dcg
+    context_name: select_dcg
+    params:
+      - other:
+          select_dca
+        how:
+          left
+        columns:
+          customer_code: customer_code_dca
+          sap_cluster: sap_cluster
+
+#JOIN dcg dcc cdpb dch dcp dcso
+  - kind: join
+    name: join_dcg_dcc_cdpb_dch_dcp_dcso
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcc
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          read_conf_dunning_procedure_block
+        how:
+          inner
+        columns:
+          company_code: company_code
+          account_group_code: account_group_code
+      - other:
+          select_dch
+        how:
+          inner
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_dcp
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dcso
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#join 149_2
+#JOIN dcg, dcso and dcp
+  - kind: join
+    name: join_149_2
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcso
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          filter_dcp_149_2
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sale_org_code: sales_org_code_dcp
+          division_code: division_code_dcp
+          distribution_channel_code: distribution_channel_code_dcp
+          sap_cluster: sap_cluster
+
+#SELECT rccomp_12_1
+  - kind: select
+    name: select_rccomp_12_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_code_dca: customer_code_dca
+        central_order_block_code: central_order_block_code
+        legal_name: legal_name
+        legal_name_dca: legal_name_dca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_legal_name_dca
+    params:
+      - aggs:
+          legal_name_dca: max
+        by:
+        - customer_code_dca
+        - sap_cluster
+
+  - kind: select
+    name: select_gr_max
+    params:
+      columns:
+        customer_code_dca: customer_code_dca_max
+        max_legal_name_dca: max_legal_name_dca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dca_max
+    context_name: select_rccomp_12_1
+    params:
+      - other:
+          select_gr_max
+        how:
+          inner
+        columns:
+          customer_code: customer_code_dca_max
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_rccomp_12_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_12.1'"
+      - column: check_status
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '', if(isnull(coalesce(if(if(legal_name = '-1', null, legal_name) = '-1', null, legal_name), if(max_legal_name_dca = '-1', null, max_legal_name_dca))) 
+                    or coalesce(if(if(legal_name = '-1', null, legal_name) = '-1', null, legal_name), if(max_legal_name_dca = '-1', null, max_legal_name_dca)) = '' 
+                    or (len(coalesce(if(if(legal_name = '-1', null, legal_name) = '-1', null, legal_name), if(max_legal_name_dca = '-1', null, max_legal_name_dca))) <= 2 
+                    and regexp(coalesce(if(if(legal_name = '-1', null, legal_name) = '-1', null, legal_name), if(max_legal_name_dca = '-1', null, max_legal_name_dca)), '[0-9A-Za-zا-ي]') = false), '0',
+                    '1'))  
+      - column: value_checked
+        expression: coalesce(if(if(legal_name = '-1', null, legal_name) = '-1', null, legal_name), if(max_legal_name_dca = '-1', null, max_legal_name_dca)) 
+        overwrite: true  
+
+  - kind: select
+    name: select_rccomp_12_1_final
+    context_name: add_rccomp_12_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rccomp_13_1
+  - kind: select
+    name: select_rccomp_13_1
+    context_name: join_dca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_code_dca: customer_code_dca
+        name_above_door: name_above_door
+        name_above_door_dca: name_above_door_dca
+        central_order_block_code: central_order_block_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_name_above_door_dca
+    params:
+      - aggs:
+          name_above_door_dca: max
+        by:
+        - customer_code_dca
+        - sap_cluster
+
+  - kind: select
+    name: select_gr_max_door
+    params:
+      columns:
+        customer_code_dca: customer_code_dca_max
+        max_name_above_door_dca: max_name_above_door_dca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dca_max
+    context_name: select_rccomp_13_1
+    params:
+      - other:
+          select_gr_max_door
+        how:
+          left
+        columns:
+          customer_code: customer_code_dca_max
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_rccomp_13_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_13.1'"
+      - column: check_status
+        expression: if(isnull(coalesce(if(name_above_door = '-1', null, name_above_door), if(max_name_above_door_dca = '-1', null, max_name_above_door_dca))) 
+                    or coalesce(if(name_above_door = '-1', null, name_above_door), if(max_name_above_door_dca = '-1', null, max_name_above_door_dca)) = '' 
+                    or (len(coalesce(if(name_above_door = '-1', null, name_above_door), if(max_name_above_door_dca = '-1', null, max_name_above_door_dca))) <= 2 
+                    and regexp(coalesce(if(name_above_door = '-1', null, name_above_door), if(max_name_above_door_dca = '-1', null, max_name_above_door_dca)), '[0-9A-Za-zا-ي]') = false), '0',
+                    '1')   
+      - column: value_checked
+        expression: coalesce(if(name_above_door = '-1', null, name_above_door), if(max_name_above_door_dca = '-1', null, max_name_above_door_dca)) 
+        overwrite: true  
+
+  - kind: select
+    name: select_rccomp_13_1_final
+    context_name: add_rccomp_13_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+      
+#SELECT rccomp_14_1
+  - kind: select
+    name: select_rccomp_14_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        organization_3_name: organization_3_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_14_1
+    context_name: select_rccomp_14_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_14.1'"
+      - column: check_status
+        expression: "CASE WHEN organization_3_name is null OR organization_3_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_14_1_final
+    context_name: add_rccomp_14_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        organization_3_name: value_checked
+      distinct: true
+
+#SELECT rccomp_15_1
+  - kind: select
+    name: select_rccomp_15_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        organization_4_name: organization_4_name
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_15_1
+    context_name: select_rccomp_15_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_15.1'"
+      - column: check_status
+        expression: "CASE WHEN organization_4_name is null OR organization_4_name ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_15_1_final
+    context_name: add_rccomp_15_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        organization_4_name: value_checked
+      distinct: true
+
+#SELECT rccomp_43_1
+  - kind: select
+    name: select_rccomp_43_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        vendor_code: vendor_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_43_1
+    context_name: select_rccomp_43_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_43.1'"
+      - column: check_status
+        expression: "CASE WHEN vendor_code is null OR vendor_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_43_1_final
+    context_name: add_rccomp_43_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        vendor_code: value_checked
+      distinct: true
+
+
+#49_1 - 54_1 waiting for curated CONF_TAX_STANDARD 
+
+
+#SELECT rccomp_49_1
+  - kind: select
+    name: select_rccomp_49_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_1: tax_1
+        tax_0_type: tax_0_type
+        tax_1_type: tax_1_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_49_1
+    context_name: select_rccomp_49_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_49.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_1 = '0' AND country_code = country_code_conf THEN '' WHEN (tax_1_type is null OR tax_1_type = '') AND (tax_0_type is null OR tax_0_type = '') THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_49_1_final
+    context_name: add_rccomp_49_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_1_type: value_checked
+      distinct: true
+
+#SELECT rccomp_50_1
+  - kind: select
+    name: select_rccomp_50_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_1: tax_1
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        legal_form_code: legal_form_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_50_1
+    context_name: select_rccomp_50_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_50.1'"
+      - column: check_status
+        expression: "CASE WHEN (tax_1 = '0' AND country_code = country_code_conf) or legal_form_code like 'X%' THEN '' WHEN (tax_1_value is null OR tax_1_value = '') AND (tax_0_value is null OR tax_0_value = '') THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_50_1_final
+    context_name: add_rccomp_50_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_1_value: value_checked
+      distinct: true
+
+#SELECT rccomp_51_1
+  - kind: select
+    name: select_rccomp_51_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_2: tax_2
+        tax_0_type: tax_0_type
+        tax_2_type: tax_2_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_51_1
+    context_name: select_rccomp_51_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_51.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_2 = '0' AND country_code = country_code_conf THEN '' WHEN (tax_2_type is null OR tax_2_type = '') AND (tax_0_type is null OR tax_0_type = '') THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_51_1_final
+    context_name: add_rccomp_51_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_2_type: value_checked
+      distinct: true
+
+#SELECT rccomp_52_1
+  - kind: select
+    name: select_rccomp_52_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_2: tax_2
+        tax_0_value: tax_0_value
+        tax_2_value: tax_2_value
+        legal_form_code: legal_form_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_52_1
+    context_name: select_rccomp_52_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_52.1'"
+      - column: check_status
+        expression: if(tax_2 = '0' and country_code = country_code_conf, '',
+                    if(legal_form_code like 'X%' or country_code = 'IT', '',
+                    if((tax_2_value is null OR tax_2_value = '')
+                    and (tax_0_value is null OR tax_0_value = ''), '0', '1')))     
+
+  - kind: select
+    name: select_rccomp_52_1_final
+    context_name: add_rccomp_52_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_2_value: value_checked
+      distinct: true
+
+#SELECT rccomp_52_2
+  - kind: select
+    name: select_rccomp_52_2
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_0: tax_0
+        tax_1: tax_1
+        tax_2: tax_2
+        tax_3: tax_3
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        legal_form_code: legal_form_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_52_2
+    context_name: select_rccomp_52_2
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_52.2'"
+      - column: check_status
+        expression: "CASE WHEN legal_form_code like 'X%' THEN '' 
+                    WHEN (tax_3_value is null OR tax_3_value = '') 
+                    AND (tax_2_value is null OR tax_2_value = '') 
+                    AND (tax_0_value is null OR tax_0_value = '') 
+                    AND (tax_1_value is null OR tax_1_value = '') 
+                    THEN '0' ELSE '1' END"
+      - column: t0
+        expression: "CASE WHEN tax_0_value is null OR tax_0_value = '' THEN 'NULL_' ELSE tax_0_value||'_' END"
+      - column: t1
+        expression: "CASE WHEN tax_1_value is null OR tax_1_value = '' THEN 'NULL_' ELSE tax_1_value||'_' END"
+      - column: t2
+        expression: "CASE WHEN tax_2_value is null OR tax_2_value = '' THEN 'NULL_' ELSE tax_2_value END"
+      - column: t3
+        expression: "CASE WHEN tax_3_value is null OR tax_3_value = '' THEN 'NULL' ELSE tax_3_value END"
+      - column: value_checked
+        expression: "t0||t1||t2||t3"
+
+  - kind: select
+    name: select_rccomp_52_2_final
+    context_name: add_rccomp_52_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rccomp_53_1
+  - kind: select
+    name: select_rccomp_53_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_3: tax_3
+        tax_0_type: tax_0_type
+        tax_3_type: tax_3_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_53_1
+    context_name: select_rccomp_53_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_53.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_3 = '0' AND country_code = country_code_conf THEN '' WHEN (tax_3_type is null OR tax_3_type = '') AND (tax_0_type is null OR tax_0_type = '') THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_53_1_final
+    context_name: add_rccomp_53_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_3_type: value_checked
+      distinct: true
+
+#SELECT rccomp_54_1
+  - kind: select
+    name: select_rccomp_54_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_3: tax_3
+        tax_0_value: tax_0_value
+        tax_3_value: tax_3_value
+        legal_form_code: legal_form_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_54_1
+    context_name: select_rccomp_54_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_54.1'"
+      - column: check_status
+        expression: "CASE WHEN (tax_3 = '0' AND country_code = country_code_conf) or legal_form_code like 'X%' THEN '' WHEN (tax_3_value is null OR tax_3_value = '') AND (tax_0_value is null OR tax_0_value = '') THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_54_1_final
+    context_name: add_rccomp_54_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_3_value: value_checked
+      distinct: true
+
+#SELECT rccomp_55_1
+  - kind: select
+    name: select_rccomp_55_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        tax_4_type: tax_4_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_55_1
+    context_name: select_rccomp_55_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_55.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_4_type is null OR tax_4_type ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_55_1_final
+    context_name: add_rccomp_55_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_4_type: value_checked
+      distinct: true
+
+#SELECT rccomp_56_1
+  - kind: select
+    name: select_rccomp_56_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        tax_4_value: tax_4_value
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_56_1
+    context_name: select_rccomp_56_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_56.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_4_value is null OR tax_4_value ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_56_1_final
+    context_name: add_rccomp_56_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_4_value: value_checked
+      distinct: true
+
+#SELECT rccomp_57_1
+  - kind: select
+    name: select_rccomp_57_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        natural_person_flag: natural_person_flag
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_57_1
+    context_name: select_rccomp_57_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_57.1'"
+      - column: check_status
+        expression: "CASE WHEN natural_person_flag is null OR natural_person_flag ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_57_1_final
+    context_name: add_rccomp_57_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        natural_person_flag: value_checked
+      distinct: true
+
+#SELECT rccomp_59_1
+  - kind: select
+    name: select_rccomp_59_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        tax_5_type: tax_5_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_59_1
+    context_name: select_rccomp_59_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_59.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_5_type is null OR tax_5_type ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_59_1_final
+    context_name: add_rccomp_59_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_5_type: value_checked
+      distinct: true
+
+#SELECT rccomp_60_1
+  - kind: select
+    name: select_rccomp_60_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_0: tax_0
+        tax_0_type: tax_0_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_60_1
+    context_name: select_rccomp_60_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_60.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_0 = '0' AND country_code = country_code_conf THEN '' WHEN tax_0_type is null OR tax_0_type = '' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_60_1_final
+    context_name: add_rccomp_60_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_0_type: value_checked
+      distinct: true
+
+#SELECT rccomp_61_1
+  - kind: select
+    name: select_rccomp_61_1
+    context_name: join_cts_dcg
+    params:
+      columns:
+        country_code: country_code
+        country_code_conf: country_code_conf
+        customer_code: customer_code
+        tax_0: tax_0
+        tax_0_value: tax_0_value
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_61_1
+    context_name: select_rccomp_61_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_61.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_0 = '0' AND country_code = country_code_conf THEN '' WHEN tax_0_value is null OR tax_0_value = '' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_61_1_final
+    context_name: add_rccomp_61_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_0_value: value_checked
+      distinct: true
+
+#SELECT rccomp_63_1
+  - kind: select
+    name: select_rccomp_63_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        tax_5_value: tax_5_value
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_63_1
+    context_name: select_rccomp_63_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_63.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_5_value is null OR tax_5_value ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_63_1_final
+    context_name: add_rccomp_63_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_5_value: value_checked
+      distinct: true
+
+#SELECT rccomp_64_1
+  - kind: select
+    name: select_rccomp_64_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        tax_6_type: tax_6_type
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_64_1
+    context_name: select_rccomp_64_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_64.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_6_type is null OR tax_6_type ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_64_1_final
+    context_name: add_rccomp_64_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_6_type: value_checked
+      distinct: true
+
+#SELECT rccomp_65_1
+  - kind: select
+    name: select_rccomp_65_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        tax_6_value: tax_6_value
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_65_1
+    context_name: select_rccomp_65_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_65.1'"
+      - column: check_status
+        expression: "CASE WHEN tax_6_value is null OR tax_6_value ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_65_1_final
+    context_name: add_rccomp_65_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_6_value: value_checked
+      distinct: true
+
+#SELECT rccomp_113_1
+  - kind: select
+    name: select_rccomp_113_1
+    context_name: join_dcc_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        reconciliation_account: reconciliation_account
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_113_1
+    context_name: select_rccomp_113_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_113.1'"
+      - column: check_status
+        expression: "CASE WHEN reconciliation_account is null OR reconciliation_account ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_113_1_final
+    context_name: add_rccomp_113_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        reconciliation_account: value_checked
+      distinct: true
+
+#SELECT rccomp_115_1
+  - kind: select
+    name: select_rccomp_115_1
+    context_name: join_dcc_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        planning_group_code: planning_group_code
+        account_group_code: account_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_115_1
+    context_name: select_rccomp_115_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_115.1'"
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%'OR account_group_code IN ('9096', '9022', '9023', '9095') THEN '' WHEN planning_group_code is null OR planning_group_code ='' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rccomp_115_1_final
+    context_name: add_rccomp_115_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        planning_group_code: value_checked
+      distinct: true
+
+#SELECT rccomp_129_1
+  - kind: select
+    name: select_rccomp_129_1
+    context_name: join_dcg_dcc_cdpb_dch_dcp_dcso
+    params:
+      columns:
+        customer_code: customer_code
+        l2_customer_code: l2_customer_code
+        customer_group_4_code: customer_group_4_code
+        dunning_procedure_code: dunning_procedure_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_129_1
+    context_name: select_rccomp_129_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_129.1'"
+      - column: check_status
+        expression: if(l2_customer_code not in('KA', 'NK')
+                    or customer_group_4_code not in('AWM', 'DE', 'DI', 'DTS', 'WH', 'DEC', 'WHN','ECS'), '',
+                    if((isnotnull(dunning_procedure_code) and dunning_procedure_code <> ''), '1', '0'))    
+
+  - kind: select
+    name: select_rccomp_129_1_final
+    context_name: add_rccomp_129_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        dunning_procedure_code: value_checked
+      distinct: true
+
+#SELECT rccomp_130_1
+  - kind: select
+    name: select_rccomp_130_1
+    context_name: join_dcg_dcc_cdpb_dch_dcp_dcso
+    params:
+      columns:
+        customer_code: customer_code
+        l2_customer_code: l2_customer_code
+        customer_group_4_code: customer_group_4_code
+        dunning_block_code: dunning_block_code
+        ka_dunning_block: ka_dunning_block
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_130_1
+    context_name: select_rccomp_130_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_130.1'"
+      - column: check_status
+        expression: if(l2_customer_code not in('KA')
+                    or customer_group_4_code not in('AWM', 'DE', 'DI', 'DTS', 'WH', 'DEC', 'WHN','ECS')
+                    or ka_dunning_block = 'NOT APPLICABLE', '',
+                    if((isnotnull(dunning_block_code) and dunning_block_code <> ''), '1', '0'))     
+
+  - kind: select
+    name: select_rccomp_130_1_final
+    context_name: add_rccomp_130_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        dunning_block_code: value_checked
+      distinct: true
+
+# rccomp_149_1
+  - kind: select
+    context_name: select_dcp
+    name: select_rccomp_149_1_cp
+    params:
+      columns:
+        customer_code: customer_code_cp
+        partner_function_code: partner_function_code_cp
+        partner_code: partner_code_cp
+        sap_cluster: sap_cluster_cp
+      distinct: true
+
+  - kind: group
+    name: aggregation_rccomp_149_1_cp
+    context_name: select_rccomp_149_1_cp
+    params:
+      - aggs:
+          partner_code_cp: min
+        by:
+        - customer_code_cp
+        - partner_function_code_cp
+        - sap_cluster_cp
+
+  - kind: add
+    name: add_rccomp_149_1_counter
+    context_name: aggregation_rccomp_149_1_cp
+    params:
+      - column: exist_flag
+        expression: if(min_partner_code_cp is null or min_partner_code_cp = '', 0, 1)
+
+  - kind: join
+    name: join_rccomp_149_1
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcp
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          add_rccomp_149_1_counter
+        how:
+          left
+        columns:
+          customer_code: customer_code_cp
+          partner_function_code: partner_function_code_cp
+          sap_cluster: sap_cluster_cp
+
+#SELECT rccomp_149_1
+  - kind: filter
+    name: filter_rccomp_149_1_cp
+    context_name: join_rccomp_149_1
+    params:
+      - condition:
+          division_code_dcp = '01' and distribution_channel_code_dcp = '01'
+          and partner_function_code in('AG', 'RE', 'RG', 'WE', 'ZY', 'YR')
+
+  - kind: select
+    name: select_pfc
+    context_name: filter_rccomp_149_1_cp
+    params:
+      columns:
+        partner_function_code: partner_function_code_pfc
+      distinct: true
+
+  - kind: add
+    name: add_dummy_pfc
+    context_name: select_pfc
+    params:
+      - column: dummy_pfc
+        expression: "'1'"
+
+  - kind: select
+    name: select_cc
+    context_name: filter_rccomp_149_1_cp
+    params:
+      columns:
+        customer_code: customer_code_cc
+      distinct: true
+
+  - kind: add
+    name: add_dummy_cc
+    context_name: select_cc
+    params:
+      - column: dummy_cc
+        expression: "'1'"
+
+  - kind: join
+    name: join_cc_pfc
+    context_name:  add_dummy_cc
+    params:
+      - other:
+           add_dummy_pfc
+        how:
+          inner
+        columns:
+          dummy_cc: dummy_pfc
+
+  - kind: select
+    name: select_rccomp_149_1
+    context_name: filter_rccomp_149_1_cp
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        partner_code: partner_code
+        partner_function_code: partner_function_code
+        partner_function_code_alternative: partner_function_code_alternative
+        exist_flag: exist_flag
+      distinct: true
+
+  - kind: join
+    name: join_pfc
+    context_name: select_rccomp_149_1
+    params:
+      - other:
+           join_cc_pfc
+        how:
+          inner
+        columns:
+          customer_code: customer_code_cc
+
+  - kind: checkpoint
+    name: checkpoint_join_pfc
+    context_name: join_pfc
+
+  - kind: add
+    name: add_check_pfc
+    context_name: checkpoint_join_pfc
+    params:
+      - column: check_pfc
+        expression: if(partner_function_code = partner_function_code_pfc, '1', '0')
+
+  - kind: select
+    name: select_rccomp_149_1_pfc
+    context_name: add_check_pfc
+    params:
+      columns:
+        customer_code: customer_code
+        partner_function_code_pfc: partner_function_code
+        exist_flag: exist_flag
+        check_pfc: check_pfc
+      distinct: true
+
+  - kind: group
+    name: aggregation_pfc
+    context_name: select_rccomp_149_1_pfc
+    params:
+      - aggs:
+          check_pfc: max
+        by:
+        - customer_code
+        - partner_function_code
+        - exist_flag
+
+  - kind: select
+    name: select_rccomp_149_1
+    context_name: filter_rccomp_149_1_cp
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        partner_code: partner_code
+        partner_function_code: partner_function_code
+        partner_function_code_alternative: partner_function_code_alternative
+      distinct: true
+
+  - kind: join
+    name: join_final_149_1
+    context_name: aggregation_pfc
+    params:
+      - other:
+           select_rccomp_149_1
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          partner_function_code: partner_function_code
+
+  - kind: add
+    name: add_rccomp_149_1
+    context_name: join_final_149_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_149.1'"
+      - column: check_status
+        expression: if(account_group_code not like '90%' 
+                    or central_order_block_code IN ('S', 'SP', 'E', 'G', 'S2', 'S3', 'S4', 'S5', 'S9', 'R', 'U', 'S1','SY',' IA','IB','RN'), '',
+                    if((exist_flag = '1' and max_check_pfc = '1') = false and partner_function_code_alternative in('ZY', 'YR', 'SH', 'PY', 'BP', 'SP'), '0', '1'))
+      - column: check_value
+        expression: if(check_status = '0', 'Missing Partner function:' || ' ' || partner_function_code, partner_function_code||'_'||partner_code)
+
+  - kind: select
+    name: select_rccomp_149_1_final
+    context_name: add_rccomp_149_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        check_value: value_checked
+      distinct: true
+
+# SELECT rccomp_149_2
+  - kind: select
+    name: select_rccomp_149_2
+    context_name: join_149_2
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        order_block_sales_code: order_block_sales_code
+        customer_group_4_code: customer_group_4_code
+        partner_function_code: partner_function_code
+        partner_code: partner_code
+        sap_cluster: sap_cluster
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_149_2
+    context_name: select_rccomp_149_2
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_149.2'"
+      - column: check_status
+        expression: if(account_group_code NOT LIKE '90%' OR order_block_sales_code IN ('S','SP','E','G','S2','S3','S4','S5','S9','R','U','S1','SY','IA','IB','RN','PR') OR customer_group_4_code NOT IN ('IN','DTS') OR (order_block_sales_code = 'M' AND country_code = 'CH'), '',
+                    if((partner_code IS NULL OR partner_code = '') AND customer_group_4_code IN ('IN','DTS'), '0', '1')) 
+      - column: value_checked
+        expression: partner_function_code ||'_'|| partner_code   
+
+  - kind: select
+    name: select_rccomp_149_2_final
+    context_name: add_rccomp_149_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rccomp_164_1
+  - kind: select
+    name: select_rccomp_164_1
+    context_name: join_dcso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        account_assignment_group_code: account_assignment_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_164_1
+    context_name: select_rccomp_164_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_164.1'"
+      - column: check_status
+        expression: "CASE WHEN account_assignment_group_code is null OR account_assignment_group_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_164_1_final
+    context_name: add_rccomp_164_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        account_assignment_group_code: value_checked
+      distinct: true
+
+#SELECT rccomp_166_1
+  - kind: select
+    name: select_rccomp_166_1
+    context_name: join_166_1
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        country_tax_code: country_tax_code
+        tax_classification: tax_classification
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_166_1
+    context_name: select_rccomp_166_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_166.1'"
+      - column: check_status
+        expression: "CASE WHEN account_group_code NOT LIKE '9%' THEN '' WHEN tax_classification IS NULL OR tax_classification = '' THEN '0' ELSE '1' END"
+      - column: vc
+        expression: "country_tax_code||'_'||tax_classification"
+
+  - kind: select
+    name: select_rccomp_166_1_final
+    context_name: add_rccomp_166_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        vc: value_checked
+      distinct: true
+
+#SELECT rccomp_178_1
+  - kind: select
+    name: select_rccomp_178_1
+    context_name: join_178
+    params:
+      columns:
+        customer_code: customer_code
+        division_code: division_code
+        account_group_code: account_group_code
+        bank_account_number: bank_account_number
+        partner_function_code: partner_function_code
+        customer_group_4_code: customer_group_4_code
+        terms_of_payment_code: terms_of_payment_code
+        distribution_channel_code: distribution_channel_code
+        account_assignment_group_code: account_assignment_group_code
+      distinct: true
+
+  - kind: filter
+    name: filter_rccomp_178_1
+    context_name: select_rccomp_178_1
+    params:
+      - condition:
+          division_code = '01' and distribution_channel_code = '01'
+
+  - kind: add
+    name: add_rccomp_178_1
+    context_name: filter_rccomp_178_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_178.1'"
+      - column: check_status_temp
+        expression: "CASE WHEN partner_function_code = 'RG' AND customer_group_4_code = 'DI' AND terms_of_payment_code NOT IN ('ZC00', 'ZC98', 'ZADV') AND distribution_channel_code = '01' AND division_code = '01' AND account_group_code LIKE '9%' THEN '1' ELSE '' END"
+      - column: check_status
+        expression: "CASE WHEN check_status_temp = '1' AND (bank_account_number is null OR bank_account_number = '') THEN '0' ELSE '1' END"
+
+
+  - kind: select
+    name: select_rccomp_178_1_final
+    context_name: add_rccomp_178_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        bank_account_number: value_checked
+      distinct: true
+
+#SELECT rccomp_180_1
+  - kind: select
+    name: select_rccomp_180_1
+    context_name: join_dcb_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        bank_control_key: bank_control_key
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_180_1
+    context_name: select_rccomp_180_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_180.1'"
+      - column: check_status
+        expression: "CASE WHEN bank_control_key is null OR bank_control_key ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_180_1_final
+    context_name: add_rccomp_180_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        bank_control_key: value_checked
+      distinct: true
+
+#SELECT rccomp_181_1
+  - kind: select
+    name: select_rccomp_181_1
+    context_name: join_dcb_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        bank_details_id: bank_details_id
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_181_1
+    context_name: select_rccomp_181_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_181.1'"
+      - column: check_status
+        expression: if(account_group_code not like '90%' or 
+                    central_order_block_code in('S1', 'E', 'G', 'R', 'U', 'S', 'S3', 'S4', 'SP', 'SY', 'IA', 'IB', 'RN', 'S2', 'S5', 'S9'), '', 
+                    if(isnull(bank_details_id) or bank_details_id = '', '0', '1'))  
+
+  - kind: select
+    name: select_rccomp_181_1_final
+    context_name: add_rccomp_181_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        bank_details_id: value_checked
+      distinct: true
+
+#SELECT rccomp_194_1
+  - kind: select
+    name: select_rccomp_194_1
+    context_name: join_dccr_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        credit_segment_code: credit_segment_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_194_1
+    context_name: select_rccomp_194_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_194.1'"
+      - column: check_status
+        expression: "CASE WHEN credit_segment_code is null OR credit_segment_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_194_1_final
+    context_name: add_rccomp_194_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        credit_segment_code: value_checked
+      distinct: true
+
+
+#SELECT rccomp_198_1
+  - kind: select
+    name: select_rccomp_198_1
+    context_name: join_dccr_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        risk_class_code: risk_class_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_198_1
+    context_name: select_rccomp_198_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_198.1'"
+      - column: check_status
+        expression: "CASE WHEN risk_class_code is null OR risk_class_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_198_1_final
+    context_name: add_rccomp_198_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        risk_class_code: value_checked
+      distinct: true
+
+#SELECT rccomp_199_1
+  - kind: select
+    name: select_rccomp_199_1
+    context_name: join_dccr_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        credit_group_code: credit_group_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_199_1
+    context_name: select_rccomp_199_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_199.1'"
+      - column: check_status
+        expression: "CASE WHEN credit_group_code is null OR credit_group_code ='' OR credit_group_code = '0000' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_199_1_final
+    context_name: add_rccomp_199_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        credit_group_code: value_checked
+      distinct: true
+
+#SELECT rccomp_201_1
+  - kind: select
+    name: select_rccomp_201_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        rating_value: rating_value
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_201_1
+    context_name: select_rccomp_201_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_201.1'"
+      - column: check_status
+        expression: "CASE WHEN rating_value is null OR rating_value ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_201_1_final
+    context_name: add_rccomp_201_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        rating_value: value_checked
+      distinct: true
+
+#SELECT rccomp_206_1
+  - kind: select
+    name: select_rccomp_206_1
+    context_name: join_dccr_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        credit_limit: credit_limit
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_206_1
+    context_name: select_rccomp_206_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_206.1'"
+      - column: check_status
+        expression: "CASE WHEN credit_limit is null OR credit_limit ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_206_1_final
+    context_name: add_rccomp_206_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        credit_limit: value_checked
+      distinct: true
+
+#Union all
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_12_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_13_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_14_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_15_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_43_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_49_1_final
+  
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_50_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_51_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_52_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_52_2_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_53_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_54_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_55_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_56_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_57_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_59_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_60_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_61_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_63_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_64_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_65_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_113_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_115_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_129_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_130_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_149_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_149_2_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_164_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_166_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_178_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_180_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_181_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_194_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_198_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_199_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_201_1_final
+
+  - kind: union
+    name: union_customer_company_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_206_1_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_company_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_company_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

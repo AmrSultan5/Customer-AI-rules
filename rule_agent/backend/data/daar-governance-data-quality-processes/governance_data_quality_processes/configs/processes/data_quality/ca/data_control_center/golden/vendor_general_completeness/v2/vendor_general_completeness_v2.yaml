@@ -1,0 +1,253 @@
+transform:
+  name: vendor_general_completeness
+  operations:
+
+# ── RVCOMP_141.1  Missing E-Mail (4000 AG only)
+# ── RVCOMP_201.1  Missing Customer Number (9000 AG only)
+# ── RVCOMP_241.1  Missing Addressability
+# ── RVCOMP_242.1  Missing Type of Industry (3000/4000/7000 AG)
+# ── RVCOMP_243.1  Missing Planning Group (4000/7000 AG)
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_address_contact
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_account_group_code: vendor_account_group_code
+        customer_code: customer_code
+        addressability_flag: addressability_flag
+        type_of_industry: type_of_industry
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+        planning_group_code: planning_group_code
+      distinct: true
+
+  - kind: filter
+    name: filter_email_address
+    context_name: read_dm_vendor_address_contact
+    params:
+      - condition: contact_medium_type = 'email_address'
+
+  - kind: select
+    name: select_dm_vendor_address_contact
+    context_name: filter_email_address
+    params:
+      columns:
+        vendor_code: vendor_code
+        contact_medium_value: contact_medium_value
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_address_contact
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_141_1
+        expression: if(vendor_account_group_code = '4000',
+                    if(isnull(contact_medium_value) or contact_medium_value = '', '0', '1'), '')
+      - column: rcvomp_201_1
+        expression: if(vendor_account_group_code = '9000',
+                    if(isnull(customer_code) or customer_code = '', '0', '1'), '')
+      - column: rcvomp_241_1
+        expression: if(isnull(addressability_flag) or addressability_flag = '', '0', '1')
+      - column: rcvomp_242_1
+        expression: if(vendor_account_group_code in('3000','4000','7000'),
+                    if(isnull(type_of_industry) or type_of_industry = '', '0', '1'), '')
+      - column: rcvomp_243_1
+        expression: if(vendor_account_group_code in('4000','7000'),
+                    if(isnull(planning_group_code) or planning_group_code = '', '0', '1'), '')
+      - column: rule_code_rcvomp_141_1
+        expression: '''RVCOMP_141.1'''
+      - column: rule_code_rcvomp_201_1
+        expression: '''RVCOMP_201.1'''
+      - column: rule_code_rcvomp_241_1
+        expression: '''RVCOMP_241.1'''
+      - column: rule_code_rcvomp_242_1
+        expression: '''RVCOMP_242.1'''
+      - column: rule_code_rcvomp_243_1
+        expression: '''RVCOMP_243.1'''
+      - column: subdomain
+        expression: '''general_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_141_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_141_1: rule_code
+        rcvomp_141_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_201_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_201_1: rule_code
+        rcvomp_201_1: check_status
+        vendor_code: vendor_code
+        customer_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_241_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_241_1: rule_code
+        rcvomp_241_1: check_status
+        vendor_code: vendor_code
+        addressability_flag: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_242_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_242_1: rule_code
+        rcvomp_242_1: check_status
+        vendor_code: vendor_code
+        type_of_industry: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_243_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_243_1: rule_code
+        rcvomp_243_1: check_status
+        vendor_code: vendor_code
+        planning_group_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_141_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_201_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_241_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_242_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_243_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

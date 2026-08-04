@@ -1,0 +1,565 @@
+transform:
+  name: f_product_aggregated_l1_l2
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_product_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_check_results
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+      schema_version: v5
+
+  - kind: read_dataio
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+      schema_version: v8
+
+  - kind: read_dataio
+    name: read_dm_product_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_universe
+      schema_version: v2
+
+  - kind: read_dataio
+    name: read_dim_product_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_product_classification
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dim_rules_inventory
+      schema_version: v6
+
+  - kind: filter
+    name: filter_dim_rules_inventory
+    context_name: read_dim_rules_inventory
+    params:
+      - condition:
+          is_active = '1'
+
+  - kind: select
+    name: select_dim_rules_inventory
+    context_name: filter_dim_rules_inventory
+    params:
+      columns:
+        rule_code: rule_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_general
+    context_name: read_dm_product_general
+    params:
+      columns:
+        material_code: material_code_pg
+        material_group_code: material_group_code_pg
+        material_type_code: material_type_code_pg
+        bpp_code: bpp_code_pg
+        sap_cluster: sap_cluster_pg
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_sales_organization
+    context_name: read_dm_product_sales_organization
+    params:
+      columns:
+        material_code : material_code_pso
+        country_code: country_code_pso
+        pack_size_code: pack_size_code_pso
+        pack_type_code: pack_type_code_pso
+        product_hierarchy_code: product_hierarchy_code_pso
+        sales_unit_code: sales_unit_code_pso
+        brand_code: brand_code_pso
+        flavour_code: flavour_code_pso
+        sap_cluster: sap_cluster_pso
+      distinct: true
+
+  - kind: select
+    name: select_dm_product_universe
+    context_name: read_dm_product_universe
+    params:
+      columns:
+        material_code : material_code_pu
+        country_code: country_code_pu
+        sap_cluster: sap_cluster_pu
+      distinct: true
+
+  - kind: add
+    name: add_dim_product_classification
+    context_name: read_dim_product_classification
+    params:
+      - column: flavour_code_ifnull
+        expression: ifnull(flavour_code, 'null')
+      - column: material_group_code_ifnull
+        expression: ifnull(material_group_code,'null')
+      - column: material_type_code_ifnull
+        expression: ifnull(material_type_code, 'null' )
+      - column: pack_size_code_ifnull
+        expression: ifnull(pack_size_code, 'null' )
+      - column: pack_type_code_ifnull
+        expression: ifnull(pack_type_code,'null')
+      - column: product_hierarchy_code_ifnull
+        expression: ifnull(product_hierarchy_code,'null' )
+      - column: sales_unit_code_ifnull
+        expression: ifnull(sales_unit_code,'null' )
+      - column: brand_code_ifnull
+        expression: ifnull(brand_code,'null' )       
+      - column: bpp_code_ifnull
+        expression: ifnull(bpp_code,'null' )                                   
+
+  - kind: select
+    name: select_dim_product_classification
+    context_name: add_dim_product_classification
+    params:
+      columns:
+        prod_class_id: prod_class_id
+        flavour_code_ifnull: flavour_code_ifnull
+        material_group_code_ifnull: material_group_code_ifnull
+        material_type_code_ifnull: material_type_code_ifnull
+        pack_size_code_ifnull: pack_size_code_ifnull
+        pack_type_code_ifnull: pack_type_code_ifnull
+        product_hierarchy_code_ifnull: product_hierarchy_code_ifnull
+        sales_unit_code_ifnull: sales_unit_code_ifnull
+        brand_code_ifnull: brand_code_ifnull
+        bpp_code_ifnull: bpp_code_ifnull  
+      distinct: true
+
+#  - kind: select
+#    name: select_check_date
+#    context_name: read_dm_product_check_results
+#    params:
+#      columns:
+#        check_date: check_date
+#        process_run_id: process_run_id
+#      distinct: true
+
+#  - kind: group
+#    name: group_max_check_date
+#    params:
+#      - aggs:
+#          check_date: max
+#        by:
+#        - process_run_id
+
+#  - kind: add
+#    name: add_max_check_date
+#    params:
+#      - column: to_date_max_check_date
+#        expression: to_date(max_check_date, "yyyy-MM-dd")
+
+  - kind: select
+    name: select_dm_product_check_results
+    context_name: read_dm_product_check_results
+    params:
+      columns:
+        check_status: check_status
+        material_code: material_code
+        country_code: country_code
+        rule_code: rule_code
+        check_date: check_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_check_status_expression
+    params:
+      - column: check_status_expression
+        expression: IF(check_status = '', '2', check_status)
+
+  - kind: select
+    name: select_check_status_pre_group
+    params:
+      columns:
+        material_code: material_code
+        rule_code: rule_code
+        country_code: country_code
+        check_status_expression: check_status_expression
+        check_date: check_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          check_status_expression: min
+        by:
+        - material_code
+        - country_code
+        - rule_code
+        - check_date
+        - sap_cluster
+
+  - kind: add
+    name: add_checks_expressions
+    params:
+      - column: failed_checks
+        expression: IF(min_check_status_expression = '0', 1, 0)
+      - column: passed_checks
+        expression: IF(min_check_status_expression = '1', 1, 0)
+      - column: skipped_checks
+        expression: IF(min_check_status_expression = '2', 1, 0)
+
+  - kind: select
+    name: select_counts_pre_group
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        rule_code: rule_code
+        failed_checks: failed_checks
+        passed_checks: passed_checks
+        skipped_checks: skipped_checks
+        check_date: check_date
+        sap_cluster: sap_cluster
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - material_code
+        - country_code
+        - rule_code
+        - check_date
+        - sap_cluster
+
+#  - kind: add
+#    name: add_dm_product_check_results
+#    params:
+#      - column: to_date_check_date
+#        expression: to_date(check_date, "yyyy-MM-dd")
+
+#  - kind: join
+#    name: join_dm_product_check_results_max_check_date
+#    params:
+#      - other:
+#          add_max_check_date
+#        how:
+#          inner
+#        columns:
+#          to_date_check_date: to_date_max_check_date
+
+  - kind: filter
+    name: filter_dm_product_check_results
+    params:
+      - condition:
+          sap_cluster is not null and sap_cluster!=''
+
+  - kind: join
+    name: join_read_dm_product_general_check_results
+    context_name: select_dm_product_universe
+    params:
+      - other:
+          filter_dm_product_check_results
+        how:
+          inner
+        columns:
+          material_code_pu: material_code 
+          country_code_pu: country_code 
+          sap_cluster_pu: sap_cluster
+      - other:
+          select_dm_product_general
+        how:
+          inner
+        columns:
+          material_code_pu: material_code_pg
+          sap_cluster_pu: sap_cluster_pg
+      - other:
+          select_dm_product_sales_organization
+        how:
+          inner
+        columns:
+          material_code_pu: material_code_pso
+          country_code_pu: country_code_pso
+          sap_cluster_pu: sap_cluster_pso
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code: rule_code          
+
+  - kind: select
+    name: select_dm_product_general_check_results_not_null
+    params:
+      columns:
+        rule_code: rule_code
+        material_code: material_code
+        country_code: country_code
+        flavour_code_pso: flavour_code_pso
+        pack_size_code_pso: pack_size_code_pso
+        pack_type_code_pso: pack_type_code_pso
+        product_hierarchy_code_pso: product_hierarchy_code_pso
+        sales_unit_code_pso: sales_unit_code_pso
+        brand_code_pso: brand_code_pso
+        material_group_code_pg: material_group_code_pg
+        material_type_code_pg: material_type_code_pg
+        bpp_code_pg: bpp_code_pg
+        sum_failed_checks: failed_checks
+        sum_passed_checks: passed_checks
+        sum_skipped_checks: skipped_checks
+        sap_cluster_pu: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_product_check_results_null
+#    context_name: join_dm_product_check_results_max_check_date
+    context_name: group_max_check_status
+    params:
+      - condition:
+          sap_cluster is null or sap_cluster=''
+
+  - kind: join
+    name: join_read_dm_product_general_check_results
+    context_name: select_dm_product_universe
+    params:
+      - other:
+          filter_dm_product_check_results_null
+        how:
+          inner
+        columns:
+          material_code_pu: material_code 
+          country_code_pu: country_code
+      - other:
+          select_dm_product_general
+        how:
+          inner
+        columns:
+          material_code_pu: material_code_pg
+          sap_cluster_pu: sap_cluster_pg
+      - other:
+          select_dm_product_sales_organization
+        how:
+          inner
+        columns:
+          material_code_pu: material_code_pso
+          country_code_pu: country_code_pso
+          sap_cluster_pu: sap_cluster_pso
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+
+  - kind: select
+    name: select_dm_product_general_check_results_null
+    params:
+      columns:
+        rule_code: rule_code
+        material_code: material_code
+        country_code: country_code
+        flavour_code_pso: flavour_code_pso
+        pack_size_code_pso: pack_size_code_pso
+        pack_type_code_pso: pack_type_code_pso
+        product_hierarchy_code_pso: product_hierarchy_code_pso
+        sales_unit_code_pso: sales_unit_code_pso
+        brand_code_pso: brand_code_pso
+        material_group_code_pg: material_group_code_pg
+        material_type_code_pg: material_type_code_pg
+        bpp_code_pg: bpp_code_pg
+        sum_failed_checks: failed_checks
+        sum_passed_checks: passed_checks
+        sum_skipped_checks: skipped_checks
+        sap_cluster_pu: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_product_check_results
+    context_name: select_dm_product_general_check_results_not_null
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_dm_product_general_check_results_null
+
+  - kind: add
+    name: add_dm_product_general_check_results
+    params:
+      - column: flavour_code_ifnull
+        expression: ifnull(flavour_code_pso, 'null')
+      - column: pack_size_code_ifnull
+        expression: ifnull(pack_size_code_pso, 'null')
+      - column: pack_type_code_ifnull
+        expression: ifnull(pack_type_code_pso, 'null')
+      - column: product_hierarchy_code_ifnull
+        expression: ifnull(product_hierarchy_code_pso, 'null')
+      - column: sales_unit_code_ifnull
+        expression: ifnull(sales_unit_code_pso, 'null')
+      - column: brand_code_ifnull
+        expression: ifnull(brand_code_pso, 'null')        
+      - column: material_group_code_ifnull
+        expression: ifnull(material_group_code_pg, 'null') 
+      - column: material_type_code_ifnull
+        expression: ifnull(material_type_code_pg, 'null') 
+      - column: bpp_code_ifnull
+        expression: ifnull(bpp_code_pg, 'null') 
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_dm_product_general_check_results
+    params:
+      columns:
+        rule_code: rule_code
+        material_code: material_code
+        country_code: country_code
+        flavour_code_ifnull: flavour_code_ifnull
+        material_group_code_ifnull: material_group_code_ifnull
+        material_type_code_ifnull: material_type_code_ifnull
+        pack_size_code_ifnull: pack_size_code_ifnull
+        pack_type_code_ifnull: pack_type_code_ifnull
+        product_hierarchy_code_ifnull: product_hierarchy_code_ifnull
+        sales_unit_code_ifnull: sales_unit_code_ifnull
+        brand_code_ifnull: brand_code_ifnull
+        bpp_code_ifnull: bpp_code_ifnull
+        failed_checks: failed_checks
+        passed_checks: passed_checks
+        skipped_checks: skipped_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dim_product_classification
+    context_name: select_dm_product_general_check_results
+    params:
+      - other:
+          select_dim_product_classification
+        how:
+          left
+        columns:
+          flavour_code_ifnull: flavour_code_ifnull
+          material_group_code_ifnull: material_group_code_ifnull
+          material_type_code_ifnull: material_type_code_ifnull
+          pack_size_code_ifnull: pack_size_code_ifnull
+          pack_type_code_ifnull: pack_type_code_ifnull
+          product_hierarchy_code_ifnull: product_hierarchy_code_ifnull
+          sales_unit_code_ifnull: sales_unit_code_ifnull
+          brand_code_ifnull: brand_code_ifnull
+          bpp_code_ifnull: bpp_code_ifnull
+
+  - kind: group
+    name: group_f_general_aggregated
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - rule_code
+        - country_code
+        - loading_date
+        - prod_class_id
+        - sap_cluster
+
+  - kind: add
+    name: add_calculations
+    params:
+      - column: total_checks
+        expression: sum_failed_checks + sum_passed_checks
+      - column: total_records
+        expression: sum_failed_checks + sum_passed_checks + sum_skipped_checks
+
+  - kind: cast
+    name: cast_integers
+    params:
+      - column: sum_failed_checks
+        to: integer
+      - column: sum_passed_checks
+        to: integer
+      - column: sum_skipped_checks
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: total_records
+        to: integer
+
+  - kind: select
+    name: select_f_product_aggregated_l1_l2
+    params:
+      columns:
+        country_code: country_code
+        prod_class_id: prod_class_id
+        rule_code: rule_code
+        loading_date: loading_date
+        sum_failed_checks: failed_checks
+        sum_passed_checks: passed_checks
+        sum_skipped_checks: skipped_checks
+        total_checks: total_checks
+        total_records: total_records
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_f_product_aggregated_l1_l2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_product_aggregated_l1_l2
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

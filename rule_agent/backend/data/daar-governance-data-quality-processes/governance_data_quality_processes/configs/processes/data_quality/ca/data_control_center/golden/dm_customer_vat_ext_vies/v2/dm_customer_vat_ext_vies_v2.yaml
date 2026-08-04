@@ -1,0 +1,106 @@
+transform:
+  name: dm_customer_vat_ext_vies
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: filter
+    name: filter_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      - condition:
+          isnotnull(tax_0_value) and isnotnull(country_code)
+
+  - kind: select
+    name: select_distinct_tax_number
+    context_name: filter_dm_customer_general
+    params:
+      columns:
+        tax_0_value: tax_0_value
+        country_code: country_code_cg
+      distinct: true
+
+  - kind: filter
+    name: filter_vat
+    context_name: select_distinct_tax_number
+    params:
+      - condition:
+          country_code_cg = '{{ country_filter }}'
+
+  - kind: governance_data_quality_processes.custom_operations.verify_vat_numbers.get_from_vies.GetFromViesOperation
+    name: get_from_vies
+    context_name: filter_vat
+    config_kind: governance_data_quality_processes.custom_operation_configs.verify_vat_numbers.get_from_vies_config.GetFromViesOperationConfig
+    params:
+      vat: tax_0_value
+      country_code: country_code_cg
+      country_filter: '{{ country_filter }}'
+
+  - kind: checkpoint
+    name: checkpoint_get_from_vies
+    context_name: get_from_vies
+
+  - kind: select
+    name: select_dm_customer_vat_ext_vies
+    context_name: checkpoint_get_from_vies
+    params:
+      columns:
+        tax_0_value: vat_number
+        company_name: company_name
+        address: address
+        street_and_num: street_and_num
+        city: city
+        postal_code: postal_code
+        district: district
+        country_code: country_code
+        country_code_cg: sap_country_code
+        legal_form: legal_form
+        api_result_status: api_result_status
+      distinct: true
+
+  - kind: add
+    name: add_execution_date
+    context_name: select_dm_customer_vat_ext_vies
+    params:
+      - column: execution_date
+        expression: cast(current_date() as date)
+
+  - kind: filter
+    name: filter_not_found
+    context_name: add_execution_date
+    params:
+      - condition:
+          api_result_status = 'verified'
+
+  - kind: write_dataio
+    name: write_dm_customer_vat_ext_vies
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_vat_ext_vies
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: '{{ refresh_mode }}'

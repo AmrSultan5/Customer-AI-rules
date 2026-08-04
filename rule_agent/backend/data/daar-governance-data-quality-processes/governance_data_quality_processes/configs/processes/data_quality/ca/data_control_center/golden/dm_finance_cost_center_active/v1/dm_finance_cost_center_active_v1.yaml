@@ -1,0 +1,65 @@
+transform:
+  name: dm_finance_cost_center_active
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read CSKS
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_csks
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: csks
+
+  - kind: filter
+    name: filter_csks
+    params:
+      - condition:
+          (DATBI = '9999-12-31 00:00:00.000' AND BKZKS <> 'X' AND PKZKS <> 'X' AND BKZOB <> 'X' AND BKZKP <> 'X' AND PKZKP <> 'X')
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        kostl: cost_center_number
+        kokrs: controlling_area_code
+        bukrs: company_code
+        datab: valid_from_date
+        datbi: valid_to_date
+        bkzks: actual_secondary_costs_ind
+        bkzkp: actual_primary_postings_ind
+        pkzks: plan_secondary_costs_ind
+        pkzkp: plan_primary_costs_ind
+        bkzer: actual_revenue_posting_lock_ind
+        bkzob: commitment_update_lock_ind
+        pkzer: planning_revenues_lock_ind
+        objnr: object_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_cost_center_active
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center_active
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

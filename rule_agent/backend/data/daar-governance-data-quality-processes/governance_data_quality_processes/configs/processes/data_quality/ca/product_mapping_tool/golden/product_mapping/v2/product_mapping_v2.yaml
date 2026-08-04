@@ -1,0 +1,80 @@
+transform:
+  name: product_mapping import from curated
+  operations:
+
+###############
+# Read data marts
+  - kind: read_dataio
+    name: read_pm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: product_mapping_tool
+      object_name: product_mapping
+      schema_version: v1
+
+  - kind: add
+    name: add_lowers
+    params:
+      - column: country_code
+        expression: lower(country)
+      - column: ext_source_name
+        expression: if(instr(lower(vendor), '_') > 0, substring(lower(vendor), instr(lower(vendor), '_') + 1), lower(vendor))
+
+  - kind: filter
+    name: filter_null_product_codes
+    context_name: add_lowers
+    params:
+      - condition:
+          material is not null and material <> '' and vendor_item is not null and vendor_item <> '' 
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: vendor
+        vendor_external_stable_key: vendor_external_stable_key
+        vendor_item: vendor_item
+        vendor_long_description: vendor_long_description
+        material: material
+        material_description: material_description
+        ban: ban
+        ban_description: ban_description
+        ean: ean
+        ean_upc: ean_upc
+        ean_pac: ean_pac
+        item_category_key: item_category_key
+        item_category_description: item_category_description
+        brand_key: brand_key
+        brand_description: brand_description
+        flavor_key: flavor_key
+        flavor_description: flavor_description 
+        package_type_key: package_type_key
+        package_type_description: package_type_description
+        package_size_key: package_size_key
+        package_size_description: package_size_description 
+        sales_unit_key: sales_unit_key
+        sales_unit_description: sales_unit_description
+        single_multi_serve_key: single_multi_serve_key
+        single_multi_serve_description: single_multi_serve_description
+      distinct: true
+
+  - kind: write_dataio
+    name: write_product_mapping
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: golden
+      object_name: product_mapping
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

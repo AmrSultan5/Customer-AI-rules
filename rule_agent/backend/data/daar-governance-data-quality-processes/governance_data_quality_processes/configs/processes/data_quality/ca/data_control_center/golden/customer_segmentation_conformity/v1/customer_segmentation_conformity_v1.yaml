@@ -1,0 +1,316 @@
+transform:
+  name: customer_segmentation_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_ccaf_format
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_ccaf_format
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_cac_tc_stc_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_cac_tc_stc_mapping
+
+#READ dm_customer_address_ext_osm
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address_ext_osm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_ext_osm
+
+  - kind: select
+    context_name: read_dm_customer_address_ext_osm
+    name: select_dm_customer_address_ext_osm
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code_ext_osm
+        sap_country_code: sap_country_code
+        longitude: longitude_ext
+        latitude: latitude_ext
+        sap_cluster: sap_cluster
+      distinct: true  
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        ccaf_code: ccaf_code
+        natural_person_flag: natural_person_flag
+        central_order_block_code: central_order_block_code
+        red_outlet_flag: red_outlet_flag
+        account_group_code: account_group_code
+        country_code: country_code 
+        country_code_from_sap_attribute: country_code_from_sap_attribute
+        country_code_from_customer_code: country_code_from_customer_code
+        customer_activity_cluster_code: customer_activity_cluster_code
+        trade_channel_code: trade_channel_code
+        sub_trade_channel_code: sub_trade_channel_code
+        trade_channel_name: trade_channel_name
+        sub_trade_channel_name: sub_trade_channel_name
+        longitude: longitude
+        latitude: latitude
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_conf_cac_tc_stc_mapping
+    context_name: read_conf_cac_tc_stc_mapping
+    params:
+      columns:
+        customer_activity_cluster_code: customer_activity_cluster_code_conf
+        trade_channel_code: trade_channel_code_conf
+        sub_trade_channel_code: sub_trade_channel_code_conf
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_conf_cac_tc_stc_mapping
+        how:
+          left
+        columns:
+          customer_activity_cluster_code: customer_activity_cluster_code_conf
+          trade_channel_code: trade_channel_code_conf
+          sub_trade_channel_code: sub_trade_channel_code_conf
+      - other:
+          select_dm_customer_address_ext_osm
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcconf_225_1
+        expression: >
+          if(account_group_code NOT LIKE '9%', '',
+             if(
+               (
+                 country_code = country_code_from_customer_code AND
+                 (
+                   country_code = country_code_from_sap_attribute OR
+                   (
+                     country_code = 'IT' AND
+                     country_code_from_sap_attribute IN ('SM', 'VA')
+                   )
+                 )
+               ),
+               '1',
+               '0'
+             )
+          )
+      - column: rcconf_282_1
+        expression: if(isnull(red_outlet_flag) or red_outlet_flag = '' 
+                    or central_order_block_code not in('I', 'CW', 'NR', 'F', ''), '', 
+                    if(red_outlet_flag = 'X', '1', '0'))
+      - column: rcconf_248_1
+        expression: if(isnull(ccaf_code) or ccaf_code = '' 
+                    or central_order_block_code in('S', 'SP', 'E', 'G', 'S2', 'S3', 'S4', 'S5', 'S9', 'R', 'U', 'M', 'NR')
+                    or natural_person_flag = 'X', '', 
+                    if(regexp(ccaf_code, '[1-5][1-5][0-9][0-9]') 
+                    or regexp(ccaf_code, '[1-5][1-5][0-9][A-Z]'), '1', '0'))
+      - column: rcconf_103_4
+        expression: if(isnull(customer_activity_cluster_code) or customer_activity_cluster_code = ''
+                    or isnull(trade_channel_code) or trade_channel_code = ''
+                    or isnull(sub_trade_channel_code) or sub_trade_channel_code = '', '', 
+                    if(isnull(customer_activity_cluster_code_conf) or isnull(trade_channel_code_conf) 
+                    or isnull(sub_trade_channel_code_conf), '0', '1'))
+      - column: rcconf_108_1
+        expression: if(isnull(trade_channel_code) or trade_channel_code = '', '', 
+                    if(isnull(trade_channel_name) or trade_channel_name = '' or trade_channel_name = 'DO NOT USE', '0', '1'))
+      - column: rcconf_109_1
+        expression: if(isnull(sub_trade_channel_code) or sub_trade_channel_code = '', '', 
+                    if(isnull(sub_trade_channel_name) or sub_trade_channel_name = '' or sub_trade_channel_name = 'DO NOT USE', '0', '1'))
+      - column: rule_code_rcconf_225_1
+        expression: '''RCCONF_225.1'''
+      - column: value_checked_rcconf_225_1
+        expression: country_code||"_"||country_code_from_sap_attribute||"_"||country_code_from_customer_code
+      - column: rule_code_rcconf_282_1
+        expression: '''RCCONF_282.1'''
+      - column: rule_code_rcconf_248_1
+        expression: '''RCCONF_248.1'''
+      - column: rule_code_rcconf_103_4
+        expression: '''RCCONF_103.4'''
+      - column: concat_103_4
+        expression: concat_ws('_', customer_activity_cluster_code, trade_channel_code, sub_trade_channel_code)
+      - column: rule_code_rcconf_108_1
+        expression: '''RCCONF_108.1'''
+      - column: rule_code_rcconf_109_1
+        expression: '''RCCONF_109.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcconf_225_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcconf_225_1: rule_code
+        rcconf_225_1: check_status
+        customer_code: customer_code
+        value_checked_rcconf_225_1: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rcconf_282_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcconf_282_1: rule_code
+        rcconf_282_1: check_status
+        customer_code: customer_code
+        red_outlet_flag: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rcconf_248_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcconf_248_1: rule_code
+        rcconf_248_1: check_status
+        customer_code: customer_code
+        ccaf_code: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rcconf_103_4
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcconf_103_4: rule_code
+        rcconf_103_4: check_status
+        customer_code: customer_code
+        concat_103_4: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rcconf_108_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcconf_108_1: rule_code
+        rcconf_108_1: check_status
+        customer_code: customer_code
+        trade_channel_name: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rcconf_109_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcconf_109_1: rule_code
+        rcconf_109_1: check_status
+        customer_code: customer_code
+        sub_trade_channel_name: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcconf_282_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_248_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_225_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_103_4
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_108_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_109_1
+
+  - kind: write_dataio
+    name: write_customer_segmentation_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_segmentation_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

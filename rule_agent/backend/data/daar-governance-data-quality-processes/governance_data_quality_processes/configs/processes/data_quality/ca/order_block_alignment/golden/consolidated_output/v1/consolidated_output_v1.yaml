@@ -1,0 +1,380 @@
+transform:
+  name: consolidated_output
+  operations:
+
+#du
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: read_dataio
+    name: read_order_block_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: order_block_matrix
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_customer_pre_join
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_name: customer_name
+        customer_code: customer_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        order_block_code: central_order_block_code
+        order_block_name: central_order_block_name
+        order_block_code_sales_area: sales_order_block_code
+        order_block_name_sales_area: sales_order_block_name
+        is_l7_customer_in_scope: is_l7_customer_in_scope
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dm_customer
+    context_name: select_dm_customer_pre_join
+    params:
+      - other:
+          read_order_block_matrix
+        how:
+          left
+        columns:
+          central_order_block_code: general_order_block
+
+  - kind: filter
+    name: filter_dm_customer
+    context_name: join_dm_customer
+    params:
+      - condition:
+          ((division_code='01' and distribution_channel_code='01') 
+          or (division_code='03' and distribution_channel_code='01') 
+          or (division_code='02' and distribution_channel_code='04')) 
+          and is_l7_customer_in_scope = '1' 
+          and (central_order_block_code = general_order_block 
+          or isnull(central_order_block_code) 
+          or central_order_block_code = '')
+          and sales_org_code <> '4900'
+
+  - kind: add
+    name: add_order_block_matrix
+    context_name: read_order_block_matrix
+    params:
+      - column: general_order_block_ifnull
+        expression: if(isnull(general_order_block) or general_order_block = '', 'null', general_order_block)
+      - column: sales_order_block_ifnull
+        expression: if(isnull(sales_order_block) or sales_order_block = '', 'null', sales_order_block)
+
+  - kind: select
+    name: select_order_block_matrix
+    context_name: add_order_block_matrix
+    params:
+      columns:
+        general_order_block: general_order_block
+        general_order_block_ifnull: general_order_block_ifnull
+        sales_order_block_ifnull: sales_order_block_ifnull
+        distribution_channel: distribution_channel
+        division: division
+        is_configuration_valid: is_configuration_valid
+      distinct: true
+
+  - kind: add
+    name: add_dm_customer
+    context_name: filter_dm_customer
+    params:
+      - column: central_order_block_code_ifnull
+        expression: if(isnull(central_order_block_code) or central_order_block_code = '', 'null', central_order_block_code)
+      - column: sales_order_block_code_ifnull
+        expression: if(isnull(sales_order_block_code) or sales_order_block_code = '', 'null', sales_order_block_code)
+
+
+  - kind: select
+    name: select_dm_customer
+    context_name: add_dm_customer
+    params:
+      columns:
+        customer_name: customer_name
+        customer_code: customer_code
+        sales_org_code: sales_org_code
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        sales_order_block_code: sales_order_block_code
+        central_order_block_code: central_order_block_code
+        central_order_block_name: central_order_block_name
+        central_order_block_code_ifnull: central_order_block_code_ifnull
+        sales_order_block_code_ifnull: sales_order_block_code_ifnull
+        sales_order_block_name: sales_order_block_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_hier_3
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_name: customer_hier_3_name
+        customer_code: customer_hier_3_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code_hier_3
+        distribution_channel_code: distribution_channel_code_hier_3
+        division_code: division_code_hier_3
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_org_hierarchy
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        country_code: country_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_cust_hierarchy
+    context_name: read_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l7_sales_org_code: l7_sales_org_code
+        l7_distribution_channel_code: l7_distribution_channel_code
+        l7_division_code: l7_division_code
+        l3_customer_code: l3_customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+
+  - kind: join
+    name: join_du_order_block_alignment
+    context_name: select_dm_customer
+    params:
+      - other:
+          select_dm_org_hierarchy
+        how:
+          inner
+        columns:
+          sales_org_code: sales_org_code
+      - other:
+          select_dm_cust_hierarchy
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sales_org_code: l7_sales_org_code
+          division_code: l7_division_code
+          distribution_channel_code: l7_distribution_channel_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_hier_3
+        how:
+          left
+        columns:
+          l3_customer_code: customer_hier_3_code
+          l7_sales_org_code: sales_org_code_hier_3
+          l7_division_code: division_code_hier_3
+          l7_distribution_channel_code: distribution_channel_code_hier_3
+          sap_cluster: sap_cluster
+      - other:
+          select_order_block_matrix
+        how:
+          left
+        columns:
+          central_order_block_code_ifnull: general_order_block_ifnull
+          distribution_channel_code: distribution_channel
+          division_code: division
+          sales_order_block_code_ifnull: sales_order_block_ifnull
+
+
+  - kind: add
+    name: add_du_order_block_alignment
+    params:
+      - column: consistency_check_flag
+        expression: if(is_configuration_valid = '1', '1', '0')
+
+  - kind: select
+    name: select_du_order_block_alignment
+    context_name: add_du_order_block_alignment
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        central_order_block_code: central_order_block_code
+        central_order_block_name: central_order_block_name
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        sales_order_block_code: sales_order_block_code
+        sales_order_block_name: sales_order_block_name
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_code: country_code
+        sales_org_code: sales_org_code
+        consistency_check_flag: consistency_check_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+#detailed
+  - kind: add
+    name: add_dq_message_output
+    context_name: select_du_order_block_alignment
+    params:
+      - column: dq_message_output
+        expression: IF(consistency_check_flag = '0', 'Order block inconsistency', 'OK')
+
+  - kind: select
+    name: select_du
+    context_name: add_dq_message_output
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        central_order_block_code: central_order_block_code
+        central_order_block_name: central_order_block_name
+        sales_order_block_code: sales_order_block_code
+        sales_order_block_name: sales_order_block_name
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_code: country_code
+        sales_org_code: sales_org_code
+        dq_message_output: dq_message_output
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: order_block_alignment
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+## AGGREGATED LAYER
+
+  - kind: add
+    name: add_customer_loading_date
+    context_name: select_du_order_block_alignment
+    params:
+      - column: quality_category
+        expression: "'accuracy'"
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: IF((consistency_check_flag <> '1'), 1, NULL)
+      - column: total_checks
+        expression: CAST(1 AS INT)
+
+  - kind: group
+    name: group_total_invalid_records
+    context_name: add_customer_loading_date
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - loading_date
+        - country_code
+        - quality_category
+        - customer_hier_3_name
+        - customer_hier_3_code
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_records
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+
+  - kind: select
+    name: select_finall
+    context_name: add_new_columns
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        invalid_checks: invalid_checks
+        total_checks: total_checks
+        quality_category: quality_category
+        customer_hier_3_name: customer_hier_3_name
+        customer_hier_3_code: customer_hier_3_code
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: order_block_alignment
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

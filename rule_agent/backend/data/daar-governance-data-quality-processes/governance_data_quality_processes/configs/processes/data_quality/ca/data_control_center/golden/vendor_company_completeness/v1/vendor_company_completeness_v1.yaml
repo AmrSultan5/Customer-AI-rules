@@ -1,0 +1,127 @@
+transform:
+  name: vendor_company_completeness
+  operations:
+
+# ── RVCOMP_221.1  Missing Reconciliation Account
+# ── RVCOMP_222.1  Missing Terms of Payment (CoCd)
+# ── RVCOMP_223.1  Missing Payment Methods
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+        reconciliation_account_general_ledger: reconciliation_account_general_ledger
+        terms_of_payment_code: terms_of_payment_code
+        payment_methods_list: payment_methods_list
+      distinct: true
+
+  - kind: add
+    name: add_checks
+    context_name: select_dm_vendor_company
+    params:
+      - column: rcvomp_221_1
+        expression: if(isnull(reconciliation_account_general_ledger) or reconciliation_account_general_ledger = '', '0', '1')
+      - column: rcvomp_222_1
+        expression: if(isnull(terms_of_payment_code) or terms_of_payment_code = '', '0', '1')
+      - column: rcvomp_223_1
+        expression: if(isnull(payment_methods_list) or payment_methods_list = '', '0', '1')
+      - column: rule_code_rcvomp_221_1
+        expression: '''RVCOMP_221.1'''
+      - column: rule_code_rcvomp_222_1
+        expression: '''RVCOMP_222.1'''
+      - column: rule_code_rcvomp_223_1
+        expression: '''RVCOMP_223.1'''
+      - column: subdomain
+        expression: '''company_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_221_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_221_1: rule_code
+        rcvomp_221_1: check_status
+        vendor_code: vendor_code
+        reconciliation_account_general_ledger: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_222_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_222_1: rule_code
+        rcvomp_222_1: check_status
+        vendor_code: vendor_code
+        terms_of_payment_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_223_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_223_1: rule_code
+        rcvomp_223_1: check_status
+        vendor_code: vendor_code
+        payment_methods_list: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_221_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_222_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_223_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

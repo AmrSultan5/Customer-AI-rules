@@ -1,0 +1,898 @@
+transform:
+  name: f_finance_universe
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read dm_finance_controlling_area
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+# Read dm_finance_general_ledger
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_general_ledger
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_general_ledger
+
+# Read dm_finance_internal_order
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_internal_order
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_internal_order
+
+# Read dm_finance_asset
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_asset
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset
+
+
+# Read dm_finance_cost_center
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center
+
+
+# Read dim_finance_classification
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_finance_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_finance_classification
+
+# Select dm_finance_controlling_area
+
+  - kind: select
+    name: select_dm_finance_controlling_area
+    context_name: read_dm_finance_controlling_area
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#Select dm_finance_general_ledger
+
+  - kind: select
+    name: select_dm_finance_general_ledger
+    context_name: read_dm_finance_general_ledger
+    params:
+      columns:
+        company_code: company_code
+        chart_of_accounts: chart_of_accounts
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#Select dm_finance_internal_order
+
+  - kind: select
+    name: select_dm_finance_internal_order
+    context_name: read_dm_finance_internal_order
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        order_number: order_number
+        order_type: order_type
+        sap_cluster: sap_cluster
+      distinct: true
+
+#Select dm_finance_asset
+
+  - kind: select
+    name: select_dm_finance_asset
+    context_name: read_dm_finance_asset
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        asset_number: asset_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+#Select dm_finance_cost_center
+
+  - kind: select
+    name: select_dm_finance_cost_center
+    context_name: read_dm_finance_cost_center
+    params:
+      columns:
+        controlling_area_code: controlling_area_code
+        company_code: company_code
+        cost_center_number: cost_center_number
+        functional_area: functional_area
+        standard_hierarchy_area: standard_hierarchy_area
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+#Select dim_finance_classification
+
+
+  - kind: add
+    name: add_dim_finance_classification
+    context_name: read_dim_finance_classification
+    params:
+      - column: controlling_area_code_fcc
+        expression: "CASE WHEN(controlling_area_code IS NULL) THEN 'null' ELSE controlling_area_code  END"
+      - column: company_code_fcc
+        expression:  "CASE WHEN(company_code  IS NULL) THEN 'null' ELSE company_code  END"
+      - column: charts_of_accounts_fcc
+        expression: "CASE WHEN(chart_of_accounts_code IS NULL) THEN 'null' ELSE chart_of_accounts_code END"
+      - column: cost_center_number_fcc
+        expression: "CASE WHEN(cost_center_number IS NULL) THEN 'null' ELSE cost_center_number END"
+      - column: functional_area_code_fcc
+        expression: "CASE WHEN(functional_area_code IS NULL) THEN 'null' ELSE functional_area_code END"
+      - column: cost_center_hierarchy_fcc
+        expression: "CASE WHEN(cost_center_hierarchy IS NULL) THEN 'null' ELSE cost_center_hierarchy END"
+
+  - kind: select
+    name: select_dim_finance_classification
+    params:
+      columns:
+        controlling_area_code_fcc: controlling_area_code
+        company_code_fcc: company_code
+        charts_of_accounts_fcc: charts_of_accounts
+        finance_class_id: finance_class_id
+        object_type: object_type
+        cost_center_number_fcc: cost_center_number_fcc
+        functional_area_code_fcc: functional_area_code_fcc
+        cost_center_hierarchy_fcc: cost_center_hierarchy_fcc
+      distinct: true
+
+  - kind: join
+    name: join_ca_gl
+    context_name: select_dm_finance_controlling_area
+    params:
+      - other:
+          select_dm_finance_general_ledger
+        how:
+          inner
+        columns:
+          chart_of_accounts: chart_of_accounts
+          company_code: company_code
+          sap_cluster: sap_cluster
+
+
+  - kind: join
+    name: join_ca_gl_fc
+    context_name: join_ca_gl
+    params:
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          chart_of_accounts: charts_of_accounts
+
+  - kind: filter
+    name: filter_obj_gl
+    params:
+      - condition:
+          (object_type  == 'General Ledger')
+
+
+  - kind: add
+    name: add_empty_gl_ca
+    params:
+      - column: order_number
+        expression: ''''''
+      - column: order_type
+        expression: ''''''
+      - column: asset_number
+        expression:  ''''''
+      - column: cost_center_number
+        expression: ''''''
+      - column: count_io
+        expression: ''''''
+      - column: count_fa
+        expression: ''''''
+      - column: count_cc
+        expression: ''''''
+      - column: count_fc
+        expression: ''''''
+
+  - kind: select
+    name: select_ca_gl_union
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_io: count_io
+        count_fa: count_fa
+        count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+  - kind: add
+    name: add_concat_key
+    params:
+      - column: count_gl
+        expression: ''''''
+
+  - kind: select
+    name: select_join_ca_gl
+    params:
+      columns:
+        company_code: company_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        count_gl: count_gl
+      distinct: true
+
+  - kind: group
+    name: group_key_sub_domain_gl
+    params:
+      - aggs:
+          count_gl: count
+        by:
+        - g_l_account_number
+        - company_code
+        - sap_cluster
+        - g_l_account_group_code
+
+
+  - kind: join
+    name: join_grp_select_gl
+    context_name: select_ca_gl_union
+    params:
+      - other:
+          group_key_sub_domain_gl
+        how:
+          inner
+        columns:
+          g_l_account_number: g_l_account_number
+          g_l_account_group_code: g_l_account_group_code
+          company_code: company_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_join_ca_gl_final
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_count_gl: count_gl
+        count_io: count_io
+        count_fa: count_fa
+        count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+
+  - kind: join
+    name: join_ca_io
+    context_name: select_dm_finance_controlling_area
+    params:
+      - other:
+          select_dm_finance_internal_order
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_ca_io_fc
+    context_name: join_ca_io
+    params:
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          chart_of_accounts: charts_of_accounts
+
+
+  - kind: filter
+    name: filter_obj_io
+    params:
+      - condition:
+          (object_type  == 'Internal Order')
+
+  - kind: add
+    name: add_empty_ca_io
+    params:
+      - column: asset_number
+        expression:  ''''''
+      - column: cost_center_number
+        expression: ''''''
+      - column: charts_of_accounts
+        expression:  ''''''
+      - column: g_l_account_number
+        expression: ''''''
+      - column: g_l_account_group_code
+        expression:  ''''''
+      - column: count_gl
+        expression: ''''''
+      - column: count_fa
+        expression: ''''''
+      - column: count_cc
+        expression: ''''''
+      - column: count_fc
+        expression: ''''''
+
+  - kind: select
+    name: select_ca_io_union
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_fa: count_fa
+        count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+  - kind: add
+    name: add_concat_key
+    params:
+      - column: count_io
+        expression: ''''''
+
+  - kind: select
+    name: select_join_ca_io
+    params:
+      columns:
+        order_number: order_number
+        sap_cluster: sap_cluster
+        controlling_area_code: controlling_area_code
+        order_type : order_type
+        count_io: count_io
+      distinct: true
+
+  - kind: group
+    name: group_key_sub_domain_io
+    params:
+      - aggs:
+          count_io: count
+        by:
+        - order_number
+        - sap_cluster
+        - controlling_area_code
+        - order_type
+
+
+  - kind: join
+    name: join_grp_select_io
+    context_name: select_ca_io_union
+    params:
+      - other:
+          group_key_sub_domain_io
+        how:
+          inner
+        columns:
+          order_type: order_type
+          order_number: order_number
+          controlling_area_code: controlling_area_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_join_ca_io_final
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_count_io: count_io
+        count_fa: count_fa
+        count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+
+  - kind: join
+    name: join_ca_fa
+    context_name: select_dm_finance_controlling_area
+    params:
+      - other:
+          select_dm_finance_asset
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_ca_fa_fc
+    context_name: join_ca_fa
+    params:
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          chart_of_accounts: charts_of_accounts
+
+
+  - kind: filter
+    name: filter_obj_fa
+    params:
+      - condition:
+          (object_type  == 'Fixed Assets')
+
+  - kind: add
+    name: add_empty_ca_fa
+    params:
+      - column: order_number
+        expression: ''''''
+      - column: order_type
+        expression: ''''''
+      - column: cost_center_number
+        expression: ''''''
+      - column: charts_of_accounts
+        expression:  ''''''
+      - column: g_l_account_number
+        expression: ''''''
+      - column: g_l_account_group_code
+        expression:  ''''''
+      - column: count_gl
+        expression:  ''''''
+      - column: count_io
+        expression:  ''''''
+      - column: count_cc
+        expression: ''''''
+      - column: count_fc
+        expression: ''''''
+
+  - kind: select
+    name: select_ca_fa_union
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_io: count_io
+        count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+  - kind: add
+    name: add_concat_key
+    params:
+      - column: count_fa
+        expression: ''''''
+
+  - kind: select
+    name: select_join_ca_fa
+    params:
+      columns:
+        asset_number: asset_number
+        sap_cluster: sap_cluster
+        company_code: company_code
+        count_fa: count_fa
+      distinct: true
+
+  - kind: group
+    name: group_key_sub_domain_fa
+    params:
+      - aggs:
+          count_fa: count
+        by:
+        - asset_number
+        - sap_cluster
+        - company_code
+
+
+  - kind: join
+    name: join_grp_select_fa
+    context_name: select_ca_fa_union
+    params:
+      - other:
+          group_key_sub_domain_fa
+        how:
+          inner
+        columns:
+          asset_number: asset_number
+          company_code: company_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_join_ca_fa_final
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_io: count_io
+        count_count_fa: count_fa
+        count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+
+
+
+  - kind: join
+    name: join_ca_cc
+    context_name: select_dm_finance_controlling_area
+    params:
+      - other:
+          select_dm_finance_cost_center
+        how:
+          inner
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_ca_cc_fc
+    context_name: join_ca_cc
+    params:
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code: controlling_area_code
+          company_code: company_code
+          chart_of_accounts: charts_of_accounts
+          cost_center_number: cost_center_number_fcc
+          functional_area: functional_area_code_fcc
+          standard_hierarchy_area: cost_center_hierarchy_fcc
+
+  - kind: filter
+    name: filter_obj_fa
+    params:
+      - condition:
+          (object_type  == 'Cost Center')
+
+  - kind: add
+    name: add_empty_ca_cc
+    params:
+      - column: order_number
+        expression: ''''''
+      - column: order_type
+        expression: ''''''
+      - column: asset_number
+        expression:  ''''''
+      - column: charts_of_accounts
+        expression:  ''''''
+      - column: g_l_account_number
+        expression: ''''''
+      - column: g_l_account_group_code
+        expression:  ''''''
+      - column: count_gl
+        expression:  ''''''
+      - column: count_io
+        expression:  ''''''
+      - column: count_fa
+        expression: ''''''
+      - column: count_fc
+        expression: ''''''
+
+
+  - kind: select
+    name: select_ca_cc_union
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_io: count_io
+        count_fa: count_fa
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+  - kind: add
+    name: add_concat_key
+    params:
+      - column: count_cc
+        expression: ''''''
+
+  - kind: select
+    name: select_join_ca_cc
+    params:
+      columns:
+        cost_center_number: cost_center_number
+        sap_cluster: sap_cluster
+        controlling_area_code: controlling_area_code
+        count_cc: count_cc
+      distinct: true
+
+  - kind: group
+    name: group_key_sub_domain_cc
+    params:
+      - aggs:
+          count_cc: count
+        by:
+        - cost_center_number
+        - sap_cluster
+        - controlling_area_code
+
+
+  - kind: join
+    name: join_grp_select_cc
+    context_name: select_ca_cc_union
+    params:
+      - other:
+          group_key_sub_domain_cc
+        how:
+          inner
+        columns:
+          cost_center_number: cost_center_number
+          controlling_area_code: controlling_area_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_join_ca_cc_final
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_io: count_io
+        count_fa: count_fa
+        count_count_cc: count_cc
+        count_fc: count_fc
+        finance_class_id: finance_class_id
+      distinct: true
+
+
+
+
+  - kind: union
+    name: union_ca_gl_io
+    context_name: select_join_ca_gl_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_join_ca_io_final
+
+
+  - kind: union
+    name: union_ca_gl_io_fa
+    context_name: union_ca_gl_io
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_join_ca_fa_final
+
+  - kind: union
+    name: union_ca_gl_io_fa_cc
+    context_name: union_ca_gl_io_fa
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_join_ca_cc_final
+
+
+
+
+
+  - kind: select
+    name: select_join_ca_fc
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts
+        company_code: company_code
+        controlling_area_code: controlling_area_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        order_number: order_number
+        order_type: order_type
+        asset_number: asset_number
+        cost_center_number: cost_center_number
+        count_gl: count_gl
+        count_io: count_io
+        count_fa: count_fa
+        count_cc: count_cc
+        finance_class_id: finance_class_id
+      distinct: true
+
+
+  - kind: group
+    name: sum_key_sub_domain
+    params:
+      - aggs:
+          count_gl: sum
+          count_io: sum
+          count_fa: sum
+          count_cc: sum
+        by:
+        - count_gl
+        - count_io
+        - count_fa
+        - count_cc
+        - country_code
+        - finance_class_id
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+      - column: no_of_finance_values
+        expression: "CAST(CASE WHEN(sum_count_gl IS NOT NULL) THEN sum_count_gl WHEN(sum_count_io IS NOT NULL) THEN sum_count_io WHEN(sum_count_fa IS NOT NULL) THEN sum_count_fa WHEN(sum_count_cc IS NOT NULL) THEN sum_count_cc ELSE 'N/A' END AS INT)"
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        finance_class_id: finance_class_id
+        country_code: country_code
+        loading_date: loading_date
+        no_of_finance_values: no_of_finance_values
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_finance_universe
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_finance_universe
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

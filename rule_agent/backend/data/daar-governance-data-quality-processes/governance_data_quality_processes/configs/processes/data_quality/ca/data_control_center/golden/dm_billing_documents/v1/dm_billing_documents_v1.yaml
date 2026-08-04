@@ -1,0 +1,174 @@
+transform:
+  name: dm_billing_documents
+  operations:
+
+  - kind: read_dataio
+    name: read_vbrk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: transactional_data
+      object_name: vbrk
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_vbrp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: transactional_data
+      object_name: vbrp
+      schema_version: v1
+
+  - kind: select
+    name: select_vbrk
+    context_name: read_vbrk
+    params:
+      columns:
+        vbeln: vbeln
+        kunag: kunag
+        kunrg: kunrg
+        erdat: erdat_a
+        fkdat: fkdat
+        vbtyp: vbtyp
+        vkorg: vkorg
+        bukrs: bukrs
+        fkart: fkart
+        fktyp: fktyp
+        waerk: waerk
+        netwr: netwr
+        mwsbk: mwsbk
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_vbrp
+    context_name: read_vbrp
+    params:
+      columns:
+        vbeln: vbeln
+        posnr: posnr
+        fkimg: fkimg
+        vrkme: vrkme
+        matnr: matnr
+        aubel: aubel
+        aupos: aupos
+        sap_cluster: sap_cluster_b
+        werks: werks
+        erdat: erdat_b
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_vbrp_left_werks
+    params:
+      - column: vbrp_left_werks
+        expression: left(werks, 2)
+
+# Read plant_code_mapping
+  - kind: read_dataio
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+      schema_version: v2
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    context_name: select_vbrk
+    name: join_dm_billing_documents
+    params:
+      - other:
+          add_vbrp_left_werks
+        how:
+          inner
+        columns:
+          vbeln: vbeln
+          sap_cluster: sap_cluster_b
+      - other:
+          select_pcm
+        how:
+          left
+        columns:
+          vbrp_left_werks: plant_code_short
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_null_columns
+    context_name: join_dm_billing_documents
+    params:
+      - column: billing_type_description
+        expression: cast(null as string)
+      - column: billing_category_description
+        expression: cast(null as string)
+      - column: document_category_description
+        expression: cast(null as string)
+
+  - kind: select
+    name: select_dm_billing_documents
+    params:
+      columns:
+        kunag: customer_code
+        kunrg: customer_payer_code
+        vbeln: billing_document_number
+        erdat_a: creation_date
+        fkdat: billing_date
+        vkorg: sale_org_code
+        bukrs: company_code
+        fkart: billing_type_code
+        billing_type_description: billing_type_description
+        fktyp: billing_category_code
+        billing_category_description: billing_category_description
+        vbtyp: document_category_code
+        document_category_description: document_category_description
+        waerk: currency
+        netwr: net_value
+        mwsbk: tax_value
+        posnr: billing_document_item_number
+        fkimg: quantity
+        vrkme: sales_unit
+        matnr: material_code
+        aubel: sales_document_number
+        aupos: sales_document_item_number
+        country_code: country_code
+        werks: plant_code
+        erdat_b: item_creation_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_billing_documents
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_billing_documents
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

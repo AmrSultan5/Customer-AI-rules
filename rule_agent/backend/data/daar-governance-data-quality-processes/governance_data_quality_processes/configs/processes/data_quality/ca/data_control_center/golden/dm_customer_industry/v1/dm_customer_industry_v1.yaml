@@ -1,0 +1,103 @@
+transform:
+  name: dm_customer_industry
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read BUT0IS
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but0is
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but0is
+
+  - kind: select
+    name: select_but0is
+    params:
+      columns:
+        partner: partner
+        ind_sector: ind_sector
+        isdef: isdef
+        istype: istype
+        sap_cluster: sap_cluster_bu
+      distinct: true
+
+# Read T016T
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t016t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t016t
+
+  - kind: filter
+    name: filter_t016t
+    params:
+      - condition:
+          spras = 'E'
+
+
+  - kind: select
+    name: select_t016t
+    params:
+      columns:
+        brsch: brsch
+        brtxt: brtxt
+        sap_cluster: sap_cluster_t
+      distinct: true
+
+  - kind: join
+    name: join_bu_t
+    context_name: select_but0is
+    params:
+      - other:
+          select_t016t
+        how:
+          left
+        columns:
+          ind_sector: brsch
+          sap_cluster_bu: sap_cluster_t
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        partner: customer_code
+        ind_sector: industry_code
+        brtxt: industry_name
+        isdef: is_industry_active
+        istype: industry_system
+        sap_cluster_bu: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_industry
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_industry
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

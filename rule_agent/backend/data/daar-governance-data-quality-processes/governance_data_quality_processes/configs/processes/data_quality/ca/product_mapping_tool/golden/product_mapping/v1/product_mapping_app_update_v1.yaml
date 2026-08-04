@@ -1,0 +1,205 @@
+transform:
+  name: update_pm_after_app_processing
+  operations:
+
+  - kind: read_local
+    name: read_app_data
+    params:
+      format: parquet
+      location: "{{mnt_path}}data_quality/product_mapping_tool/product_mapping/{{vendor_data.country}}_{{vendor_data.vendor}}.parquet"
+
+  - kind: add
+    name: add_ext_source_key
+    params:
+      - column: ext_source_key
+        expression: "cast (null as string)"
+        overwrite: true
+      # - column: sap_product_code
+      #   expression: lpad(sap_product_code, 18, "0")
+      #   overwrite: true
+
+  - kind: read_dataio
+    name: read_ca_0_mat03_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_mat03_material
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mat03_static
+    context_name: read_ca_0_mat03_material
+    params:
+      - condition:
+          ISNULL(material) = 0 AND material != material_desc
+
+  - kind: select
+    name: select_columns_sap
+    params:
+      columns:
+        material: sap_product_code
+        material_desc: sap_product_name_mat03
+        bic_cpbartno: ban_mat03
+        cpbartno_desc: ban_name_mat03
+        bic_ceanpc: ean_piece_mat03
+        bic_ceanpac: ean_pack_mat03
+        eanupc: ean_case_mat03
+        bic_cbrand: brand_key_mat03
+        cbrand_desc: brand_name_mat03
+        bic_cflavor: flavour_key_mat03
+        cflavor_desc: flavour_name_mat03
+        bic_cpacktype: package_type_key_mat03
+        cpacktype_desc: package_type_name_mat03
+        bic_cpacksize: package_size_key_mat03
+        cpacksize_desc: package_size_name_mat03
+        bic_ccategory: item_category_key_mat03
+        ccategory_desc: item_category_name_mat03
+        bic_csls_unit: sales_unit_key_mat03
+        csls_unit_desc: sales_unit_name_mat03
+        bic_cssms: single_multi_serve_key_mat03
+        cssms_desc: single_multi_serve_name_mat03
+      distinct: true
+
+  - kind: add
+    name: add_rank
+    params:
+      - column: rank_sap
+        window:
+          func: rank
+          partition_by:
+            - sap_product_code
+          order_by:
+            - sap_product_name_mat03: asc
+
+  - kind: filter
+    name: filter_rank
+    params:
+      - condition:
+          rank_sap = 1
+
+  - kind: join
+    name: join_columns_sap
+    context_name: add_ext_source_key
+    params:
+      - other:
+          filter_rank
+        how:
+          left
+        columns:
+          sap_product_code: sap_product_code
+
+  - kind: add
+    name: add_values
+    params:
+      - column: sap_product_name
+        expression: if(sap_product_name is null or sap_product_name = '', sap_product_name_mat03, sap_product_name)
+        overwrite: true 
+      - column: ban
+        expression: if(ban is null or ban = '', ban_mat03, ban)
+        overwrite: true 
+      - column: ban_name
+        expression: if(ban_name is null or ban_name = '', ban_name_mat03, ban_name)
+        overwrite: true 
+      - column: ean_piece
+        expression: if(ean_piece is null or ean_piece = '', ean_piece_mat03, ean_piece)
+        overwrite: true 
+      - column: ean_pack
+        expression: if(ean_pack is null or ean_pack = '', ean_pack_mat03, ean_pack)
+        overwrite: true 
+      - column: ean_case
+        expression: if(ean_case is null or ean_case = '', ean_case_mat03, ean_case)
+        overwrite: true 
+      - column: brand_key
+        expression: if(brand_key is null or brand_key = '', brand_key_mat03, brand_key)
+        overwrite: true 
+      - column: brand_name
+        expression: if(brand_name is null or brand_name = '', brand_name_mat03, brand_name)
+        overwrite: true 
+      - column: flavour_key
+        expression: if(flavour_key is null or flavour_key = '', flavour_key_mat03, flavour_key)
+        overwrite: true 
+      - column: flavour_name
+        expression: if(flavour_name is null or flavour_name = '', flavour_name_mat03, flavour_name)
+        overwrite: true 
+      - column: package_type_key
+        expression: if(package_type_key is null or package_type_key = '', package_type_key_mat03, package_type_key)
+        overwrite: true 
+      - column: package_type_name
+        expression: if(package_type_name is null or package_type_name = '', package_type_name_mat03, package_type_name)
+        overwrite: true 
+      - column: package_size_key
+        expression: if(package_size_key is null or package_size_key = '', package_size_key_mat03, package_size_key)
+        overwrite: true 
+      - column:  package_size_name
+        expression: if(package_size_name is null or package_size_name = '', package_size_name_mat03, package_size_name)
+        overwrite: true 
+      - column:  item_category_key
+        expression: if(item_category_key is null or item_category_key = '',  item_category_key_mat03, item_category_key)
+        overwrite: true  
+      - column:  item_category_name
+        expression: if(item_category_name is null or item_category_name = '', item_category_name_mat03, item_category_name)
+        overwrite: true 
+      - column:  sales_unit_key
+        expression: if(sales_unit_key is null or sales_unit_key = '',  sales_unit_key_mat03, sales_unit_key)
+        overwrite: true 
+      - column:  sales_unit_name
+        expression: if(sales_unit_name is null or sales_unit_name = '', sales_unit_name_mat03, sales_unit_name)
+        overwrite: true 
+      - column:  single_multi_serve_key
+        expression: if(single_multi_serve_key is null or single_multi_serve_key = '', single_multi_serve_key_mat03, single_multi_serve_key)
+        overwrite: true 
+      - column:  single_multi_serve_name
+        expression: if(single_multi_serve_name is null or single_multi_serve_name = '', single_multi_serve_name_mat03, single_multi_serve_name)
+        overwrite: true 
+ 
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        country_code: country_code
+        ext_source_name: ext_source_name
+        ext_source_key: ext_source_key
+        ext_product_code: ext_product_code
+        ext_product_name_src: ext_product_name
+        sap_product_code: sap_product_code
+        sap_product_name: sap_product_name
+        ban: ban
+        ban_name: ban_description
+        ean_piece: ean
+        ean_case: ean_upc
+        ean_pack: ean_pac
+        item_category_key: item_category_key
+        item_category_name: item_category_description
+        brand_key: brand_key
+        brand_name: brand_description
+        flavour_key: flavor_key
+        flavour_name: flavor_description 
+        package_type_key: package_type_key
+        package_type_name: package_type_description
+        package_size_key: package_size_key
+        package_size_name: package_size_description 
+        sales_unit_key: sales_unit_key
+        sales_unit_name: sales_unit_description
+        single_multi_serve_key: single_multi_serve_key
+        single_multi_serve_name: single_multi_serve_description
+      distinct: true
+
+  - kind: write_dataio
+    name: write_ext_portfolio
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_tool
+      namespace: golden
+      object_name: product_mapping
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

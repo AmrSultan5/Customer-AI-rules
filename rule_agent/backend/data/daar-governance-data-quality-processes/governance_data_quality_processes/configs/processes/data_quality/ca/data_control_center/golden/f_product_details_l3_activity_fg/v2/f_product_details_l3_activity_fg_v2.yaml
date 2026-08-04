@@ -1,0 +1,355 @@
+transform:
+  name: f_product_details_l3_activity_fg
+  operations:
+
+# Read dm_product_check_results_activity_fg
+
+  - kind: read_dataio
+    name: read_dm_product_check_results_activity_fg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_check_results_activity_fg
+      schema_version: v2
+
+  # - kind: filter
+  #   name: filter_dm_product_check_results_activity
+  #   params:
+  #     - condition:
+  #         (check_status == '0' or check_status == '1')
+
+  - kind: select
+    name: select_dm_product_check_results_activity_fg
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code 
+        check_status: check_status
+        message_output: message_output
+        bom_number: bom_number
+        bom_material_number: bom_material_number
+        bom_component_material_flag: bom_component_material_flag
+        plant_block_status: plant_block_status
+        plant_extenstion_date: plant_extenstion_date
+        purchase_document_flag: purchase_document_flag
+        purchase_document_last_date: purchase_document_last_date
+        production_order_flag: production_order_flag
+        production_order_last_date: production_order_last_date
+        product_document_flag: product_document_flag
+        product_document_last_date: product_document_last_date
+        rule_code: rule_code
+        sales_block_status: sales_block_status
+        sales_block_date: sales_block_date
+        sales_quantity_cy_flag: sales_quantity_cy_flag
+        sales_quantity_py_flag: sales_quantity_py_flag
+        sales_quantity_ppy_flag: sales_quantity_ppy_flag
+        stock_batch: stock_batch
+        stock_blocked_quantity_flag: stock_blocked_quantity_flag
+        stock_customer_unrestricted_use_quantity_flag: stock_customer_unrestricted_use_quantity_flag
+        stock_in_country_flag: stock_in_country_flag
+        stock_in_transit_quantity_flag: stock_in_transit_quantity_flag
+        stock_in_transfer_quantity_flag: stock_in_transfer_quantity_flag
+        stock_unrestricted_quantity_flag: stock_unrestricted_quantity_flag
+        stock_quality_inspection_quantity_flag: stock_quality_inspection_quantity_flag
+        stock_vendor_flag: stock_vendor_flag
+        future_planning_flag: future_planning_flag
+        sales_order_flag: sales_order_flag
+        sales_order_last_date: sales_order_last_date
+        billing_document_flag: billing_document_flag
+        billing_document_last_date: billing_document_last_date
+        delivery_document_flag: delivery_document_flag
+        delivery_document_last_date: delivery_document_last_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read dm_product_general
+
+  - kind: read_dataio
+    name: read_dm_product_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_general
+      schema_version: v5
+
+#Select dm_product_general
+
+  - kind: add
+    name: add_dm_product_general
+    context_name: read_dm_product_general
+    params:
+      - column: material_group_code_ifnull
+        expression: ifnull(material_group_code, 'null')
+      - column: material_type_code_ifnull
+        expression: ifnull(material_type_code, 'null')
+      - column: bpp_code_ifnull
+        expression: ifnull(bpp_code, 'null')
+      - column: bpp_name_ifnull
+        expression: ifnull(bpp_name,'null' ) 
+      - column: bpp_package_name_ifnull
+        expression: ifnull(bpp_package_name,'null' )
+
+  - kind: select
+    name: select_dm_product_general
+    context_name: add_dm_product_general
+    params:
+      columns:
+        material_code: material_code
+        material_group_code_ifnull: material_group_code
+        material_type_code_ifnull: material_type_code
+        bpp_code_ifnull: bpp_code
+        bpp_name_ifnull: bpp_name
+        bpp_package_name_ifnull: bpp_package_name
+        material_description: material_description
+        creation_date: creation_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read dm_product_sales_organization
+
+  - kind: read_dataio
+    name: read_dm_product_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_sales_organization
+      schema_version: v8
+
+#Select dm_product_sales_organization
+
+  - kind: filter
+    name: filter_dm_product_sales_organization
+    params:
+      - condition:
+          distribution_channel_code = '01'
+
+  - kind: add
+    name: add_dm_product_sales_organization
+    params:
+      - column: flavour_code_ifnull
+        expression: ifnull(flavour_code, 'null')
+      - column: pack_size_code_ifnull
+        expression: ifnull(pack_size_code, 'null')
+      - column: pack_type_code_ifnull
+        expression: ifnull(pack_type_code, 'null')
+      - column: product_hierarchy_code_ifnull
+        expression: ifnull(product_hierarchy_code, 'null')
+      - column: sales_org_code_ifnull
+        expression: ifnull(sales_org_code, 'null')
+      - column: sales_unit_code_ifnull
+        expression: ifnull(sales_unit_code, 'null')
+      - column: brand_code_ifnull
+        expression: ifnull(brand_code, 'null')
+
+  - kind: select
+    name: select_dm_product_sales_organization
+    context_name: add_dm_product_sales_organization
+    params:
+      columns:
+        material_code: material_code
+        country_code: country_code
+        flavour_code_ifnull: flavour_code
+        pack_size_code_ifnull: pack_size_code
+        pack_type_code_ifnull: pack_type_code
+        product_hierarchy_code_ifnull: product_hierarchy_code
+        sales_org_code_ifnull: sales_org_code
+        sales_unit_code_ifnull: sales_unit_code
+        brand_code_ifnull: brand_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+# Read dim_product_classification
+
+  - kind: read_dataio
+    name: read_dim_product_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_product_classification
+      schema_version: v1
+
+#Select dim_product_classification
+
+  - kind: add
+    name: add_dim_product_classification
+    context_name: read_dim_product_classification
+    params:
+      - column: flavour_code_ifnull
+        expression: ifnull(flavour_code, 'null')
+      - column: material_group_code_ifnull
+        expression: ifnull(material_group_code, 'null')
+      - column: material_type_code_ifnull
+        expression: ifnull(material_type_code, 'null')
+      - column: pack_size_code_ifnull
+        expression: ifnull(pack_size_code, 'null')
+      - column: pack_type_code_ifnull
+        expression: ifnull(pack_type_code, 'null')
+      - column: product_hierarchy_code_ifnull
+        expression: ifnull(product_hierarchy_code, 'null')
+      - column: sales_unit_code_ifnull
+        expression: ifnull(sales_unit_code, 'null')
+      - column: brand_code_ifnull
+        expression: ifnull(brand_code, 'null')
+      - column: bpp_code_ifnull
+        expression: ifnull(bpp_code, 'null')
+      - column: bpp_name_ifnull
+        expression: ifnull(bpp_name,'null' ) 
+      - column: bpp_package_name_ifnull
+        expression: ifnull(bpp_package_name,'null' )
+
+  - kind: select
+    name: select_dim_product_classification
+    context_name: add_dim_product_classification
+    params:
+      columns:
+        prod_class_id: prod_class_id
+        flavour_code_ifnull: flavour_code
+        material_group_code_ifnull: material_group_code
+        material_type_code_ifnull: material_type_code
+        pack_size_code_ifnull: pack_size_code
+        pack_type_code_ifnull: pack_type_code
+        product_hierarchy_code_ifnull: product_hierarchy_code
+        sales_unit_code_ifnull: sales_unit_code
+        brand_code_ifnull: brand_code
+        bpp_code_ifnull: bpp_code
+        bpp_name_ifnull: bpp_name
+        bpp_package_name_ifnull: bpp_package_name        
+      distinct: true
+
+
+  - kind: join
+    name: join_qc_pg_pso_pu_pc
+    context_name: select_dm_product_check_results_activity_fg
+    params:
+      - other:
+          select_dm_product_general
+        how:
+          inner
+        columns:
+          material_code: material_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_product_sales_organization
+        how:
+          inner
+        columns:
+          material_code: material_code
+          country_code: country_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dim_product_classification
+        how:
+          left
+        columns:
+          flavour_code: flavour_code
+          material_group_code: material_group_code
+          material_type_code: material_type_code
+          pack_size_code: pack_size_code
+          pack_type_code: pack_type_code
+          product_hierarchy_code: product_hierarchy_code
+          sales_unit_code: sales_unit_code
+          brand_code: brand_code
+          bpp_code: bpp_code
+          bpp_name: bpp_name
+          bpp_package_name: bpp_package_name
+
+  - kind: add
+    name: add_final_columns
+    params:
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+      - column: purchase_document_last_date_format
+        expression: CAST(date_format(to_date(left(purchase_document_last_date,10),"yyyy-MM-dd"),"yyyy-MM-dd") AS timestamp)
+      - column: production_order_last_date_format
+        expression: CAST(date_format(to_date(left(production_order_last_date,10),"yyyy-MM-dd"),"yyyy-MM-dd") AS timestamp)
+      - column: product_document_last_date_format
+        expression: CAST(date_format(to_date(left(product_document_last_date,10),"yyyy-MM-dd"),"yyyy-MM-dd") AS timestamp)
+
+  - kind: select
+    name: select_dm_product_check_results_activity_final_columns
+    params:
+      columns:
+        check_status: check_status
+        country_code: country_code
+        material_code: material_code
+        loading_date: loading_date
+        creation_date: material_creation_date
+        material_description: material_description
+        message_output: message_output
+        bom_number: bom_number
+        bom_material_number: bom_material_number
+        bom_component_material_flag: bom_component_material_flag
+        plant_block_status: plant_block_status
+        plant_extenstion_date: plant_extenstion_date
+        prod_class_id: prod_class_id
+        purchase_document_flag: purchase_document_flag
+        purchase_document_last_date_format: purchase_document_last_date
+        production_order_flag: production_order_flag
+        production_order_last_date_format: production_order_last_date
+        product_document_flag: product_document_flag
+        product_document_last_date_format: product_document_last_date
+        rule_code: rule_code
+        sales_block_status: sales_block_status
+        sales_block_date: sales_block_date
+        sales_quantity_cy_flag: sales_quantity_cy_flag
+        sales_quantity_py_flag: sales_quantity_py_flag
+        sales_quantity_ppy_flag: sales_quantity_ppy_flag
+        sap_cluster: sap_cluster
+        stock_batch: stock_batch
+        stock_blocked_quantity_flag: stock_blocked_quantity_flag
+        stock_customer_unrestricted_use_quantity_flag: stock_customer_unrestricted_use_quantity_flag
+        stock_in_country_flag: stock_in_country_flag
+        stock_in_transit_quantity_flag: stock_in_transit_quantity_flag
+        stock_in_transfer_quantity_flag: stock_in_transfer_quantity_flag
+        stock_unrestricted_quantity_flag: stock_unrestricted_quantity_flag
+        stock_quality_inspection_quantity_flag: stock_quality_inspection_quantity_flag
+        stock_vendor_flag: stock_vendor_flag
+        future_planning_flag: future_planning_flag
+        sales_order_flag: sales_order_flag
+        sales_order_last_date: sales_order_last_date
+        billing_document_flag: billing_document_flag
+        billing_document_last_date: billing_document_last_date
+        delivery_document_flag: delivery_document_flag
+        delivery_document_last_date: delivery_document_last_date
+      distinct: true 
+
+  - kind: write_dataio
+    name: write_f_product_details_l3_activity_fg
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_product_details_l3_activity_fg
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full

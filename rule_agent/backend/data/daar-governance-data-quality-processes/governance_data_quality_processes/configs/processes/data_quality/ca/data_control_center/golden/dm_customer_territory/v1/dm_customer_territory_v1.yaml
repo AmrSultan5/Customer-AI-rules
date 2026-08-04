@@ -1,0 +1,222 @@
+transform:
+  name: dm_customer_territory
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+#Read zbut0000p3vvi9
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_zbut0000p3vvi9
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm     
+      namespace: customer
+      object_name: zbut0000p3vvi9
+
+#Read zterritory_c
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_zterritory_c
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm     
+      namespace: reference_data
+      object_name: zterritory_c
+
+# #Read zterritory_c_t
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_zterritory_c_t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm     
+      namespace: reference_data
+      object_name: zterritory_c_t
+
+
+#Select zbut0000p3vvi9
+
+  - kind: select
+    name: select_zbut0000p3vvi9
+    context_name: read_zbut0000p3vvi9
+    params:
+      columns:
+        partner: customer_code
+        type: territory_type
+        terrid: territory_code
+        date_from: territory_validity_from
+        date_to: territory_validity_to
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_territory_validity_to
+    params:
+      - condition:
+          territory_validity_to in('99991231235959', '99991231')
+
+  - kind: cast
+    name: cast_territory_validity_from_to
+    params:
+      - column: territory_validity_from
+        to: string
+      - column: territory_validity_to
+        to: string
+
+  - kind: add
+    name: add_territory_validity_from_to
+    params:
+      - column: territory_validity_from_to_format
+        expression: (date_format(to_date(left(territory_validity_from,8),"yyyyMMdd"),"yyyy-MM-dd"))
+      - column: territory_validity_to_to_format
+        expression: (date_format(to_date(left(territory_validity_to,8),"yyyyMMdd"),"yyyy-MM-dd"))
+
+
+# #Select zterritory_c_t_t
+
+  - kind: filter
+    name: filter_langu
+    context_name: read_zterritory_c_t
+    params:
+      - condition:
+          (langu = 'E')
+
+  - kind: select
+    name: select_zterritory_c_t_t
+    context_name: filter_langu
+    params:
+      columns:
+        territory: territory_t
+        description: territory_assignment_description_t
+        langu: langu
+        sap_cluster: sap_cluster_t
+      distinct: true
+    skip_next: false
+
+#Select zterritory_c_t2
+
+  - kind: select
+    name: select_zterritory_c_t2
+    context_name: read_zterritory_c
+    params:
+      columns:
+        terrtyp: terrtyp_t2
+        sap_cluster: sap_cluster_t2
+      distinct: true
+    skip_next: false
+
+#Select zterritory_c_t3
+
+  - kind: select
+    name: select_zterritory_c_t3
+    context_name: read_zterritory_c
+    params:
+      columns:
+        territory: territory_t3
+        sap_cluster: sap_cluster_t3
+      distinct: true
+    skip_next: false
+#Select zterritory_c_t4
+
+  - kind: select
+    name: select_zterritory_c_t4
+    context_name: read_zterritory_c
+    params:
+      columns:
+        territory: territory_t4
+        terrtyp: terrtyp_t4
+        sap_cluster: sap_cluster_t4
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_zb_t_t2_t3_t4
+    context_name: add_territory_validity_from_to
+    params:
+      - other:
+          select_zterritory_c_t_t
+        how:
+          left
+        columns:
+          territory_code: territory_t
+          sap_cluster: sap_cluster_t
+      - other:
+          select_zterritory_c_t2
+        how:
+          left
+        columns:
+          territory_type: terrtyp_t2
+          sap_cluster: sap_cluster_t2
+      - other:
+          select_zterritory_c_t3
+        how:
+          left
+        columns:
+          territory_code: territory_t3
+          sap_cluster: sap_cluster_t3
+      - other:
+          select_zterritory_c_t4
+        how:
+          left
+        columns:
+          territory_type: terrtyp_t4
+          territory_code: territory_t4
+          sap_cluster: sap_cluster_t4
+
+
+
+  - kind: add
+    name: add_is_territory_type_code_allowed
+    params:
+      - column: is_territory_type_allowed
+        expression: "CASE WHEN terrtyp_t2 IS NOT NULL THEN '1' ELSE '0' END"
+      - column: is_territory_code_allowed
+        expression: "CASE WHEN territory_t3 IS NOT NULL THEN '1' ELSE '0' END"
+      - column: is_territory_mapping_allowed
+        expression: "CASE WHEN territory_t4 IS NOT NULL THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_dm_customer_territory_final
+    params:
+      columns:
+        customer_code: customer_code
+        territory_type: territory_type
+        territory_code: territory_code
+        territory_validity_from_to_format: territory_validity_from
+        territory_validity_to_to_format: territory_validity_to
+        territory_assignment_description_t: territory_assignment_description
+        is_territory_type_allowed: is_territory_type_allowed
+        is_territory_code_allowed: is_territory_code_allowed
+        is_territory_mapping_allowed: is_territory_mapping_allowed
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_customer_territory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_territory
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

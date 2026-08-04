@@ -1,0 +1,681 @@
+transform:
+  name: dunning_procedure
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_partner
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dunning_reference
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: dunning_reference
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_c1
+    context_name: read_dm_customer
+    params:
+      - condition:
+          customer_group_4_code in('AWM', 'DE', 'DI', 'DTS', 'WH', 'DEC', 'WHN', 'ECS') 
+          and division_code = '01' 
+          and distribution_channel_code = '01'
+
+  - kind: filter
+    name: filter_dm_cust_hierarchy
+    context_name: read_dm_cust_hierarchy
+    params:
+      - condition:
+          l2_customer_code in('KA', 'NK')
+
+  - kind: filter
+    name: filter_dm_customer_partner
+    context_name: read_dm_customer_partner
+    params:
+      - condition:
+          partner_function_code = 'RG'
+          and division_code = '01' 
+          and distribution_channel_code = '01'
+
+  - kind: select
+    name: select_dm_customer_c1
+    context_name: filter_dm_customer_c1
+    params:
+      columns:
+        customer_code: customer_code_c1
+        customer_name: customer_name_c1
+        account_group_code: account_group_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code
+        company_code: company_code
+        dunning_procedure_code: dunning_procedure_code
+        dunning_procedure_name: dunning_procedure_name
+        dunning_block_code: dunning_block_code
+        dunning_block_name: dunning_block_name
+        open_balance_value: open_balance_value
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c2
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c3
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c3
+        customer_name: customer_name_c3
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_cust_hierarchy
+    context_name: filter_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l2_customer_code: l2_customer_code
+        l7_sales_org_code: l7_sales_org_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_org_hierarchy
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        sales_org_code: sales_org_code
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dunning_reference
+    context_name: read_dunning_reference
+    params:
+      columns:
+        sales_org_code: sales_org_code
+        account_group_code: account_group_code
+        ka_dunning_block: ka_dunning_block
+        default_dunning_procedure: default_dunning_procedure
+        nka_dunning_procedure: nka_dunning_procedure
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_partner
+    context_name: filter_dm_customer_partner
+    params:
+      columns:
+        customer_code: customer_code_cp
+        partner_code: partner_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_du_dunning_procedure
+    context_name: select_dm_customer_c1
+    params:
+      - other:
+          select_dm_org_hierarchy
+        how:
+          inner
+        columns:
+          sales_org_code: sales_org_code
+      - other:
+          select_dm_cust_hierarchy
+        how:
+          left
+        columns:
+          customer_code_c1: l7_customer_code
+          sales_org_code: l7_sales_org_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c2
+        how:
+          inner
+        columns:
+          l2_customer_code: customer_code_c2
+          sap_cluster: sap_cluster
+      - other:
+          select_dunning_reference
+        how:
+          inner
+        columns:
+          sales_org_code: sales_org_code
+          account_group_code: account_group_code
+      - other:
+          select_dm_customer_partner
+        how:
+          inner
+        columns:
+          customer_code_c1: customer_code_cp
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c3
+        how:
+          left
+        columns:
+          partner_code: customer_code_c3
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_du_dunning_procedure
+    context_name: join_du_dunning_procedure
+    params:
+      - column: dunning_block_missing_check_flag
+        expression: if((isnull(dunning_block_code) or dunning_block_code = '') 
+                    and customer_code_c2 = 'KA' and ka_dunning_block <> 'NOT APPLICABLE', '0', 
+                    if((customer_code_c2 = 'KA' and ka_dunning_block <> 'NOT APPLICABLE')
+                    or customer_code_c2 = 'NK', null, 
+                    '1'))
+      - column: dunning_procedure_missing_check_flag
+        expression: if(isnull(dunning_procedure_code) or dunning_procedure_code = '', '0', '1')
+      - column: dunning_procedure_accuracy_check_flag
+        expression: if(isnull(dunning_procedure_missing_check_flag), null,
+                    if((dunning_procedure_missing_check_flag = '1' 
+                    and sales_org_code = '6100' 
+                    and customer_code_c2 = 'KA' 
+                    and dunning_procedure_code = default_dunning_procedure)
+                    or (dunning_procedure_missing_check_flag = '1' 
+                    and sales_org_code = '6100' 
+                    and customer_code_c2 = 'NK' 
+                    and dunning_procedure_code = nka_dunning_procedure), '1', 
+                    if(dunning_procedure_missing_check_flag = '1' 
+                    and dunning_procedure_code = default_dunning_procedure, '1', 
+                    '0')))
+
+  - kind: select
+    name: select_du_dunning_procedure
+    context_name: add_du_dunning_procedure
+    params:
+      columns:
+        customer_code_c1: customer_code
+        customer_name_c1: customer_name
+        account_group_code: account_group_code
+        customer_code_c2: customer_hier_2_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code
+        company_code: company_code
+        country_code: country_code
+        dunning_procedure_code: dunning_procedure_code
+        dunning_procedure_name: dunning_procedure_name
+        dunning_block_code: dunning_block_code
+        dunning_block_name: dunning_block_name
+        partner_code: payer_code
+        customer_name_c3: payer_name
+        dunning_block_missing_check_flag: dunning_block_missing_check_flag
+        dunning_procedure_missing_check_flag: dunning_procedure_missing_check_flag
+        dunning_procedure_accuracy_check_flag: dunning_procedure_accuracy_check_flag
+        open_balance_value: open_balance_value
+      distinct: true
+
+#GROUP 1 Dunning Block completeness
+
+  - kind: add
+    context_name: select_du_dunning_procedure
+    name: add_dq_message_output
+    params:
+      - column: group_name
+        expression: '"Dunning Block"'
+      - column: quality_category
+        expression: '"completeness"'
+      - column: dq_message_output
+        expression: IF(dunning_block_missing_check_flag = '0', 'Missing Dunning Block', IF(dunning_block_missing_check_flag = '1', 'OK','N/A'))
+
+  - kind: select
+    name: select_Dunning_Block_Completeness
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        account_group_code: account_group_code
+        customer_hier_2_code: customer_hier_2_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code
+        country_code: country_code
+        company_code: company_code
+        dunning_procedure_code: dunning_procedure_code
+        dunning_procedure_name: dunning_procedure_name
+        dunning_block_code: dunning_block_code
+        dunning_block_name: dunning_block_name
+        payer_code: payer_code
+        payer_name: payer_name
+        dunning_block_missing_check_flag: check_flag
+        group_name: group_name
+        quality_category: quality_category
+        dq_message_output: dq_message_output
+        open_balance_value: open_balance_value
+      distinct: true
+
+#GROUP 2  Dunning Procedure completeness
+
+  - kind: add
+    context_name: select_du_dunning_procedure
+    name: add_dq_message_output
+    params:
+      - column: group_name
+        expression: '"Dunning Procedure"'
+      - column: quality_category
+        expression: '"completeness"'
+      - column: dq_message_output
+        expression: IF(dunning_procedure_missing_check_flag  = 0, 'Missing Dunning Procedure',  IF(dunning_procedure_missing_check_flag = '1', 'OK','N/A'))
+
+  - kind: select
+    name: select_Dunning_Procedure_Completeness
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        account_group_code: account_group_code
+        customer_hier_2_code: customer_hier_2_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code
+        country_code: country_code
+        company_code: company_code
+        dunning_procedure_code: dunning_procedure_code
+        dunning_procedure_name: dunning_procedure_name
+        dunning_block_code: dunning_block_code
+        dunning_block_name: dunning_block_name
+        payer_code: payer_code
+        payer_name: payer_name
+        dunning_procedure_missing_check_flag: check_flag
+        group_name: group_name
+        quality_category: quality_category
+        dq_message_output: dq_message_output
+        open_balance_value: open_balance_value
+      distinct: true
+
+# #GROUP 3  Dunning Procedure accuracy
+
+  - kind: add
+    context_name: select_du_dunning_procedure
+    name: add_dq_message_output
+    params:
+      - column: group_name
+        expression: '"Dunning Procedure"'
+      - column: quality_category
+        expression: '"accuracy"'
+      - column: check_flag
+        expression: IF(dunning_procedure_missing_check_flag = '1' and dunning_procedure_accuracy_check_flag  = 0, '0', IF(dunning_procedure_missing_check_flag = '1' and dunning_procedure_accuracy_check_flag  = '1', '1',IF(dunning_procedure_missing_check_flag = '0','', '')))
+      - column: dq_message_output
+        expression: IF(dunning_procedure_missing_check_flag = '1' and dunning_procedure_accuracy_check_flag  = 0, 'Wrong Dunning Procedure', IF(dunning_procedure_missing_check_flag = '1' and dunning_procedure_accuracy_check_flag  = '1', 'OK', 'N/A'))
+
+
+  - kind: select
+    name: select_Dunning_Procedure_Accuracy
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        account_group_code: account_group_code
+        customer_hier_2_code: customer_hier_2_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sales_org_code: sales_org_code
+        country_code: country_code
+        company_code: company_code
+        dunning_procedure_code: dunning_procedure_code
+        dunning_procedure_name: dunning_procedure_name
+        dunning_block_code: dunning_block_code
+        dunning_block_name: dunning_block_name
+        payer_code: payer_code
+        payer_name: payer_name
+        check_flag: check_flag
+        group_name: group_name
+        quality_category: quality_category
+        dq_message_output: dq_message_output
+        open_balance_value: open_balance_value
+      distinct: true
+
+
+
+  - kind: union
+    name: union_group_1_completeness_group_2_completeness
+    context_name: select_Dunning_Block_Completeness
+    params:
+        allow_missing: false
+        by_name: true
+        other: select_Dunning_Procedure_Completeness
+
+
+  - kind: union
+    name: union_group_2_completeness_group_3_accuracy
+    context_name: union_group_1_completeness_group_2_completeness
+    params:
+        allow_missing: false
+        by_name: true
+        other: select_Dunning_Procedure_Accuracy
+
+      
+
+  # - kind: filter
+  #   name: filter_pal
+  #   params:
+  #     - condition:
+  #         customer_code = '2401972658'
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: dunning_procedure
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full
+
+#   ## AGGREGATED LAYER
+
+#   #GROUP 1 completeness
+
+  - kind: add
+    context_name: union_group_2_completeness_group_3_accuracy  
+    name: add_aggregated_group_1_completeness
+    params:
+      - column: total_records
+        expression: IF(customer_code != '', 1, NULL)
+      - column: total_checks
+        expression: IF(customer_code != '', 1, NULL)
+      - column: invalid_records
+        expression: IF(check_flag  = '0' , 1, NULL)
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, " - ", customer_group_4_name)
+
+  - kind: filter
+    name: filter_G1
+    params:
+      - condition:
+          group_name = 'Dunning Block' and quality_category = 'completeness'
+
+
+  - kind: group
+    name: group_group_1_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - customer_group_4_code
+        - customer_group_4_name
+        - customer_group_4
+        - customer_hier_2_code
+        - group_name
+        - quality_category
+
+  - kind: select
+    name: select_G1
+    context_name: group_group_1_completeness
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        customer_hier_2_code: customer_hier_2_code
+        group_name: group_name
+        quality_category: quality_category
+        count_total_records: total_records1
+        count_total_checks: total_checks1
+        count_invalid_records: failed_checks1
+      distinct: true       
+
+
+#   #GROUP 2 completeness
+
+  - kind: add
+    context_name: union_group_2_completeness_group_3_accuracy  
+    name: add_aggregated_group_1_completeness
+    params:
+      - column: total_records
+        expression: IF(customer_code != '', 1, NULL)
+      - column: total_checks
+        expression: IF(customer_code != '', 1, NULL)
+      - column: invalid_records
+        expression: IF(check_flag  = '0' , 1, NULL)
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, " - ", customer_group_4_name)
+
+  - kind: filter
+    name: filter_G2
+    params:
+      - condition:
+          group_name = 'Dunning Procedure' and quality_category = 'completeness'
+
+
+  - kind: group
+    name: group_group_2_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - customer_group_4_code
+        - customer_group_4_name
+        - customer_group_4
+        - customer_hier_2_code
+        - group_name
+        - quality_category
+
+  - kind: select
+    name: select_G2
+    context_name: group_group_2_completeness
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        customer_hier_2_code: customer_hier_2_code
+        group_name: group_name
+        quality_category: quality_category
+        count_total_records: total_records1
+        count_total_checks: total_checks1
+        count_invalid_records: failed_checks1
+      distinct: true       
+
+
+#GROUP 3 Accuracy
+
+  - kind: add
+    context_name: union_group_2_completeness_group_3_accuracy  
+    name: add_aggregated_group_3_Accuracy
+    params:
+      - column: total_records
+        expression: IF(customer_code != '', 1, NULL)
+      - column: total_checks
+        expression: IF(customer_code != '', 1, NULL)
+      - column: invalid_records
+        expression: IF(check_flag  = '0' , 1, NULL)
+      - column: customer_group_4
+        expression: IF(customer_group_4_code != '' and customer_group_4_name != '', CONCAT(customer_group_4_code, ' - ', customer_group_4_name),'lack of CG4')
+
+  - kind: filter
+    name: filter_G2
+    params:
+      - condition:
+          group_name = 'Dunning Procedure' and quality_category = 'accuracy'
+
+
+  - kind: group
+    name: group_group_2_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_records: count
+        by:
+        - country_code
+        - customer_group_4_code
+        - customer_group_4_name
+        - customer_group_4
+        - customer_hier_2_code
+        - group_name
+        - quality_category
+
+  - kind: select
+    name: select_G3
+    context_name: group_group_2_completeness
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        customer_hier_2_code: customer_hier_2_code
+        group_name: group_name
+        quality_category: quality_category
+        count_total_records: total_records1
+        count_total_checks: total_checks1
+        count_invalid_records: failed_checks1
+      distinct: true       
+
+
+
+
+
+  - kind: union
+    name: union_g1_completeness_g2_completeness
+    context_name: select_G1
+    params:
+        allow_missing: false
+        by_name: true
+        other: select_G2
+
+
+
+
+
+  - kind: union
+    name: union_g2_completeness_g3_completeness
+    context_name: union_g1_completeness_g2_completeness
+    params:
+        allow_missing: false
+        by_name: true
+        other: select_G3
+
+
+  - kind: add
+    name: add_customer_loading_date
+    params:
+    - column: failed_checks
+      expression: CAST(failed_checks1 AS INT)
+    - column: loading_date
+      expression: CAST(current_date() AS DATE)
+    - column: total_checks
+      expression: CAST(total_checks1 AS INT)
+    - column: total_records
+      expression: CAST(total_records1 AS INT)
+
+
+  - kind: select
+    name: select_AGG
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        customer_hier_2_code: customer_hier_2_code
+        group_name: group_name
+        quality_category: quality_category
+        total_records: total_records
+        total_checks: total_checks
+        failed_checks: failed_checks
+        loading_date: loading_date
+      distinct: true       
+
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: dunning_procedure
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

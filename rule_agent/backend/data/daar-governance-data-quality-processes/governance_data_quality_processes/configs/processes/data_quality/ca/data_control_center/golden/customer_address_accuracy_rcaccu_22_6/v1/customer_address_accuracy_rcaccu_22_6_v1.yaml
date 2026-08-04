@@ -1,0 +1,334 @@
+transform:
+  name: customer_address_accuracy
+  operations:
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: read_dataio
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: select
+    name: select_dcg
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        central_order_block_code: central_order_block_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        city: city
+        latitude: latitude
+        longitude: longitude
+        post_code: post_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dca_dcg
+    context_name: select_dca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: read_dataio
+    name: read_conf_city_bbox
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_city_bbox
+
+  - kind: add
+    name: add_bbox_fields
+    context_name: read_conf_city_bbox
+    params:
+      - column: bbox_country_code
+        expression: if(city in('WIEN'), '''AT''', 
+                    if(city in('SARAJEVO'), '''BA''', 
+                    if(city in('СОФИЯ'), '''BG''', 
+                    if(city in('ZÜRICH'), '''CH''', 
+                    if(city in('PRAHA'), '''CH''', 
+                    if(city in('ΑΘΗΝΑ'), '''GR''', 
+                    if(city in('ZAGREB'), '''HR''', 
+                    if(city in('BUDAPEST'), '''HU''', 
+                    if(city in('DUBLIN'), '''IE''', 
+                    if(city in('MILANO', 'NAPOLI', 'ROMA', 'TORINO'), '''IT''', 
+                    if(city in('RĪGA'), '''LV''', 
+                    if(city in('KRAKÓW', 'WARSZAWA'), '''PL''', 
+                    if(city in('BRATISLAVA'), '''SK''', 
+                    if(city in('LJUBLJANA'), '''SI''', 
+                    if(city in('BEOGRAD'), '''RS''', 
+                    if(city in('BUCURESTI'), '''RO''', ''''''))))))))))))))))
+
+  - kind: select
+    name: select_bbox
+    context_name: add_bbox_fields
+    params:
+      columns:
+        city: bbox_city
+        bbox_country_code: bbox_country_code
+        min_lat: min_lat
+        max_lat: max_lat
+        min_lon: min_lon
+        max_lon: max_lon
+      distinct: true
+
+  - kind: governance_data_quality_processes.custom_operations.custom_join.join_inbox.JoinInboxOperation
+    name: join_inbox
+    context_name: join_dca_dcg
+    config_kind: governance_data_quality_processes.custom_operation_configs.custom_join.join_inbox_config.JoinInboxOperationConfig
+    params:
+      - other:
+          select_bbox
+        how:
+          inner
+        columns:
+          city: bbox_city
+          latitude: min_lat
+          latitude: max_lat
+          longitude: min_lon
+          longitude: max_lon
+          country_code: bbox_country_code
+
+  - kind: add
+    name: add_type_inbox
+    context_name: join_inbox
+    params:
+      - column: similarity_type
+        expression: '''inbox'''
+
+  - kind: governance_data_quality_processes.custom_operations.custom_join.join_outbox.JoinOutboxOperation
+    name: join_outbox
+    context_name: join_dca_dcg
+    config_kind: governance_data_quality_processes.custom_operation_configs.custom_join.join_outbox_config.JoinOutboxOperationConfig
+    params:
+      - other:
+          select_bbox
+        how:
+          inner
+        columns:
+          city: bbox_city
+          latitude: min_lat
+          latitude: max_lat
+          longitude: min_lon
+          longitude: max_lon
+          country_code: bbox_country_code
+
+  - kind: add
+    name: add_type_outbox
+    context_name: join_outbox
+    params:
+      - column: similarity_type
+        expression: '''outbox'''
+
+  - kind: governance_data_quality_processes.custom_operations.custom_join.join_inbox_city.JoinInboxCityOperation
+    name: join_inbox_city
+    context_name: join_dca_dcg
+    config_kind: governance_data_quality_processes.custom_operation_configs.custom_join.join_inbox_city_config.JoinInboxCityOperationConfig
+    params:
+      - other:
+          select_bbox
+        how:
+          inner
+        columns:
+          city: bbox_city
+          latitude: min_lat
+          latitude: max_lat
+          longitude: min_lon
+          longitude: max_lon
+          country_code: bbox_country_code
+
+  - kind: add
+    name: add_type_inbox_city
+    context_name: join_inbox_city
+    params:
+      - column: similarity_type
+        expression: '''inbox with similarity'''
+
+  - kind: union
+    name: union_joins
+    context_name: add_type_inbox
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_type_outbox
+
+  - kind: union
+    name: union_joins
+    context_name: union_joins
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_type_inbox_city
+
+  - kind: add
+    name: add_calculations
+    params:
+      - column: suppressed
+        expression: if(bbox_city in('WIEN'), '''S,S3,S4,SY,M,E,R,SP,G,WH''', 
+                    if(bbox_city in('SARAJEVO'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('СОФИЯ'), '''S,S3,S4,SY,E,G,SP', 
+                    if(bbox_city in('ZÜRICH'), '''S, S3,S4,SY''', 
+                    if(bbox_city in('PRAHA'), '''S,S3,S4,SY,E,G,S1,SP,U,M,NH''', 
+                    if(bbox_city in('ΑΘΗΝΑ'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('ZAGREB'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('BUDAPEST'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('DUBLIN'), '''S,S3,S4,SY,NH,E,G,SP,U''', 
+                    if(bbox_city in('MILANO', 'NAPOLI', 'ROMA', 'TORINO'), '''S,S3,S4,SY,NH,E,G,SP,U''', 
+                    if(bbox_city in('RĪGA'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('KRAKÓW', 'WARSZAWA'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('BRATISLAVA'), '''S,S3,S4,SY,E,G,S1,SP,U,M,NH''', 
+                    if(bbox_city in('LJUBLJANA'), '''S,S3,S4,SY''', 
+                    if(bbox_city in('BEOGRAD'), '''S,S3,S4,SY,E,G,SP''', 
+                    if(bbox_city in('BUCURESTI'), '''S,S3,S4,SY''', ''''''))))))))))))))))
+      - column: is_suppressed
+        expression: array_contains(split(suppressed, ','), central_order_block_code)
+      - column: central_point_lat
+        expression: (min_lat + max_lat) / 2
+      - column: central_poin_lon
+        expression: (min_lon + max_lon) / 2
+      - column: r_latitude
+        expression: radians(latitude)
+      - column: r_central_point_lat
+        expression: radians(central_point_lat)
+      - column: r_longitude
+        expression: radians(longitude)
+      - column: r_central_poin_lon
+        expression: radians(central_poin_lon)
+      - column: difference_latitude
+        expression: r_central_point_lat - r_latitude
+      - column: difference_longitude
+        expression: r_central_poin_lon - r_longitude
+      - column: angle
+        expression: power(sin(difference_latitude/2),2) + cos(r_latitude) * cos(r_central_point_lat) * power(sin(difference_longitude/2),2)
+      - column: distance
+        expression: 2 * atan2(sqrt(angle), sqrt(1-angle))
+      - column: radius
+        expression: double(6371)
+      - column: haversine
+        expression: distance * radius
+      - column: r_max_lat
+        expression: radians(max_lat)
+      - column: r_max_lon
+        expression: radians(max_lon)
+      - column: dlat_corner
+        expression: r_max_lat - r_central_point_lat
+      - column: dlon_corner
+        expression: r_max_lon - r_central_poin_lon
+      - column: angle_corner
+        expression: power(sin(dlat_corner/2),2) + cos(r_central_point_lat) * cos(r_max_lat) * power(sin(dlon_corner/2),2)
+      - column: distance_corner
+        expression: 2 * atan2(sqrt(angle_corner), sqrt(1 - angle_corner))
+      - column: haversine
+        expression: distance * radius
+      - column: haversine_ref
+        expression: distance_corner * radius
+      - column: levenshtein_distance_l
+        expression: levenshtein(upper(city), bbox_city)
+      - column: levenshtein_distance_r
+        expression: levenshtein(bbox_city, upper(city))
+      - column: levenshtein_distance
+        expression: int((levenshtein_distance_l + levenshtein_distance_r) / 2)
+      - column: city_first_token
+        expression: substring_index(city, ' ', 1)
+
+  - kind: group
+    name: group_least_haversine
+    params:
+      - aggs:
+          levenshtein_distance: min
+        by:
+        - customer_code
+
+  - kind: join
+    name: join_correct_city
+    context_name: add_calculations
+    params:
+      - other:
+          group_least_haversine
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          levenshtein_distance: min_levenshtein_distance
+
+  - kind: add
+    name: add_check
+    context_name: join_correct_city
+    params:
+      - column: advanced_message
+        expression: if(similarity_type = 'outbox' and levenshtein_distance <= 2 and haversine >= haversine_ref, concat_ws('', 'Lat/Lon out of ', bbox_city, ' area, but City name is it or likewise (',
+                    levenshtein_distance, ' letters differences)'), 
+                    if(similarity_type = 'inbox' and haversine <= 0.5, concat_ws('', 'Distance2Center within ', round(haversine, 0), 'KM (very near), but City name has ',
+                    levenshtein_distance, ' letters differences vs ', bbox_city), 
+                    if(similarity_type = 'inbox' and haversine <= 1, concat_ws('', 'Distance2Center within ', round(haversine, 0), 'KM (near), but City name has ',
+                    levenshtein_distance, ' letters differences vs ', bbox_city), 
+                    if(similarity_type = 'inbox', concat_ws('', 'Distance2Center within ', round(haversine, 0), 'KM (borderline), but City name has ',
+                    levenshtein_distance, ' letters differences vs ', bbox_city), 
+                    if(similarity_type = 'inbox with similarity', 'OK', 
+                    '')))))
+      - column: value_checked
+        expression: concat_ws(', ', city, post_code)
+      - column: check_date
+        expression: current_timestamp()
+      - column: rule_code
+        expression: "'RCACCU_22.6'"
+      - column: check_status
+        expression: if(similarity_type = 'outbox' and levenshtein_distance <= 2 and haversine >= haversine_ref, '0', 
+                    if(similarity_type = 'inbox' and haversine <= 0.5, '0', 
+                    if(similarity_type = 'inbox' and haversine <= 1, '0', 
+                    if(similarity_type = 'inbox', '1', 
+                    if(similarity_type = 'inbox with similarity', '1', 
+                    '')))))
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        advanced_message: check_details_message
+        check_date: check_date
+      distinct: true

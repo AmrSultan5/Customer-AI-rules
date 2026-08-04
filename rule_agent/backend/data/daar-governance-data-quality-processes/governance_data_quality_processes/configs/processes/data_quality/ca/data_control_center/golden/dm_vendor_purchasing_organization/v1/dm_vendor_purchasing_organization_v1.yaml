@@ -1,0 +1,272 @@
+transform:
+  name: dm_vendor_purchasing_organization
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfa1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfa1
+
+  - kind: filter
+    name: filter_lfa1
+    context_name: read_lfa1
+    params:
+        - condition: (ifnull(SPERR,'') <> 'X' OR ifnull(SPERM,'') <> 'X' OR ifnull(LOEVM,'') <> 'X') AND KTOKK IN('4000', '9000', '2000', '3000', '7000')
+
+  - kind: select
+    name: select_lfa1
+    context_name: filter_lfa1
+    params:
+      columns:
+        lifnr: lifnr
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfm1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfm1
+
+  - kind: filter
+    name: filter_lfm1
+    context_name: read_lfm1
+    params:
+        - condition: ZZPREFVEND IS NOT NULL AND (ifnull(SPERM,'') <> 'X' OR ifnull(LOEVM,'') <> 'X' )
+
+  - kind: select
+    name: select_lfm1
+    context_name: filter_lfm1
+    params:
+      columns:
+        lifnr: lifnr
+        zterm: zterm
+        vsbed: vsbed
+        ekorg: ekorg
+        bstae: bstae
+        waers: waers
+        minbw: minbw
+        kalsk: kalsk
+        plifz: plifz
+        eikto: eikto
+        sperm: sperm
+        loevm: loevm
+        zzprefvend: zzprefvend
+        expvz: mode_of_transport_for_foreign_trade
+        inco1: incoterms_part_1
+        inco2: incoterms_part_2_city
+        kzaut: automatic_purchase_order_flag
+        lebre: service_based_invoice_verification_flag
+        lfabc: abc_indicator
+        libes: order_entry_by_vendor_flag
+        telf1: vendor_telephone_number
+        verkf: vendor_salesperson
+        webre: gr_based_invoice_verification_flag
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t052u
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t052u
+
+  - kind: filter
+    name: filter_t052u
+    context_name: read_t052u
+    params:
+        - condition: SPRAS = 'E'
+
+  - kind: select
+    name: select_t052u
+    context_name: filter_t052u
+    params:
+      columns:
+        zterm: zterm
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t024e
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t024e
+
+  - kind: select
+    name: select_t024e
+    context_name: read_t024e
+    params:
+      columns:
+        ekorg: ekorg
+        ekotx: ekotx
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t163m
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t163m
+
+  - kind: filter
+    name: filter_t163m
+    context_name: read_t163m
+    params:
+        - condition: SPRAS = 'E'
+
+  - kind: select
+    name: select_t163m
+    context_name: filter_t163m
+    params:
+      columns:
+        bstae: bstae
+        bsbez: bsbez
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_purch_org_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: purch_org_mapping
+
+  - kind: select
+    name: select_purch_org_mapping
+    context_name: read_purch_org_mapping
+    params:
+      columns:
+        purch_org_code: purch_org_code
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_vendor
+    context_name: select_lfa1
+    params:
+      - other:
+          select_lfm1
+        how:
+          inner
+        columns:
+          lifnr: lifnr
+      - other:
+          select_t052u
+        how:
+          left
+        columns:
+          zterm: zterm
+      - other:
+          select_t024e
+        how:
+          left
+        columns:
+          ekorg: ekorg
+      - other:
+          select_t163m
+        how:
+          left
+        columns:
+          bstae: bstae
+      - other:
+          select_purch_org_mapping
+        how:
+          inner
+        columns:
+          ekorg: purch_org_code
+
+  - kind: cast
+    name: cast_cols
+    params:
+      - column: minbw
+        to: decimal(13,2)
+      - column: plifz
+        to: decimal(3,0)
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        lifnr: vendor_code
+        ekorg: purchasing_organization_code
+        ekotx: purchasing_organization_name
+        zterm: terms_of_payment_code_purchasing_org
+        waers: purchase_order_currency
+        minbw: minimum_order_value
+        kalsk: group_of_calculation_schema
+        plifz: planned_delivery_time
+        bstae: confirmation_control_code
+        bsbez: confirmation_control_description
+        eikto: account_with_vendor
+        sperm: po_level_purchasing_block
+        loevm: po_level_deletion_flag
+        zzprefvend: preferred_vendor
+        mode_of_transport_for_foreign_trade: mode_of_transport_for_foreign_trade
+        incoterms_part_1: incoterms_part_1
+        incoterms_part_2_city: incoterms_part_2_city
+        automatic_purchase_order_flag: automatic_purchase_order_flag
+        service_based_invoice_verification_flag: service_based_invoice_verification_flag
+        abc_indicator: abc_indicator
+        order_entry_by_vendor_flag: order_entry_by_vendor_flag
+        vendor_telephone_number: vendor_telephone_number
+        vendor_salesperson: vendor_salesperson
+        gr_based_invoice_verification_flag: gr_based_invoice_verification_flag
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

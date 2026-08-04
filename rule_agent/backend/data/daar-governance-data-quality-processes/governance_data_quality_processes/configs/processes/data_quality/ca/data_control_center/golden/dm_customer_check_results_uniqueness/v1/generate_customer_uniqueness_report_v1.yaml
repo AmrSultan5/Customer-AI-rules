@@ -1,0 +1,186 @@
+transform:
+  name: Generate Customer Uniqueness Report
+  operations:
+
+  - kind: read_dataio
+    name: df_equipment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_equipment
+      schema_version: v4
+
+  - kind: read_dataio
+    name: df_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: read_dataio
+    name: df_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: read_dataio
+    name: df_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+      schema_version: v3
+
+  - kind: read_dataio
+    name: df_customer_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_contact
+      schema_version: v2
+
+  - kind: read_dataio
+    name: df_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+      schema_version: v3
+
+  - kind: read_dataio
+    name: df_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dim_rules_inventory
+      schema_version: v7
+
+  - kind: read_dataio
+    name: df_last_visit
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        storage_id: '{{dataio.storage_id}}'
+        layer: udm
+      namespace: mtc
+      domain: datamart
+      object_name: fsm001_field_sales_activities
+      schema_version: v1
+
+  - kind: read_dataio
+    name: df_last_order
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        storage_id: '{{dataio.storage_id}}'
+        layer: udm
+      namespace: mtc
+      domain: cchbc
+      object_name: ca_sd_97m_perfect_order
+      schema_version: v2
+
+  - kind: read_dataio
+    name: df_customer_pi
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: cacus03pi_customer_pi
+      schema_version: v1
+
+  - kind: read_dataio
+    name: df_customer_master
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        storage_id: '{{dataio.storage_id}}'
+        layer: udm
+      namespace: md
+      domain: cchbc
+      object_name: ca_0_cus03_customer
+      schema_version: v3
+
+  - kind: read_dataio
+    name: df_customer_activeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_check_results_activeness
+      schema_version: v4
+
+  - name: df_customer_base
+    kind: governance_data_quality_processes.custom_operations.data_quality.data_control_center.dm_customer_uniqueness.generate_base_table_for_customer_matching.GenerateBaseTableForCustomerUniquenessOperation
+
+  - name: df_duplicated_customers
+    kind: governance_data_quality_processes.custom_operations.data_quality.data_control_center.dm_customer_uniqueness.identify_duplicated_customers.IdentifyDuplicatedCustomersOperation
+
+  - name: df_customer_uniqueness_report
+    kind: governance_data_quality_processes.custom_operations.data_quality.data_control_center.dm_customer_uniqueness.prepare_duplicated_customers_report.PrepareDuplicatedCustomersReportOperation
+
+  - kind: write_dataio
+    name: write_customer_uniqueness_report
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_check_results_uniqueness
+      process_run_id: "{{process_run_id}}"
+      schema_version: v5
+      refresh_mode: full

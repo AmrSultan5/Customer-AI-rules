@@ -1,0 +1,154 @@
+transform:
+  name: detailed
+  operations:
+  - kind: read_dataio
+    name: read_du
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: geo_coordinates_basic_checks
+      schema_version: v1
+
+  - kind: add
+    name: add_dq_message_output
+    params:
+      - column: dq_message_output
+        expression: " CASE WHEN latitude IS NULL OR longitude IS NULL THEN 'Missing GEO coordinates' WHEN latitude = 0 OR longitude = 0 or longitude = latitude THEN 'Wrong GEO coordinates' WHEN longitude > latitude AND sales_org_code NOT IN (9600, 9400, 4700) THEN 'Check if latitude is not in place of longitude' WHEN longitude > latitude AND sales_org_code IN (9600, 9400, 4700) THEN 'N/A' ELSE 'OK' END"
+
+  - kind: select
+    name: select_detailed
+    params:
+      columns:
+        customer_code: customer_code
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_name: customer_name
+        country_code: country_code
+        sap_cluster: sap_cluster
+        customer_hier_3_name: customer_hier_3_name
+        customer_hier_4_name: customer_hier_4_name
+        sales_org_code: sales_org_code
+        latitude: latitude
+        longitude: longitude
+        street_name: street_name
+        house_number: house_number
+        house_number_supplement: house_number_supplement
+        post_code: post_code
+        city: city
+        region: region
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_4_code: customer_hier_4_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        dq_message_output: dq_message_output
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: geo_coordinates_basic_checks
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+## AGGREGATED LAYER
+
+  - kind: read_dataio
+    name: read_detailed
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: geo_coordinates_basic_checks
+      namespace: golden
+      object_name: detailed_status
+      schema_version: v1
+
+  - kind: add
+    name: add_replace_null_with_empty
+    params:
+      - column: customer_group_4_name
+        expression: if(customer_group_4_name is null, '', customer_group_4_name)
+        overwrite: true
+      - column: customer_group_4_code
+        expression: if(customer_group_4_code is null, '', customer_group_4_code)
+        overwrite: true
+
+  - kind: add
+    name: add_customer_loading_date
+    params:
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, '-', customer_group_4_name)
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: IF(dq_message_output != 'OK' AND dq_message_output  != 'N/A', 1, NULL)
+      - column: total_checks
+        expression: CAST(1 AS INT)
+
+  - kind: group
+    name: group_total_invalid_checks
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - country_code
+        - customer_group_4_code
+        - customer_group_4_name
+        - customer_group_4
+        - loading_date
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_checks
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        loading_date: loading_date
+        invalid_checks: invalid_checks
+        total_checks: total_checks
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: geo_coordinates_basic_checks
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,243 @@
+transform:
+  name: vendor_purchasing_completeness
+  operations:
+
+# ── RVCOMP_244.1  Missing ABC Indicator
+# ── RVCOMP_245.1  Missing Preferred Vendor Code
+# ── RVCOMP_261.1  Missing Currency of Vendor
+# ── RVCOMP_262.1  Missing Terms of Payment (Purch.Org.)
+# ── RVCOMP_263.1  Missing GR-Based Invoice Verification
+# ── RVCOMP_264.1  Missing Service-Based Invoice Verification
+#
+# country_code sourced from purch_org_mapping via purchasing_organization_code
+# This avoids the fan-out caused by joining dm_vendor_company on vendor_code only
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_purchasing_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_purch_org_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: purch_org_mapping
+
+  - kind: select
+    name: select_dm_vendor_purchasing_organization
+    context_name: read_dm_vendor_purchasing_organization
+    params:
+      columns:
+        vendor_code: vendor_code
+        purchasing_organization_code: purchasing_organization_code
+        purchase_order_currency: purchase_order_currency
+        terms_of_payment_code_purchasing_org: terms_of_payment_code_purchasing_org
+        abc_indicator: abc_indicator
+        preferred_vendor: preferred_vendor
+        gr_based_invoice_verification_flag: gr_based_invoice_verification_flag
+        service_based_invoice_verification_flag: service_based_invoice_verification_flag
+      distinct: true
+
+  - kind: select
+    name: select_purch_org_mapping
+    context_name: read_purch_org_mapping
+    params:
+      columns:
+        purch_org_code: purch_org_code
+        country_code: country_code
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_purchasing_organization
+    params:
+      - other:
+          select_purch_org_mapping
+        how:
+          left
+        columns:
+          purchasing_organization_code: purch_org_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_244_1
+        expression: if(isnull(abc_indicator) or abc_indicator = '', '0', '1')
+      - column: rcvomp_245_1
+        expression: if(isnull(preferred_vendor) or preferred_vendor = '', '0', '1')
+      - column: rcvomp_261_1
+        expression: if(isnull(purchase_order_currency) or purchase_order_currency = '', '0', '1')
+      - column: rcvomp_262_1
+        expression: if(isnull(terms_of_payment_code_purchasing_org) or terms_of_payment_code_purchasing_org = '', '0', '1')
+      - column: rcvomp_263_1
+        expression: if(isnull(gr_based_invoice_verification_flag) or gr_based_invoice_verification_flag = '', '0', '1')
+      - column: rcvomp_264_1
+        expression: if(isnull(service_based_invoice_verification_flag) or service_based_invoice_verification_flag = '', '0', '1')
+      - column: rule_code_rcvomp_244_1
+        expression: '''RVCOMP_244.1'''
+      - column: rule_code_rcvomp_245_1
+        expression: '''RVCOMP_245.1'''
+      - column: rule_code_rcvomp_261_1
+        expression: '''RVCOMP_261.1'''
+      - column: rule_code_rcvomp_262_1
+        expression: '''RVCOMP_262.1'''
+      - column: rule_code_rcvomp_263_1
+        expression: '''RVCOMP_263.1'''
+      - column: rule_code_rcvomp_264_1
+        expression: '''RVCOMP_264.1'''
+      - column: subdomain
+        expression: '''purchasing_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_244_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_244_1: rule_code
+        rcvomp_244_1: check_status
+        vendor_code: vendor_code
+        abc_indicator: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_245_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_245_1: rule_code
+        rcvomp_245_1: check_status
+        vendor_code: vendor_code
+        preferred_vendor: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_261_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_261_1: rule_code
+        rcvomp_261_1: check_status
+        vendor_code: vendor_code
+        purchase_order_currency: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_262_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_262_1: rule_code
+        rcvomp_262_1: check_status
+        vendor_code: vendor_code
+        terms_of_payment_code_purchasing_org: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_263_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_263_1: rule_code
+        rcvomp_263_1: check_status
+        vendor_code: vendor_code
+        gr_based_invoice_verification_flag: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_264_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_264_1: rule_code
+        rcvomp_264_1: check_status
+        vendor_code: vendor_code
+        service_based_invoice_verification_flag: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_244_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_245_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_261_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_262_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_263_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_264_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

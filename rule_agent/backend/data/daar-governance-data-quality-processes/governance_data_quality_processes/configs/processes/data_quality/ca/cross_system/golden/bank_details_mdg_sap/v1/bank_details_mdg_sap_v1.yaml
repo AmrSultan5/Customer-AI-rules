@@ -1,0 +1,1679 @@
+transform:
+  name: Bank_details_mdg_sap
+  operations:
+    - kind: read_dataio
+      name: read_mdg_but0bk
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: bank_data
+        object_name: but0bk
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but0bk
+      context_name: read_mdg_but0bk
+      params:
+        columns:
+          partner: partner_but0bk
+          bkvid: bkvid_but0bk
+          banks: banks_but0bk
+          bankl: bankl_but0bk
+          bankn: bankn_but0bk
+          bkont: bkont_but0bk
+          koinh: koinh_but0bk
+          bkref: bkref_but0bk
+          xezer: xezer_but0bk
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_tiban
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: bank_data
+        object_name: tiban
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_tiban
+      context_name: read_mdg_tiban
+      params:
+        columns:
+          iban: iban_tiban
+          bankl: bankl_tiban
+          bankn: bankn_tiban
+          banks: banks_tiban
+          bkont: bkont_tiban
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          partner_guid: partner_guid_mdg_but000
+          name_last: name_last_mdg_but000
+          name_first: name_first_mdg_but000
+          xpcpt: xpcpt_mdg_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+    
+    - kind: filter
+      name: filter_knvv
+      params:
+        - condition:
+            vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+    
+    - kind: select
+      name: select_knvv_pre_checkpoint
+      context_name: filter_knvv
+      params:          
+        columns:
+          kunnr: kunnr_knvv
+          kvgr4: kvgr4_knvv
+          vkorg: vkorg_knvv
+          vtweg: vtweg_knvv
+          spart: spart_knvv
+        distinct: true
+
+    - kind: checkpoint
+      name: select_knvv
+      context_name: select_knvv_pre_checkpoint
+
+    - kind: join
+      name: join_mdg
+      context_name: select_mdg_but0bk
+      params:
+        - other:
+            select_mdg_tiban
+          how:
+            left
+          columns:
+            bankl_but0bk: bankl_tiban
+            bankn_but0bk: bankn_tiban
+            banks_but0bk: banks_tiban
+            bkont_but0bk: bkont_tiban
+        - other:
+            select_mdg_but000
+          how:
+            inner
+          columns:
+            partner_but0bk: partner_mdg_but000
+        - other:
+            select_knvv
+          how:
+            inner
+          columns:
+            partner_mdg_but000: kunnr_knvv
+
+    - kind: filter
+      name: filter_join_mdg
+      context_name: join_mdg
+      params:
+        - condition:
+            xpcpt_mdg_but000 <>'X' AND (
+              partner_but0bk LIKE '12%' OR 
+              partner_but0bk LIKE '13%' OR 
+              partner_but0bk LIKE '40%' OR 
+              partner_but0bk LIKE '18%' OR 
+              partner_but0bk LIKE '30%' OR 
+              partner_but0bk LIKE '16%' OR 
+              partner_but0bk LIKE '29%' OR 
+              partner_but0bk LIKE '17%' OR 
+              partner_but0bk LIKE '24%' OR 
+              partner_but0bk LIKE '26%' OR 
+              partner_but0bk LIKE '21%' OR 
+              partner_but0bk LIKE '19%' OR 
+              partner_but0bk LIKE '96%' OR 
+              partner_but0bk LIKE '28%' OR 
+              partner_but0bk LIKE '27%' OR 
+              partner_but0bk LIKE '32%' OR 
+              partner_but0bk LIKE '35%' OR 
+              partner_but0bk LIKE '25%' OR 
+              partner_but0bk LIKE '34%' OR 
+              partner_but0bk LIKE '42%' OR 
+              partner_but0bk LIKE '33%' OR 
+              partner_but0bk LIKE '31%' OR 
+              partner_but0bk LIKE '15%' OR 
+              partner_but0bk LIKE '95%' OR 
+              partner_but0bk LIKE '94%' OR 
+              partner_but0bk LIKE '14%' OR 
+              partner_but0bk LIKE '47%' OR 
+              partner_but0bk LIKE '22%')
+ 
+    - kind: add
+      name: add_mdg_HASH
+      context_name: filter_join_mdg
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(partner_but0bk,bkvid_but0bk, iban_tiban, banks_but0bk,bankl_but0bk,bankn_but0bk,bkont_but0bk,koinh_but0bk,bkref_but0bk,xezer_but0bk ,partner_guid_mdg_but000))
+
+    - kind: select
+      name: mdg
+      context_name: add_mdg_HASH
+      params:
+        columns:
+          partner_but0bk: partner_mdg
+          bkvid_but0bk: bkvid_mdg
+          iban_tiban: iban_mdg
+          banks_but0bk: banks_mdg
+          bankl_but0bk: bankl_mdg
+          bankn_but0bk: bankn_mdg
+          bkont_but0bk: bkont_mdg
+          koinh_but0bk: koinh_mdg
+          bkref_but0bk: bkref_mdg
+          xezer_but0bk: xezer_mdg
+          name_first_mdg_but000: name_first_mdg
+          name_last_mdg_but000: name_last_mdg
+          partner_guid_mdg_but000: partner_guid_mdg
+          HASH: HASH_mdg
+        distinct: true
+
+#s4hana
+    - kind: read_dataio
+      name: read_s4hana_but0bk
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: bank_data
+        object_name: but0bk
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_but0bk
+      context_name: read_s4hana_but0bk
+      params:
+        columns:
+          partner: partner_but0bk
+          bkvid: bkvid_but0bk
+          banks: banks_but0bk
+          bankl: bankl_but0bk
+          bankn: bankn_but0bk
+          bkont: bkont_but0bk
+          koinh: koinh_but0bk
+          bkref: bkref_but0bk
+          xezer: xezer_but0bk
+          SAP_CLUSTER: SAP_CLUSTER_but0bk
+        distinct: true
+
+    - kind: read_dataio
+      name: read_s4hana_tiban
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: bank_data
+        object_name: tiban
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_tiban
+      context_name: read_s4hana_tiban
+      params:
+        columns:
+          iban: iban_tiban
+          bankl: bankl_tiban
+          bankn: bankn_tiban
+          banks: banks_tiban
+          bkont: bkont_tiban
+          SAP_CLUSTER: SAP_CLUSTER_tiban
+        distinct: true
+
+    - kind: read_dataio
+      name: read_s4hana_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_but000
+      context_name: read_s4hana_but000
+      params:
+        columns:
+          partner: partner_s4hana_but000
+          partner_guid: partner_guid_s4hana_but000
+          name_last: name_last_s4hana_but000
+          name_first: name_first_s4hana_but000
+          xpcpt: xpcpt_s4hana_but000
+          SAP_CLUSTER: SAP_CLUSTER_s4hana_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_knvv_sap
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+    
+    - kind: filter
+      name: filter_knvv_sap
+      context_name: read_knvv_sap
+      params:
+        - condition:
+            vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+    
+    - kind: select
+      name: select_knvv_sap
+      context_name: filter_knvv_sap
+      params:          
+        columns:
+          kunnr: kunnr_knvv
+          kvgr4: kvgr4_knvv
+          vkorg: vkorg_knvv
+          vtweg: vtweg_knvv
+          spart: spart_knvv
+          sap_cluster: sap_cluster_knvv
+        distinct: true
+
+    - kind: join
+      name: join_s4hana
+      context_name: select_s4hana_but0bk
+      params:
+        - other:
+            select_s4hana_tiban
+          how:
+            left
+          columns:
+            bankl_but0bk: bankl_tiban
+            bankn_but0bk: bankn_tiban
+            banks_but0bk: banks_tiban
+            bkont_but0bk: bkont_tiban
+            SAP_CLUSTER_but0bk: SAP_CLUSTER_tiban
+        - other:
+            select_s4hana_but000
+          how:
+            inner
+          columns:
+            partner_but0bk: partner_s4hana_but000
+            SAP_CLUSTER_but0bk: SAP_CLUSTER_s4hana_but000
+        - other:
+            select_knvv_sap
+          how:
+            inner
+          columns:
+            partner_s4hana_but000: kunnr_knvv
+            SAP_CLUSTER_s4hana_but000: sap_cluster_knvv
+
+    - kind: add
+      name: add_s4hana_HASH
+      context_name: join_s4hana
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(partner_but0bk,bkvid_but0bk, iban_tiban, banks_but0bk,bankl_but0bk,bankn_but0bk,bkont_but0bk,koinh_but0bk,bkref_but0bk,xezer_but0bk ,partner_guid_s4hana_but000))
+
+    - kind: filter
+      name: filter_join_s4hana_cl1
+      context_name: add_s4hana_HASH
+      params:
+        - condition:
+            SAP_CLUSTER_but0bk = 'CL1' AND xpcpt_s4hana_but000 <>'X' AND (
+              partner_but0bk LIKE '12%' OR 
+              partner_but0bk LIKE '13%' OR 
+              partner_but0bk LIKE '40%' OR 
+              partner_but0bk LIKE '18%' OR 
+              partner_but0bk LIKE '30%' OR 
+              partner_but0bk LIKE '16%' OR 
+              partner_but0bk LIKE '29%' OR 
+              partner_but0bk LIKE '17%' OR 
+              partner_but0bk LIKE '24%' OR 
+              partner_but0bk LIKE '26%' OR 
+              partner_but0bk LIKE '21%' OR 
+              partner_but0bk LIKE '19%')
+
+    - kind: filter
+      name: filter_join_s4hana_cl2
+      context_name: add_s4hana_HASH
+      params:
+        - condition:
+            SAP_CLUSTER_but0bk = 'CL2' AND xpcpt_s4hana_but000 <>'X' AND (
+              partner_but0bk LIKE '96%' OR 
+              partner_but0bk LIKE '28%' OR 
+              partner_but0bk LIKE '27%' OR 
+              partner_but0bk LIKE '32%' OR 
+              partner_but0bk LIKE '35%' OR 
+              partner_but0bk LIKE '25%' OR 
+              partner_but0bk LIKE '34%' OR 
+              partner_but0bk LIKE '42%' OR 
+              partner_but0bk LIKE '33%' OR 
+              partner_but0bk LIKE '31%' OR 
+              partner_but0bk LIKE '15%' OR 
+              partner_but0bk LIKE '95%' OR 
+              partner_but0bk LIKE '94%' OR 
+              partner_but0bk LIKE '14%' OR  
+              partner_but0bk LIKE '47%' OR 
+              partner_but0bk LIKE '22%')
+
+    - kind: union
+      name: s4hana_union
+      context_name: filter_join_s4hana_cl1
+      params:
+        allow_missing: true
+        by_name: true
+        other: filter_join_s4hana_cl2
+
+
+    - kind: select
+      name: s4hana
+      context_name: s4hana_union
+      params:
+        columns:
+          partner_but0bk: partner_s4hana
+          bkvid_but0bk: bkvid_s4hana
+          iban_tiban: iban_s4hana
+          banks_but0bk: banks_s4hana
+          bankl_but0bk: bankl_s4hana
+          bankn_but0bk: bankn_s4hana
+          bkont_but0bk: bkont_s4hana
+          koinh_but0bk: koinh_s4hana
+          bkref_but0bk: bkref_s4hana
+          xezer_but0bk: xezer_s4hana
+          name_first_s4hana_but000: name_first_s4hana
+          name_last_s4hana_but000: name_last_s4hana
+          partner_guid_s4hana_but000: partner_guid_s4hana
+          HASH: HASH_s4hana
+        distinct: true
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            s4hana
+          how:
+            full
+          columns:
+            HASH_mdg: HASH_s4hana
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_s4hana is null or HASH_s4hana = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          bkvid_mdg: bkvid_mdg
+          iban_mdg: iban_mdg
+          banks_mdg: banks_mdg
+          bankl_mdg: bankl_mdg
+          bankn_mdg: bankn_mdg
+          bkont_mdg: bkont_mdg
+          koinh_mdg: koinh_mdg
+          bkref_mdg: bkref_mdg
+          xezer_mdg: xezer_mdg
+          name_first_mdg: name_first_mdg
+          name_last_mdg: name_last_mdg
+          partner_guid_mdg: partner_guid_mdg
+          HASH_mdg: HASH_mdg
+
+    - kind: filter
+      name: non_matching_s4hana
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_mdg is null or HASH_mdg = ''
+
+    - kind: select
+      name: non_matching_s4hana_select
+      context_name: non_matching_s4hana
+      params:
+        columns:
+          partner_s4hana: partner_s4hana
+          bkvid_s4hana: bkvid_s4hana
+          iban_s4hana: iban_s4hana
+          banks_s4hana: banks_s4hana
+          bankl_s4hana: bankl_s4hana
+          bankn_s4hana: bankn_s4hana
+          bkont_s4hana: bkont_s4hana
+          koinh_s4hana: koinh_s4hana
+          bkref_s4hana: bkref_s4hana
+          xezer_s4hana: xezer_s4hana
+          name_first_s4hana: name_first_s4hana
+          name_last_s4hana: name_last_s4hana
+          partner_guid_s4hana: partner_guid_s4hana
+          HASH_s4hana: HASH_s4hana
+
+# ###data missing from mdg
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_s4hana_select
+          how:
+            full
+          columns:
+            partner_mdg: partner_s4hana
+            bkvid_mdg: bkvid_s4hana
+            partner_guid_mdg: partner_guid_s4hana
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: msg_mdg
+          expression: CASE WHEN partner_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_s4hana
+          expression: CASE WHEN partner_s4hana IS NULL THEN 'data missing from sap' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string)   
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          partner_s4hana: partner
+          bkvid_s4hana: bkvid
+          name_first_s4hana: name_first
+          name_last_s4hana: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+# ###data missing from S4HANA
+
+    - kind: filter
+      name: join_data_missing_from_s4hana_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_s4hana is null
+
+    - kind: select
+      name: final_data_missing_from_s4hana
+      context_name: join_data_missing_from_s4hana_filter
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_s4hana: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+##BANK DETAILS: IBAN
+    - kind: filter
+      name: bank_details_iban_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND iban_s4hana <> iban_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_iban
+      context_name: bank_details_iban_filter
+      params:
+        - column: attr_name_bank_details_iban
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND iban_s4hana <> iban_mdg THEN concat('BANK DETAILS:',' IBAN') END
+        - column: msg_bank_details_iban
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND iban_s4hana <> iban_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_iban
+      context_name: add_missing_columns_bank_details_iban
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_iban: msg
+          attr_name_bank_details_iban: attr_name
+          iban_s4hana: tgt_attr
+          iban_mdg: src_attr
+
+##BANK DETAILS: Bank Country
+    - kind: filter
+      name: bank_details_bank_country_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND banks_s4hana <> banks_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_bank_country
+      context_name: bank_details_bank_country_filter
+      params:
+        - column: attr_name_bank_details_bank_country
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND banks_s4hana <> banks_mdg THEN concat('BANK DETAILS:',' Bank Country') END
+        - column: msg_bank_details_bank_country
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND banks_s4hana <> banks_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_bank_country
+      context_name: add_missing_columns_bank_details_bank_country
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_bank_country: msg
+          attr_name_bank_details_bank_country: attr_name
+          banks_s4hana: tgt_attr
+          banks_mdg: src_attr
+
+##BANK DETAILS: Bank Key
+    - kind: filter
+      name: bank_details_bank_key_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bankl_s4hana <> bankl_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_bank_key
+      context_name: bank_details_bank_key_filter
+      params:
+        - column: attr_name_bank_details_bank_key
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bankl_s4hana <> bankl_mdg THEN concat('BANK DETAILS:',' Bank Key') END
+        - column: msg_bank_details_bank_key
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bankl_s4hana <> bankl_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_bank_key
+      context_name: add_missing_columns_bank_details_bank_key
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_bank_key: msg
+          attr_name_bank_details_bank_key: attr_name
+          bankl_s4hana: tgt_attr
+          bankl_mdg: src_attr
+
+##BANK DETAILS: Bank Account
+    - kind: filter
+      name: bank_details_bank_account_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bankn_s4hana <> bankn_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_bank_account
+      context_name: bank_details_bank_account_filter
+      params:
+        - column: attr_name_bank_details_bank_account
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bankn_s4hana <> bankn_mdg THEN concat('BANK DETAILS:',' Bank Account') END
+        - column: msg_bank_details_bank_account
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bankn_s4hana <> bankn_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_bank_account
+      context_name: add_missing_columns_bank_details_bank_account
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_bank_account: msg
+          attr_name_bank_details_bank_account: attr_name
+          bankn_s4hana: tgt_attr
+          bankn_mdg: src_attr
+
+##BANK DETAILS: Bank Control Key
+    - kind: filter
+      name: bank_details_bank_control_key_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bkont_s4hana <> bkont_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_bank_control_key
+      context_name: bank_details_bank_control_key_filter
+      params:
+        - column: attr_name_bank_details_bank_control_key
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bkont_s4hana <> bkont_mdg THEN concat('BANK DETAILS:',' Bank Control Key') END
+        - column: msg_bank_details_bank_control_key
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bkont_s4hana <> bkont_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_bank_control_key
+      context_name: add_missing_columns_bank_details_bank_control_key
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_bank_control_key: msg
+          attr_name_bank_details_bank_control_key: attr_name
+          bkont_s4hana: tgt_attr
+          bkont_mdg: src_attr
+
+##BANK DETAILS: Account Holder
+    - kind: filter
+      name: bank_details_account_holder_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND koinh_s4hana <> koinh_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_account_holder
+      context_name: bank_details_account_holder_filter
+      params:
+        - column: attr_name_bank_details_account_holder
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND koinh_s4hana <> koinh_mdg THEN concat('BANK DETAILS:',' Account Holder') END
+        - column: msg_bank_details_account_holder
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND koinh_s4hana <> koinh_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_account_holder
+      context_name: add_missing_columns_bank_details_account_holder
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_account_holder: msg
+          attr_name_bank_details_account_holder: attr_name
+          koinh_s4hana: tgt_attr
+          koinh_mdg: src_attr
+
+##BANK DETAILS: Reference details
+    - kind: filter
+      name: bank_details_reference_details_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bkref_s4hana <> bkref_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_reference_details
+      context_name: bank_details_reference_details_filter
+      params:
+        - column: attr_name_bank_details_reference_details
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bkref_s4hana <> bkref_mdg THEN concat('BANK DETAILS:',' Reference details') END
+        - column: msg_bank_details_reference_details
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND bkref_s4hana <> bkref_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_reference_details
+      context_name: add_missing_columns_bank_details_reference_details
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_reference_details: msg
+          attr_name_bank_details_reference_details: attr_name
+          bkref_s4hana: tgt_attr
+          bkref_mdg: src_attr
+
+##BANK DETAILS: Collect.Auth.
+    - kind: filter
+      name: bank_details_collect_auth_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND xezer_s4hana <> xezer_mdg
+
+    - kind: add
+      name: add_missing_columns_bank_details_collect_auth
+      context_name: bank_details_collect_auth_filter
+      params:
+        - column: attr_name_bank_details_collect_auth
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND xezer_s4hana <> xezer_mdg THEN concat('BANK DETAILS:',' Collect.Auth.') END
+        - column: msg_bank_details_collect_auth
+          expression: CASE WHEN partner_mdg = partner_s4hana AND bkvid_mdg = bkvid_s4hana AND partner_guid_mdg = partner_guid_s4hana AND xezer_s4hana <> xezer_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_bank_details_collect_auth
+      context_name: add_missing_columns_bank_details_collect_auth
+      params:
+        columns:
+          partner_mdg: partner
+          bkvid_mdg: bkvid
+          name_first_mdg: name_first
+          name_last_mdg: name_last
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_bank_details_collect_auth: msg
+          attr_name_bank_details_collect_auth: attr_name
+          xezer_s4hana: tgt_attr
+          xezer_mdg: src_attr
+
+    - kind: union
+      name: union_comparison
+      context_name: final_data_missing_from_mdg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_s4hana
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_iban
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_country
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_key
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_account
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_control_key
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_account_holder
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_reference_details
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_collect_auth
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+        distinct: true
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: kunnr_knvv
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            kvgr4_knvv: kvgr4_tvv4t
+
+    - kind: filter
+      name: filter_comp_partner
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('BANK DETAILS' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(kvgr4_knvv,' - ',bezei_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          name_first: attribute1
+          name_last: attribute2
+          bkvid: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          vkorg_knvv: attribute6
+          vtweg_knvv: attribute7
+          spart_knvv: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+
+    - kind: write_dataio
+      name: write_bank_data
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+# ## agg ##
+# ### mdg ###
+    - kind: join
+      name: join_mdg_agg
+      context_name: mdg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_mdg: kunnr_kna1
+
+    - kind: filter
+      name: filter_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_mdg_agg
+      context_name: filter_mdg_agg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          HASH_mdg: HASH_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BANK DETAILS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            HASH_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### s4hana ###
+    - kind: join
+      name: join_s4hana_agg
+      context_name: s4hana
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_s4hana: kunnr_kna1
+
+    - kind: filter
+      name: filter_s4hana_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_s4hana_agg
+      context_name: filter_s4hana_agg
+      params:
+        columns:
+          partner_s4hana: partner_s4hana
+          HASH_s4hana: HASH_s4hana
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_s4hana_agg
+      context_name: select_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner_s4hana, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner_s4hana, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner_s4hana, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner_s4hana, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner_s4hana, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner_s4hana, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner_s4hana, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner_s4hana, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner_s4hana, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner_s4hana, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner_s4hana, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner_s4hana, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner_s4hana, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner_s4hana, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner_s4hana, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner_s4hana, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner_s4hana, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner_s4hana, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner_s4hana, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner_s4hana, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner_s4hana, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner_s4hana, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner_s4hana, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner_s4hana, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner_s4hana, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner_s4hana, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner_s4hana, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner_s4hana, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner_s4hana, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BANK DETAILS' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_s4hana_agg
+      context_name: add_missing_columns_s4hana_agg
+      params:
+        - aggs:
+            HASH_s4hana: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_s4hana_agg_final
+      context_name: group_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_s4hana: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_mdg ###
+    - kind: join
+      name: join_missing_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: filter_missing_mdg_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BANK DETAILS' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_s4hana ###
+    - kind: join
+      name: join_missing_s4hana_agg
+      context_name: final_data_missing_from_s4hana
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_s4hana_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_missing_from_s4hana_agg
+      context_name: filter_missing_s4hana_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_s4hana_agg
+      context_name: select_data_missing_from_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BANK DETAILS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM SAP' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_s4hana_agg
+      context_name: add_missing_columns_data_missing_from_s4hana_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_s4hana_final
+      context_name: group_data_missing_from_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### mismatch ###
+    - kind: union
+      name: union_comparison_agg
+      context_name: final_bank_details_iban
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_country
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_key
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_account
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_bank_control_key
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_account_holder
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_reference_details
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_bank_details_collect_auth
+
+    - kind: join
+      name: join_mismatch_agg
+      context_name: union_comparison_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_mismatch_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: filter_mismatch_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BANK DETAILS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true  
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_s4hana_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_mdg_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_s4hana_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_mismatch_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

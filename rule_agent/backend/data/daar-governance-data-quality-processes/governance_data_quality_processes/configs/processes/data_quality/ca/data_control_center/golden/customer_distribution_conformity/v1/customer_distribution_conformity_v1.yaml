@@ -1,0 +1,2153 @@
+transform:
+  name: customer_distribution_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read data marts
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_cg4_order_block_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_cg4_order_block_matrix
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_order_block_time
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_order_block_time
+
+#Select Data Marts
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        central_order_block_name: central_order_block_name
+        central_order_block_assignment_date: central_order_block_assignment_date
+        account_group_code: account_group_code
+        distribution_type_code: distribution_type_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_hierarchy
+    context_name: read_dm_customer_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l3_customer_code: l3_customer_code
+        l7_division_code: division_code_ch
+        l7_distribution_channel_code: distribution_channel_code_ch
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_company
+    context_name: read_dm_customer_company
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code_cc
+        terms_of_payment_code: terms_of_payment_code_cc
+        terms_of_payment_description: terms_of_payment_description
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_sales_organization
+    context_name: read_dm_customer_sales_organization
+    params:
+      columns:
+        customer_code: customer_code
+        sale_org_code: sale_org_code
+        country_code: country_code_so
+        customer_group_code: customer_group_code
+        customer_group_name: customer_group_name
+        shipping_condition_code: shipping_condition_code
+        shipping_condition_name: shipping_condition_name
+        delivering_plant_code: delivering_plant_code
+        is_delivering_plant_allowed: is_delivering_plant_allowed
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        terms_of_payment_code: terms_of_payment_code_so
+        terms_of_payment_name: terms_of_payment_name_so
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        trading_term_1_code: trading_term_1_code
+        trading_term_1_name: trading_term_1_name
+        order_block_sales_code: order_block_sales_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_sales_organization_d
+    context_name: read_dm_customer_sales_organization
+    params:
+      columns:
+        customer_code: customer_code_d
+        sale_org_code: sale_org_code
+        delivering_plant_code: delivering_plant_code_d
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_conf_cg4_order_block_matrix
+    context_name: read_conf_cg4_order_block_matrix
+    params:
+      columns:
+        customer_group_4_code: customer_group_4_code_mx
+        customer_hier_3_code: customer_hier_3_code_mx
+        order_block_code: order_block_code_mx
+        flag: flag
+      distinct: true
+
+  - kind: select
+    name: select_cobt
+    context_name: read_conf_order_block_time
+    params:
+      columns:
+        central_order_block_code: conf_central_order_block_code
+        max_months: conf_max_months
+      distinct: true
+
+#READ dm_customer_partner_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_partner
+
+  - kind: select
+    context_name: read_dm_customer_partner
+    name: select_dm_customer_partner
+    params:
+      columns:
+        customer_code: customer_code
+        partner_function_code: partner_function_code
+        partner_code: partner_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_partner
+    context_name: select_dm_customer_partner
+    params:
+      - condition:
+          partner_function_code = 'ZW'
+
+# Join data marts 119.2
+  - kind: join
+    name: join_data_marts_119
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dm_customer_company
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          country_code_cc: country_code_so
+          sap_cluster: sap_cluster
+
+# Join data marts
+  - kind: join
+    name: join_data_marts_144_154_170
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+# Join data marts
+  - kind: join
+    name: join_data_marts_154_5
+    context_name: join_data_marts_144_154_170
+    params:
+      - other:
+          select_dm_customer_partner
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_sales_organization_d
+        how:
+          inner
+        columns:
+          partner_code: customer_code_d
+          sale_org_code: sale_org_code
+          sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_uploading_points
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_uploading_points
+
+  - kind: add
+    name: add_dm_customer_uploading_points
+    context_name: read_dm_customer_uploading_points
+    params:
+      - column: nullif_grh_mon_morning_from
+        expression: nullif(grh_mon_morning_from, '-1')
+      - column: nullif_grh_mon_morning_to
+        expression: nullif(grh_mon_morning_to, '-1')
+      - column: nullif_grh_mon_afternoon_from
+        expression: nullif(grh_mon_afternoon_from, '-1')
+      - column: nullif_grh_mon_afternoon_to
+        expression: nullif(grh_mon_afternoon_to, '-1')
+      - column: nullif_grh_tue_morning_from
+        expression: nullif(grh_tue_morning_from, '-1')
+      - column: nullif_grh_tue_morning_to
+        expression: nullif(grh_tue_morning_to, '-1')
+      - column: nullif_grh_tue_afternoon_from
+        expression: nullif(grh_tue_afternoon_from, '-1')
+      - column: nullif_grh_tue_afternoon_to
+        expression: nullif(grh_tue_afternoon_to, '-1')
+      - column: nullif_grh_wed_morning_from
+        expression: nullif(grh_wed_morning_from, '-1')
+      - column: nullif_grh_wed_morning_to
+        expression: nullif(grh_wed_morning_to, '-1')
+      - column: nullif_grh_wed_afternoon_from
+        expression: nullif(grh_wed_afternoon_from, '-1')
+      - column: nullif_grh_wed_afternoon_to
+        expression: nullif(grh_wed_afternoon_to, '-1')
+      - column: nullif_grh_thu_morning_from
+        expression: nullif(grh_thu_morning_from, '-1')
+      - column: nullif_grh_thu_morning_to
+        expression: nullif(grh_thu_morning_to, '-1')
+      - column: nullif_grh_thu_afternoon_from
+        expression: nullif(grh_thu_afternoon_from, '-1')
+      - column: nullif_grh_thu_afternoon_to
+        expression: nullif(grh_thu_afternoon_to, '-1')
+      - column: nullif_grh_fri_morning_from
+        expression: nullif(grh_fri_morning_from, '-1')
+      - column: nullif_grh_fri_morning_to
+        expression: nullif(grh_fri_morning_to, '-1')
+      - column: nullif_grh_fri_afternoon_from
+        expression: nullif(grh_fri_afternoon_from, '-1')
+      - column: nullif_grh_fri_afternoon_to
+        expression: nullif(grh_fri_afternoon_to, '-1')
+      - column: nullif_grh_sat_morning_from
+        expression: nullif(grh_sat_morning_from, '-1')
+      - column: nullif_grh_sat_morning_to
+        expression: nullif(grh_sat_morning_to, '-1')
+      - column: nullif_grh_sat_afternoon_from
+        expression: nullif(grh_sat_afternoon_from, '-1')
+      - column: nullif_grh_sat_afternoon_to
+        expression: nullif(grh_sat_afternoon_to, '-1')
+      - column: nullif_grh_sun_morning_from
+        expression: nullif(grh_sun_morning_from, '-1')
+      - column: nullif_grh_sun_morning_to
+        expression: nullif(grh_sun_morning_to, '-1')
+      - column: nullif_grh_sun_afternoon_from
+        expression: nullif(grh_sun_afternoon_from, '-1')
+      - column: nullif_grh_sun_afternoon_to
+        expression: nullif(grh_sun_afternoon_to, '-1')
+
+  - kind: select
+    name: select_dm_customer_uploading_points
+    context_name: add_dm_customer_uploading_points
+    params:
+      columns:
+        customer_code: customer_code
+        nullif_grh_mon_morning_from: nullif_grh_mon_morning_from
+        nullif_grh_mon_morning_to: nullif_grh_mon_morning_to
+        nullif_grh_mon_afternoon_from: nullif_grh_mon_afternoon_from
+        nullif_grh_mon_afternoon_to: nullif_grh_mon_afternoon_to
+        nullif_grh_tue_morning_from: nullif_grh_tue_morning_from
+        nullif_grh_tue_morning_to: nullif_grh_tue_morning_to
+        nullif_grh_tue_afternoon_from: nullif_grh_tue_afternoon_from
+        nullif_grh_tue_afternoon_to: nullif_grh_tue_afternoon_to
+        nullif_grh_wed_morning_from: nullif_grh_wed_morning_from
+        nullif_grh_wed_morning_to: nullif_grh_wed_morning_to
+        nullif_grh_wed_afternoon_from: nullif_grh_wed_afternoon_from
+        nullif_grh_wed_afternoon_to: nullif_grh_wed_afternoon_to
+        nullif_grh_thu_morning_from: nullif_grh_thu_morning_from
+        nullif_grh_thu_morning_to: nullif_grh_thu_morning_to
+        nullif_grh_thu_afternoon_from: nullif_grh_thu_afternoon_from
+        nullif_grh_thu_afternoon_to: nullif_grh_thu_afternoon_to
+        nullif_grh_fri_morning_from: nullif_grh_fri_morning_from
+        nullif_grh_fri_morning_to: nullif_grh_fri_morning_to
+        nullif_grh_fri_afternoon_from: nullif_grh_fri_afternoon_from
+        nullif_grh_fri_afternoon_to: nullif_grh_fri_afternoon_to
+        nullif_grh_sat_morning_from: nullif_grh_sat_morning_from
+        nullif_grh_sat_morning_to: nullif_grh_sat_morning_to
+        nullif_grh_sat_afternoon_from: nullif_grh_sat_afternoon_from
+        nullif_grh_sat_afternoon_to: nullif_grh_sat_afternoon_to
+        nullif_grh_sun_morning_from: nullif_grh_sun_morning_from
+        nullif_grh_sun_morning_to: nullif_grh_sun_morning_to
+        nullif_grh_sun_afternoon_from: nullif_grh_sun_afternoon_from
+        nullif_grh_sun_afternoon_to: nullif_grh_sun_afternoon_to
+        grh_mon_morning_from: grh_mon_morning_from
+        grh_mon_morning_to: grh_mon_morning_to
+        grh_mon_afternoon_from: grh_mon_afternoon_from
+        grh_mon_afternoon_to: grh_mon_afternoon_to
+        grh_tue_morning_from: grh_tue_morning_from
+        grh_tue_morning_to: grh_tue_morning_to
+        grh_tue_afternoon_from: grh_tue_afternoon_from
+        grh_tue_afternoon_to: grh_tue_afternoon_to
+        grh_wed_morning_from: grh_wed_morning_from
+        grh_wed_morning_to: grh_wed_morning_to
+        grh_wed_afternoon_from: grh_wed_afternoon_from
+        grh_wed_afternoon_to: grh_wed_afternoon_to
+        grh_thu_morning_from: grh_thu_morning_from
+        grh_thu_morning_to: grh_thu_morning_to
+        grh_thu_afternoon_from: grh_thu_afternoon_from
+        grh_thu_afternoon_to: grh_thu_afternoon_to
+        grh_fri_morning_from: grh_fri_morning_from
+        grh_fri_morning_to: grh_fri_morning_to
+        grh_fri_afternoon_from: grh_fri_afternoon_from
+        grh_fri_afternoon_to: grh_fri_afternoon_to
+        grh_sat_morning_from: grh_sat_morning_from
+        grh_sat_morning_to: grh_sat_morning_to
+        grh_sat_afternoon_from: grh_sat_afternoon_from
+        grh_sat_afternoon_to: grh_sat_afternoon_to
+        grh_sun_morning_from: grh_sun_morning_from
+        grh_sun_morning_to: grh_sun_morning_to
+        grh_sun_afternoon_from: grh_sun_afternoon_from
+        grh_sun_afternoon_to: grh_sun_afternoon_to
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_dm_customer_uploading_points
+    context_name: select_dm_customer_uploading_points
+    params:
+      - aggs:
+          nullif_grh_mon_morning_from: max
+          nullif_grh_mon_morning_to: max
+          nullif_grh_mon_afternoon_from: max
+          nullif_grh_mon_afternoon_to: max
+          nullif_grh_tue_morning_from: max
+          nullif_grh_tue_morning_to: max
+          nullif_grh_tue_afternoon_from: max
+          nullif_grh_tue_afternoon_to: max
+          nullif_grh_wed_morning_from: max
+          nullif_grh_wed_morning_to: max
+          nullif_grh_wed_afternoon_from: max
+          nullif_grh_wed_afternoon_to: max
+          nullif_grh_thu_morning_from: max
+          nullif_grh_thu_morning_to: max
+          nullif_grh_thu_afternoon_from: max
+          nullif_grh_thu_afternoon_to: max
+          nullif_grh_fri_morning_from: max
+          nullif_grh_fri_morning_to: max
+          nullif_grh_fri_afternoon_from: max
+          nullif_grh_fri_afternoon_to: max
+          nullif_grh_sat_morning_from: max
+          nullif_grh_sat_morning_to: max
+          nullif_grh_sat_afternoon_from: max
+          nullif_grh_sat_afternoon_to: max
+          nullif_grh_sun_morning_from: max
+          nullif_grh_sun_morning_to: max
+          nullif_grh_sun_afternoon_from: max
+          nullif_grh_sun_afternoon_to: max
+        by:
+        - customer_code
+        - sap_cluster
+
+  - kind: join
+    name: join_data_marts_rcconf_72
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          group_dm_customer_uploading_points
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_uploading_points
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    context_name: join_data_marts_rcconf_72
+    name: filter_data_marts_rcconf_72
+    params:
+      - condition:
+          distribution_channel_code = '01' and division_code = '01'
+
+  - kind: add
+    name: add_checks_rcconf_72
+    context_name: filter_data_marts_rcconf_72
+    params:
+      - column: rule_code_72_1
+        expression: "'RCCONF_72.1'"
+      - column: rule_code_72_2
+        expression: "'RCCONF_72.2'"
+      - column: rule_code_72_3
+        expression: "'RCCONF_72.3'"
+      - column: rule_code_72_4
+        expression: "'RCCONF_72.4'"
+      - column: rule_code_72_5
+        expression: "'RCCONF_72.5'"
+      - column: rule_code_72_6
+        expression: "'RCCONF_72.6'"
+      - column: rule_code_72_7
+        expression: "'RCCONF_72.7'"
+      - column: rule_code_72_8
+        expression: "'RCCONF_72.8'"
+      - column: rcconf_72_1
+        expression: if(account_group_code like '9%' and coalesce(max_nullif_grh_mon_morning_from, 
+                    max_nullif_grh_mon_morning_to, 
+                    max_nullif_grh_mon_afternoon_from, 
+                    max_nullif_grh_mon_afternoon_to, 
+                    max_nullif_grh_tue_morning_from, 
+                    max_nullif_grh_tue_morning_to, 
+                    max_nullif_grh_tue_afternoon_from, 
+                    max_nullif_grh_tue_afternoon_to, 
+                    max_nullif_grh_wed_morning_from, 
+                    max_nullif_grh_wed_morning_to, 
+                    max_nullif_grh_wed_afternoon_from, 
+                    max_nullif_grh_wed_afternoon_to, 
+                    max_nullif_grh_thu_morning_from, 
+                    max_nullif_grh_thu_morning_to, 
+                    max_nullif_grh_thu_afternoon_from, 
+                    max_nullif_grh_thu_afternoon_to, 
+                    max_nullif_grh_fri_morning_from, 
+                    max_nullif_grh_fri_morning_to, 
+                    max_nullif_grh_fri_afternoon_from, 
+                    max_nullif_grh_fri_afternoon_to, 
+                    max_nullif_grh_sat_morning_from, 
+                    max_nullif_grh_sat_morning_to, 
+                    max_nullif_grh_sat_afternoon_from, 
+                    max_nullif_grh_sat_afternoon_to, 
+                    max_nullif_grh_sun_morning_from, 
+                    max_nullif_grh_sun_morning_to, 
+                    max_nullif_grh_sun_afternoon_from, 
+                    max_nullif_grh_sun_afternoon_to) is not null
+                    and central_order_block_code not in('S1','E','SP','G'), 
+                    if(coalesce(nullif(grh_mon_morning_from, '00:00'), 
+                    nullif(grh_mon_morning_to, '00:00'), 
+                    nullif(grh_mon_afternoon_from, '00:00'), 
+                    nullif(grh_mon_afternoon_to, '00:00'), 
+                    nullif(grh_tue_morning_from, '00:00'), 
+                    nullif(grh_tue_morning_to, '00:00'), 
+                    nullif(grh_tue_afternoon_from, '00:00'), 
+                    nullif(grh_tue_afternoon_to, '00:00'), 
+                    nullif(grh_wed_morning_from, '00:00'), 
+                    nullif(grh_wed_morning_to, '00:00'), 
+                    nullif(grh_wed_afternoon_from, '00:00'), 
+                    nullif(grh_wed_afternoon_to, '00:00'), 
+                    nullif(grh_thu_morning_from, '00:00'), 
+                    nullif(grh_thu_morning_to, '00:00'), 
+                    nullif(grh_thu_afternoon_from, '00:00'), 
+                    nullif(grh_thu_afternoon_to, '00:00'), 
+                    nullif(grh_fri_morning_from, '00:00'), 
+                    nullif(grh_fri_morning_to, '00:00'), 
+                    nullif(grh_fri_afternoon_from, '00:00'), 
+                    nullif(grh_fri_afternoon_to, '00:00'), 
+                    nullif(grh_sat_morning_from, '00:00'), 
+                    nullif(grh_sat_morning_to, '00:00'), 
+                    nullif(grh_sat_afternoon_from, '00:00'), 
+                    nullif(grh_sat_afternoon_to, '00:00'), 
+                    nullif(grh_sun_morning_from, '00:00'), 
+                    nullif(grh_sun_morning_to, '00:00'), 
+                    nullif(grh_sun_afternoon_from, '00:00'), 
+                    nullif(grh_sun_afternoon_to, '00:00'), '00:00') > '00:00', '1', '0'),'')
+      - column: rcconf_72_2
+        expression: if(account_group_code like '9%' and coalesce(max_nullif_grh_mon_morning_from, 
+                    max_nullif_grh_mon_morning_to, 
+                    max_nullif_grh_mon_afternoon_from, 
+                    max_nullif_grh_mon_afternoon_to, 
+                    max_nullif_grh_tue_morning_from, 
+                    max_nullif_grh_tue_morning_to, 
+                    max_nullif_grh_tue_afternoon_from, 
+                    max_nullif_grh_tue_afternoon_to, 
+                    max_nullif_grh_wed_morning_from, 
+                    max_nullif_grh_wed_morning_to, 
+                    max_nullif_grh_wed_afternoon_from, 
+                    max_nullif_grh_wed_afternoon_to, 
+                    max_nullif_grh_thu_morning_from, 
+                    max_nullif_grh_thu_morning_to, 
+                    max_nullif_grh_thu_afternoon_from, 
+                    max_nullif_grh_thu_afternoon_to, 
+                    max_nullif_grh_fri_morning_from, 
+                    max_nullif_grh_fri_morning_to, 
+                    max_nullif_grh_fri_afternoon_from, 
+                    max_nullif_grh_fri_afternoon_to, 
+                    max_nullif_grh_sat_morning_from, 
+                    max_nullif_grh_sat_morning_to, 
+                    max_nullif_grh_sat_afternoon_from, 
+                    max_nullif_grh_sat_afternoon_to, 
+                    max_nullif_grh_sun_morning_from, 
+                    max_nullif_grh_sun_morning_to, 
+                    max_nullif_grh_sun_afternoon_from, 
+                    max_nullif_grh_sun_afternoon_to) is not null
+                    and central_order_block_code not in('S1','E','SP','G'),
+                    if(nullif(grh_mon_morning_from, '-1') > nullif(grh_mon_morning_to, '-1'), '0', 
+                    if(nullif(grh_mon_afternoon_from, '-1') > nullif(grh_mon_afternoon_to, '-1'), '0',  
+                    if(nullif(grh_tue_morning_from, '-1') > nullif(grh_tue_morning_to, '-1'), '0',  
+                    if(nullif(grh_tue_afternoon_from, '-1') > nullif(grh_tue_afternoon_to, '-1'), '0',  
+                    if(nullif(grh_wed_morning_from, '-1') > nullif(grh_wed_morning_to, '-1'), '0',  
+                    if(nullif(grh_wed_afternoon_from, '-1') > nullif(grh_wed_afternoon_to, '-1'), '0',  
+                    if(nullif(grh_thu_morning_from, '-1') > nullif(grh_thu_morning_to, '-1'), '0',  
+                    if(nullif(grh_thu_afternoon_from, '-1') > nullif(grh_thu_afternoon_to, '-1'), '0',  
+                    if(nullif(grh_fri_morning_from, '-1') > nullif(grh_fri_morning_to, '-1'), '0',  
+                    if(nullif(grh_fri_afternoon_from, '-1') > nullif(grh_fri_afternoon_to, '-1'), '0',  
+                    if(nullif(grh_sat_morning_from, '-1') > nullif(grh_sat_morning_to, '-1'), '0',  
+                    if(nullif(grh_sat_afternoon_from, '-1') > nullif(grh_sat_afternoon_to, '-1'), '0',  
+                    if(nullif(grh_sun_morning_from, '-1') > nullif(grh_sun_morning_to, '-1'), '0', 
+                    if(nullif(grh_sun_afternoon_from, '-1') > nullif(grh_sun_afternoon_to, '-1'), '0', '1')))))))))))))), '')
+      - column: rcconf_72_3
+        expression: if(account_group_code like '9%'
+                    and central_order_block_code not in('S1','E','SP','G'),
+                    if(grh_mon_morning_from = '-1', '0', 
+                    if(grh_mon_morning_to = '-1', '0', 
+                    if(grh_mon_morning_from = '-1', '0', 
+                    if(grh_mon_morning_to = '-1', '0', 
+                    if(grh_mon_afternoon_from = '-1', '0', 
+                    if(grh_mon_afternoon_to = '-1', '0',  
+                    if(grh_tue_morning_from = '-1', '0', 
+                    if(grh_tue_morning_to = '-1', '0',  
+                    if(grh_tue_afternoon_from = '-1', '0', 
+                    if(grh_tue_afternoon_to = '-1', '0',  
+                    if(grh_wed_morning_from = '-1', '0', 
+                    if(grh_wed_morning_to = '-1', '0',  
+                    if(grh_wed_afternoon_from = '-1', '0', 
+                    if(grh_wed_afternoon_to = '-1', '0',  
+                    if(grh_thu_morning_from = '-1', '0', 
+                    if(grh_thu_morning_to = '-1', '0',  
+                    if(grh_thu_afternoon_from = '-1', '0', 
+                    if(grh_thu_afternoon_to = '-1', '0',  
+                    if(grh_fri_morning_from = '-1', '0', 
+                    if(grh_fri_morning_to = '-1', '0',  
+                    if(grh_fri_afternoon_from = '-1', '0', 
+                    if(grh_fri_afternoon_to = '-1', '0',  
+                    if(grh_sat_morning_from = '-1', '0', 
+                    if(grh_sat_morning_to = '-1', '0',  
+                    if(grh_sat_afternoon_from = '-1', '0', 
+                    if(grh_sat_afternoon_to = '-1', '0',  
+                    if(grh_sun_morning_from = '-1', '0', 
+                    if(grh_sun_morning_to = '-1', '0', 
+                    if(grh_sun_afternoon_from = '-1', '0', 
+                    if(grh_sun_afternoon_to = '-1', '0', '1')))))))))))))))))))))))))))))), '')
+      - column: rcconf_72_4
+        expression: >
+          if(account_group_code like '9%'
+            and central_order_block_code not in('S1','E','SP','G'),
+            if(
+              (grh_mon_morning_from='00:00' and grh_mon_morning_to not in ('00:00', '-1')) or
+              (grh_mon_afternoon_from='00:00' and grh_mon_afternoon_to not in ('00:00', '-1')) or
+              (grh_tue_morning_from='00:00' and grh_tue_morning_to not in ('00:00', '-1')) or
+              (grh_tue_afternoon_from='00:00' and grh_tue_afternoon_to not in ('00:00', '-1')) or
+              (grh_wed_morning_from='00:00' and grh_wed_morning_to not in ('00:00', '-1')) or
+              (grh_wed_afternoon_from='00:00' and grh_wed_afternoon_to not in ('00:00', '-1')) or
+              (grh_thu_morning_from='00:00' and grh_thu_morning_to not in ('00:00', '-1')) or
+              (grh_thu_afternoon_from='00:00' and grh_thu_afternoon_to not in ('00:00', '-1')) or
+              (grh_fri_morning_from='00:00' and grh_fri_morning_to not in ('00:00', '-1')) or
+              (grh_fri_afternoon_from='00:00' and grh_fri_afternoon_to not in ('00:00', '-1')) or
+              (grh_sat_morning_from='00:00' and grh_sat_morning_to not in ('00:00', '-1')) or
+              (grh_sat_afternoon_from='00:00' and grh_sat_afternoon_to not in ('00:00', '-1')) or
+              (grh_sun_morning_from='00:00' and grh_sun_morning_to not in ('00:00', '-1')) or
+              (grh_sun_afternoon_from='00:00' and grh_sun_afternoon_to not in ('00:00', '-1')),
+              '0','1'
+            ),
+            ''
+          )
+      - column: rcconf_72_5
+        expression: >
+          if(account_group_code like '9%'
+            and central_order_block_code not in('S1','E','SP','G'),
+            if(
+              (grh_mon_morning_from not in ('00:00', '-1') and grh_mon_morning_to='00:00') or
+              (grh_mon_afternoon_from not in ('00:00', '-1') and grh_mon_afternoon_to='00:00') or
+              (grh_tue_morning_from not in ('00:00', '-1') and grh_tue_morning_to='00:00') or
+              (grh_tue_afternoon_from not in ('00:00', '-1') and grh_tue_afternoon_to='00:00') or
+              (grh_wed_morning_from not in ('00:00', '-1') and grh_wed_morning_to='00:00') or
+              (grh_wed_afternoon_from not in ('00:00', '-1') and grh_wed_afternoon_to='00:00') or
+              (grh_thu_morning_from not in ('00:00', '-1') and grh_thu_morning_to='00:00') or
+              (grh_thu_afternoon_from not in ('00:00', '-1') and grh_thu_afternoon_to='00:00') or
+              (grh_fri_morning_from not in ('00:00', '-1') and grh_fri_morning_to='00:00') or
+              (grh_fri_afternoon_from not in ('00:00', '-1') and grh_fri_afternoon_to='00:00') or
+              (grh_sat_morning_from not in ('00:00', '-1') and grh_sat_morning_to='00:00') or
+              (grh_sat_afternoon_from not in ('00:00', '-1') and grh_sat_afternoon_to='00:00') or
+              (grh_sun_morning_from not in ('00:00', '-1') and grh_sun_morning_to='00:00') or
+              (grh_sun_afternoon_from not in ('00:00', '-1') and grh_sun_afternoon_to='00:00'),
+              '0','1'
+            ),
+            ''
+          )
+      - column: rcconf_72_6
+        expression: >
+          if(account_group_code like '9%'
+            and central_order_block_code not in('S1','E','SP','G'),
+            if(
+              grh_mon_morning_to='-1' or grh_mon_afternoon_to='-1' or
+              grh_tue_morning_to='-1' or grh_tue_afternoon_to='-1' or
+              grh_wed_morning_to='-1' or grh_wed_afternoon_to='-1' or
+              grh_thu_morning_to='-1' or grh_thu_afternoon_to='-1' or
+              grh_fri_morning_to='-1' or grh_fri_afternoon_to='-1' or
+              grh_sat_morning_to='-1' or grh_sat_afternoon_to='-1' or
+              grh_sun_morning_to='-1' or grh_sun_afternoon_to='-1',
+              '0','1'
+            ),
+            ''
+          )
+      - column: rcconf_72_7
+        expression: >
+          if(account_group_code like '9%'
+            and central_order_block_code not in('S1','E','SP','G'),
+            if(
+              (grh_mon_afternoon_to > '23:59' and grh_mon_afternoon_to <> '-1') or
+              (grh_tue_afternoon_to > '23:59' and grh_tue_afternoon_to <> '-1') or
+              (grh_wed_afternoon_to > '23:59' and grh_wed_afternoon_to <> '-1') or
+              (grh_thu_afternoon_to > '23:59' and grh_thu_afternoon_to <> '-1') or
+              (grh_fri_afternoon_to > '23:59' and grh_fri_afternoon_to <> '-1') or
+              (grh_sat_afternoon_to > '23:59' and grh_sat_afternoon_to <> '-1') or
+              (grh_sun_afternoon_to > '23:59' and grh_sun_afternoon_to <> '-1'),
+              '0','1'
+            ),
+            ''
+          )
+      - column: rcconf_72_8
+        expression: >
+          if(account_group_code like '9%'
+            and central_order_block_code not in('S1','E','SP','G'),
+            if(
+              (grh_mon_morning_to = grh_mon_morning_from and grh_mon_morning_to <> '00:00') or
+              (grh_mon_afternoon_to = grh_mon_afternoon_from and grh_mon_afternoon_to <> '00:00') or
+              (grh_tue_morning_to = grh_tue_morning_from and grh_tue_morning_to <> '00:00') or
+              (grh_tue_afternoon_to = grh_tue_afternoon_from and grh_tue_afternoon_to <> '00:00') or
+              (grh_wed_morning_to = grh_wed_morning_from and grh_wed_morning_to <> '00:00') or
+              (grh_wed_afternoon_to = grh_wed_afternoon_from and grh_wed_afternoon_to <> '00:00') or
+              (grh_thu_morning_to = grh_thu_morning_from and grh_thu_morning_to <> '00:00') or
+              (grh_thu_afternoon_to = grh_thu_afternoon_from and grh_thu_afternoon_to <> '00:00') or
+              (grh_fri_morning_to = grh_fri_morning_from and grh_fri_morning_to <> '00:00') or
+              (grh_fri_afternoon_to = grh_fri_afternoon_from and grh_fri_afternoon_to <> '00:00') or
+              (grh_sat_morning_to = grh_sat_morning_from and grh_sat_morning_to <> '00:00') or
+              (grh_sat_afternoon_to = grh_sat_afternoon_from and grh_sat_afternoon_to <> '00:00') or
+              (grh_sun_morning_to = grh_sun_morning_from and grh_sun_morning_to <> '00:00') or
+              (grh_sun_afternoon_to = grh_sun_afternoon_from and grh_sun_afternoon_to <> '00:00'),
+              '0','1'
+            ),
+            ''
+          )
+      - column: rcconf_72_2_agg
+        expression: if(rcconf_72_2 = '', '2', rcconf_72_2)  
+      - column: rcconf_72_3_agg
+        expression: if(rcconf_72_3 = '', '2', rcconf_72_3)  
+      - column: value_checked_72_1
+        expression: concat_ws(', ',
+                    concat_ws('_', max_nullif_grh_mon_afternoon_from, max_nullif_grh_mon_afternoon_to), 
+                    concat_ws('_', max_nullif_grh_tue_morning_from, max_nullif_grh_tue_morning_to), 
+                    concat_ws('_', max_nullif_grh_tue_afternoon_from, max_nullif_grh_tue_afternoon_to), 
+                    concat_ws('_', max_nullif_grh_wed_morning_from, max_nullif_grh_wed_morning_to), 
+                    concat_ws('_', max_nullif_grh_wed_afternoon_from, max_nullif_grh_wed_afternoon_to), 
+                    concat_ws('_', max_nullif_grh_thu_morning_from, max_nullif_grh_thu_morning_to), 
+                    concat_ws('_', max_nullif_grh_thu_afternoon_from, max_nullif_grh_thu_afternoon_to), 
+                    concat_ws('_', max_nullif_grh_fri_morning_from, max_nullif_grh_fri_morning_to), 
+                    concat_ws('_', max_nullif_grh_fri_afternoon_from, max_nullif_grh_fri_afternoon_to), 
+                    concat_ws('_', max_nullif_grh_sat_morning_from, max_nullif_grh_sat_morning_to), 
+                    concat_ws('_', max_nullif_grh_sat_afternoon_from, max_nullif_grh_sat_afternoon_to), 
+                    concat_ws('_', max_nullif_grh_sun_morning_from, max_nullif_grh_sun_morning_to),
+                    concat_ws('_', max_nullif_grh_sun_afternoon_from, max_nullif_grh_sun_afternoon_to))
+      - column: value_checked_72_2
+        expression: concat_ws(', ',
+                    concat_ws('_', grh_mon_afternoon_from, grh_mon_afternoon_to), 
+                    concat_ws('_', grh_tue_morning_from, grh_tue_morning_to), 
+                    concat_ws('_', grh_tue_afternoon_from, grh_tue_afternoon_to), 
+                    concat_ws('_', grh_wed_morning_from, grh_wed_morning_to), 
+                    concat_ws('_', grh_wed_afternoon_from, grh_wed_afternoon_to), 
+                    concat_ws('_', grh_thu_morning_from, grh_thu_morning_to), 
+                    concat_ws('_', grh_thu_afternoon_from, grh_thu_afternoon_to), 
+                    concat_ws('_', grh_fri_morning_from, grh_fri_morning_to), 
+                    concat_ws('_', grh_fri_afternoon_from, grh_fri_afternoon_to), 
+                    concat_ws('_', grh_sat_morning_from, grh_sat_morning_to), 
+                    concat_ws('_', grh_sat_afternoon_from, grh_sat_afternoon_to), 
+                    concat_ws('_', grh_sun_morning_from, grh_sun_morning_to),
+                    concat_ws('_', grh_sun_afternoon_from, grh_sun_afternoon_to))
+      - column: value_checked_72_3
+        expression: concat_ws(', ', 
+                    grh_mon_afternoon_from, 
+                    grh_mon_afternoon_to, 
+                    grh_tue_morning_from, 
+                    grh_tue_morning_to, 
+                    grh_tue_afternoon_from, 
+                    grh_tue_afternoon_to, 
+                    grh_wed_morning_from, 
+                    grh_wed_morning_to, 
+                    grh_wed_afternoon_from, 
+                    grh_wed_afternoon_to, 
+                    grh_thu_morning_from, 
+                    grh_thu_morning_to, 
+                    grh_thu_afternoon_from, 
+                    grh_thu_afternoon_to, 
+                    grh_fri_morning_from, 
+                    grh_fri_morning_to, 
+                    grh_fri_afternoon_from, 
+                    grh_fri_afternoon_to, 
+                    grh_sat_morning_from, 
+                    grh_sat_morning_to, 
+                    grh_sat_afternoon_from, 
+                    grh_sat_afternoon_to, 
+                    grh_sun_morning_from, 
+                    grh_sun_morning_to, 
+                    grh_sun_afternoon_from, 
+                    grh_sun_afternoon_to)
+      - column: grh_mon_morning
+        expression: if(nullif(grh_mon_morning_from, '-1') > nullif(grh_mon_morning_to, '-1'), 'monday_morning_from_monday_morning_to', null)
+      - column: grh_mon_afternoon
+        expression: if(nullif(grh_mon_afternoon_from, '-1') > nullif(grh_mon_afternoon_to, '-1'), 'monday_afternoon_from_monday_afternoon_to', null)
+      - column: grh_tue_morning
+        expression: if(nullif(grh_tue_morning_from, '-1') > nullif(grh_tue_morning_to, '-1'), 'tuesday_morning_from_tuesday_morning_to', null)
+      - column: grh_tue_afternoon
+        expression: if(nullif(grh_tue_afternoon_from, '-1') > nullif(grh_tue_afternoon_to, '-1'), 'tuesday_afternoon_from_tuesday_afternoon_to', null)
+      - column: grh_wed_morning
+        expression: if(nullif(grh_wed_morning_from, '-1') > nullif(grh_wed_morning_to, '-1'), 'wednesday_morning_from_wednesday_morning_to', null)
+      - column: grh_wed_afternoon
+        expression: if(nullif(grh_wed_afternoon_from, '-1') > nullif(grh_wed_afternoon_to, '-1'), 'wednesday_afternoon_from_wednesday_afternoon_to', null)
+      - column: grh_thu_morning
+        expression: if(nullif(grh_thu_morning_from, '-1') > nullif(grh_thu_morning_to, '-1'), 'thursday_morning_from_thursday_morning_to', null)
+      - column: grh_thu_afternoon
+        expression: if(nullif(grh_thu_afternoon_from, '-1') > nullif(grh_thu_afternoon_to, '-1'), 'thursday_afternoon_from_thursday_afternoon_to', null)
+      - column: grh_fri_morning
+        expression: if(nullif(grh_fri_morning_from, '-1') > nullif(grh_fri_morning_to, '-1'), 'friday_morning_from_friday_morning_to', null)
+      - column: grh_fri_afternoon
+        expression: if(nullif(grh_fri_afternoon_from, '-1') > nullif(grh_fri_afternoon_to, '-1'), 'friday_afternoon_from_friday_afternoon_to', null)
+      - column: grh_sat_morning
+        expression: if(nullif(grh_sat_morning_from, '-1') > nullif(grh_sat_morning_to, '-1'), 'saturday_morning_from_saturday_morning_to', null)
+      - column: grh_sat_afternoon
+        expression: if(nullif(grh_sat_afternoon_from, '-1') > nullif(grh_sat_afternoon_to, '-1'), 'saturday_afternoon_from_saturday_afternoon_to', null)
+      - column: grh_sun_morning
+        expression: if(nullif(grh_sun_morning_from, '-1') > nullif(grh_sun_morning_to, '-1'), 'sunday_morning_from_sunday_morning_to', null)
+      - column: grh_sun_afternoon
+        expression: if(nullif(grh_sun_afternoon_from, '-1') > nullif(grh_sun_afternoon_to, '-1'), 'sunday_afternoon_from_sunday_afternoon_to', null)
+      - column: grh_mon_morning_from_desc
+        expression: if(grh_mon_morning_from = '-1', 'monday_morning_from', null)
+      - column: grh_mon_afternoon_from_desc
+        expression: if(grh_mon_afternoon_from = '-1', 'monday_afternoon_from', null)
+      - column: grh_tue_morning_from_desc
+        expression: if(grh_tue_morning_from = '-1', 'tuesday_morning_from', null)
+      - column: grh_tue_afternoon_from_desc
+        expression: if(grh_tue_afternoon_from = '-1', 'tuesday_afternoon_from', null)
+      - column: grh_wed_morning_from_desc
+        expression: if(grh_wed_morning_from = '-1', 'wednesday_morning_from', null)
+      - column: grh_wed_afternoon_from_desc
+        expression: if(grh_wed_afternoon_from = '-1', 'wednesday_afternoon_from', null)
+      - column: grh_thu_morning_from_desc
+        expression: if(grh_thu_morning_from = '-1', 'thursday_morning_from', null)
+      - column: grh_thu_afternoon_from_desc
+        expression: if(grh_thu_afternoon_from = '-1', 'thursday_afternoon_from', null)
+      - column: grh_fri_morning_from_desc
+        expression: if(grh_fri_morning_from = '-1', 'friday_morning_from', null)
+      - column: grh_fri_afternoon_from_desc
+        expression: if(grh_fri_afternoon_from  = '-1', 'friday_afternoon_from', null)
+      - column: grh_sat_morning_from_desc
+        expression: if(grh_sat_morning_from = '-1', 'saturday_morning_from', null)
+      - column: grh_sat_afternoon_from_desc
+        expression: if(grh_sat_afternoon_from = '-1', 'saturday_afternoon_from', null)
+      - column: grh_sun_morning_from_desc
+        expression: if(grh_sun_morning_from = '-1', 'sunday_morning_from', null)
+      - column: grh_sun_afternoon_from_desc
+        expression: if(grh_sun_afternoon_from = '-1', 'sunday_afternoon_from', null)
+      - column: grh_mon_morning_to_desc
+        expression: if(grh_mon_morning_to = '-1', 'monday_morning_to', null)
+      - column: grh_mon_afternoon_to_desc
+        expression: if(grh_mon_afternoon_to = '-1', 'monday_afternoon_to', null)
+      - column: grh_tue_morning_to_desc
+        expression: if(grh_tue_morning_to = '-1', 'tuesday_morning_to', null)
+      - column: grh_tue_afternoon_to_desc
+        expression: if(grh_tue_afternoon_to = '-1', 'tuesday_afternoon_to', null)
+      - column: grh_wed_morning_to_desc
+        expression: if(grh_wed_morning_to = '-1', 'wednesday_morning_to', null)
+      - column: grh_wed_afternoon_to_desc
+        expression: if(grh_wed_afternoon_to = '-1', 'wednesday_afternoon_to', null)
+      - column: grh_thu_morning_to_desc
+        expression: if(grh_thu_morning_to = '-1', 'thursday_morning_to', null)
+      - column: grh_thu_afternoon_to_desc
+        expression: if(grh_thu_afternoon_to = '-1', 'thursday_afternoon_to', null)
+      - column: grh_fri_morning_to_desc
+        expression: if(grh_fri_morning_to = '-1', 'friday_morning_to', null)
+      - column: grh_fri_afternoon_to_desc
+        expression: if(grh_fri_afternoon_to  = '-1', 'friday_afternoon_to', null)
+      - column: grh_sat_morning_to_desc
+        expression: if(grh_sat_morning_to = '-1', 'saturday_morning_to', null)
+      - column: grh_sat_afternoon_to_desc
+        expression: if(grh_sat_afternoon_to = '-1', 'saturday_afternoon_to', null)
+      - column: grh_sun_morning_to_desc
+        expression: if(grh_sun_morning_to = '-1', 'sunday_morning_to', null)
+      - column: grh_sun_afternoon_to_desc
+        expression: if(grh_sun_afternoon_to = '-1', 'sunday_afternoon_to', null)
+
+  - kind: group
+    name: group_rcconf_72_1
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_1: max
+          value_checked_72_1: collect_set
+        by:
+        - rule_code_72_1
+        - customer_code
+
+  - kind: add
+    name: add_rcconf_72_1
+    context_name: group_rcconf_72_1
+    params:
+      - column: value_checked_72_1
+        expression: array_join(array_distinct(collect_set_value_checked_72_1), ', ')
+
+  - kind: select
+    name: select_rcconf_72_1_final
+    context_name: add_rcconf_72_1
+    params:
+      columns:
+        rule_code_72_1: rule_code
+        max_rcconf_72_1: check_status
+        customer_code: customer_code
+        value_checked_72_1: value_checked
+      distinct: true
+
+  - kind: group
+    name: group_rcconf_72_2
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_2_agg: min
+          value_checked_72_2: collect_set
+          grh_mon_morning: max
+          grh_mon_afternoon: max
+          grh_tue_morning: max
+          grh_tue_afternoon: max
+          grh_wed_morning: max
+          grh_wed_afternoon: max
+          grh_thu_morning: max
+          grh_thu_afternoon: max
+          grh_fri_morning: max
+          grh_fri_afternoon: max
+          grh_sat_morning: max
+          grh_sat_afternoon: max
+          grh_sun_morning: max
+          grh_sun_afternoon: max
+        by:
+        - rule_code_72_2
+        - customer_code
+
+  - kind: add
+    name: add_rcconf_72_2
+    context_name: group_rcconf_72_2
+    params:
+      - column: rcconf_72_2
+        expression: if(min_rcconf_72_2_agg = '2', '', min_rcconf_72_2_agg)
+      - column: value_checked_72_2
+        expression: if(rcconf_72_2 = '0',
+                    concat_ws(', ', 
+                    max_grh_mon_morning, 
+                    max_grh_mon_afternoon, 
+                    max_grh_tue_morning, 
+                    max_grh_tue_afternoon, 
+                    max_grh_wed_morning, 
+                    max_grh_wed_afternoon, 
+                    max_grh_thu_morning, 
+                    max_grh_thu_afternoon, 
+                    max_grh_fri_morning, 
+                    max_grh_fri_afternoon, 
+                    max_grh_sat_morning, 
+                    max_grh_sat_afternoon, 
+                    max_grh_sun_morning, 
+                    max_grh_sun_afternoon),
+                    array_join(array_distinct(collect_set_value_checked_72_2), ', '))
+
+  - kind: select
+    name: select_rcconf_72_2_final
+    context_name: add_rcconf_72_2
+    params:
+      columns:
+        rule_code_72_2: rule_code
+        rcconf_72_2: check_status
+        customer_code: customer_code
+        value_checked_72_2: value_checked
+      distinct: true
+
+  - kind: group
+    name: group_rcconf_72_3
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_3_agg: min
+          value_checked_72_3: collect_set
+          grh_mon_morning_from_desc: max
+          grh_mon_afternoon_from_desc: max
+          grh_tue_morning_from_desc: max
+          grh_tue_afternoon_from_desc: max
+          grh_wed_morning_from_desc: max
+          grh_wed_afternoon_from_desc: max
+          grh_thu_morning_from_desc: max
+          grh_thu_afternoon_from_desc: max
+          grh_fri_morning_from_desc: max
+          grh_fri_afternoon_from_desc: max
+          grh_sat_morning_from_desc: max
+          grh_sat_afternoon_from_desc: max
+          grh_sun_morning_from_desc: max
+          grh_sun_afternoon_from_desc: max
+          grh_mon_morning_to_desc: max
+          grh_mon_afternoon_to_desc: max
+          grh_tue_morning_to_desc: max
+          grh_tue_afternoon_to_desc: max
+          grh_wed_morning_to_desc: max
+          grh_wed_afternoon_to_desc: max
+          grh_thu_morning_to_desc: max
+          grh_thu_afternoon_to_desc: max
+          grh_fri_morning_to_desc: max
+          grh_fri_afternoon_to_desc: max
+          grh_sat_morning_to_desc: max
+          grh_sat_afternoon_to_desc: max
+          grh_sun_morning_to_desc: max
+          grh_sun_afternoon_to_desc: max
+        by:
+        - rule_code_72_3
+        - customer_code
+
+  - kind: add
+    name: add_rcconf_72_3
+    context_name: group_rcconf_72_3
+    params:
+      - column: rcconf_72_3
+        expression: if(min_rcconf_72_3_agg = '2', '', min_rcconf_72_3_agg)
+      - column: value_checked_72_3
+        expression: if(rcconf_72_3 = '0',
+                    concat_ws(', ', 
+                    max_grh_mon_morning_from_desc, 
+                    max_grh_mon_afternoon_from_desc, 
+                    max_grh_tue_morning_from_desc, 
+                    max_grh_tue_afternoon_from_desc, 
+                    max_grh_wed_morning_from_desc, 
+                    max_grh_wed_afternoon_from_desc, 
+                    max_grh_thu_morning_from_desc, 
+                    max_grh_thu_afternoon_from_desc, 
+                    max_grh_fri_morning_from_desc, 
+                    max_grh_fri_afternoon_from_desc, 
+                    max_grh_sat_morning_from_desc, 
+                    max_grh_sat_afternoon_from_desc, 
+                    max_grh_sun_morning_from_desc, 
+                    max_grh_sun_afternoon_from_desc,
+                    max_grh_mon_morning_to_desc, 
+                    max_grh_mon_afternoon_to_desc, 
+                    max_grh_tue_morning_to_desc, 
+                    max_grh_tue_afternoon_to_desc, 
+                    max_grh_wed_morning_to_desc, 
+                    max_grh_wed_afternoon_to_desc, 
+                    max_grh_thu_morning_to_desc, 
+                    max_grh_thu_afternoon_to_desc, 
+                    max_grh_fri_morning_to_desc, 
+                    max_grh_fri_afternoon_to_desc, 
+                    max_grh_sat_morning_to_desc, 
+                    max_grh_sat_afternoon_to_desc, 
+                    max_grh_sun_morning_to_desc, 
+                    max_grh_sun_afternoon_to_desc),
+                    array_join(array_distinct(collect_set_value_checked_72_3), ', '))
+
+  - kind: select
+    name: select_rcconf_72_3_final
+    context_name: add_rcconf_72_3
+    params:
+      columns:
+        rule_code_72_3: rule_code
+        rcconf_72_3: check_status
+        customer_code: customer_code
+        value_checked_72_3: value_checked
+      distinct: true
+
+  - kind: group
+    name: group_rcconf_72_4
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_4: min
+          value_checked_72_2: collect_set
+        by:
+        - rule_code_72_4
+        - customer_code
+
+  - kind: group
+    name: group_rcconf_72_5
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_5: min
+          value_checked_72_2: collect_set
+        by:
+        - rule_code_72_5
+        - customer_code
+
+  - kind: group
+    name: group_rcconf_72_6
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_6: min
+          value_checked_72_2: collect_set
+        by:
+        - rule_code_72_6
+        - customer_code
+
+  - kind: group
+    name: group_rcconf_72_7
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_7: min
+          value_checked_72_2: collect_set
+        by:
+        - rule_code_72_7
+        - customer_code
+  
+  - kind: group
+    name: group_rcconf_72_8
+    context_name: add_checks_rcconf_72
+    params:
+      - aggs:
+          rcconf_72_8: min
+          value_checked_72_2: collect_set
+        by:
+        - rule_code_72_8
+        - customer_code
+
+  - kind: add
+    name: add_value_checked_72_4
+    context_name: group_rcconf_72_4
+    params:
+      - column: value_checked_72_4
+        expression: concat_ws(',', collect_set_value_checked_72_2)
+
+  - kind: select
+    name: select_rcconf_72_4_final
+    context_name: add_value_checked_72_4
+    params:
+      columns:
+        rule_code_72_4: rule_code
+        min_rcconf_72_4: check_status
+        customer_code: customer_code
+        value_checked_72_4: value_checked
+
+  - kind: add
+    name: add_value_checked_72_5
+    context_name: group_rcconf_72_5
+    params:
+      - column: value_checked_72_5
+        expression: concat_ws(',', collect_set_value_checked_72_2)
+
+  - kind: select
+    name: select_rcconf_72_5_final
+    context_name: add_value_checked_72_5
+    params:
+      columns:
+        rule_code_72_5: rule_code
+        min_rcconf_72_5: check_status
+        customer_code: customer_code
+        value_checked_72_5: value_checked
+
+  - kind: add
+    name: add_value_checked_72_6
+    context_name: group_rcconf_72_6
+    params:
+      - column: value_checked_72_6
+        expression: concat_ws(',', collect_set_value_checked_72_2)
+
+  - kind: select
+    name: select_rcconf_72_6_final
+    context_name: add_value_checked_72_6
+    params:
+      columns:
+        rule_code_72_6: rule_code
+        min_rcconf_72_6: check_status
+        customer_code: customer_code
+        value_checked_72_6: value_checked
+
+  - kind: add
+    name: add_value_checked_72_7
+    context_name: group_rcconf_72_7
+    params:
+      - column: value_checked_72_7
+        expression: concat_ws(',', collect_set_value_checked_72_2)
+
+  - kind: select
+    name: select_rcconf_72_7_final
+    context_name: add_value_checked_72_7
+    params:
+      columns:
+        rule_code_72_7: rule_code
+        min_rcconf_72_7: check_status
+        customer_code: customer_code
+        value_checked_72_7: value_checked
+
+  - kind: add
+    name: add_value_checked_72_8
+    context_name: group_rcconf_72_8
+    params:
+      - column: value_checked_72_8
+        expression: concat_ws(',', collect_set_value_checked_72_2)
+
+  - kind: select
+    name: select_rcconf_72_8_final
+    context_name: add_value_checked_72_8
+    params:
+      columns:
+        rule_code_72_8: rule_code
+        min_rcconf_72_8: check_status
+        customer_code: customer_code
+        value_checked_72_8: value_checked
+
+# #SELECT rcconf_119_1
+#   - kind: select
+#     name: select_rcconf_119_1
+#     context_name: join_data_marts
+#     params:
+#       columns:
+#         customer_code: customer_code
+#         terms_of_payment_code_cc: terms_of_payment_code_cc
+#         terms_of_payment_description: terms_of_payment_description
+#       distinct: true
+
+# #RULE 119_1
+#   - kind: add
+#     name: add_rcconf_119_1
+#     context_name: select_rcconf_119_1
+#     params:
+#       - column: rule_code
+#         expression: "'RCCONF_119.1'"
+#       - column: check_status
+#         expression: "DECODE(TRUE, ISNULL(terms_of_payment_code_cc) OR terms_of_payment_code_cc='','', ISNULL(terms_of_payment_description) OR terms_of_payment_description='', '0', '1')"
+#       - column: value_checked
+#         expression: "terms_of_payment_description"      
+
+#   - kind: select
+#     name: select_rcconf_119_1_final
+#     context_name: add_rcconf_119_1
+#     params:
+#       columns:
+#         rule_code: rule_code
+#         check_status: check_status
+#         customer_code: customer_code
+#         value_checked: value_checked
+#       distinct: true
+
+#SELECT rcconf_119_2
+  - kind: select
+    name: select_rcconf_119_2
+    context_name: join_data_marts_119
+    params:
+      columns:
+        customer_code: customer_code
+        terms_of_payment_code_cc: terms_of_payment_code_cc
+        terms_of_payment_code_so: terms_of_payment_code_so
+      distinct: true
+
+#RULE 119_2
+  - kind: add
+    name: add_rcconf_119_2
+    context_name: select_rcconf_119_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_119.2'"
+      - column: check_status
+        expression: "CASE WHEN terms_of_payment_code_cc IS NULL or terms_of_payment_code_so IS NULL THEN '-1' WHEN terms_of_payment_code_cc = terms_of_payment_code_so THEN '1' ELSE '0' END"
+      - column: value_checked
+        expression: "CONCAT(terms_of_payment_code_cc, '_', terms_of_payment_code_so)"  
+
+  - kind: group
+    name: group_rcconf_119_2_status
+    context_name: add_rcconf_119_2
+    params:
+      - aggs:
+          check_status: max
+        by:
+        - customer_code
+
+  - kind: join
+    name: join_rcconf_119_2_status
+    context_name: add_rcconf_119_2
+    params:
+      - other:
+          group_rcconf_119_2_status
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          check_status: max_check_status
+
+  - kind: group
+    name: group_rcconf_119_2_value_checked
+    context_name: join_rcconf_119_2_status
+    params:
+      - aggs:
+          value_checked: collect_set
+        by:
+        - customer_code
+        - rule_code
+        - check_status
+
+  - kind: add
+    name: add_rcconf_119_2_value_checked_concat
+    context_name: group_rcconf_119_2_value_checked
+    params:
+      - column: collect_set_value_checked_concat
+        expression: concat_ws(',', sort_array(collect_set_value_checked))
+
+  - kind: add
+    name: add_rcconf_119_2_status_empty
+    context_name: add_rcconf_119_2_value_checked_concat
+    params:
+      - column: check_status
+        expression: IF(check_status = '-1', '', check_status)
+        overwrite: true
+
+  - kind: select
+    name: select_rcconf_119_2_final
+    context_name: add_rcconf_119_2_status_empty
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        collect_set_value_checked_concat: value_checked
+      distinct: true
+
+#SELECT rcconf_144
+  - kind: select
+    name: select_rcconf_144
+    context_name: join_data_marts_144_154_170
+    params:
+      columns:
+        customer_code: customer_code
+        customer_group_code: customer_group_code
+        customer_group_name: customer_group_name
+        account_group_code: account_group_code
+        terms_of_payment_code_so: terms_of_payment_code
+        terms_of_payment_name_so: terms_of_payment_name
+      distinct: true
+
+#RULE 144_1
+  - kind: add
+    name: add_rcconf_144_1
+    context_name: select_rcconf_144
+    params:
+      - column: rule_code
+        expression: "'RCCONF_144.1'"
+      - column: check_status
+        expression: "DECODE(TRUE, ISNULL(customer_group_code) OR customer_group_code='','', ISNULL(customer_group_name),'0','1')"
+      - column: value_checked
+        expression: "customer_group_name"   
+
+  - kind: select
+    name: select_rcconf_144_1_final
+    context_name: add_rcconf_144_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 144_4
+  - kind: add
+    name: add_rcconf_144_4
+    context_name: select_rcconf_144
+    params:
+      - column: rule_code
+        expression: "'RCCONF_144.4'"
+      - column: check_status
+        expression: "CASE WHEN ISNULL(terms_of_payment_code) OR terms_of_payment_code='' THEN '' WHEN (account_group_code LIKE '70%' OR  account_group_code LIKE '71%' OR  account_group_code LIKE  '72%' OR  account_group_code LIKE  '73%' OR  account_group_code LIKE '90%') AND ISNULL(terms_of_payment_name) THEN '0'  WHEN (account_group_code LIKE  '70%' OR  account_group_code LIKE  '71%' OR  account_group_code LIKE  '72%' OR  account_group_code LIKE  '73%' OR  account_group_code LIKE '90%') AND NOT ISNULL(terms_of_payment_name) THEN '1' ELSE '' END"
+      - column: value_checked
+        expression: "account_group_code"   
+
+  - kind: select
+    name: select_rcconf_144_4_final
+    context_name: add_rcconf_144_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+
+
+#SELECT rcconf_154
+  - kind: select
+    name: select_rcconf_154
+    context_name: join_data_marts_144_154_170
+    params:
+      columns:
+        customer_code: customer_code
+        delivering_plant_code: delivering_plant_code
+        is_delivering_plant_allowed: is_delivering_plant_allowed
+        account_group_code: account_group_code
+      distinct: true
+
+#RULE 154_1
+  - kind: add
+    name: add_rcconf_154_1
+    context_name: select_rcconf_154
+    params:
+      - column: rule_code
+        expression: "'RCCONF_154.1'"
+      - column: check_status
+        expression: "DECODE(TRUE, ISNULL(delivering_plant_code) OR delivering_plant_code='','', is_delivering_plant_allowed = '0', '0', '1')"
+      - column: value_checked
+        expression: "delivering_plant_code"   
+
+  - kind: select
+    name: select_rcconf_154_1_final
+    context_name: add_rcconf_154_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 154_4
+  - kind: add
+    name: add_rcconf_154_4
+    context_name: select_rcconf_154
+    params:
+      - column: rule_code
+        expression: "'RCCONF_154.4'"
+      - column: check_status
+        expression: "CASE WHEN ISNULL(delivering_plant_code) OR delivering_plant_code='' THEN '' WHEN (account_group_code LIKE '70%' OR account_group_code LIKE  '71%' OR account_group_code LIKE  '72%' OR account_group_code LIKE  '73%' OR account_group_code LIKE  '90%') AND ISNULL(delivering_plant_code) THEN '0' WHEN ( account_group_code LIKE  '70%' OR account_group_code LIKE  '71%' OR account_group_code LIKE  '72%' OR account_group_code LIKE  '73%' OR account_group_code LIKE  '90%') AND NOT ISNULL(delivering_plant_code) THEN '1' ELSE '' END"
+      - column: value_checked
+        expression: "delivering_plant_code"   
+
+  - kind: select
+    name: select_rcconf_154_4_final
+    context_name: add_rcconf_154_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rcconf_154_5
+  - kind: select
+    name: select_rcconf_154_5
+    context_name: join_data_marts_154_5
+    params:
+      columns:
+        customer_code: customer_code
+        delivering_plant_code: delivering_plant_code
+        delivering_plant_code_d: delivering_plant_code_d
+        distribution_type_code: distribution_type_code
+      distinct: true
+
+#RULE 154_5
+  - kind: add
+    name: add_rcconf_154_5
+    context_name: select_rcconf_154_5
+    params:
+      - column: rule_code
+        expression: "'RCCONF_154.5'"
+      - column: check_status
+        expression: if(isnull(delivering_plant_code) 
+                    or delivering_plant_code = '' 
+                    or isnull(delivering_plant_code_d) 
+                    or delivering_plant_code_d = '' 
+                    or distribution_type_code <> '09', '',
+                    if(delivering_plant_code = delivering_plant_code_d, '1', '0'))
+      - column: value_checked
+        expression: concat_ws('', delivering_plant_code, delivering_plant_code_d)
+
+  - kind: select
+    name: select_rcconf_154_5_final
+    context_name: add_rcconf_154_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+# #SELECT rcconf_163
+#   - kind: select
+#     name: select_rcconf_163
+#     context_name: join_data_marts
+#     params:
+#       columns:
+#         customer_code: customer_code
+#         terms_of_payment_code_so: terms_of_payment_code
+#         terms_of_payment_name_so: terms_of_payment_name
+#       distinct: true
+
+# #RULE 163_1
+#   - kind: add
+#     name: add_rcconf_163_1
+#     context_name: select_rcconf_163
+#     params:
+#       - column: rule_code
+#         expression: "'RCCONF_163.1'"
+#       - column: check_status
+#         expression: "DECODE(TRUE, ISNULL(terms_of_payment_code) OR terms_of_payment_code='','',  ISNULL(terms_of_payment_name),'0','1')"
+#       - column: value_checked
+#         expression: "terms_of_payment_name"   
+
+#   - kind: select
+#     name: select_rcconf_163_1_final
+#     context_name: add_rcconf_163_1
+#     params:
+#       columns:
+#         rule_code: rule_code
+#         check_status: check_status
+#         customer_code: customer_code
+#         value_checked: value_checked
+#       distinct: true
+
+
+
+#SELECT rcconf_170
+  - kind: select
+    name: select_rcconf_170
+    context_name: join_data_marts_144_154_170
+    params:
+      columns:
+        customer_code: customer_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+#RULE 170_1
+  - kind: add
+    name: add_rcconf_170_1
+    context_name: select_rcconf_170
+    params:
+      - column: rule_code
+        expression: "'RCCONF_170.1'"
+      - column: check_status
+        expression: "DECODE(TRUE, ISNULL(customer_group_4_code) OR customer_group_4_code='','',  ISNULL(customer_group_4_name) OR customer_group_4_name LIKE '%DO NOT USE%','0','1')"
+      - column: value_checked
+        expression: "customer_group_4_name"   
+
+  - kind: select
+    name: select_rcconf_170_1_final
+    context_name: add_rcconf_170_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+# #RULE 170_4
+#   - kind: add
+#     name: add_rcconf_170_4
+#     context_name: select_rcconf_170
+#     params:
+#       - column: rule_code
+#         expression: "'RCCONF_170.4'"
+#       - column: check_status
+#         expression: "DECODE(TRUE, distribution_channel_code = '04' AND division_code = '02'  AND (ISNULL(customer_group_4_code) OR customer_group_4_code=''),'1', distribution_channel_code = '04' AND division_code = '02'  AND NOT ISNULL(customer_group_4_code),'0','')"
+#       - column: value_checked
+#         expression: "customer_group_4_code"   
+
+#   - kind: select
+#     name: select_rcconf_170_4_final
+#     context_name: add_rcconf_170_4
+#     params:
+#       columns:
+#         rule_code: rule_code
+#         check_status: check_status
+#         customer_code: customer_code
+#         value_checked: value_checked
+#       distinct: true
+
+# #RULE 170_7
+
+#filter data marts
+  - kind: filter
+    context_name: select_dm_customer_general
+    name: select_dm_customer_general_flt_non_CY
+    params:
+      - condition:
+          country_code != 'CY'
+
+  - kind: filter
+    context_name: select_dm_customer_general
+    name: select_dm_customer_general_flt_CY
+    params:
+      - condition:
+          country_code = 'CY'
+
+# Join data marts - non CY
+  - kind: join
+    name: join_data_marts_170_7_non_CY
+    context_name: select_dm_customer_general_flt_non_CY
+    params:
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_hierarchy
+        how:
+          inner
+        columns:
+          customer_code: l7_customer_code
+          division_code: division_code_ch
+          distribution_channel_code: distribution_channel_code_ch
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    context_name: select_conf_cg4_order_block_matrix
+    name: filter_conf_cg4_order_block_matrix
+    params:
+      - condition:
+          flag = '0'
+
+  - kind: add
+    name: add_is_null
+    params:
+      - column: flag_key
+        expression: "CASE WHEN (customer_hier_3_code_mx IS NULL OR customer_hier_3_code_mx = '') THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_flag
+    params:
+      columns:
+        customer_hier_3_code_mx: customer_hier_3_code_mx
+        order_block_code_mx: order_block_code_mx
+        customer_group_4_code_mx: customer_group_4_code_mx
+        flag: flag
+        flag_key: flag_key
+      distinct: true
+
+  - kind: filter
+    context_name: select_flag
+    name: filter_flag_key_1
+    params:
+      - condition:
+          flag_key = '1'
+
+  - kind: join
+    name: join_scope_special_char_key_1_non_CY
+    context_name: join_data_marts_170_7_non_CY
+    params:
+      - other:
+          filter_flag_key_1
+        how:
+          left
+        columns:
+          central_order_block_code: order_block_code_mx
+          customer_group_4_code: customer_group_4_code_mx
+          l3_customer_code: customer_hier_3_code_mx
+
+
+  - kind: filter
+    context_name: select_flag
+    name: filter_flag_key_0
+    params:
+      - condition:
+          flag_key = '0'
+
+  - kind: join
+    name: join_scope_special_char_key_0_non_CY
+    context_name: join_data_marts_170_7_non_CY
+    params:
+      - other:
+          filter_flag_key_0
+        how:
+          left
+        columns:
+          central_order_block_code: order_block_code_mx
+          customer_group_4_code: customer_group_4_code_mx
+
+  - kind: union
+    name: union_join_flags_non_CY
+    context_name: join_scope_special_char_key_1_non_CY
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_scope_special_char_key_0_non_CY
+
+  - kind: add
+    name: add_rcconf_170_7_non_CY
+    params:
+      - column: rule_code
+        expression: "'RCCONF_170.7'"
+      - column: check_status
+        expression: "CASE WHEN country_code = 'EG' AND customer_group_4_code = 'DTS' AND central_order_block_code = 'WH' THEN '1' WHEN ISNULL(customer_group_4_code) OR customer_group_4_code = '' THEN '' WHEN NOT ISNULL(customer_group_4_code_mx) THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "customer_group_4_code||'_'||central_order_block_code"   
+
+  - kind: select
+    name: select_rcconf_170_7_final_non_CY
+    context_name: add_rcconf_170_7_non_CY
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+# Join data marts - CY
+  - kind: join
+    name: join_data_marts_170_7_CY
+    context_name: select_dm_customer_general_flt_CY
+    params:
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_hierarchy
+        how:
+          inner
+        columns:
+          customer_code: l7_customer_code
+          division_code: division_code_ch
+          distribution_channel_code: distribution_channel_code_ch
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_scope_special_char_key_1_CY
+    context_name: join_data_marts_170_7_CY
+    params:
+      - other:
+          filter_flag_key_1
+        how:
+          left
+        columns:
+          order_block_sales_code: order_block_code_mx
+          customer_group_4_code: customer_group_4_code_mx
+          l3_customer_code: customer_hier_3_code_mx
+
+  - kind: join
+    name: join_scope_special_char_key_0_CY
+    context_name: join_data_marts_170_7_CY
+    params:
+      - other:
+          filter_flag_key_0
+        how:
+          left
+        columns:
+          order_block_sales_code: order_block_code_mx
+          customer_group_4_code: customer_group_4_code_mx
+
+  - kind: union
+    name: union_join_flags_CY
+    context_name: join_scope_special_char_key_1_CY
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_scope_special_char_key_0_CY
+
+  - kind: add
+    name: add_rcconf_170_7_CY
+    params:
+      - column: rule_code
+        expression: "'RCCONF_170.7'"
+      - column: check_status
+        expression: "DECODE(TRUE, ISNULL(customer_group_4_code) OR customer_group_4_code='','', NOT ISNULL(customer_group_4_code_mx), '0','1')"
+      - column: value_checked
+        expression: "customer_group_4_code||'_'||central_order_block_code"   
+
+  - kind: select
+    name: select_rcconf_170_7_final_CY
+    context_name: add_rcconf_170_7_CY
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#union final 170.7
+  - kind: union
+    name: union_rcconf_170_7_final
+    context_name: select_rcconf_170_7_final_CY
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_170_7_final_non_CY
+
+  - kind: group
+    name: min_check_status_170_7_final
+    context_name: union_rcconf_170_7_final
+    params:
+      - aggs:
+          check_status: min
+        by:
+        - rule_code
+        - customer_code
+        - value_checked
+
+  - kind: select
+    name: select_rcconf_170_7_final
+    context_name: min_check_status_170_7_final
+    params:
+      columns:
+        rule_code: rule_code
+        min_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rcconf_170_8
+  - kind: select
+    name: select_rcconf_170_8
+    context_name: join_data_marts_144_154_170
+    params:
+      columns:
+        customer_code: customer_code
+        customer_group_4_code: customer_group_4_code
+        distribution_type_code: distribution_type_code
+      distinct: true
+
+#RULE 170_8
+  - kind: add
+    name: add_rcconf_170_8
+    context_name: select_rcconf_170_8
+    params:
+      - column: rule_code
+        expression: "'RCCONF_170.8'"
+      - column: check_status
+        expression: if(distribution_type_code <> '09', '', 
+                    if(customer_group_4_code = 'DTS' and distribution_type_code = '09', '1',
+                    if(customer_group_4_code <> 'DTS' and distribution_type_code = '09', '0', '')))
+      - column: value_checked
+        expression: concat_ws('_', customer_group_4_code, distribution_type_code)  
+
+  - kind: select
+    name: select_rcconf_170_8_final
+    context_name: add_rcconf_170_8
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+# #SELECT rcconf_172
+#   - kind: select
+#     name: select_rcconf_172
+#     context_name: join_data_marts
+#     params:
+#       columns:
+#         customer_code: customer_code
+#         central_order_block_code: central_order_block_code
+#         central_order_block_name: central_order_block_name
+#       distinct: true
+
+# #RULE 172_1
+#   - kind: add
+#     name: add_rcconf_172_1
+#     context_name: select_rcconf_172
+#     params:
+#       - column: rule_code
+#         expression: "'rcconf_172.1'"
+#       - column: check_status
+#         expression: "DECODE(TRUE, ISNULL(central_order_block_code) OR central_order_block_code='','', central_order_block_code LIKE '%DO NOT USE%', '0', '1')"
+#       - column: value_checked
+#         expression: "central_order_block_code"   
+
+#   - kind: select
+#     name: select_rcconf_172_1_final
+#     context_name: add_rcconf_172_1
+#     params:
+#       columns:
+#         rule_code: rule_code
+#         check_status: check_status
+#         customer_code: customer_code
+#         value_checked: value_checked
+#       distinct: true
+
+# #RULE 172_2
+#   - kind: add
+#     name: add_rcconf_172_2
+#     context_name: select_rcconf_172
+#     params:
+#       - column: rule_code
+#         expression: "'rcconf_172.2'"
+#       - column: check_status
+#         expression: "DECODE(TRUE, ISNULL(central_order_block_code) OR central_order_block_code='','', NOT ISNULL(central_order_block_code) AND (ISNULL(central_order_block_name) OR central_order_block_name=''), '0', '1')"
+#       - column: value_checked
+#         expression: "central_order_block_name"   
+
+#   - kind: select
+#     name: select_rcconf_172_2_final
+#     context_name: add_rcconf_172_2
+#     params:
+#       columns:
+#         rule_code: rule_code
+#         check_status: check_status
+#         customer_code: customer_code
+#         value_checked: value_checked
+#       distinct: true
+
+# Join 173_1
+  - kind: join
+    name: join_173_1
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_cobt
+        how:
+          left
+        columns:
+          central_order_block_code: conf_central_order_block_code
+
+#SELECT rcconf_173_1
+  - kind: select
+    name: select_rcconf_173_1
+    context_name: join_173_1
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        central_order_block_assignment_date: central_order_block_assignment_date
+        conf_max_months: conf_max_months
+        conf_central_order_block_code: conf_central_order_block_code
+      distinct: true
+
+#RULE 173_1
+  - kind: add
+    name: add_rcconf_173_1
+    context_name: select_rcconf_173_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_173.1'"
+        # DAYS LEVEL
+      - column: check_status
+        expression: "CASE WHEN conf_central_order_block_code IS NULL OR conf_central_order_block_code = '' OR central_order_block_assignment_date IS NULL OR central_order_block_assignment_date = '' THEN '' WHEN MONTHS_BETWEEN(current_date(), central_order_block_assignment_date) <= conf_max_months THEN '1' ELSE '0' END"
+      #   # MONTHS LEVEL
+      # - column: check_status
+      #   expression: "CASE WHEN conf_central_order_block_code IS NULL OR conf_central_order_block_code = '' OR central_order_block_assignment_date IS NULL OR central_order_block_assignment_date = '' THEN '' WHEN MONTHS_BETWEEN(date_format(current_date(),'yyyy-MM'), date_format(to_date(central_order_block_assignment_date),'yyyy-MM')) <= conf_max_months THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_173_1_final
+    context_name: add_rcconf_173_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        central_order_block_assignment_date: value_checked
+      distinct: true
+
+#Union all
+#   - kind: union
+#     name: union_customer_distribution_conformity
+#     context_name: select_rcconf_119_1_final
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_rcconf_144_1_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    context_name: select_rcconf_72_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_2_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_3_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_4_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_5_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_6_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_7_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_72_8_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_144_4_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_154_1_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_154_1_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_154_4_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_154_5_final
+
+#   - kind: union
+#     name: union_customer_distribution_conformity
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_rcconf_163_1_final
+
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_170_1_final
+
+
+#   - kind: union
+#     name: union_customer_distribution_conformity
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_rcconf_170_4_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_170_7_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_170_8_final
+#   - kind: union
+#     name: union_customer_distribution_conformity
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_rcconf_172_1_final
+
+
+#   - kind: union
+#     name: union_customer_distribution_conformity
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_rcconf_172_2_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_173_1_final
+
+  - kind: union
+    name: union_customer_distribution_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_119_2_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_distribution_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_distribution_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

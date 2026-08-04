@@ -1,0 +1,457 @@
+transform:
+  name: vendor_general_completeness
+  operations:
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_contact_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_contact_address
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_contact_person
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_contact_person
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        customer_code: customer_code
+        vendor_org_name1: vendor_org_name1
+        vendor_account_group_code: vendor_account_group_code
+        type_of_industry: type_of_industry
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        is_house_bank_code_allowed: is_house_bank_code_allowed
+        planning_group_code: planning_group_code
+        reconciliation_account_general_ledger: reconciliation_account_general_ledger
+        assignment_numbers_sorting_key: assignment_numbers_sorting_key
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_contact_address
+    context_name: read_dm_vendor_contact_address
+    params:
+      columns:
+        vendor_code: vendor_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        contact_medium_value_extension: contact_medium_value_extension
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_contact_person
+    context_name: read_dm_vendor_contact_person
+    params:
+      columns:
+        vendor_code: vendor_code
+        partner_number: partner_number
+        email_address: email_address
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_contact_address
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_contact_person
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_11_1
+        expression: if(isnull(assignment_numbers_sorting_key) or assignment_numbers_sorting_key = '', '0', '1')
+      - column: rcvomp_12_1
+        expression: if(isnull(planning_group_code) or planning_group_code = '', '0', '1')
+      - column: rcvomp_25_1
+        expression: if(contact_medium_type='fixed_tel_number',
+                    if(isnull(contact_medium_value) or contact_medium_value = '', '0', '1'), '')
+      - column: rcvomp_25_1_1
+        expression: if(contact_medium_type='email_address', 
+                    if(isnull(contact_medium_value) or contact_medium_value = '', '0', '1'), '')
+      - column: rcvomp_33_1
+        expression: if(contact_medium_type='fixed_tel_number', 
+                    if(isnull(contact_medium_value_extension) or contact_medium_value_extension = '', '0', '1'), '')
+      - column: rcvomp_35_1
+        expression: if(contact_medium_type='mobile_tel_number', 
+                    if(isnull(contact_medium_value) or contact_medium_value = '', '0', '1'), '')
+      - column: rcvomp_44_1
+        expression: if(vendor_account_group_code = '9000', 
+                    if(isnull(customer_code) or customer_code= '', '0', '1'), '')
+      - column: rcvomp_47_1
+        expression: if(vendor_account_group_code = '4000', 
+                    if(isnull(type_of_industry) or type_of_industry = '', '0', '1'), '')
+      - column: rcvomp_50_1
+        expression: if(isnull(reconciliation_account_general_ledger) or reconciliation_account_general_ledger = '', '0', '1')
+      - column: rcvomp_64_1
+        expression: if((isnull(contact_medium_value) or contact_medium_value='') 
+                    and (isnull(partner_number) or partner_number = '') and (isnull(email_address) OR email_address = ''), '0', '1')
+      - column: rcvomp_68_1
+        expression: if(company_code in('0428', '0580', '0588', '0589', '0590', '0598', '0522', '0562', '0563', '0526', '0528', '0529', '0530', '0532', '0440', '0441', '0443', '0444', '0445', '0456', '0594', '0595', '0540', '0480', '0491', '0416', '0415', '0417', '0520', '0307', '0403', '0470'), 
+                    if(is_house_bank_code_allowed = '1', '1', '0'), '')
+      - column: rcvomp_7_1
+        expression: if(isnull(vendor_org_name1) or vendor_org_name1 = '', '0', '1')
+      - column: rule_code_rcvomp_11_1
+        expression: '''RVCOMP_11.1'''
+      - column: rule_code_rcvomp_12_1
+        expression: '''RVCOMP_12.1'''
+      - column: rule_code_rcvomp_25_1
+        expression: '''RVCOMP_25.1'''
+      - column: rule_code_rcvomp_25_1_1
+        expression: '''RVCOMP_25.1.1'''
+      - column: rule_code_rcvomp_33_1
+        expression: '''RVCOMP_33.1'''
+      - column: rule_code_rcvomp_35_1
+        expression: '''RVCOMP_35.1'''
+      - column: rule_code_rcvomp_44_1
+        expression: '''RVCOMP_44.1'''
+      - column: rule_code_rcvomp_47_1
+        expression: '''RVCOMP_47.1'''
+      - column: rule_code_rcvomp_50_1
+        expression: '''RVCOMP_50.1'''
+      - column: rule_code_rcvomp_64_1
+        expression: '''RVCOMP_64.1'''
+      - column: rule_code_rcvomp_68_1
+        expression: '''RVCOMP_68.1'''
+      - column: rule_code_rcvomp_7_1
+        expression: '''RVCOMP_7.1'''
+      - column: subdomain
+        expression: '''general_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_11_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_11_1: rule_code
+        rcvomp_11_1: check_status
+        vendor_code: vendor_code
+        assignment_numbers_sorting_key: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_12_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_12_1: rule_code
+        rcvomp_12_1: check_status
+        vendor_code: vendor_code
+        planning_group_code: value_checked
+        country_code: country_code
+        subdomain: subdomain
+        check_date: check_date
+        
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_25_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_25_1: rule_code
+        rcvomp_25_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_25_1_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_25_1_1: rule_code
+        rcvomp_25_1_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_33_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_33_1: rule_code
+        rcvomp_33_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value_extension: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_35_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_35_1: rule_code
+        rcvomp_35_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_44_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_44_1: rule_code
+        rcvomp_44_1: check_status
+        vendor_code: vendor_code
+        customer_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_47_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_47_1: rule_code
+        rcvomp_47_1: check_status
+        vendor_code: vendor_code
+        type_of_industry: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_50_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_50_1: rule_code
+        rcvomp_50_1: check_status
+        vendor_code: vendor_code
+        reconciliation_account_general_ledger: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_64_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_64_1: rule_code
+        rcvomp_64_1: check_status
+        vendor_code: vendor_code
+        contact_medium_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_68_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_68_1: rule_code
+        rcvomp_68_1: check_status
+        vendor_code: vendor_code
+        is_house_bank_code_allowed: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_7_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_7_1: rule_code
+        rcvomp_7_1: check_status
+        vendor_code: vendor_code
+        vendor_org_name1: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_11_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_12_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_25_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_25_1_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_33_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_35_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_44_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_47_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_50_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_64_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_68_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_7_1
+
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

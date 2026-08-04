@@ -1,0 +1,182 @@
+transform:
+  name: dm_finance_controlling_area
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read TKA01
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tka01
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tka01
+
+
+  - kind: select
+    name: select_tka01
+    params:
+      columns:
+        ktopl: ktopl
+        kokrs: kokrs
+        bezei: bezei
+        khinr: khinr
+        dprct: dprct
+        bphinr: bphinr
+        sap_cluster: sap_cluster_tk1
+      distinct: true
+
+
+# Read TKA02
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tka02
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tka02
+
+  - kind: filter
+    name: filter_tka02
+    params:
+      - condition:
+          (bukrs NOT IN ('ZBY1', 'ZA01', 'XX06', 'XX05', 'XX04', 'XX03', 'XX02', 'XX01', 'XX00', 'VE01', 'US01', 'UA01', 'TW01', 'TR01', 'TH01', 'SK01', 'SG01', 'SE01', 'RU01', 'RERF', 'REOB', 'RECO', 'PT01', 'PL01', 'PH01', 'PE01', 'NZ01', 'NO01', 'NL01', 'MY01', 'MX03', 'MX01', 'LU01', 'KZ01', 'KR01', 'JP01', 'IT01', 'IN01', 'IE01', 'ID01', 'HU01', 'HK01', 'GR01', 'GB01', 'FR01', 'FI01', 'ES01', 'DK01', 'DE02', 'DE01', 'CZ01', 'CYP2', 'CYP1', 'CYM1', 'COPY', 'CO01', 'CN01', 'CL01', 'CH01', 'CA01', 'BR01', 'BG01', 'BE01', 'AU01', 'AT01', 'ARG1', 'AR01', '1451', '1450', '0MB1', '0797', '0794', '0790', '0781', '0780', '0769', '0764', '0748', '0732', '0591', '0579', '0532', '0531', '0525', '0524', '0518', '0486', '0462', '0446', '0429', '0402', '0317', '0313', '0311', '0308', '0306', '0301') )
+
+  - kind: select
+    name: select_tka02
+    params:
+      columns:
+        bukrs: bukrs
+        kokrs: kokrs
+        sap_cluster: sap_cluster_tk2
+      distinct: true
+
+
+# Read T001
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t001
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t001
+
+
+  - kind: select
+    name: select_t001
+    params:
+      columns:
+        bukrs: bukrs
+        land1: land1
+        butxt: butxt
+        sap_cluster: sap_cluster_t1
+      distinct: true
+
+# cluster config
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+
+  - kind: filter
+    name: filter_cluster_config
+    params:
+      - condition:
+          flag = 'DM_company'
+
+  - kind: select
+    name: select_cluster_config
+    params:
+      columns:
+        account_group_code: account_group_code
+        cluster: cluster
+        country_code: country_code
+        company_code: company_code
+
+# JOINS
+
+  - kind: join
+    name: join_sa_tk1_tk2_t1
+    context_name: select_tka01
+    params:
+      - other:
+          select_tka02
+        how:
+          inner
+        columns:
+          kokrs: kokrs
+          sap_cluster_tk1: sap_cluster_tk2
+      - other:
+          select_t001
+        how:
+          left
+        columns:
+          bukrs: bukrs
+          sap_cluster_tk2: sap_cluster_t1
+      - other:
+          select_cluster_config
+        how:
+          inner
+        columns:
+          bukrs: company_code
+          sap_cluster_tk2: cluster
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        kokrs: controlling_area_code
+        bezei: controlling_area_name
+        bukrs: company_code
+        butxt: company_name
+        country_code: country_code
+        ktopl: chart_of_accounts
+        khinr: cost_centers_standard_hierarchy
+        dprct: dummy_profit_center
+        bphinr: standard_hierarchy_area
+        sap_cluster_tk1: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

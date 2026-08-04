@@ -1,0 +1,104 @@
+transform:
+  name: dm_finance_settlement_rule
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read COBRB
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cobrb
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: cobrb
+
+
+  - kind: select
+    name: select_cobrb
+    params:
+      columns:
+        bukrs: bukrs
+        objnr: objnr
+        aufnr: aufnr
+        bureg: bureg
+        extnr: extnr
+        perbz: perbz
+        werks: werks
+        gsber: gsber
+        hkont: hkont
+        prctr: prctr
+        kostl: kostl
+        anln1: anln1
+        matnr: matnr
+        prozs: prozs
+        aqzif: aqzif
+        brtyp: brtyp
+        betrr: betrr
+        bwaer: bwaer
+        konty: konty
+        kokrs: kokrs
+        dfreg: dfreg
+        gabja: gabja
+        gabpe: gabpe
+        gbisj: gbisj
+        gbisp: gbisp
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        bukrs: company_code
+        objnr: object_number
+        aufnr: order_number
+        bureg: distribution_rule_group
+        extnr: distribution_rule_number
+        perbz: settlement_type
+        werks: plant
+        gsber: business_area
+        hkont: g_l_account_number
+        prctr: profit_center
+        kostl: cost_center
+        anln1: main_asset_number
+        matnr: material_number
+        prozs: settlement_percentage_rate
+        aqzif: order_settlement_equivalence_number
+        brtyp: amount_rule_type
+        betrr: amount_for_amount_rule
+        bwaer: currency_for_amount_rule
+        konty: account_assignment_category
+        kokrs: controling_area_code
+        dfreg: default_rule
+        gabja: valid_from_year
+        gabpe: valid_from_period
+        gbisj: valid_to_year
+        gbisp: valid_to_period
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_settlement_rule
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_settlement_rule
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

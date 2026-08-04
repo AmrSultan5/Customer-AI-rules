@@ -1,0 +1,52 @@
+# Databricks Apps runtime configuration.
+#
+# Databricks reads this from the root of the synced source directory (this
+# directory), installs requirements.txt, then runs `command`.
+#
+# There is no shell, so $VAR is not expanded — DATABRICKS_APP_PORT is the one
+# exception, substituted by the platform at launch. Everything else must come
+# through `env` below.
+#
+# --workers 1: each worker parses the full Excel/governance data set into pandas
+# independently, and the default app compute is 2 vCPU / 6 GB.
+
+command:
+  - uvicorn
+  - main:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "$DATABRICKS_APP_PORT"
+  - --workers
+  - "1"
+
+env:
+  - name: RULE_AGENT_ENV
+    value: 'production'
+
+  # The frontend is served from ./static by this same process, so every request
+  # is same-origin and CORS never comes into play. Set this to the app's own URL
+  # anyway — it costs nothing and keeps the allowlist honest if a second origin
+  # is ever added. Never "*": the production startup check in main.py rejects it.
+  - name: CORS_ORIGINS
+    value: 'https://rule-agent-REPLACE_WITH_WORKSPACE_ID.REPLACE_WITH_REGION.databricksapps.com'
+
+  # Secrets — each `valueFrom` names a resource key configured on the app.
+  # See Resources in the app settings; never hardcode these values here.
+  - name: ANTHROPIC_API_KEY
+    valueFrom: anthropic_api_key
+
+  - name: OPENAI_API_KEY
+    valueFrom: openai_api_key
+
+  - name: RULE_AGENT_API_TOKEN
+    valueFrom: api_token
+
+  - name: RULE_AGENT_ADMIN_PASSWORD
+    valueFrom: admin_password
+
+  # Postgres DSN, e.g. postgresql+asyncpg://user:pass@host:5432/rule_agent
+  # Required: the app container's local disk is wiped on every restart, so the
+  # default SQLite file would lose all conversations and analytics.
+  - name: DATABASE_URL
+    valueFrom: app_database

@@ -1,0 +1,109 @@
+transform:
+  name: dm_product_warehouse_storage_location
+  operations:
+    - name: initialize_schema_configuration
+      kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+      params:
+        module_name: governance_data_quality_processes
+        config_name: dcc_schema_versions
+    - name: t320
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        dataio:
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        source: sap_s4hana
+        namespace: material_master
+        object_name: t320
+    - name: t320
+      kind: select
+      params:
+        columns:
+          lgnum: warehouse_number_t32
+          werks: plant_code_t32
+          lgort: storage_location_code_t32
+          lgref: storage_location_reference_t32
+          sap_cluster: sap_cluster_t32
+
+    - name: mlgn
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        dataio:
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        source: sap_s4hana
+        namespace: material_master
+        object_name: mlgn
+    - name: mlgn
+      kind: select
+      params:
+        columns:
+          lgnum: warehouse_number_ml
+          matnr: material_code_ml
+          lvorm: deletion_flag_ml
+          lhmg1: loading_equipment_qty_1_ml
+          lhme1: loading_equipment_qty_1_uom_code_ml
+          lety1: first_storage_unity_type_code_ml
+          lhmg2: loading_equipment_qty_2_ml
+          lhme2: loading_equipment_qty_2_uom_code_ml
+          lety2: second_storage_unity_type_code_ml
+          sap_cluster: sap_cluster_ml
+    - name: mlgn
+      kind: cast
+      params:
+        - column: loading_equipment_qty_1_ml
+          to: integer
+        - column: loading_equipment_qty_2_ml
+          to: integer
+
+    - name: join_t32_ml
+      kind: join
+      context_name: t320
+      params:
+        - other:
+            mlgn
+          how:
+            left
+          columns:
+            warehouse_number_t32: warehouse_number_ml
+            sap_cluster_t32: sap_cluster_ml
+
+    - name: dm_product_warehouse_storage_location
+      kind: select
+      context_name: join_t32_ml
+      params:
+        columns:
+          material_code_ml: material_code
+          plant_code_t32: plant_code
+          warehouse_number_ml: warehouse_number
+          storage_location_code_t32: storage_location_code
+          storage_location_reference_t32: storage_location_reference
+          deletion_flag_ml: deletion_flag
+          loading_equipment_qty_1_ml: loading_equipment_qty_1
+          loading_equipment_qty_1_uom_code_ml: loading_equipment_qty_1_uom_code
+          first_storage_unity_type_code_ml: first_storage_unity_type_code
+          loading_equipment_qty_2_ml: loading_equipment_qty_2
+          loading_equipment_qty_2_uom_code_ml: loading_equipment_qty_2_uom_code
+          second_storage_unity_type_code_ml: second_storage_unity_type_code
+          sap_cluster_t32: sap_cluster
+        distinct: true
+
+    - name: write_dm_product_warehouse_storage_location
+      kind: write_dataio
+      params:
+        dataio:
+          layer: application
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: golden
+        object_name: dm_product_warehouse_storage_location
+        process_run_id: "{{process_run_id}}"
+        schema_version: v2
+        refresh_mode: full

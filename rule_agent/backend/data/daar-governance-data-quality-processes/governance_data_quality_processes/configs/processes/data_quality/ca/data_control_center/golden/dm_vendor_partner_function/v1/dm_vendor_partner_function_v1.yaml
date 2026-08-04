@@ -1,0 +1,153 @@
+transform:
+  name: dm_vendor_partner_function
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfa1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfa1
+
+  - kind: filter
+    name: filter_lfa1
+    context_name: read_lfa1
+    params:
+      - condition: (ifnull(SPERR,'') <> 'X' OR ifnull(SPERM,'') <> 'X' OR ifnull(LOEVM,'') <> 'X') AND KTOKK IN('4000', '9000', '2000', '3000', '7000')
+
+  - kind: select
+    name: select_lfa1
+    context_name: filter_lfa1
+    params:
+      columns:
+        lifnr: lifnr
+        ktokk: ktokk
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_wyt3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: wyt3
+
+  - kind: filter
+    name: filter_wyt3
+    context_name: read_wyt3
+    params:
+      - condition: lifn2 IS NOT NULL AND lifn2 <> ''
+
+  - kind: select
+    name: select_wyt3
+    context_name: filter_wyt3
+    params:
+      columns:
+        lifn2: lifn2
+        lifnr: partner_number
+        ekorg: ekorg
+        parvw: parvw
+        ernam: ernam
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_purch_org_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: purch_org_mapping
+
+  - kind: select
+    name: select_purch_org_mapping
+    context_name: read_purch_org_mapping
+    params:
+      columns:
+        purch_org_code: purch_org_code
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_vendor_partner_function
+    context_name: select_lfa1
+    params:
+      - other:
+          select_wyt3
+        how:
+          left
+        columns:
+          lifnr: lifn2
+      - other:
+          select_purch_org_mapping
+        how:
+          left
+        columns:
+          ekorg: purch_org_code
+
+  - kind: add
+    name: add_partner_function_description
+    params:
+      - column: partner_function_description
+        expression: "CASE parvw
+                     WHEN 'BA' THEN 'Ordering Address'
+                     WHEN 'LF' THEN 'Vendor'
+                     WHEN 'WL' THEN 'Goods Supplier'
+                     WHEN 'RS' THEN 'Invoicing Party'
+                     WHEN 'HR' THEN 'Manufacturer'
+                     WHEN 'OA' THEN 'Ordering Address'
+                     WHEN 'VN' THEN 'Vendor'
+                     WHEN 'GS' THEN 'Goods Supplier'
+                     WHEN 'PI' THEN 'Invoicing Party'
+                     WHEN 'PY' THEN 'Payee'
+                     WHEN 'MN' THEN 'Manufacturing Plant'
+                     ELSE parvw END"
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        lifnr: vendor_code
+        ktokk: vendor_account_group_code
+        ekorg: purchasing_organization_code
+        parvw: partner_function_code
+        partner_function_description: partner_function_description
+        partner_number: partner_number
+        ernam: created_by
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_vendor_partner_function
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_partner_function
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

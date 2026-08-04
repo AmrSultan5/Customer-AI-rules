@@ -1,0 +1,204 @@
+transform:
+  name: detailed
+  operations:
+
+  - kind: read_dataio
+    name: read_du
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: reconciliation_account
+      schema_version: v1
+
+  - kind: add
+    name: add_completeness
+    context_name: read_du
+    params:
+      - column: order_block
+        expression: CONCAT(order_block_code, " - ", order_block_name)
+      - column: customer_hier_3
+        expression: CONCAT(customer_hier_3_code, " - ", customer_hier_3_name) 
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, " - ", customer_group_4_name)
+      - column: account_group
+        expression: CONCAT(account_group_code, " - ", account_group_name)
+      - column: dq_output_message
+        expression: "CASE WHEN completeness_recon_flag = '0' THEN 'Missing Reconciliation Account' WHEN completeness_recon_flag = '1' AND accuracy_recon_flag = '0' THEN 'Inconsistency between Recc account & Account group' WHEN completeness_recon_flag = '1' AND accuracy_recon_flag = '1' THEN 'OK' END"
+
+  - kind: select
+    name: select_du
+    context_name: add_completeness
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block: order_block
+        customer_hier_3: customer_hier_3
+        customer_group_4: customer_group_4
+        country_code: country_code
+        company_code: company_code
+        reconciliation_account: reconciliation_account
+        account_group: account_group
+        completeness_recon_flag: completeness_recon_flag
+        accuracy_recon_flag: accuracy_recon_flag
+        dq_output_message: dq_output_message
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: reconciliation_account
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+## AGGREGATED LAYER
+
+  - kind: add
+    name: add_completeness
+    context_name: select_du
+    params:
+      - column: total_records
+        expression: CAST(1 AS INT) 
+      - column: total_checks
+        expression: IF((completeness_recon_flag IS NOT NULL AND completeness_recon_flag!=''), 1, NULL)           
+      - column: quality_category
+        expression: "'completeness'"
+      - column: invalid_checks
+        expression: IF((completeness_recon_flag='0'), 1, NULL)
+      - column: account_group
+        expression: CONCAT(account_group_code, " - ", account_group_name)        
+      - column: loading_date
+        expression: current_date()
+
+  - kind: group
+    name: group_completeness
+    context_name: add_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - account_group
+        - quality_category
+        - loading_date
+
+  - kind: select
+    name: select_completeness
+    context_name: group_completeness
+    params:
+      columns:
+        country_code: country_code
+        account_group: account_group
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: add
+    name: add_accuracy
+    context_name: select_du
+    params:
+      - column: total_records
+        expression: CAST(1 AS INT) 
+      - column: total_checks
+        expression: IF((accuracy_recon_flag IS NOT NULL AND accuracy_recon_flag!=''), 1, NULL)           
+      - column: quality_category
+        expression: "'accuracy'"
+      - column: invalid_checks
+        expression: IF((accuracy_recon_flag='0'), 1, NULL)
+      - column: loading_date
+        expression: current_date()  
+
+  - kind: group
+    name: group_accuracy
+    context_name: add_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - account_group
+        - quality_category
+        - loading_date
+
+  - kind: select
+    name: select_accuracy
+    context_name: group_accuracy
+    params:
+      columns:
+        country_code: country_code
+        account_group: account_group
+        count_total_records: total_records
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_accuracy
+
+  - kind: add
+    name: add_new_columns
+    context_name: union_all
+    params:
+      - column: total_records_int
+        expression: CAST(total_records AS INT)
+      - column: total_checks_int
+        expression: CAST(total_checks AS INT)
+      - column: invalid_checks_int
+        expression: CAST(invalid_checks AS INT)
+
+  - kind: select
+    name: select_finall
+    context_name: add_new_columns
+    params:
+      columns:
+        country_code: country_code
+        account_group: account_group
+        total_records_int: total_records
+        total_checks_int: total_checks
+        quality_category: quality_category
+        invalid_checks_int: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: reconciliation_account
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

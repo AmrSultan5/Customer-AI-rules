@@ -1,0 +1,487 @@
+transform:
+  name: f_employee_details_l3
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_employee_organisation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_organisation
+      schema_version: v1
+
+  - kind: select
+    name: select_deo
+    context_name: read_dm_employee_organisation
+    params:
+      columns:
+        object_type: object_type_deo
+        supervisory_organisation_id: supervisory_organisation_id
+        company_id: company_id_deo
+        department_name: department_name_deo
+        sub_department_name: sub_department_name_deo
+        supervisory_organisation_name: supervisory_organisation_name_deo
+        manager_employee_id: manager_employee_id_deo
+        manager_position_id: manager_position_id_deo
+        upper_supervisory_organisation_id: upper_supervisory_organisation_id_deo
+        upper_supervisory_organisation_name: upper_supervisory_organisation_name_deo
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_position
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_position
+      schema_version: v1
+
+  - kind: select
+    name: select_dep
+    context_name: read_dm_employee_position
+    params:
+      columns:
+        object_type: object_type_dep
+        position_id: position_id_dep
+        company_id: company_id_dep
+        position_name: position_name_dep
+        department_name: department_name_dep
+        sub_department_name: sub_department_name_dep
+        position_time_type_id: position_time_type_id_dep
+        position_fte: position_fte_dep
+        cost_center_id: cost_center_id_dep
+        job_family_name: job_family_name_dep
+        job_family_group_name: job_family_group_name_dep
+        management_level: management_level_dep
+        is_on_leave: is_on_leave_dep
+      distinct: true
+
+  - kind: add
+    name: add_company_id_dep
+    context_name: select_dep
+    params:
+      - column: company_id_dep
+        expression: ifnull(company_id_dep, 'null')
+        overwrite: true
+      - column: is_on_leave_dep
+        expression: ifnull(is_on_leave_dep, 'null')
+        overwrite: true
+
+  - kind: read_dataio
+    name: read_dm_employee_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker
+      schema_version: v2
+
+  - kind: select
+    name: select_dew
+    context_name: read_dm_employee_worker
+    params:
+      columns:
+        object_type: object_type_dew
+        employee_id: employee_id
+        worker_type_id: worker_type_id_dew
+        company_id: company_id_dew
+        payroll_id: payroll_id_dew
+        position_name: position_name_dew
+        department_name: department_name_dew
+        sub_department_name: sub_department_name_dew
+        employee_sub_type_id: employee_sub_type_id_dew
+        supervisory_organisation_id: supervisory_organisation_id_dew
+        job_family_name: job_family_name_dew
+        position_fte: position_fte_dew
+        job_profile_id: job_profile_id_dew
+        is_on_leave: is_on_leave_dew
+      distinct: true
+
+########################################################################################
+
+  - kind: read_dataio
+    name: read_dm_employee_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results
+      schema_version: v3
+
+  - kind: filter
+    name: filter_decr
+    context_name: read_dm_employee_check_results
+    params:
+      - condition:
+          check_status = '0'
+
+  - kind: read_dataio
+    name: read_dm_employee_check_results_lifecycle
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results_lifecycle
+      schema_version: v1
+
+  - kind: select
+    name: select_decrl
+    context_name:  read_dm_employee_check_results_lifecycle
+    params:
+      columns:
+        rule_code: rule_code_l
+        object_id: object_id_l
+        check_status: check_status_l
+        check_status_start_date: fail_start_date_l
+      distinct: true
+
+  - kind: join
+    name: join_user_message
+    context_name: filter_decr
+    params:
+      - other:
+          select_decrl
+        how:
+          left
+        columns:
+          object_id: object_id_l
+          rule_code: rule_code_l
+          check_status: check_status_l
+
+  - kind: select
+    name: select_last_loading_data
+    context_name: join_user_message
+    params:
+      columns:
+        rule_code: rule_code
+        object_id: object_id
+        check_status: check_status
+        value_checked: value_checked
+        check_date: check_date
+        object_type: object_type
+        country_code: country_code
+        location_code: location_code
+        fail_start_date_l: fail_start_date
+        user_message_name: user_message
+        detailed_message: detailed_message
+      distinct: true
+
+########################################################################################
+
+  - kind: read_dataio
+    name: read_dim_employee_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: dim_employee_classification
+      schema_version: v1
+
+  - kind: add
+    name: add_company_code_dec
+    context_name: read_dim_employee_classification
+    params:
+      - column: company_code
+        expression: ifnull(company_code, 'null')
+        overwrite: true
+      - column: is_on_leave
+        expression: ifnull(is_on_leave, 'null')
+        overwrite: true
+
+  - kind: select
+    name: select_dim_employee_classification_position
+    context_name: add_company_code_dec
+    params:
+      columns:
+        company_code: company_code_position
+        object_type: object_type_position
+        employee_class_id: employee_class_id_p
+        is_on_leave: is_on_leave_position
+      distinct: true
+
+  - kind: select
+    name: select_dim_employee_classification_worker
+    context_name: add_company_code_dec
+    params:
+      columns:
+        worker_type: worker_type_worker
+        company_code: company_id_worker
+        employee_class_id: employee_class_id_w
+        is_on_leave: is_on_leave_worker
+      distinct: true
+
+  - kind: select
+    name: select_dim_employee_classification_organisation
+    context_name: add_company_code_dec
+    params:
+      columns:
+        object_type: object_type_organisation
+        company_code: company_code_organisation
+        employee_class_id: employee_class_id_o
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: dim_rules_inventory
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dri
+    context_name: read_dim_rules_inventory
+    params:
+      - condition:
+          is_active = '1'
+
+  - kind: select
+    name: select_dri
+    context_name: filter_dri
+    params:
+      columns:
+        rule_code: rule_code
+        is_pbi_active: is_pbi_active
+        # is_sensitive: is_sensitive
+      distinct: true
+
+  - kind: join
+    name: join_checks_datamarts
+    context_name: select_last_loading_data
+    params:
+      - other:
+          select_dri
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+      - other:
+          select_deo
+        how:
+          left
+        columns:
+          object_id: supervisory_organisation_id
+      - other:
+          add_company_id_dep
+        how:
+          left
+        columns:
+          object_id: position_id_dep
+      - other:
+          select_dew
+        how:
+          left
+        columns:
+          object_id: employee_id
+      - other:
+          select_dim_employee_classification_organisation
+        how:
+          left
+        columns:
+          object_type_deo: object_type_organisation
+          company_id_deo: company_code_organisation
+      - other:
+          select_dim_employee_classification_position
+        how:
+          left
+        columns:
+          company_id_dep: company_code_position
+          object_type_dep: object_type_position
+          is_on_leave_dep: is_on_leave_position
+      - other:
+          select_dim_employee_classification_worker
+        how:
+          left
+        columns:
+          worker_type_id_dew: worker_type_worker
+          company_id_dew: company_id_worker
+          is_on_leave_dew: is_on_leave_worker
+
+  - kind: add
+    name: add_data
+    context_name: join_checks_datamarts
+    params:
+      - column: employee_class_id
+        expression: if(employee_class_id_o is not null and employee_class_id_o != '', employee_class_id_o,
+                    if(employee_class_id_p is not null and employee_class_id_p != '', employee_class_id_p,
+                    if(employee_class_id_w is not null and employee_class_id_w != '', employee_class_id_w, NULL)))
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+      - column: payroll_id
+        expression: if(object_type_dew = 'Employee', payroll_id_dew,
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: position_name
+        expression: if(object_type_dew = 'Employee', position_name_dew,
+                    if(object_type_dep = 'Position', position_name_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: department_name
+        expression: if(object_type_dew = 'Employee', department_name_dew,
+                    if(object_type_dep = 'Position', department_name_dep,
+                    if(object_type_deo = 'Organisation', department_name_deo, '')))
+      - column: sub_department_name
+        expression: if(object_type_dew = 'Employee', sub_department_name_dew,
+                    if(object_type_dep = 'Position', sub_department_name_dep,
+                    if(object_type_deo = 'Organisation', sub_department_name_deo, '')))
+      - column: employee_sub_type_id
+        expression: if(object_type_dew = 'Employee', employee_sub_type_id_dew,
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: supervisory_organisation_id
+        expression: if(object_type_dew = 'Employee', supervisory_organisation_id_dew,
+                    if(object_type_dep = 'Position', supervisory_organisation_id_dep,
+                    if(object_type_deo = 'Organisation', supervisory_organisation_id_deo, '')))
+      - column: supervisory_organisation_name
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', supervisory_organisation_name_deo, '')))
+      - column: position_time_type_id
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', position_time_type_id_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: position_fte
+        expression: if(object_type_dew = 'Employee', position_fte_dew,
+                    if(object_type_dep = 'Position', position_fte_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: cost_center_id
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', cost_center_id_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: job_profile_id
+        expression: if(object_type_dew = 'Employee', job_profile_id_dew,
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: job_family_name
+        expression: if(object_type_dew = 'Employee', job_family_name_dew,
+                    if(object_type_dep = 'Position', job_family_name_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: job_family_group_name
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', job_family_group_name_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: management_level
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', management_level_dep,
+                    if(object_type_deo = 'Organisation', '', '')))
+      - column: manager_employee_id
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', manager_employee_id_deo, '')))
+      - column: manager_position_id
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', manager_position_id_deo, '')))
+      - column: upper_supervisory_organisation_id
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', upper_supervisory_organisation_id_deo, '')))
+      - column: upper_supervisory_organisation_name
+        expression: if(object_type_dew = 'Employee', '',
+                    if(object_type_dep = 'Position', '',
+                    if(object_type_deo = 'Organisation', upper_supervisory_organisation_name_deo, '')))
+      - column: value_checked
+        expression: if(value_checked = '', NULL, value_checked)
+        overwrite: true
+      - column: country_code
+        expression: if(country_code = '', NULL, country_code)
+        overwrite: true
+      - column: location_code
+        expression: if(location_code = '', NULL, location_code)
+        overwrite: true
+
+  - kind: cast
+    name: cast_to_integer
+    context_name: add_data
+    params:
+      - column: is_pbi_active
+        to: integer
+
+  - kind: select
+    name: select_final
+    context_name: cast_to_integer
+    params:
+      columns:
+        value_checked: value_checked
+        check_status: check_status
+        country_code: country_code
+        location_code: location_code
+        employee_class_id: employee_class_id
+        object_id: object_id
+        rule_code: rule_code
+        loading_date: loading_date
+        detailed_message: detailed_message
+        payroll_id: payroll_id
+        position_name: position_name
+        department_name: department_name
+        sub_department_name: sub_department_name
+        employee_sub_type_id: employee_sub_type_id
+        supervisory_organisation_id: supervisory_organisation_id
+        supervisory_organisation_name: supervisory_organisation_name
+        position_time_type_id: position_time_type_id
+        position_fte: position_fte
+        cost_center_id: cost_center_id
+        job_profile_id: job_profile_id
+        job_family_name: job_family_name
+        job_family_group_name: job_family_group_name
+        management_level: management_level
+        manager_employee_id: manager_employee_id
+        manager_position_id: manager_position_id
+        upper_supervisory_organisation_id: upper_supervisory_organisation_id
+        upper_supervisory_organisation_name: upper_supervisory_organisation_name
+        is_pbi_active: is_pbi_active
+        fail_start_date: fail_start_date
+        user_message: user_message
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_employee_details_l3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: f_employee_details_l3
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full

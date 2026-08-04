@@ -1,0 +1,1791 @@
+transform:
+  name: Billing_data_mdg_d365
+  operations:
+    - kind: read_dataio
+      name: read_mdg_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_knvv
+      context_name: read_mdg_knvv
+      params:
+        columns:
+          KUNNR: PARTNER
+          KVGR4: KVGR4
+          vkorg: vkorg
+          vtweg: vtweg
+          spart: spart
+          PERRL: PERRL
+          KTGRD: KTGRD
+          INCO1: INCO1
+          INCO2: INCO2
+          PRFRE: PRFRE
+          ZTERM: ZTERM
+          aufsd: aufsd
+        distinct: true   
+
+    - kind: filter
+      name: filter_mdg_knvv
+      context_name: select_mdg_knvv
+      params:
+        - condition: PARTNER like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%','96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%') and vtweg = '01' and spart = '01' and vkorg in (9600,1100,8600,4890,5500,5100,4500,3200,7900,1200,8090,2800,7800,6300,9200,3300,3100,2000,8200,9500,9400,6100,9100,2500,8500,4090,7200)
+
+    - kind: add
+      name: add_mdg_HASH
+      context_name: filter_mdg_knvv
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(PARTNER,vkorg,vtweg,spart,PERRL,KTGRD,INCO1,INCO2,upper(PRFRE),ZTERM,aufsd))
+
+    - kind: select
+      name: mdg_
+      context_name: add_mdg_HASH
+      params:
+        columns:
+          PARTNER: PARTNER_mdg
+          KVGR4: KVGR4_mdg
+          vkorg: vkorg_mdg
+          vtweg: vtweg_mdg
+          spart: spart_mdg
+          PERRL: PERRL_mdg
+          KTGRD: KTGRD_mdg
+          INCO1: INCO1_mdg
+          INCO2: INCO2_mdg
+          PRFRE: PRFRE_mdg
+          ZTERM: ZTERM_mdg
+          aufsd: aufsd_mdg
+          HASH: hash_mdg
+        distinct: true
+
+    - kind: checkpoint
+      name: mdg
+      context_name: mdg_
+
+        
+####################################################################################################
+    - kind: read_dataio
+      name: read_d365_optionsetmapping
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_optionsetmapping
+        schema_version: v1
+
+    - kind: select
+      name: optionsetmapping
+      context_name: read_d365_optionsetmapping
+      params:
+        columns:
+          cch_entityname: cch_entityname
+          cch_attributename: cch_attributename
+          cch_externalvalue: cch_externalvalue
+          cch_optionsetvalue: cch_optionsetvalue
+####################################################################################################
+
+    - kind: filter
+      name: filter_cch_invoicinglistdates
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_invoicinglistdates'
+
+    - kind: add
+      name: clean_cch_invoicinglistdates
+      context_name: filter_cch_invoicinglistdates
+      params:
+      - column: sap_invoicinglistdates
+        expression: trim(cch_externalvalue)
+      - column: d365_invoicinglistdates
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_cch_invoicinglistdates
+      context_name: clean_cch_invoicinglistdates
+      params:
+        columns:
+          sap_invoicinglistdates: sap_invoicinglistdates
+          d365_invoicinglistdates: d365_invoicinglistdates
+        distinct: true
+###################################################################
+    - kind: filter
+      name: filter_cch_accountassignmentgroup
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_accountassignmentgroup'
+
+
+    - kind: add
+      name: clean_cch_accountassignmentgroup
+      context_name: filter_cch_accountassignmentgroup
+      params:
+      - column: sap_accountassignmentgroup
+        expression: trim(cch_externalvalue)
+      - column: d365_accountassignmentgroup
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_accountassignmentgroup
+      context_name: clean_cch_accountassignmentgroup
+      params:
+        columns:
+          sap_accountassignmentgroup: sap_accountassignmentgroup
+          d365_accountassignmentgroup: d365_accountassignmentgroup
+        distinct: true
+###################################################################
+
+
+
+    - kind: filter
+      name: filter_cch_incoterms
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_incoterms'
+
+    - kind: add
+      name: clean_cch_incoterms
+      context_name: filter_cch_incoterms
+      params:
+      - column: sap_incoterms
+        expression: trim(cch_externalvalue)
+      - column: d365_incoterms
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_cch_incoterms
+      context_name: clean_cch_incoterms
+      params:
+        columns:
+          sap_incoterms: sap_incoterms
+          d365_incoterms: d365_incoterms
+        distinct: true
+###################################################################
+    - kind: filter
+      name: filter_paymenttermscode
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'paymenttermscode'
+
+
+    - kind: add
+      name: clean_paymenttermscode
+      context_name: filter_paymenttermscode
+      params:
+      - column: sap_paymenttermscode
+        expression: trim(cch_externalvalue)
+      - column: d365_paymenttermscode
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_paymenttermscode
+      context_name: clean_paymenttermscode
+      params:
+        columns:
+          sap_paymenttermscode: sap_paymenttermscode
+          d365_paymenttermscode: d365_paymenttermscode
+        distinct: true
+###################################################################
+
+    - kind: filter
+      name: filter_orderblockselectedsalesarea
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_orderblockselectedsalesarea'
+
+
+    - kind: add
+      name: clean_orderblockselectedsalesarea
+      context_name: filter_orderblockselectedsalesarea
+      params:
+      - column: sap_orderblockselectedsalesarea
+        expression: trim(cch_externalvalue)
+      - column: d365_orderblockselectedsalesarea
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_orderblockselectedsalesarea
+      context_name: clean_orderblockselectedsalesarea
+      params:
+        columns:
+          sap_orderblockselectedsalesarea: sap_orderblockselectedsalesarea
+          d365_orderblockselectedsalesarea: d365_orderblockselectedsalesarea
+        distinct: true
+###################################################################
+
+    - kind: filter
+      name: filter_distributionchannel
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_distributionchannel'
+
+
+    - kind: add
+      name: clean_distributionchannel
+      context_name: filter_distributionchannel
+      params:
+      - column: sap_distributionchannel
+        expression: trim(cch_externalvalue)
+      - column: d365_distributionchannel
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_distributionchannel
+      context_name: clean_distributionchannel
+      params:
+        columns:
+          sap_distributionchannel: sap_distributionchannel
+          d365_distributionchannel: d365_distributionchannel
+        distinct: true
+###################################################################
+
+
+    - kind: filter
+      name: filter_division
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_division'
+
+
+    - kind: add
+      name: clean_division
+      context_name: filter_division
+      params:
+      - column: sap_division
+        expression: trim(cch_externalvalue)
+      - column: d365_division
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_division
+      context_name: clean_division
+      params:
+        columns:
+          sap_division: sap_division
+          d365_division: d365_division
+        distinct: true
+###################################################################
+
+    - kind: filter
+      name: filter_customergroup4code
+      context_name: optionsetmapping
+      params:
+        - condition: statuscode = 1 and statecode = 0 and cch_entityname = 'account' and cch_attributename = 'cch_customergroup4code'
+
+    - kind: add
+      name: clean_customergroup4code
+      context_name: filter_customergroup4code
+      params:
+      - column: sap_customergroup4code
+        expression: trim(cch_externalvalue)
+      - column: d365_customergroup4code
+        expression: trim(cch_optionsetvalue)
+        
+    - kind: select
+      name: select_customergroup4code
+      context_name: clean_customergroup4code
+      params:
+        columns:
+          sap_customergroup4code: sap_customergroup4code
+          d365_customergroup4code: d365_customergroup4code
+        distinct: true
+###################################################################
+
+
+    - kind: read_dataio
+      name: read_d365_territory
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: territory
+        schema_version: v1
+
+    - kind: filter
+      name: filter_territory
+      context_name: read_d365_territory
+      params:
+        - condition: 1 = 1
+
+    - kind: select
+      name: select_d365_territory
+      context_name: filter_territory
+      params:
+        columns:
+          cch_sapid: territory_cch_sapid
+          id: territory_id
+        distinct: true
+
+        
+        
+####################################################################################################
+    - kind: read_dataio
+      name: read_d365_account
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: account
+        schema_version: v1
+  
+    - kind: filter
+      name: filter_d365_account
+      context_name: read_d365_account
+      params:
+        - condition: cch_sapid like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%','96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%')
+  
+    - kind: select
+      name: select_d365_account
+      context_name: filter_d365_account
+      params:
+        columns:        
+          cch_sapid: cch_sapid
+          cch_salesorganizationid: cch_salesorganizationid
+          cch_distributionchannel: cch_distributionchannel
+          cch_division: cch_division
+          cch_orderblockselectedsalesarea: cch_orderblockselectedsalesarea
+          cch_invoicinglistdates: cch_invoicinglistdates
+          cch_accountassignmentgroup: cch_accountassignmentgroup
+          cch_incoterms: cch_incoterms
+          cch_incotermspart2: cch_incotermspart2
+          cch_pricedetermination: cch_pricedetermination
+          paymenttermscode: paymenttermscode
+          cch_custgrp4directindirect: cch_custgrp4directindirect
+        distinct: true
+
+  
+    - kind: join
+      name: join_d365
+      context_name: select_d365_account
+      params:
+        - other:
+            select_distributionchannel
+          how:
+            left
+          columns:
+            cch_distributionchannel: d365_distributionchannel
+        - other:
+            select_division
+          how:
+            left
+          columns:
+            cch_division: d365_division
+        - other:
+            select_customergroup4code
+          how:
+            left
+          columns:
+            cch_custgrp4directindirect: d365_customergroup4code
+        - other:
+            select_accountassignmentgroup
+          how:
+            left
+          columns:
+            cch_accountassignmentgroup: d365_accountassignmentgroup            
+        - other:
+            select_cch_incoterms
+          how:
+            left
+          columns:
+            cch_incoterms: d365_incoterms  
+        - other:
+            select_orderblockselectedsalesarea
+          how:
+            left
+          columns:
+            cch_orderblockselectedsalesarea: d365_orderblockselectedsalesarea            
+        - other:
+            select_paymenttermscode
+          how:
+            left
+          columns:
+            paymenttermscode: d365_paymenttermscode  
+        - other:
+            select_cch_invoicinglistdates
+          how:
+            left
+          columns:
+            cch_invoicinglistdates: d365_invoicinglistdates
+        - other:
+            select_d365_territory
+          how:
+            left
+          columns:
+            cch_salesorganizationid: territory_id
+
+    - kind: select
+      name: select_d365
+      context_name: join_d365
+      params:
+        columns:        
+          cch_sapid: cch_sapid
+          territory_cch_sapid: territory_cch_sapid
+          sap_distributionchannel: cch_distributionchannel
+          sap_division: cch_division
+          sap_orderblockselectedsalesarea: cch_orderblockselectedsalesarea_temp
+          sap_invoicinglistdates: cch_invoicinglistdates_temp
+          sap_accountassignmentgroup: cch_accountassignmentgroup_temp
+          sap_incoterms: cch_incoterms_temp
+          cch_incotermspart2: cch_incotermspart2_temp
+          cch_pricedetermination: cch_pricedetermination_temp
+          sap_paymenttermscode: paymenttermscode_temp
+          sap_customergroup4code: cch_custgrp4directindirect
+        distinct: true
+
+    - kind: add
+      name: add_d365_columns
+      context_name: select_d365
+      params:
+        - column: cch_invoicinglistdates
+          expression: COALESCE(cch_invoicinglistdates_temp,'')
+        - column: cch_accountassignmentgroup
+          expression: COALESCE(cch_accountassignmentgroup_temp,'')
+        - column: cch_incoterms
+          expression: COALESCE(cch_incoterms_temp,'')
+        - column: cch_incotermspart2
+          expression: COALESCE(cch_incotermspart2_temp,'')
+        - column: cch_pricedetermination
+          expression: upper(IF(coalesce(cast(cch_pricedetermination_temp as string),'') ='false','X',''))
+        - column: paymenttermscode
+          expression: COALESCE(paymenttermscode_temp,'')
+        - column: cch_orderblockselectedsalesarea
+          expression: trim(coalesce(cch_orderblockselectedsalesarea_temp,''))
+        - column: hash_d365
+          expression: md5(concat(coalesce(cch_sapid,''),coalesce(territory_cch_sapid,''),coalesce(cch_distributionchannel,''),coalesce(cch_division,''),coalesce(cch_invoicinglistdates_temp,''),coalesce(cch_accountassignmentgroup_temp,''),coalesce(cch_incoterms_temp,''),coalesce(cch_incotermspart2_temp,''),upper(IF(coalesce(cast(cch_pricedetermination_temp as string),'') ='false','X','')),coalesce(paymenttermscode_temp,''),trim(coalesce(cch_orderblockselectedsalesarea_temp,''))))
+
+    - kind: filter
+      name: filter_d365
+      context_name: add_d365_columns
+      params:
+        - condition: sap_distributionchannel = '01' and sap_division = '01' and territory_cch_sapid in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+
+
+    - kind: select
+      name: d365_
+      context_name: filter_d365
+      params:
+        columns:
+          cch_sapid: PARTNER_d365
+          cch_custgrp4directindirect: KVGR4_d365
+          territory_cch_sapid: vkorg_d365
+          cch_distributionchannel: vtweg_d365
+          cch_division: spart_d365
+          cch_invoicinglistdates: PERRL_d365
+          cch_accountassignmentgroup: KTGRD_d365
+          cch_incoterms: INCO1_d365
+          cch_incotermspart2: INCO2_d365
+          cch_pricedetermination: PRFRE_d365
+          paymenttermscode: ZTERM_d365
+          cch_orderblockselectedsalesarea: aufsd_d365
+          hash_d365: HASH_d365
+        distinct: true
+
+    - kind: checkpoint
+      name: d365
+      context_name: d365_      
+#############################################################
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            d365
+          how:
+            full
+          columns:
+            HASH_mdg: HASH_d365
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_d365 is null or HASH_d365 = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          PARTNER_mdg: PARTNER_mdg
+          KVGR4_mdg: KVGR4_mdg
+          vkorg_mdg: vkorg_mdg
+          vtweg_mdg: vtweg_mdg
+          spart_mdg: spart_mdg
+          PERRL_mdg: PERRL_mdg
+          KTGRD_mdg: KTGRD_mdg
+          INCO1_mdg: INCO1_mdg
+          INCO2_mdg: INCO2_mdg
+          PRFRE_mdg: PRFRE_mdg
+          ZTERM_mdg: ZTERM_mdg
+          aufsd_mdg: aufsd_mdg
+          HASH_mdg: HASH_mdg
+
+    - kind: filter
+      name: non_matching_d365
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_mdg is null or HASH_mdg = ''
+
+    - kind: select
+      name: non_matching_d365_select
+      context_name: non_matching_d365
+      params:
+        columns:
+          PARTNER_d365: PARTNER_d365
+          KVGR4_d365: KVGR4_d365
+          vkorg_d365: vkorg_d365
+          vtweg_d365: vtweg_d365
+          spart_d365: spart_d365
+          PERRL_d365: PERRL_d365
+          KTGRD_d365: KTGRD_d365
+          INCO1_d365: INCO1_d365
+          INCO2_d365: INCO2_d365
+          PRFRE_d365: PRFRE_d365
+          ZTERM_d365: ZTERM_d365
+          aufsd_d365: aufsd_d365
+          HASH_d365: HASH_d365
+
+###data missing from mdg
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_d365_select
+          how:
+            full
+          columns:
+            PARTNER_mdg: PARTNER_d365
+            vkorg_mdg: vkorg_d365
+            vtweg_mdg: vtweg_d365
+            spart_mdg: spart_d365
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: msg_mdg
+          expression: CASE WHEN PARTNER_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_d365
+          expression: CASE WHEN PARTNER_d365 IS NULL THEN 'data missing from d365' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string)   
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          PARTNER_d365: partner
+          vkorg_d365: VKORG
+          vtweg_d365: VTWEG
+          spart_d365: SPART
+          KVGR4_d365: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+###data missing from d365
+
+    - kind: filter
+      name: join_data_missing_from_d365_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_d365 is null
+
+    - kind: select
+      name: final_data_missing_from_d365
+      context_name: join_data_missing_from_d365_filter
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_d365: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+##BILLING DATA: Invoice List Schedule
+    - kind: filter
+      name: billing_data_invoice_list_schedule_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND PERRL_d365 <> PERRL_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_invoice_list_schedule
+      context_name: billing_data_invoice_list_schedule_filter
+      params:
+        - column: attr_name_billing_data_invoice_list_schedule
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND PERRL_d365 <> PERRL_mdg THEN concat('BILLING DATA:',' Invoice List Schedule') END
+        - column: msg_billing_data_invoice_list_schedule
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND PERRL_d365 <> PERRL_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_invoice_list_schedule
+      context_name: add_missing_columns_billing_data_invoice_list_schedule
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_invoice_list_schedule: msg
+          attr_name_billing_data_invoice_list_schedule: attr_name
+          PERRL_d365: tgt_attr
+          PERRL_mdg: src_attr
+
+###BILLING DATA: Account Assignment Group---
+    - kind: filter
+      name: billing_data_account_assignment_group_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND KTGRD_d365 <> KTGRD_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_account_assignment_group
+      context_name: billing_data_account_assignment_group_filter
+      params:
+        - column: attr_name_billing_data_account_assignment_group
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND KTGRD_d365 <> KTGRD_mdg THEN concat('BILLING DATA:',' Account Assignment Group') END
+        - column: msg_billing_data_account_assignment_group
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND KTGRD_d365 <> KTGRD_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_account_assignment_group
+      context_name: add_missing_columns_billing_data_account_assignment_group
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_account_assignment_group: msg
+          attr_name_billing_data_account_assignment_group: attr_name
+          KTGRD_d365: tgt_attr
+          KTGRD_mdg: src_attr
+
+##BILLING DATA: Incoterms
+    - kind: filter
+      name: billing_data_incoterms_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND INCO1_d365 <> INCO1_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_incoterms
+      context_name: billing_data_incoterms_filter
+      params:
+        - column: attr_name_billing_data_incoterms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND INCO1_d365 <> INCO1_mdg THEN concat('BILLING DATA:',' Incoterms') END
+        - column: msg_billing_data_incoterms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND INCO1_d365 <> INCO1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_incoterms
+      context_name: add_missing_columns_billing_data_incoterms
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_incoterms: msg
+          attr_name_billing_data_incoterms: attr_name
+          INCO1_d365: tgt_attr
+          INCO1_mdg: src_attr
+
+###BILLING DATA: Incoterms2
+
+    - kind: filter
+      name: billing_data_incoterms2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND INCO2_d365 <> INCO2_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_incoterms2
+      context_name: billing_data_incoterms2_filter
+      params:
+        - column: attr_name_billing_data_incoterms2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND INCO2_d365 <> INCO2_mdg THEN concat('BILLING DATA:',' Incoterms2') END
+        - column: msg_billing_data_incoterms2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND INCO2_d365 <> INCO2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_incoterms2
+      context_name: add_missing_columns_billing_data_incoterms2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_incoterms2: msg
+          attr_name_billing_data_incoterms2: attr_name
+          INCO2_d365: tgt_attr
+          INCO2_mdg: src_attr
+
+###BILLING DATA: Pricing
+    - kind: filter
+      name: billing_data_pricing_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND PRFRE_d365 <> PRFRE_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_pricing
+      context_name: billing_data_pricing_filter
+      params:
+        - column: attr_name_billing_data_pricing
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND upper(PRFRE_d365) <> upper(PRFRE_mdg) THEN concat('BILLING DATA:',' Pricing') END
+        - column: msg_billing_data_pricing
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND upper(PRFRE_d365) <> upper(PRFRE_mdg) THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_pricing
+      context_name: add_missing_columns_billing_data_pricing
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_pricing: msg
+          attr_name_billing_data_pricing: attr_name
+          PRFRE_d365: tgt_attr
+          PRFRE_mdg: src_attr
+
+###BILLING DATA: Payment Terms
+    - kind: filter
+      name: billing_data_payment_terms_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND ZTERM_d365 <> ZTERM_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_payment_terms
+      context_name: billing_data_payment_terms_filter
+      params:
+        - column: attr_name_billing_data_payment_terms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND ZTERM_d365 <> ZTERM_mdg THEN concat('BILLING DATA:',' Payment Terms') END
+        - column: msg_billing_data_payment_terms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND ZTERM_d365 <> ZTERM_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_payment_terms
+      context_name: add_missing_columns_billing_data_payment_terms
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_payment_terms: msg
+          attr_name_billing_data_payment_terms: attr_name
+          ZTERM_d365: tgt_attr
+          ZTERM_mdg: src_attr
+
+###BLOCKING: Order Block - Sales Area
+    - kind: filter
+      name: blocking_order_block_sales_area_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND aufsd_d365 <> aufsd_mdg
+
+    - kind: add
+      name: add_missing_columns_blocking_order_block_sales_area
+      context_name: blocking_order_block_sales_area_filter
+      params:
+        - column: attr_name_blocking_order_block_sales_area
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND aufsd_d365 <> aufsd_mdg THEN concat('BLOCKING:',' Order Block - Sales Area') END
+        - column: msg_blocking_order_block_sales_area
+          expression: CASE WHEN PARTNER_mdg = PARTNER_d365 AND vkorg_mdg = vkorg_d365 AND vtweg_mdg = vtweg_d365 AND spart_mdg = spart_d365 AND aufsd_d365 <> aufsd_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_blocking_order_block_sales_area
+      context_name: add_missing_columns_blocking_order_block_sales_area
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_blocking_order_block_sales_area: msg
+          attr_name_blocking_order_block_sales_area: attr_name
+          aufsd_d365: tgt_attr
+          aufsd_mdg: src_attr
+
+    - kind: union
+      name: union_comparison
+      context_name: final_data_missing_from_mdg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_d365
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_invoice_list_schedule
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_account_assignment_group
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_pricing
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_payment_terms
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_blocking_order_block_sales_area
+
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          name_last: name_last_mdg_but000
+          name_first: name_first_mdg_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            KVGR4: KVGR4_tvv4t
+
+    - kind: filter
+      name: filter_final
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('BILLING DATA' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(KVGR4,' - ',BEZEI_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          name_first_mdg_but000: attribute1
+          name_last_mdg_but000: attribute2
+          NULL_Value: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          VKORG: attribute6
+          VTWEG: attribute7
+          SPART: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+
+    - kind: write_dataio
+      name: write_shipping_data
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+## agg ##
+### mdg ###
+    - kind: join
+      name: join_mdg_agg
+      context_name: mdg
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner_mdg: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_mdg: kunnr_kna1
+
+    - kind: filter
+      name: filter_mdg_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_mdg_agg
+      context_name: filter_mdg_agg
+      params:
+        columns:
+          PARTNER_mdg: PARTNER_mdg
+          HASH_mdg: HASH_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            HASH_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### d365 ###
+    - kind: join
+      name: join_d365_agg
+      context_name: d365
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner_d365: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_d365: kunnr_kna1
+
+    - kind: filter
+      name: filter_d365_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_d365_agg
+      context_name: filter_d365_agg
+      params:
+        columns:
+          PARTNER_d365: PARTNER_d365
+          HASH_d365: HASH_d365
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_d365_agg
+      context_name: select_d365_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_d365, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_d365, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_d365, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_d365, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_d365, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_d365, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_d365, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_d365, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_d365, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_d365, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_d365, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_d365, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_d365, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_d365, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_d365, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_d365, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_d365, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_d365, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_d365, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_d365, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_d365, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_d365, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_d365, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_d365, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_d365, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_d365, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_d365, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_d365, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_d365, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('d365' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_d365_agg
+      context_name: add_missing_columns_d365_agg
+      params:
+        - aggs:
+            HASH_d365: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_d365_agg_final
+      context_name: group_d365_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_d365: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_mdg ###
+    - kind: join
+      name: join_missing_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_mdg_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: filter_missing_mdg_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('d365' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_d365 ###
+    - kind: join
+      name: join_missing_d365_agg
+      context_name: final_data_missing_from_d365
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_d365_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_missing_from_d365_agg
+      context_name: filter_missing_d365_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_d365_agg
+      context_name: select_data_missing_from_d365_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM D365' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_d365_agg
+      context_name: add_missing_columns_data_missing_from_d365_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_d365_final
+      context_name: group_data_missing_from_d365_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### mismatch ###
+    - kind: union
+      name: union_comparison_agg
+      context_name: final_billing_data_invoice_list_schedule
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_account_assignment_group
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_pricing
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_payment_terms
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_blocking_order_block_sales_area
+
+    - kind: join
+      name: join_final_agg
+      context_name: union_comparison_agg
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            KVGR4: KVGR4_tvv4t
+
+    - kind: filter
+      name: filter_final_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: filter_final_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true  
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_d365_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_mdg_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_d365_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_mismatch_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

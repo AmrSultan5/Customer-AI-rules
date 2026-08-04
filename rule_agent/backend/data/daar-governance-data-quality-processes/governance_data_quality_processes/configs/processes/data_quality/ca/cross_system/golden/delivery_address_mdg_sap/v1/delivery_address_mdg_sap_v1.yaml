@@ -1,0 +1,2142 @@
+transform:
+  name: delivery_address_mdg_sap
+  operations:
+
+  - kind: read_dataio
+    name: read_mdg_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_but000
+    context_name: read_mdg_but000
+    params:
+      - condition:
+          partner not like '000%' and xpcpt <> 'X' and partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', 
+          '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%')
+
+  - kind: select
+    name: select_mdg_but000
+    context_name: filter_mdg_but000
+    params:
+      columns:
+        partner: partner_mdg_but000
+        name_last: name_last_mdg_but000
+        name_first: name_first_mdg_but000
+        partner_guid: partner_guid_mdg_but000
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  - kind: select
+    name: select_mdg_but020
+    context_name: read_mdg_but020
+    params:
+      columns:
+        partner: partner_mdg_but020
+        addrnumber: addrnumber_mdg_but020
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_adrc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adrc
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_adrc
+    context_name: read_mdg_adrc
+    params:
+      - condition:
+          nation = '' and (adrc_uuid <> '' and isnotnull(adrc_uuid))
+
+  - kind: select
+    name: select_mdg_adrc_regex
+    context_name: filter_mdg_adrc
+    params:
+      columns:
+        addrnumber: addrnumber_mdg_adrc
+        city1: city1_mdg_adrc1
+        street: street_mdg_adrc1
+        house_num1: house_num1_mdg_adrc1
+        building: building_mdg_adrc1
+        post_code1: post_code1_mdg_adrc1
+        floor: floor_mdg_adrc1
+        house_num2: house_num2_mdg_adrc1
+        roomnumber: roomnumber_mdg_adrc1
+        country: country_mdg_adrc
+        region: region_mdg_adrc
+        regiogroup: regiogroup_mdg_adrc
+        time_zone: time_zone_mdg_adrc
+        transpzone: transpzone_mdg_adrc
+      distinct: true
+      
+  - kind: add
+    name: select_mdg_adrc
+    context_name: select_mdg_adrc_regex
+    params:
+      - column: city1_mdg_adrc
+        expression: regexp_replace(regexp_replace(city1_mdg_adrc1,'\n',''),'\r','')
+      - column: street_mdg_adrc
+        expression: regexp_replace(regexp_replace(street_mdg_adrc1,'\n',''),'\r','')
+      - column: house_num1_mdg_adrc
+        expression: regexp_replace(regexp_replace(house_num1_mdg_adrc1,'\n',''),'\r','')
+      - column: building_mdg_adrc
+        expression: regexp_replace(regexp_replace(building_mdg_adrc1,'\n',''),'\r','')
+      - column: post_code1_mdg_adrc
+        expression: regexp_replace(regexp_replace(post_code1_mdg_adrc1,'\n',''),'\r','')
+      - column: floor_mdg_adrc
+        expression: regexp_replace(regexp_replace(floor_mdg_adrc1,'\n',''),'\r','')
+      - column: house_num2_mdg_adrc
+        expression: regexp_replace(regexp_replace(house_num2_mdg_adrc1,'\n',''),'\r','')
+      - column: roomnumber_mdg_adrc
+        expression: regexp_replace(regexp_replace(roomnumber_mdg_adrc1,'\n',''),'\r','')
+      - column: regiogroup_mdg_adrc
+        expression: regexp_replace(regexp_replace(regiogroup_mdg_adrc1,'\n',''),'\r','')
+
+  - kind: read_dataio
+    name: read_mdg_zmdgc_geo
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: zmdgc_geo
+      schema_version: v1
+
+  - kind: select
+    name: select_mdg_zmdgc_geo
+    context_name: read_mdg_zmdgc_geo
+    params:
+      columns:
+        partner: partner_mdg_zmdgc_geo
+        zlati: zlati_mdg_zmdgc_geo
+        zlong: zlong_mdg_zmdgc_geo
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_mdg_knvv
+    context_name: read_mdg_knvv
+    params:
+      - condition:
+          vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+  
+  - kind: select
+    name: select_knvv_pre_checkpoint
+    context_name: filter_mdg_knvv
+    params:          
+      columns:
+        kunnr: kunnr
+        kvgr4: kvgr4
+        vkorg: vkorg
+        vtweg: vtweg
+        spart: spart
+      distinct: true
+
+  - kind: checkpoint
+    name: select_knvv
+    context_name: select_knvv_pre_checkpoint
+
+  - kind: join
+    name: join_mdg
+    context_name: select_mdg_but000
+    params:
+      - other:
+          select_mdg_but020
+        how:
+          inner
+        columns:
+          partner_mdg_but000: partner_mdg_but020
+      - other:
+          select_knvv
+        how:
+          inner
+        columns:
+          partner_mdg_but000: kunnr
+      - other:
+          select_mdg_adrc
+        how:
+          left
+        columns:
+          addrnumber_mdg_but020: addrnumber_mdg_adrc
+      - other:
+          select_mdg_zmdgc_geo
+        how:
+          left
+        columns:
+          partner_mdg_but000: partner_mdg_zmdgc_geo
+
+
+  - kind: read_dataio
+    name: read_sap_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_sap_but000
+    context_name: read_sap_but000
+    params:
+      - condition:
+          partner not like '000%' and xpcpt <> 'X' and if(sap_cluster = 'CL1', partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'),
+          partner like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%'))
+
+  - kind: select
+    name: select_sap_but000
+    context_name: filter_sap_but000
+    params:
+      columns:
+        partner: partner_sap_but000
+        name_last: name_last_sap_but000
+        name_first: name_first_sap_but000
+        partner_guid: partner_guid_sap_but000
+        sap_cluster: sap_cluster_but000
+      distinct: true
+
+  - kind: read_dataio
+    name: read_sap_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but020
+      schema_version: v1
+
+  - kind: select
+    name: select_sap_but020
+    context_name: read_sap_but020
+    params:
+      columns:
+        partner: partner_sap_but020
+        addrnumber: addrnumber_sap_but020
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_sap_adrc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: adrc
+      schema_version: v1
+
+  - kind: filter
+    name: filter_sap_adrc
+    context_name: read_sap_adrc
+    params:
+      - condition:
+          nation = '' and (adrc_uuid <> '' and isnotnull(adrc_uuid))
+
+  - kind: select
+    name: select_sap_adrc_regex
+    context_name: filter_sap_adrc
+    params:
+      columns:
+        addrnumber: addrnumber_sap_adrc
+        city1: city1_sap_adrc1
+        street: street_sap_adrc1
+        house_num1: house_num1_sap_adrc1
+        building: building_sap_adrc1
+        post_code1: post_code1_sap_adrc1
+        floor: floor_sap_adrc1
+        house_num2: house_num2_sap_adrc1
+        roomnumber: roomnumber_sap_adrc1
+        country: country_sap_adrc
+        region: region_sap_adrc
+        regiogroup: regiogroup_sap_adrc1
+        time_zone: time_zone_sap_adrc
+        transpzone: transpzone_sap_adrc
+        sap_cluster: sap_cluster
+      distinct: true
+     
+  - kind: add
+    name: select_sap_adrc
+    context_name: select_sap_adrc_regex
+    params:
+      - column: city1_sap_adrc
+        expression: regexp_replace(regexp_replace(city1_sap_adrc1,'\n',''),'\r','')
+      - column: street_sap_adrc
+        expression: regexp_replace(regexp_replace(street_sap_adrc1,'\n',''),'\r','')
+      - column: house_num1_sap_adrc
+        expression: regexp_replace(regexp_replace(house_num1_sap_adrc1,'\n',''),'\r','')
+      - column: building_sap_adrc
+        expression: regexp_replace(regexp_replace(building_sap_adrc1,'\n',''),'\r','')
+      - column: post_code1_sap_adrc
+        expression: regexp_replace(regexp_replace(post_code1_sap_adrc1,'\n',''),'\r','')
+      - column: floor_sap_adrc
+        expression: regexp_replace(regexp_replace(floor_sap_adrc1,'\n',''),'\r','')
+      - column: house_num2_sap_adrc
+        expression: regexp_replace(regexp_replace(house_num2_sap_adrc1,'\n',''),'\r','')
+      - column: roomnumber_sap_adrc
+        expression: regexp_replace(regexp_replace(roomnumber_sap_adrc1,'\n',''),'\r','')
+      - column: regiogroup_sap_adrc
+        expression: regexp_replace(regexp_replace(regiogroup_sap_adrc1,'\n',''),'\r','')
+
+  - kind: read_dataio
+    name: read_sap_lot_gc_adr
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: address_and_communication_data
+      object_name: lot_gc_adr
+      schema_version: v1
+
+  - kind: select
+    name: select_sap_lot_gc_adr
+    context_name: read_sap_lot_gc_adr
+    params:
+      columns:
+        addrnumber: addrnumber_sap_lot_gc_adr
+        lot_gc_latitude: lot_gc_latitude_sap_lot_gc_adr
+        lot_gc_longitud: lot_gc_longitud_sap_lot_gc_adr
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_knvv_sap
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_knvv_sap
+    context_name: read_knvv_sap
+    params:
+      - condition:
+          vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+  
+  - kind: select
+    name: select_knvv_sap
+    context_name: filter_knvv_sap
+    params:          
+      columns:
+        kunnr: kunnr_knvv
+        kvgr4: kvgr4_knvv
+        vkorg: vkorg_knvv
+        vtweg: vtweg_knvv
+        spart: spart_knvv
+        sap_cluster: sap_cluster_knvv
+      distinct: true
+
+  - kind: join
+    name: join_sap
+    context_name: select_sap_but000
+    params:
+      - other:
+          select_sap_but020
+        how:
+          inner
+        columns:
+          partner_sap_but000: partner_sap_but020
+          sap_cluster_but000: sap_cluster
+      - other:
+          select_knvv_sap
+        how:
+          inner
+        columns:
+          partner_sap_but000: kunnr_knvv
+          sap_cluster_but000: sap_cluster_knvv
+      - other:
+          select_sap_adrc
+        how:
+          left
+        columns:
+          addrnumber_sap_but020: addrnumber_sap_adrc
+          sap_cluster: sap_cluster
+      - other:
+          select_sap_lot_gc_adr
+        how:
+          left
+        columns:
+          addrnumber_sap_but020: addrnumber_sap_lot_gc_adr
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_mdg
+    context_name: join_mdg
+    params:
+      - column: hash_mdg
+        expression: md5(concat_ws('',
+                    partner_mdg_but000, 
+                    partner_guid_mdg_but000, 
+                    city1_mdg_adrc, 
+                    street_mdg_adrc, 
+                    house_num1_mdg_adrc,
+                    building_mdg_adrc, 
+                    post_code1_mdg_adrc,
+                    floor_mdg_adrc,
+                    house_num2_mdg_adrc,
+                    roomnumber_mdg_adrc,
+                    country_mdg_adrc,
+                    region_mdg_adrc,
+                    regiogroup_mdg_adrc,
+                    time_zone_mdg_adrc,
+                    transpzone_mdg_adrc,
+                    zlati_mdg_zmdgc_geo,
+                    zlong_mdg_zmdgc_geo))
+
+  - kind: checkpoint
+    name: checkpoint_mdg
+    context_name: add_mdg
+
+  - kind: add
+    name: add_sap
+    context_name: join_sap
+    params:
+      - column: hash_sap
+        expression: md5(concat_ws('',
+                    partner_sap_but000, 
+                    partner_guid_sap_but000, 
+                    city1_sap_adrc, 
+                    street_sap_adrc, 
+                    house_num1_sap_adrc,
+                    building_sap_adrc, 
+                    post_code1_sap_adrc,
+                    floor_sap_adrc,
+                    house_num2_sap_adrc,
+                    roomnumber_sap_adrc,
+                    country_sap_adrc,
+                    region_sap_adrc,
+                    regiogroup_sap_adrc,
+                    time_zone_sap_adrc,
+                    transpzone_sap_adrc,
+                    lot_gc_latitude_sap_lot_gc_adr,
+                    lot_gc_longitud_sap_lot_gc_adr))           
+
+  - kind: checkpoint
+    name: checkpoint_sap
+    context_name: add_sap
+
+  - kind: join
+    name: join_non_matching_mdg
+    context_name: checkpoint_mdg
+    params:
+      - other:
+          checkpoint_sap
+        how:
+          full
+        columns:
+          hash_mdg: hash_sap
+
+  - kind: filter
+    name: filter_non_matching_mdg
+    context_name: join_non_matching_mdg
+    params:
+      - condition:
+          isnull(hash_sap) or hash_sap = ''
+
+  - kind: join
+    name: join_non_matching_sap
+    context_name: checkpoint_sap
+    params:
+      - other:
+          checkpoint_mdg
+        how:
+          full
+        columns:
+          hash_sap: hash_mdg
+
+  - kind: filter
+    name: filter_non_matching_sap
+    context_name: join_non_matching_sap
+    params:
+      - condition:
+          isnull(hash_mdg) or hash_mdg = ''
+
+  - kind: select
+    name: select_non_matching_mdg
+    context_name: filter_non_matching_mdg
+    params:
+      columns:
+        partner_mdg_but000: partner_mdg
+        name_last_mdg_but000: name_last_mdg
+        name_first_mdg_but000: name_first_mdg
+        city1_mdg_adrc: city1_mdg
+        street_mdg_adrc: street_mdg
+        house_num1_mdg_adrc: house_num1_mdg
+        building_mdg_adrc: building_mdg
+        post_code1_mdg_adrc: post_code1_mdg
+        floor_mdg_adrc: floor_mdg
+        house_num2_mdg_adrc: house_num2_mdg
+        roomnumber_mdg_adrc: roomnumber_mdg
+        country_mdg_adrc: country_mdg
+        region_mdg_adrc: region_mdg
+        regiogroup_mdg_adrc: regiogroup_mdg
+        time_zone_mdg_adrc: time_zone_mdg
+        transpzone_mdg_adrc: transpzone_mdg
+        zlati_mdg_zmdgc_geo: zlati_mdg
+        zlong_mdg_zmdgc_geo: zlong_mdg
+        hash_mdg: hash_mdg
+        partner_guid_mdg_but000: partner_guid_mdg
+      distinct: true
+
+  - kind: select
+    name: select_non_matching_sap
+    context_name: filter_non_matching_sap
+    params:
+      columns:
+        partner_sap_but000: partner_sap
+        name_last_sap_but000: name_last_sap
+        name_first_sap_but000: name_first_sap
+        city1_sap_adrc: city1_sap
+        street_sap_adrc: street_sap
+        house_num1_sap_adrc: house_num1_sap
+        building_sap_adrc: building_sap
+        post_code1_sap_adrc: post_code1_sap
+        floor_sap_adrc: floor_sap
+        house_num2_sap_adrc: house_num2_sap
+        roomnumber_sap_adrc: roomnumber_sap
+        country_sap_adrc: country_sap
+        region_sap_adrc: region_sap
+        regiogroup_sap_adrc: regiogroup_sap
+        time_zone_sap_adrc: time_zone_sap
+        transpzone_sap_adrc: transpzone_sap
+        lot_gc_latitude_sap_lot_gc_adr: lot_gc_latitude_sap
+        lot_gc_longitud_sap_lot_gc_adr: lot_gc_longitud_sap
+        hash_sap: hash_sap
+        partner_guid_sap_but000: partner_guid_sap
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_mdg
+    context_name: select_non_matching_mdg
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_sap
+    context_name: select_non_matching_sap
+
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: select
+    name: select_kna1
+    context_name: read_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E' and sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvv4t
+    params:
+      - condition:
+         sap_cluster = 'CL1' and spras = 'E'
+
+  - kind: select
+    name: select_tvv4t
+    params:
+      columns:
+        kvgr4: kvgr4
+        bezei: bezei
+      distinct: true
+
+  - kind: join
+    name: join_non_matching
+    context_name: checkpoint_non_matching_mdg
+    params:
+      - other:
+          checkpoint_non_matching_sap
+        how:
+          full
+        columns:
+          partner_mdg: partner_sap
+          partner_guid_mdg: partner_guid_sap
+
+
+  - kind: join
+    name: join_missing_from_mdg
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_sap: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_mdg
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+  - kind: join
+    name: join_missing_from_sap
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          left
+        columns:
+          partner_mdg: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+  - kind: filter
+    name: join_missing_from_sap
+    params:
+      - condition: aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+## data missing from mdg
+
+  - kind: filter
+    name: filter_missing_from_mdg
+    context_name: join_missing_from_mdg
+    params:
+      - condition:
+          isnull(partner_mdg)
+
+  - kind: add
+    name: add_missing_from_mdg
+    context_name: filter_missing_from_mdg
+    params:
+      - column: msg
+        expression: if(isnull(partner_mdg), 'data missing from mdg', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_sap, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''DELIVERY ADDRESS'''
+      - column: src_system
+        expression: '''sap'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: loading_date
+        expression: current_date()
+
+## data missing from sap
+
+  - kind: filter
+    name: filter_missing_from_sap
+    context_name: join_missing_from_sap
+    params:
+      - condition:
+          isnull(partner_sap)
+
+  - kind: add
+    name: add_missing_from_sap
+    context_name: filter_missing_from_sap
+    params:
+      - column: msg
+        expression: if(isnull(partner_sap), 'data missing from sap', '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''DELIVERY ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''sap'''
+      - column: loading_date
+        expression: current_date()
+
+# attributes are mismatching
+
+  - kind: filter
+    name: filter_mismatched
+    context_name: join_missing_from_sap
+    params:
+      - condition:
+          partner_sap = partner_mdg
+          and partner_guid_sap = partner_guid_mdg
+          and (city1_sap <> city1_mdg
+          or street_sap <> street_mdg
+          or house_num1_sap <> house_num1_mdg
+          or building_sap <> building_mdg
+          or post_code1_sap <> post_code1_mdg
+          or floor_sap <> floor_mdg
+          or house_num2_sap <> house_num2_mdg
+          or roomnumber_sap <> roomnumber_mdg
+          or country_sap <> country_mdg
+          or region_sap <> region_mdg
+          or regiogroup_sap <> regiogroup_mdg
+          or time_zone_sap <> time_zone_mdg
+          or transpzone_sap <> transpzone_mdg
+          or lot_gc_latitude_sap <> zlati_mdg
+          or lot_gc_longitud_sap <> zlong_mdg)
+
+  - kind: add
+    name: add_mismatched
+    context_name: filter_mismatched
+    params:
+      - column: msg_city1
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and city1_sap <> city1_mdg, 'attributes are mismatching', '-')
+      - column: msg_street
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and street_sap <> street_mdg, 'attributes are mismatching', '-')
+      - column: msg_house_num1
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and house_num1_sap <> house_num1_mdg, 'attributes are mismatching', '-')
+      - column: msg_building
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and building_sap <> building_mdg, 'attributes are mismatching', '-')
+      - column: msg_post_code1
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and post_code1_sap <> post_code1_mdg, 'attributes are mismatching', '-')
+      - column: msg_floor
+        expression: if(partner_sap = partner_mdg
+                    and partner_guid_sap = partner_guid_mdg
+                    and floor_sap <> floor_mdg, 'attributes are mismatching', '-')
+      - column: msg_house_num2
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and house_num2_sap <> house_num2_mdg, 'attributes are mismatching', '-')
+      - column: msg_roomnumber
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and roomnumber_sap <> roomnumber_mdg, 'attributes are mismatching', '-')
+      - column: msg_country
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and country_sap <> country_mdg, 'attributes are mismatching', '-')
+      - column: msg_region
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and region_sap <> region_mdg, 'attributes are mismatching', '-')
+      - column: msg_regiogroup
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and regiogroup_sap <> regiogroup_mdg, 'attributes are mismatching', '-')
+      - column: msg_time_zone
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and time_zone_sap <> time_zone_mdg, 'attributes are mismatching', '-')
+      - column: msg_transpzone
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and transpzone_sap <> transpzone_mdg, 'attributes are mismatching', '-')
+      - column: msg_latitude
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and lot_gc_latitude_sap <> zlati_mdg, 'attributes are mismatching', '-')
+      - column: msg_longitud
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and lot_gc_longitud_sap <> zlong_mdg, 'attributes are mismatching', '-')
+      - column: attr_name_city1
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and city1_sap <> city1_mdg, concat('DELIVERY ADDRESS:', ' ', ' City'), '-')
+      - column: attr_name_street
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and street_sap <> street_mdg, concat('DELIVERY ADDRESS:', ' ', ' Street'), '-')
+      - column: attr_name_house_num1
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and house_num1_sap <> house_num1_mdg, concat('DELIVERY ADDRESS:', ' ', ' House Number'), '-')
+      - column: attr_name_building
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and building_sap <> building_mdg, concat('DELIVERY ADDRESS:', ' ', ' Building Code'), '-')
+      - column: attr_name_post_code1
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and post_code1_sap <> post_code1_mdg, concat('DELIVERY ADDRESS:', ' ', ' Postal Code'), '-')
+      - column: attr_name_floor
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and floor_sap <> floor_mdg, concat('DELIVERY ADDRESS:', ' ', ' Floor'), '-')
+      - column: attr_name_house_num2
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and house_num2_sap <> house_num2_mdg, concat('DELIVERY ADDRESS:', ' ', ' Suppl'), '-')
+      - column: attr_name_roomnumber
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and roomnumber_sap <> roomnumber_mdg, concat('DELIVERY ADDRESS:', ' ', ' Room'), '-')
+      - column: attr_name_country
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and country_sap <> country_mdg, concat('DELIVERY ADDRESS:', ' ', ' Country'), '-')
+      - column: attr_name_region
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and region_sap <> region_mdg, concat('DELIVERY ADDRESS:', ' ', ' Region'), '-')
+      - column: attr_name_regiogroup
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and regiogroup_sap <> regiogroup_mdg, concat('DELIVERY ADDRESS:', ' ', ' Regional structure grouping'), '-')
+      - column: attr_name_time_zone
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and time_zone_sap <> time_zone_mdg, concat('DELIVERY ADDRESS:', ' ', ' Time zone'), '-')
+      - column: attr_name_transpzone
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and transpzone_sap <> transpzone_mdg, concat('DELIVERY ADDRESS:', ' ', ' Transportation Zone'), '-')
+      - column: attr_name_latitude
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and lot_gc_latitude_sap <> zlati_mdg, concat('DELIVERY ADDRESS:', ' ', ' Latitude'), '-')
+      - column: attr_name_longitud
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and lot_gc_longitud_sap <> zlong_mdg, concat('DELIVERY ADDRESS:', ' ', ' Longitude'), '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''DELIVERY ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''sap'''
+      - column: loading_date
+        expression: current_date()
+
+
+  - kind: select
+    name: select_missing_from_mdg
+    context_name: add_missing_from_mdg
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_sap: primary_key_l1
+        name_first_sap: attribute1
+        name_last_sap: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_missing_from_sap
+    context_name: add_missing_from_sap
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_city1
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_city1 <> '-'
+
+  - kind: select
+    name: select_mismatched_city1
+    context_name: filter_mismatched_city1
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_city1: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_city1: compared_attribute
+        city1_mdg: compared_src_attr_value
+        city1_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_street
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_street <> '-'
+
+  - kind: select
+    name: select_mismatched_street
+    context_name: filter_mismatched_street
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_street: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_street: compared_attribute
+        street_mdg: compared_src_attr_value
+        street_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_house_num1
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_house_num1 <> '-'
+
+  - kind: select
+    name: select_mismatched_house_num1
+    context_name: filter_mismatched_house_num1
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_house_num1: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_house_num1: compared_attribute
+        house_num1_mdg: compared_src_attr_value
+        house_num1_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_building
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_building <> '-'
+
+  - kind: select
+    name: select_mismatched_building
+    context_name: filter_mismatched_building
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_building: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_building: compared_attribute
+        building_mdg: compared_src_attr_value
+        building_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_post_code1
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_post_code1 <> '-'
+
+  - kind: select
+    name: select_mismatched_post_code1
+    context_name: filter_mismatched_post_code1
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_post_code1: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_post_code1: compared_attribute
+        post_code1_mdg: compared_src_attr_value
+        post_code1_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_floor
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_floor <> '-'
+
+  - kind: select
+    name: select_mismatched_floor
+    context_name: filter_mismatched_floor
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_floor: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_floor: compared_attribute
+        floor_mdg: compared_src_attr_value
+        floor_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_house_num2
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_house_num2 <> '-'
+
+  - kind: select
+    name: select_mismatched_house_num2
+    context_name: filter_mismatched_house_num2
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_house_num2: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_house_num2: compared_attribute
+        house_num2_mdg: compared_src_attr_value
+        house_num2_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_roomnumber
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_roomnumber <> '-'
+
+  - kind: select
+    name: select_mismatched_roomnumber
+    context_name: filter_mismatched_roomnumber
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_roomnumber: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_roomnumber: compared_attribute
+        roomnumber_mdg: compared_src_attr_value
+        roomnumber_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_country
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_country <> '-'
+
+  - kind: select
+    name: select_mismatched_country
+    context_name: filter_mismatched_country
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_country: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_country: compared_attribute
+        country_mdg: compared_src_attr_value
+        country_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_region
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_region <> '-'
+
+  - kind: select
+    name: select_mismatched_region
+    context_name: filter_mismatched_region
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_region: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_region: compared_attribute
+        region_mdg: compared_src_attr_value
+        region_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_regiogroup
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_regiogroup <> '-'
+
+  - kind: select
+    name: select_mismatched_regiogroup
+    context_name: filter_mismatched_regiogroup
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_regiogroup: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_regiogroup: compared_attribute
+        regiogroup_mdg: compared_src_attr_value
+        regiogroup_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_time_zone
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_time_zone <> '-'
+
+  - kind: select
+    name: select_mismatched_time_zone
+    context_name: filter_mismatched_time_zone
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_time_zone: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_time_zone: compared_attribute
+        time_zone_mdg: compared_src_attr_value
+        time_zone_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_transpzone
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_transpzone <> '-'
+
+  - kind: select
+    name: select_mismatched_transpzone
+    context_name: filter_mismatched_transpzone
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_transpzone: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_transpzone: compared_attribute
+        transpzone_mdg: compared_src_attr_value
+        transpzone_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_latitude
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_latitude <> '-'
+
+  - kind: select
+    name: select_mismatched_latitude
+    context_name: filter_mismatched_latitude
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_latitude: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_latitude: compared_attribute
+        zlati_mdg: compared_src_attr_value
+        lot_gc_latitude_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_longitud
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_longitud <> '-'
+
+  - kind: select
+    name: select_mismatched_longitud
+    context_name: filter_mismatched_longitud
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_longitud: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_longitud: compared_attribute
+        zlong_mdg: compared_src_attr_value
+        lot_gc_longitud_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    context_name: select_mismatched_city1
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_street
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_house_num1
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_building
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_post_code1
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_floor
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_house_num2
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_roomnumber
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_country
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_region
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_regiogroup
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_time_zone
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_transpzone
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_latitude
+
+  - kind: union
+    name: union_delivery_address_mismatched
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_longitud
+
+  - kind: select
+    name: select_mismatched
+    context_name: union_delivery_address_mismatched
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        primary_key_l1: primary_key_l1
+        attribute1: attribute1
+        attribute2: attribute2
+        attribute4: attribute4
+        attribute5: attribute5
+        attribute6: attribute6
+        attribute7: attribute7
+        attribute8: attribute8
+        attribute10: attribute10
+        country: country
+        compared_attribute: compared_attribute
+        compared_src_attr_value: compared_src_attr_value
+        compared_tgt_attr_value: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: union
+    name: union_delivery_address
+    context_name: select_missing_from_mdg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_from_sap
+
+  - kind: union
+    name: union_delivery_address
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched
+
+  - kind: write_dataio
+    name: write_delivery_address
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True
+
+##agg
+
+  - kind: select
+    name: select_mdg
+    context_name: checkpoint_mdg
+    params:
+      columns:
+        partner_mdg_but000: partner_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: select_mdg
+    params:
+      - column: table_name
+        expression: '''DELIVERY ADDRESS'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: hash_mdg
+      - column: mdg_country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##total sap
+  - kind: select
+    name: select_sap
+    context_name: checkpoint_sap
+    params:
+      columns:
+        partner_sap_but000: partner_sap
+        hash_sap: hash_sap
+      distinct: true
+
+  - kind: add
+    name: add_sap_agg
+    context_name: select_sap
+    params:
+      - column: table_name
+        expression: '''DELIVERY ADDRESS'''
+      - column: src_system
+        expression: '''sap'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: sap
+        expression: hash_sap
+      - column: sap_country
+        expression: CASE substr(partner_sap, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_sap_agg
+    context_name: add_sap_agg
+    params:
+      - aggs:
+          sap: count
+        by:
+        - sap_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_sap_agg_loading_date
+    context_name: group_sap_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_sap AS INT)
+
+  - kind: select
+    name: select_sap_agg
+    context_name: add_sap_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        sap_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from mdg
+
+  - kind: group
+    name: group_missing_from_mdg_agg
+    context_name: select_missing_from_mdg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_mdg_agg
+    context_name: group_missing_from_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM MDG'''
+
+  - kind: select
+    name: select_missing_from_mdg_agg
+    context_name: add_missing_from_mdg_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from sap
+
+  - kind: group
+    name: group_missing_from_sap_agg
+    context_name: select_missing_from_sap
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_sap_agg
+    context_name: group_missing_from_sap_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM SAP'''
+
+  - kind: select
+    name: select_missing_from_sap_agg
+    context_name: add_missing_from_sap_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##mismatched
+
+  - kind: filter
+    name: filter_mismatched_agg
+    context_name: union_delivery_address
+    params:
+      - condition:
+          dimension = 'attributes are mismatching'
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: filter_mismatched_agg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+
+  - kind: select
+    name: select_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

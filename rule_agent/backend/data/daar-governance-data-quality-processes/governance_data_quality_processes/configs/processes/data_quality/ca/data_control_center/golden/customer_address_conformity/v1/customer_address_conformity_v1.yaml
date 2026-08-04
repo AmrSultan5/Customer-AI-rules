@@ -1,0 +1,936 @@
+transform:
+  name: customer_address_conformity
+  operations:     
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_general
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        latitude: latitude
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        sap_cluster: sap_cluster
+      distinct: true        
+
+#READ dm_customer_address
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_ca
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        longitude: longitude_address
+        latitude: latitude_address
+        city: city
+        city_translit: city_translit
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        street_1_name: street_1_name
+        street_1_name_translit: street_1_name_translit
+        house_number: house_number
+        post_code: post_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_rcconf_383_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_383_1
+    context_name: select_rcconf_383_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_383.1'"
+      - column: longitude_cast
+        expression: "CAST(longitude as DECIMAL(15,6))"            
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' THEN '' WHEN longitude_cast is null or longitude_cast='' THEN '' WHEN int(longitude_cast) = 0 THEN '' WHEN (LENGTH(longitude_cast)=9 AND INSTR(longitude_cast,'.')=3) OR (LENGTH(longitude_cast)=10 AND INSTR(longitude_cast,'.')=4 AND INSTR(longitude_cast,'-')=1) OR (LENGTH(longitude_cast)=8 AND INSTR(longitude_cast,'.')=2) OR (LENGTH(longitude_cast)=9 AND INSTR(longitude_cast,'.')=3 AND INSTR(longitude_cast,'-')=1) OR (LENGTH(longitude_cast)=10 AND INSTR(longitude_cast,'.')=4) OR (LENGTH(longitude_cast)=11 AND INSTR(longitude_cast,'.')=5 AND INSTR(longitude_cast,'-')=1) THEN '1' ELSE '0' END "
+
+
+  - kind: select
+    name: select_rcconf_383_1_final
+    context_name: add_rcconf_383_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        longitude_cast: value_checked
+      distinct: true  
+
+#SELECT rcconf_384_3
+  - kind: select
+    name: select_rcconf_384_3
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_384_3
+    context_name: select_rcconf_384_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_384.3'"
+      - column: latitude_cast
+        expression: "CAST(latitude as DECIMAL(15,6))"            
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' THEN '' WHEN latitude_cast is null or latitude_cast='' THEN '' WHEN INT(latitude_cast) IN(0.0,0.000,0) THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_384_3_final
+    context_name: add_rcconf_384_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        latitude_cast: value_checked
+      distinct: true  
+
+#SELECT rcconf_383_3
+  - kind: select
+    name: select_rcconf_383_3
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_383_3
+    context_name: select_rcconf_383_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_383.3'"
+      - column: longitude_cast
+        expression: "CAST(longitude as DECIMAL(15,6))"            
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' THEN '' WHEN longitude_cast is null or longitude_cast='' THEN '' WHEN INT(longitude_cast) IN(0.0,0.000,0) THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_383_3_final
+    context_name: add_rcconf_383_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        longitude_cast: value_checked
+      distinct: true 
+
+#SELECT rcconf_384_1
+  - kind: select
+    name: select_rcconf_384_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_384_1
+    context_name: select_rcconf_384_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_384.1'"
+      - column: latitude_cast
+        expression: "CAST(latitude as DECIMAL(15,6))"            
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' THEN '' WHEN latitude_cast is null or latitude_cast='' THEN '' WHEN int(latitude_cast) = 0 THEN '' WHEN (LENGTH(latitude_cast)=9 AND INSTR(latitude_cast,'.')=3) OR (LENGTH(latitude_cast)=10 AND INSTR(latitude_cast,'.')=4 AND INSTR(latitude_cast,'-')=1) OR (LENGTH(latitude_cast)=8 AND INSTR(latitude_cast,'.')=2) OR (LENGTH(latitude_cast)=9 AND INSTR(latitude_cast,'.')=3 AND INSTR(latitude_cast,'-')=1) OR (LENGTH(latitude_cast)=10 AND INSTR(latitude_cast,'.')=4) OR (LENGTH(latitude_cast)=11 AND INSTR(latitude_cast,'.')=5 AND INSTR(latitude_cast,'-')=1) THEN '1' ELSE '0' END "
+
+  - kind: select
+    name: select_rcconf_384_1_final
+    context_name: add_rcconf_384_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        latitude_cast: value_checked
+      distinct: true  
+
+#SELECT rcconf_383_2
+  - kind: select
+    name: select_rcconf_383_2
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_383_2
+    context_name: select_rcconf_383_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_383.2'"
+      - column: longitude_cast
+        expression: "CAST(longitude as DECIMAL(15,6))"            
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' or longitude_cast is null or longitude_cast='' OR INT(longitude_cast)= 0 THEN '' WHEN regexp(CAST(longitude_cast as STRING), '\\d{9}')='true' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_383_2_final
+    context_name: add_rcconf_383_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        longitude_cast: value_checked
+      distinct: true  
+
+#SELECT rcconf_384_2
+  - kind: select
+    name: select_rcconf_384_2
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_384_2
+    context_name: select_rcconf_384_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_384.2'"
+      - column: latitude_cast
+        expression: "CAST(latitude as DECIMAL(15,6))"            
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' or latitude_cast is null or latitude_cast='' OR INT(latitude_cast)= 0 THEN '' WHEN regexp(CAST(latitude_cast as STRING), '\\d{9}')='true' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_384_2_final
+    context_name: add_rcconf_384_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        latitude_cast: value_checked
+      distinct: true  
+
+#SELECT rcconf_383_4
+  - kind: select
+    name: select_rcconf_383_4
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        longitude: longitude
+        account_group_code: account_group_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_383_4
+    context_name: select_rcconf_383_4
+    params:
+      - column: rule_code
+        expression: "'RCCONF_383.4'"
+      - column: check_status
+        expression: "CASE WHEN account_group_code like '7%' or latitude is null or latitude='' OR INT(latitude)= 0 or longitude is null or longitude='' OR INT(longitude)= 0 THEN '' WHEN latitude=longitude THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: CONCAT(latitude,'_',longitude)
+
+  - kind: select
+    name: select_rcconf_383_4_final
+    context_name: add_rcconf_383_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true 
+
+#JOIN rcconf_22.4 rcconf_23.1
+  - kind: join
+    name: join_ca_dcg
+    context_name: select_ca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+  - kind: select
+    name: select_rcconf_22_4
+    context_name: join_ca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        city: city
+        country_code: country_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_22_4
+    context_name: select_rcconf_22_4
+    params:
+      - column: rule_code
+        expression: "'RCCONF_22.4'"
+      - column: check_status
+        expression: if(isnull(city) or city = '', '', 
+                    if(upper(city) = 'GENÈVE 15 AÉROPORT', '1', 
+                    if(upper(city) like '%PRAH%' or upper(city) like '%BRATISLAVA%', '1', 
+                    if(upper(city) IN ('2 MAI', '1 DECEMBRIE', '1 MAI', 'MILA 23', '23 AUGUST','BAILE 1 MAI'), '1',
+                    if(upper(city) IN ('ВЕЛИКА ДИМЕРКА А/Д М-01 К-Ч.-Н.-ЯР.', 'ВІН.ЛЬВІВСЬКЕ Ш. А/Д М-21 ВИС.-ЖИ.-', 'ХМЕЛ.Р-Н,РОЗСОШАНСЬКА ТГ,АВТОД.Н-03'), '1',
+                    if(country_code = 'NG' and regexp(upper(city), '^(JAHI|KURUDUMA|SABURI|TASHA|UMUEBULU|LEKKI PHASE|GRA|KUBWA|IDANYIN BY CELE|BAWAK)[ ]*[0-9]+$'),'1', if(regexp(city,'.*[0-9]+'), '0', '1')))))))
+  - kind: select
+    name: select_rcconf_22_4_final
+    context_name: add_rcconf_22_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        city: value_checked
+      distinct: true
+
+#SELECT rcconf_23_1
+  - kind: select
+    name: select_rcconf_23_1
+    context_name: join_ca_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_23_1
+    context_name: select_rcconf_23_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_23.1'"
+      - column: check_status
+        expression: "CASE WHEN country_code is null OR country_code='' THEN '' WHEN is_allowed_country_code='1' THEN '1' ELSE '0' END"
+
+
+  - kind: select
+    name: select_rcconf_23_1_final
+    context_name: add_rcconf_23_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        country_code: value_checked
+      distinct: true 
+
+#READ dm_customer_sales_organization
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: select
+    context_name: read_dm_customer_sales_organization
+    name: select_cso
+    params:
+      columns:
+        customer_code: customer_code
+        sale_org_code: sale_org_code
+        sap_cluster: sap_cluster
+      distinct: true 
+
+#JOIN rcconf_383.5
+  - kind: join
+    name: join_cso_dcg
+    context_name: select_cso
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#SELECT rcconf_383_5
+  - kind: select
+    name: select_rcconf_383_5
+    context_name: join_cso_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        longitude: longitude
+        account_group_code: account_group_code
+        sale_org_code: sale_org_code
+      distinct: true   
+
+  - kind: add
+    name: add_rcconf_383_5
+    context_name: select_rcconf_383_5
+    params:
+      - column: rule_code
+        expression: "'RCCONF_383.5'"
+      - column: latitude_cast
+        expression: "CAST(latitude as DECIMAL(15,6))"            
+      - column: longitude_cast
+        expression: "CAST(longitude as DECIMAL(15,6))"          
+      - column: check_status
+        expression: if(account_group_code like '7%' or longitude_cast is null or longitude_cast='' or latitude_cast is null or latitude_cast='' 
+                    OR sale_org_code IN('3801', '3802', '3803', '3804', '3805', '3806', '3890',  '3600', '9600', '9400', '4700') 
+                    OR INT(longitude_cast)= 0 OR INT(latitude_cast)= 0 OR latitude_cast = longitude_cast, '',
+                    if(latitude_cast < longitude_cast, '0', 
+                    if(latitude_cast > longitude_cast, '1', '')))
+      - column: value_checked
+        expression: CONCAT(latitude_cast,'_',longitude_cast) 
+
+  - kind: select
+    name: select_rcconf_383_5_final
+    context_name: add_rcconf_383_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true 
+
+#READ conf_special_characters
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_special_characters
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_special_characters
+
+  - kind: filter
+    context_name: read_conf_special_characters
+    name: filter_conf_special_characters
+    params:
+      - condition:
+          rule_code = 'RCCONF_18.2' AND CAST(value AS STRING) != '0'
+
+  - kind: add
+    name: add_address_rule
+    context_name: select_ca
+    params:
+      - column: rule_code
+        expression: "'RCCONF_18.2'"
+
+  - kind: add
+    name: add_conf_special_characters
+    context_name: filter_conf_special_characters
+    params:
+      - column: rule_code
+        expression: "'RCCONF_18.2'"
+      - column: rcconf_18_2
+        expression: "CAST(value AS STRING)"
+
+  - kind: select
+    name: select_conf_special_characters
+    context_name: add_conf_special_characters
+    params:
+      columns:
+        rule_code: rule_code
+        character: character
+        rcconf_18_2: rcconf_18_2
+      distinct: true
+   
+  - kind: join
+    name: join_dcg_dca_csc
+    context_name: select_dcg
+    params:
+      - other:
+          add_address_rule
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_conf_special_characters
+        how:
+          left
+        columns:
+          rule_code: rule_code
+
+#SELECT rcconf_18_2
+  - kind: select
+    name: select_rcconf_18_2
+    context_name: join_dcg_dca_csc
+    params:
+      columns:
+        customer_code: customer_code
+        street_1_name: street_1_name
+        rule_code: rule_code
+        character: character
+        rcconf_18_2: rcconf_18_2
+      distinct: true
+
+#RULE 18_2
+  - kind: add
+    name: add_rcconf_18_2
+    context_name: select_rcconf_18_2
+    params:
+      - column: r_code
+        expression: "'RCCONF_18.2'"
+      - column: check_val
+        expression: "street_1_name"
+      - column: check_status
+        expression: "CASE WHEN check_val is null OR check_val = '' THEN '' WHEN INSTR(check_val, character) > 0 AND rcconf_18_2 = '1' THEN '0' WHEN INSTR(check_val, concat(character,'',character)) > 0  AND rcconf_18_2 = '2' THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REPLACE(check_val, chr(34), '')), 2) <> 0 THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REGEXP_REPLACE(check_val, '[()]', '')), 2) <> 0 OR INSTR(check_val, '(') > INSTR(check_val, ')') THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REGEXP_REPLACE(check_val, '[{}]', '')), 2) <> 0 OR INSTR(check_val, '{') > INSTR(check_val, '}') THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REPLACE(REPLACE(check_val, chr(91), ''), chr(93), '')), 2) <> 0 OR INSTR(check_val, chr(91)) > INSTR(check_val, chr(93)) THEN '0' ELSE '1' END"
+
+  - kind: group
+    name: aggregation_rcconf_18_2
+    context_name: add_rcconf_18_2
+    params:
+      - aggs:
+          check_status: min
+        by:
+        - customer_code
+        - r_code
+        - check_val
+
+  - kind: select
+    name: select_rcconf_18_2_final
+    context_name: aggregation_rcconf_18_2
+    params:
+      columns:
+        r_code: rule_code
+        min_check_status: check_status
+        customer_code: customer_code
+        check_val: value_checked
+      distinct: true 
+
+#RULE rcconf_22_2
+  - kind: filter
+    context_name: read_conf_special_characters
+    name: filter_conf_special_characters_22_2
+    params:
+      - condition:
+          rule_code = 'RCCONF_22.2' AND CAST(value AS STRING) != '0'
+
+  - kind: add
+    name: add_address_rule_22_2
+    context_name: select_ca
+    params:
+      - column: rule_code
+        expression: "'RCCONF_22.2'"
+
+  - kind: add
+    name: add_conf_special_characters_22_2
+    context_name: filter_conf_special_characters_22_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_22.2'"
+      - column: rcconf_22_2
+        expression: "CAST(value AS STRING)"
+
+  - kind: select
+    name: select_conf_special_characters_22_2
+    context_name: add_conf_special_characters_22_2
+    params:
+      columns:
+        rule_code: rule_code
+        character: character
+        rcconf_22_2: rcconf_22_2
+      distinct: true
+   
+  - kind: join
+    name: join_dcg_dca_csc_22_2
+    context_name: select_dcg
+    params:
+      - other:
+          add_address_rule_22_2
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_conf_special_characters_22_2
+        how:
+          left
+        columns:
+          rule_code: rule_code
+
+#SELECT rcconf__22_2
+  - kind: select
+    name: select_rcconf_22_2
+    context_name: join_dcg_dca_csc_22_2
+    params:
+      columns:
+        customer_code: customer_code
+        city: city
+        rule_code: rule_code
+        character: character
+        rcconf_22_2: rcconf_22_2
+      distinct: true
+
+#RULE 22_2
+  - kind: add
+    name: add_rcconf_22_2
+    context_name: select_rcconf_22_2
+    params:
+      - column: r_code
+        expression: "'RCCONF_22.2'"
+      - column: check_val
+        expression: "city"
+      - column: check_status
+        expression: "CASE WHEN check_val = 'БОХОНИКИ,УРОЧ.,\\\"ШКУРИНЕЦЬКА ДУБИНА\\\"' THEN '' WHEN check_val is null OR check_val = '' THEN '' WHEN INSTR(check_val, character) > 0 AND rcconf_22_2 = '1' THEN '0' WHEN INSTR(check_val, concat(character,'',character)) > 0  AND rcconf_22_2 = '2' THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REPLACE(check_val, chr(34), '')), 2) <> 0 THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REGEXP_REPLACE(check_val, '[()]', '')), 2) <> 0 OR INSTR(check_val, '(') > INSTR(check_val, ')') THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REGEXP_REPLACE(check_val, '[{}]', '')), 2) <> 0 OR INSTR(check_val, '{') > INSTR(check_val, '}') THEN '0' WHEN MOD(LENGTH(check_val) - LENGTH(REPLACE(REPLACE(check_val, chr(91), ''), chr(93), '')), 2) <> 0 OR INSTR(check_val, chr(91)) > INSTR(check_val, chr(93)) THEN '0' ELSE '1' END"
+
+  - kind: group
+    name: aggregation_rcconf_22_2
+    context_name: add_rcconf_22_2
+    params:
+      - aggs:
+          check_status: min
+        by:
+        - customer_code
+        - r_code
+        - check_val
+
+  - kind: select
+    name: select_rcconf_22_2_final
+    context_name: aggregation_rcconf_22_2
+    params:
+      columns:
+        r_code: rule_code
+        min_check_status: check_status
+        customer_code: customer_code
+        check_val: value_checked
+      distinct: true 
+
+#RULE rcconf_21_1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_postal_code_standard
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_postal_code_standard
+
+  - kind: select
+    name: select_conf_postal_code_standard
+    context_name: read_conf_postal_code_standard
+    params:
+      columns:
+        country_code: conf_country_code
+        postal_code_format: conf_postal_code_format
+        length: conf_length
+      distinct: true 
+
+  - kind: join
+    name: join_dcg_dca_csc_21_1
+    context_name: select_dcg
+    params:
+      - other:
+          select_ca
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_conf_postal_code_standard
+        how:
+          left
+        columns:
+          country_code: conf_country_code 
+
+  - kind: select
+    name: select_rcconf_21_1
+    context_name: join_dcg_dca_csc_21_1
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        post_code: post_code
+        conf_postal_code_format: conf_postal_code_format
+        conf_length: conf_length
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_21_1
+    context_name: select_rcconf_21_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_21.1'"        
+      - column: check_status
+        expression: "CASE WHEN post_code is null or post_code='' THEN '' WHEN regexp(post_code, conf_postal_code_format)='true' AND LENGTH(post_code) = conf_length THEN '1' ELSE '0' END"
+      - column: value_checked
+        expression: post_code
+
+  - kind: group
+    name: aggregation_rcconf_21_1
+    context_name: add_rcconf_21_1
+    params:
+      - aggs:
+          check_status: max
+        by:
+        - country_code
+        - rule_code
+        - customer_code
+        - value_checked
+
+  - kind: select
+    name: select_rcconf_21_1_final
+    context_name: aggregation_rcconf_21_1
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE rcconf_21_2
+  - kind: join
+    name: join_dcg_dca_csc_21_2
+    context_name: select_dcg
+    params:
+      - other:
+          select_ca
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_rcconf_21_2
+    context_name: join_dcg_dca_csc_21_2
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        post_code: post_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_21_2
+    context_name: select_rcconf_21_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_21.2'"        
+      - column: check_status
+        expression: if(isnull(post_code) or post_code = '', '', 
+                    if(post_code = upper(post_code), '1', '0'))
+      - column: value_checked
+        expression: post_code
+
+
+  - kind: select
+    name: select_rcconf_21_2_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_383_1_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_384_3_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_383_3_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_384_1_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_383_2_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_384_2_final      
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_383_4_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_22_4_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_23_1_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_383_5_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_18_2_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_22_2_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_21_1_final
+
+  - kind: union
+    name: union_customer_address_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_21_2_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_address_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_address_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

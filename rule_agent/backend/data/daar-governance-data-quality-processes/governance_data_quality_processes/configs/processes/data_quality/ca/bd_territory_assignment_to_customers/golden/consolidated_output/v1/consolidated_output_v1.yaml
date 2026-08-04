@@ -1,0 +1,187 @@
+transform:
+  name: bd_territory_assignment_to_customers
+  operations:
+
+#DETAILED
+#read bd_territory_assignment_to_customers
+  - kind: read_dataio
+    name: read_du_bd_territory_assignment_to_customers
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: bd_territory_assignment_to_customers
+      schema_version: v1
+
+  - kind: add
+    name: add_replace_null_with_blank
+    params:
+      - column: customer_group_4_name
+        expression: if(customer_group_4_name is null, '', customer_group_4_name)
+        overwrite: true
+      - column: customer_group_4_code
+        expression: if(customer_group_4_code is null, '', customer_group_4_code)
+        overwrite: true
+
+  - kind: add
+    name: add_dq_output_message
+    params:
+      - column: sales_office
+        expression: concat(sales_office_code, ' - ', sales_office_name)
+      - column: sales_group
+        expression: concat(sales_group_code, ' - ', sales_group_name)
+      - column: customer_group_4
+        expression: concat(customer_group_4_code, ' - ', customer_group_4_name)
+      - column: dq_output_message
+        expression: IF(territory_check_flag == '0','Missing territory','OK')
+
+  - kind: select
+    name: select_bd_territory_assignment_to_customers
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_code: country_code
+        sales_org_code: sales_org_code
+        territory_type: territory_type
+        territory_validity_from: territory_validity_from
+        territory_validity_to: territory_validity_to
+        territory_code: territory_code
+        territory_check_flag: territory_check_flag
+        sales_office_code: sales_office_code
+        sales_office_name: sales_office_name
+        sales_group_code: sales_group_code
+        sales_group_name: sales_group_name
+        sales_office: sales_office
+        sales_group: sales_group
+        customer_group_4: customer_group_4
+        dq_output_message: dq_output_message
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: bd_territory_assignment_to_customers
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#AGGREGATED
+#read bd_territory_assignment_to_customers
+  - kind: read_dataio
+    name: read_du_bd_territory_assignment_to_customers
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: bd_territory_assignment_to_customers
+      schema_version: v1
+
+  - kind: add
+    name: add_replace_null_with_blank
+    params:
+      - column: customer_group_4_name
+        expression: if(customer_group_4_name is null, '', customer_group_4_name)
+        overwrite: true
+      - column: customer_group_4_code
+        expression: if(customer_group_4_code is null, '', customer_group_4_code)
+        overwrite: true
+
+  - kind: select
+    name: select_du_completeness
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        territory_check_flag: territory_check_flag
+
+  - kind: add
+    name: add_aggregated_completeness
+    params:
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, ' - ', customer_group_4_name)
+      - column: quality_category
+        expression: '"completeness"'
+      - column: total_checks
+        expression: IF(territory_check_flag!='', 1, NULL)
+      - column: invalid_checks
+        expression: IF(territory_check_flag= '0', 1, NULL)
+ 
+  - kind: group
+    name: group_completeness
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - customer_group_4_name
+        - customer_group_4_code
+        - customer_group_4
+        - quality_category
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: count_total_checks
+        to: integer
+      - column: count_invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_completeness
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4: customer_group_4
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: bd_territory_assignment_to_customers
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+

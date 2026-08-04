@@ -1,0 +1,285 @@
+transform:
+  name: dm_vendor_check_results_activity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_purchasing_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_purchasing_organization
+
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_purchase_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_purchase_orders
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_open_items
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_open_items
+
+  - kind: filter
+    context_name: read_dm_vendor_general
+    name: filter_dm_vendor_general
+    params:
+      - condition:
+          vendor_account_group_code = '4000' and deletion_block <> 'X' and created_date <= add_months(current_timestamp(), -12)
+
+  - kind: filter
+    context_name: read_dm_vendor_company
+    name: filter_dm_vendor_company
+    params:
+      - condition:
+          company_level_deletion_block <> 'X' and block_key_for_payment <> 'X'
+
+  - kind: filter
+    context_name: read_dm_purchase_orders
+    name: filter_dm_purchase_orders
+    params:
+      - condition:
+          purchase_document_date <= add_months(current_timestamp(), -12)
+
+  - kind: filter
+    context_name: read_dm_open_items
+    name: filter_dm_open_items
+    params:
+      - condition:
+          (document_status NOT IN ('M', 'D') AND account_type = 'K' ) OR cleared_items_archive_flag = 'X'
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: filter_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_name1: vendor_name1
+        deletion_block: deletion_block
+        deletion_central_flag: deletion_central_flag
+        imposed_purchasing_block: imposed_purchasing_block
+        created_date: created_date
+      distinct: true 
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: filter_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        country_code: country_code
+        company_level_posting_block: company_level_posting_block
+        company_level_deletion_flag: company_level_deletion_flag
+        company_level_deletion_block: company_level_deletion_block
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_purchasing_organization
+    context_name: read_dm_vendor_purchasing_organization
+    params:
+      columns:
+        vendor_code: vendor_code
+        purchasing_organization_code: purchasing_organization_code
+        po_level_purchasing_block: po_level_purchasing_block
+        po_level_deletion_flag: po_level_deletion_flag
+      distinct: true
+
+  - kind: select
+    name: select_dm_purchase_orders
+    context_name: filter_dm_purchase_orders
+    params:
+      columns:
+        vendor_code: vendor_code
+        purchasing_organization: purchasing_organization_code
+        purchasing_document_number: purchasing_document_number
+        invoice_completion_flag: invoice_completion_flag
+        delivery_completion_flag: delivery_completion_flag
+        purchase_document_date: purchase_document_date
+      distinct: true
+
+  - kind: select
+    name: select_dm_open_items
+    context_name: filter_dm_open_items
+    params:
+      columns:
+        vendor_code: vendor_code
+        company_code: company_code
+        document_number_of_clearing: document_number_of_clearing
+        cleared_items_document_number_of_clearing: cleared_items_document_number_of_clearing
+        cleared_items_archive_flag: cleared_items_archive_flag
+      distinct: true 
+
+  - kind: join
+    name: join_dm_vendor_general
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_purchasing_organization
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_purchase_orders
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          purchasing_organization_code: purchasing_organization_code
+      - other:
+          select_dm_open_items
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+          company_code: company_code
+
+  - kind: filter
+    name: filter_created_date_on_company_code
+    params:
+      - condition:
+          if(company_code = '0590' and isnotnull(created_date), created_date <= add_months(current_timestamp(), -13), true)
+      - condition:
+          if(company_code = '0590' and isnotnull(purchase_document_date), purchase_document_date <= add_months(current_timestamp(), -13), true)
+
+  - kind: add
+    name: add_activity_rules
+    params:
+      - column: rule_code
+        expression: '''RVACT_1'''
+      - column: purchasing_document_check
+        expression: if(isnotnull(purchasing_document_number), '1', '0')
+      - column: invoice_to_complete_check
+        expression: if(isnotnull(purchasing_document_number) and isnull(invoice_completion_flag), '1',
+         if(isnotnull(purchasing_document_number) and isnotnull(invoice_completion_flag), '0', ''))
+      - column: delivery_to_complete_check
+        expression: if(isnotnull(purchasing_document_number) and isnull(delivery_completion_flag), '1',
+         if(isnotnull(purchasing_document_number) and isnotnull(delivery_completion_flag), '0', ''))
+      - column: open_items_check
+        expression: if(isnull(purchasing_document_number), '',
+         if(isnotnull(purchasing_document_number) and isnull(document_number_of_clearing), '1', '0'))
+      - column: parked_items_check
+        expression: if(isnull(purchasing_document_number), '',
+         if(isnotnull(purchasing_document_number) and (isnotnull(cleared_items_document_number_of_clearing) or cleared_items_archive_flag = 'X'), '1', '0'))
+      - column: activity_check
+        expression: if(purchasing_document_check = '1' OR invoice_to_complete_check = '1' OR delivery_to_complete_check = '1' OR open_items_check = '1' OR parked_items_check = '1', '1', '0')
+      - column: purchasing_document
+        expression: if(purchasing_document_check = '1', 'YES', 'NO')
+      - column: invoice_to_complete
+        expression: if(invoice_to_complete_check = '1', 'YES', 'NO')
+      - column: delivery_to_complete
+        expression: if(delivery_to_complete_check = '1', 'YES', 'NO')
+      - column: open_items
+        expression: if(open_items_check = '1', 'YES', 'NO')
+      - column: parked_items
+        expression: if(parked_items_check = '1', 'YES', 'NO')
+      - column: check_status
+        expression: activity_check
+
+  - kind: select
+    name: select_dm_vendor_check_result_activity
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        vendor_code: vendor_code
+        vendor_name1: vendor_name
+        country_code: country_code
+        deletion_block: deletion_block
+        deletion_central_flag: deletion_central_flag
+        imposed_purchasing_block: purchasing_block
+        company_level_posting_block: company_level_posting_block
+        company_level_deletion_flag: company_level_deletion_flag
+        company_level_deletion_block: company_level_deletion_block
+        po_level_purchasing_block: po_level_purchasing_block
+        po_level_deletion_flag: po_level_deletion_flag
+        purchasing_document: purchasing_document
+        purchase_document_date: purchasing_document_date
+        invoice_to_complete: invoice_to_complete
+        delivery_to_complete: delivery_to_complete
+        open_items: open_items
+        parked_items: parked_items
+        activity_check: activity_check
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results_activity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results_activity
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

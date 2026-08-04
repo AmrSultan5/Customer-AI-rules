@@ -1,0 +1,59 @@
+transform:
+  name: dm_customer_open_items
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read BSID
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_bsid
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: bsid
+
+  - kind: add
+    name: add_record_type
+    params:
+      - column: record_type
+        expression: '''Customer open items'''
+
+  - kind: select
+    name: select_bsid
+    params:
+      columns:
+        record_type: record_type
+        kunnr: customer_code
+        bukrs: company_code
+        budat: posting_date
+        belnr: accounting_document_number
+        augbl: document_number_of_clearing_document
+        augdt: clearing_date
+        bstat: document_status
+        umsks: transaction_type
+        sap_cluster: sap_cluster
+
+  - kind: write_dataio
+    name: write_dm_customer_open_items
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_open_items
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

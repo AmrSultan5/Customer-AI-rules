@@ -1,0 +1,371 @@
+transform:
+  name: f_employee_aggregated_l1_l2
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_employee_organisation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_organisation
+      schema_version: v1
+
+  - kind: add
+    name: add_company_id_deo
+    context_name: read_dm_employee_organisation
+    params:
+      - column: company_id
+        expression: ifnull(company_id, 'null')
+        overwrite: true
+
+  - kind: select
+    name: select_deo
+    context_name: add_company_id_deo
+    params:
+      columns:
+        object_type: object_type_deo
+        supervisory_organisation_id: supervisory_organisation_id
+        company_id: company_id_deo
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_position
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_position
+      schema_version: v1
+
+  - kind: select
+    name: select_dep
+    context_name: read_dm_employee_position
+    params:
+      columns:
+        object_type: object_type_dep
+        position_id: position_id_dep
+        company_id: company_id_dep
+        is_on_leave: is_on_leave_dep
+      distinct: true
+
+  - kind: add
+    name: add_company_id_dep
+    context_name: select_dep
+    params:
+      - column: company_id_dep
+        expression: ifnull(company_id_dep, 'null')
+        overwrite: true
+      - column: is_on_leave_dep
+        expression: ifnull(is_on_leave_dep, 'null')
+        overwrite: true
+
+  - kind: read_dataio
+    name: read_dm_employee_worker
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_worker
+      schema_version: v2
+
+  - kind: select
+    name: select_dew
+    context_name: read_dm_employee_worker
+    params:
+      columns:
+        object_type: object_type_dew
+        worker_type_id: worker_type_id_dew
+        employee_id: employee_id
+        company_id: company_id_dew
+        is_on_leave: is_on_leave_dew
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_employee_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: udm
+      object_name: dm_employee_check_results
+      schema_version: v3
+
+  - kind: read_dataio
+    name: read_dim_employee_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: dim_employee_classification
+      schema_version: v1
+
+  - kind: add
+    name: add_company_code_dec
+    context_name: read_dim_employee_classification
+    params:
+      - column: company_code
+        expression: ifnull(company_code, 'null')
+        overwrite: true
+      - column: is_on_leave
+        expression: ifnull(is_on_leave, 'null')
+        overwrite: true
+
+  - kind: select
+    name: select_dim_employee_classification_position
+    context_name: add_company_code_dec
+    params:
+      columns:
+        company_code: company_code_position
+        object_type: object_type_position
+        employee_class_id: employee_class_id_p
+        is_on_leave: is_on_leave_position
+      distinct: true
+
+  - kind: select
+    name: select_dim_employee_classification_worker
+    context_name: add_company_code_dec
+    params:
+      columns:
+        worker_type: worker_type_worker
+        company_code: company_id_worker
+        employee_class_id: employee_class_id_w
+        is_on_leave: is_on_leave_worker
+      distinct: true
+
+  - kind: select
+    name: select_dim_employee_classification_organisation
+    context_name: add_company_code_dec
+    params:
+      columns:
+        object_type: object_type_organisation
+        company_code: company_code_organisation
+        employee_class_id: employee_class_id_o
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: dim_rules_inventory
+      schema_version: v2
+
+  - kind: filter
+    name: filter_dri
+    context_name: read_dim_rules_inventory
+    params:
+      - condition:
+          is_active = '1'
+
+  - kind: select
+    name: select_dri
+    context_name: filter_dri
+    params:
+      columns:
+        rule_code: rule_code
+        is_pbi_active: is_pbi_active
+        # is_sensitive: is_sensitive
+      distinct: true
+
+  - kind: join
+    name: join_checks_datamarts
+    context_name: read_dm_employee_check_results
+    params:
+      - other:
+          select_dri
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+      - other:
+          select_deo
+        how:
+          left
+        columns:
+          object_id: supervisory_organisation_id
+      - other:
+          add_company_id_dep
+        how:
+          left
+        columns:
+          object_id: position_id_dep
+      - other:
+          select_dew
+        how:
+          left
+        columns:
+          object_id: employee_id
+      - other:
+          select_dim_employee_classification_organisation
+        how:
+          left
+        columns:
+          object_type_deo: object_type_organisation
+          company_id_deo: company_code_organisation
+      - other:
+          select_dim_employee_classification_position
+        how:
+          left
+        columns:
+          company_id_dep: company_code_position
+          object_type_dep: object_type_position
+          is_on_leave_dep: is_on_leave_position
+      - other:
+          select_dim_employee_classification_worker
+        how:
+          left
+        columns:
+          worker_type_id_dew: worker_type_worker
+          company_id_dew: company_id_worker
+          is_on_leave_dew: is_on_leave_worker
+
+  - kind: add
+    name: add_emp_class_id
+    context_name: join_checks_datamarts
+    params:
+      - column: employee_class_id
+        expression: if(employee_class_id_o is not null and employee_class_id_o != '', employee_class_id_o,
+                    if(employee_class_id_p is not null and employee_class_id_p != '', employee_class_id_p,
+                    if(employee_class_id_w is not null and employee_class_id_w != '', employee_class_id_w, NULL)))
+
+  - kind: add
+    name: add_checks
+    context_name: add_emp_class_id
+    params:
+      - column: failed_checks
+        expression: if(check_status = '0' AND user_message_name IS NULL, 1, 0)
+      - column: passed_checks
+        expression: if(check_status = '1', 1, 0)
+      - column: skipped_checks
+        expression: if(check_status != '1' AND (check_status = '' OR user_message_name IS NOT NULL), 1, 0)
+
+  - kind: group
+    name: group_checks
+    context_name: add_checks
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - rule_code
+        - country_code
+        - location_code
+        - employee_class_id
+        - is_pbi_active
+
+  - kind: add
+    name: add_total_checks
+    context_name: group_checks
+    params:
+      - column: sum_failed_checks
+        expression: ifnull(sum_failed_checks, 0)
+        overwrite: true
+      - column: sum_passed_checks
+        expression: ifnull(sum_passed_checks, 0)
+        overwrite: true
+      - column: sum_skipped_checks
+        expression: ifnull(sum_skipped_checks, 0)
+        overwrite: true
+      - column: total_checks
+        expression: sum_failed_checks + sum_passed_checks
+      - column: total_records
+        expression: sum_failed_checks + sum_passed_checks + sum_skipped_checks
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+
+  - kind: cast
+    name: cast_to_integer
+    context_name: add_total_checks
+    params:
+      - column: sum_failed_checks
+        to: integer
+      - column: sum_passed_checks
+        to: integer
+      - column: sum_skipped_checks
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: total_records
+        to: integer
+      - column: is_pbi_active
+        to: integer
+
+  - kind: add
+    name: add_null
+    context_name: cast_to_integer
+    params:
+      - column: country_code
+        expression: if(country_code = '', NULL, country_code)
+        overwrite: true
+      - column: location_code
+        expression: if(location_code = '', NULL, location_code)
+        overwrite: true
+      - column: employee_class_id
+        expression: if(employee_class_id = '', NULL, employee_class_id)
+        overwrite: true
+
+  - kind: select
+    name: select_final
+    context_name: add_null
+    params:
+      columns:
+        country_code: country_code
+        location_code: location_code
+        employee_class_id: employee_class_id
+        rule_code: rule_code
+        loading_date: loading_date
+        sum_failed_checks: failed_checks
+        sum_passed_checks: passed_checks
+        sum_skipped_checks: skipped_checks
+        total_checks: total_checks
+        total_records: total_records
+        is_pbi_active: is_pbi_active
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_employee_aggregated_l1_l2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality_rtr
+      country: ca
+      module: data_control_center_employee
+      namespace: golden
+      object_name: f_employee_aggregated_l1_l2
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

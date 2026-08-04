@@ -1,0 +1,63 @@
+transform:
+  name: dm_finance_cost_controlling
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read COEP
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_coep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: coep
+
+  - kind: filter
+    name: filter_coep
+    params:
+      - condition:
+          (gjahr >= 2022)
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        kokrs: controlling_area_code
+        belnr: document_number
+        perio: period
+        megbtr: total_quantity
+        mefbtr: fixed_quantity
+        objnr: object_number
+        gjahr: fiscal_year
+        zlenr: document_item_number
+        ebelp: purchasing_document_item_number
+        bukrs: company_code
+        uspob: cost_center_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_cost_controlling
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_controlling
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

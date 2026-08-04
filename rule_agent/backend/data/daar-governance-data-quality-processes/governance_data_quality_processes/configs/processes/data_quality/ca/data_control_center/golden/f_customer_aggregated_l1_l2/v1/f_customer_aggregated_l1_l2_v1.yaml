@@ -1,0 +1,434 @@
+transform:
+  name: f_customer_aggregated_l1_l2
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_customer_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_customer_classification
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_check_results
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dim_rules_inventory
+
+  - kind: filter
+    name: filter_dim_rules_inventory
+    params:
+      - condition:
+          is_active = '1'
+
+  - kind: select
+    name: select_dim_rules_inventory
+    context_name: filter_dim_rules_inventory
+    params:
+      columns:
+        rule_code: rule_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        account_group_code: account_group_code
+        central_order_block_code: order_block_code
+        customer_visits_flag: customer_visits_flag
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_sales_organization
+    context_name: read_dm_customer_sales_organization
+    params:
+      columns:
+        customer_code: customer_code
+        customer_group_4_code: customer_group_4_code
+        sap_cluster: sap_cluster
+        payer_partner_function_flag: payer_partner_function_flag
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_hierarchy
+    context_name: read_dm_customer_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l3_customer_code: l3_customer_code
+        l4_customer_code: l4_customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_dim_customer_classification
+    context_name: read_dim_customer_classification
+    params:
+      - column: payer_partner_function_flag_cc
+        expression: ifnull(payer_partner_function_flag, 'null')
+      - column: order_block_code_cc
+        expression: ifnull(order_block_code,'null')
+      - column: account_group_code_cc
+        expression: ifnull(account_group_code, 'null' )
+      - column: customer_group_4_code_cc
+        expression: ifnull(customer_group_4_code, 'null' )
+      - column: customer_hierarchy_3_code_cc
+        expression: ifnull(customer_hierarchy_3_code,'null')
+      - column: customer_hierarchy_4_code_cc
+        expression: ifnull(customer_hierarchy_4_code,'null' )
+      - column: customer_visits_flag_cc
+        expression: ifnull(customer_visits_flag,'null' )
+
+  - kind: select
+    name: select_dim_customer_classification
+    context_name: add_dim_customer_classification
+    params:
+      columns:
+        cust_class_id: cust_class_id
+        payer_partner_function_flag_cc: payer_partner_function_flag
+        order_block_code_cc: order_block_code
+        account_group_code_cc: account_group_code
+        customer_group_4_code_cc: customer_group_4_code
+        customer_hierarchy_3_code_cc: l3_customer_code
+        customer_hierarchy_4_code_cc: l4_customer_code
+        customer_visits_flag_cc: customer_visits_flag
+      distinct: true
+
+#  - kind: select
+#    name: select_check_date
+#    context_name: read_dm_customer_check_results
+#    params:
+#      columns:
+#        check_date: check_date
+#        process_run_id: process_run_id
+#      distinct: true
+
+#  - kind: group
+#    name: group_max_check_date
+#    params:
+#      - aggs:
+#          check_date: max
+#        by:
+#        - process_run_id
+
+#  - kind: add
+#    name: add_max_check_date
+#    params:
+#      - column: to_date_max_check_date
+#        expression: to_date(max_check_date, "yyyy-MM-dd")
+
+  - kind: select
+    name: select_dm_customer_check_results
+    context_name: read_dm_customer_check_results
+    params:
+      columns:
+        check_status: check_status
+        customer_code: customer_code
+        rule_code: rule_code
+        check_date: check_date
+        value_checked: value_checked
+      distinct: true
+
+  - kind: add
+    name: add_check_status_expression
+    params:
+      - column: check_status_expression
+        expression: IF(check_status = '', '2', check_status)
+
+  - kind: select
+    name: select_check_status_pre_group
+    params:
+      columns:
+        customer_code: customer_code
+        rule_code: rule_code
+        check_status_expression: check_status_expression
+        check_date: check_date
+        value_checked: value_checked
+      distinct: true
+
+
+  - kind: add
+    name: add_checks_expressions
+    params:
+      - column: failed_checks
+        expression: IF(check_status_expression = '0', 1, 0)
+      - column: passed_checks
+        expression: IF(check_status_expression = '1', 1, 0)
+      - column: skipped_checks
+        expression: IF(check_status_expression = '2', 1, 0)
+
+  - kind: select
+    name: select_counts_pre_group
+    params:
+      columns:
+        customer_code: customer_code
+        rule_code: rule_code
+        failed_checks: failed_checks
+        passed_checks: passed_checks
+        skipped_checks: skipped_checks
+        check_date: check_date
+        value_checked: value_checked
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - customer_code
+        - rule_code
+        - check_date
+        - value_checked
+
+#  - kind: add
+#    name: add_dm_customer_check_results
+#    params:
+#      - column: to_date_check_date
+#        expression: to_date(check_date, "yyyy-MM-dd")
+
+#  - kind: join
+#    name: join_dm_customer_check_results_max_check_date
+#    params:
+#      - other:
+#          add_max_check_date
+#        how:
+#          inner
+#        columns:
+#          to_date_check_date: to_date_max_check_date
+
+  - kind: join
+    name: join_read_dm_customer_general_check_results
+    context_name: select_dm_customer_general
+    params:
+      - other:
+#          join_dm_customer_check_results_max_check_date
+          group_max_check_status
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+      - other:
+          select_dm_customer_sales_organization
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_hierarchy
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dm_customer_general_check_results
+    context_name: join_read_dm_customer_general_check_results
+    params:
+      - column: payer_partner_function_flag_cg
+        expression: ifnull(payer_partner_function_flag, 'null')
+      - column: order_block_code_cg
+        expression: ifnull(order_block_code, 'null')
+      - column: account_group_code_cg
+        expression: ifnull(account_group_code, 'null')
+      - column: customer_group_4_code_cg
+        expression: ifnull(customer_group_4_code, 'null')
+      - column: l3_customer_code_cg
+        expression: ifnull(l3_customer_code, 'null')
+      - column: l4_customer_code_cg
+        expression: ifnull(l4_customer_code, 'null')
+      - column: customer_visits_flag_cg
+        expression: ifnull(customer_visits_flag, 'null')
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_dm_customer_general_check_results
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        rule_code: rule_code
+        sum_failed_checks: failed_checks
+        sum_passed_checks: passed_checks
+        sum_skipped_checks: skipped_checks
+        payer_partner_function_flag_cg: payer_partner_function_flag
+        order_block_code_cg: order_block_code
+        account_group_code_cg: account_group_code
+        customer_group_4_code_cg: customer_group_4_code
+        l3_customer_code_cg: l3_customer_code
+        l4_customer_code_cg: l4_customer_code
+        customer_visits_flag_cg: customer_visits_flag
+        loading_date: loading_date
+
+
+  - kind: join
+    name: join_dim_customer_classification
+    context_name: select_dm_customer_general_check_results
+    params:
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+      - other:
+          select_dim_customer_classification
+        how:
+          left
+        columns:
+          payer_partner_function_flag: payer_partner_function_flag
+          order_block_code: order_block_code
+          account_group_code: account_group_code
+          customer_group_4_code: customer_group_4_code
+          l3_customer_code: l3_customer_code
+          l4_customer_code: l4_customer_code
+          customer_visits_flag: customer_visits_flag
+
+  - kind: group
+    name: group_f_customer_aggregated
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - country_code
+        - cust_class_id
+        - rule_code
+        - loading_date
+        
+  - kind: add
+    name: add_calculations
+    params:
+      - column: total_checks
+        expression: sum_failed_checks + sum_passed_checks
+      - column: total_records
+        expression: sum_failed_checks + sum_passed_checks + sum_skipped_checks
+
+  - kind: cast
+    name: cast_integers
+    params:
+      - column: sum_failed_checks
+        to: integer
+      - column: sum_passed_checks
+        to: integer
+      - column: sum_skipped_checks
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: total_records
+        to: integer
+
+  - kind: select
+    name: select_f_customer_aggregated_l1_l2
+    params:
+      columns:
+        country_code: country_code
+        cust_class_id: cust_class_id
+        rule_code: rule_code
+        loading_date: loading_date
+        sum_failed_checks: failed_checks
+        sum_passed_checks: passed_checks
+        sum_skipped_checks: skipped_checks
+        total_checks: total_checks
+        total_records: total_records
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_f_customer_aggregated_l1_l2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_customer_aggregated_l1_l2
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

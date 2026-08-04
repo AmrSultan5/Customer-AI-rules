@@ -1,0 +1,349 @@
+transform:
+  name: consolidated_output
+  operations:
+
+#du
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: filter
+    name: filter_dm_customer
+    context_name: read_dm_customer
+    params:
+      - condition:
+          division_code = '01' 
+          and distribution_channel_code = '01' 
+          and account_group_code like '90%' 
+          and order_block_code in ('E', 'SP', 'G', 'S')
+
+  - kind: select
+    name: select_dm_customer
+    context_name: filter_dm_customer
+    params:
+      columns:
+        customer_name: customer_name
+        customer_code: customer_code
+        account_group_code: account_group_code
+        account_group_name: account_group_name
+        sales_org_code: sales_org_code
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        order_block_code: central_order_block_code
+        order_block_code_sales_area: order_block_code_sales_area
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_org_hierarchy
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        country_code: country_code
+        sales_org_code: sales_org_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_equipment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_equipment
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_equipment
+    context_name: read_dm_equipment
+    params:
+      columns:
+        equipment_number: equipment_number
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_items
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_items
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_items
+    context_name: read_dm_items
+    params:
+      columns:
+        customer_number: customer_number
+        accounting_document_number: accounting_document_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_du_order_block_status
+    context_name: select_dm_customer
+    params:
+      - other:
+          select_dm_org_hierarchy
+        how:
+          inner
+        columns:
+          sales_org_code: sales_org_code
+      - other:
+          select_dm_equipment
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_items
+        how:
+          left
+        columns:
+          customer_code: customer_number
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_du_order_block_status
+    params:
+      - column: open_items
+        expression: if(isnotnull(accounting_document_number) and accounting_document_number <> '','Yes','No')
+      - column: equipment
+        expression: if(isnotnull(equipment_number) and  equipment_number <> '','Yes','No')
+      - column: accuracy_check_order_block_flag
+        expression: if((central_order_block_code = 'E' and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnull(accounting_document_number) 
+                    or accounting_document_number = '')) 
+                    or (central_order_block_code = 'SP' 
+                    and (isnull(equipment_number) OR equipment_number = '') 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')) 
+                    or (central_order_block_code = 'G' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')) 
+                    or (central_order_block_code = 'S' 
+                    and (isnull(equipment_number) OR equipment_number = '') 
+                    and (isnull(accounting_document_number)
+                    or accounting_document_number = '')),'1','0')
+      - column: accuracy_check_order_block_output
+        expression: if((central_order_block_code = 'E' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnull(accounting_document_number) or 
+                    accounting_document_number = '')) 
+                    or (central_order_block_code = 'SP' 
+                    and (isnull(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')) 
+                    or (central_order_block_code = 'G' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')) 
+                    or (central_order_block_code = 'S' 
+                    and (isnull(equipment_number) OR equipment_number = '') 
+                    and (isnull(accounting_document_number)
+                    or accounting_document_number = '')), 'OK',
+                    if((central_order_block_code = 'E' 
+                    and (isnull(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnull(accounting_document_number) 
+                    or accounting_document_number = '')) 
+                    or (central_order_block_code = 'SP' 
+                    and (isnull(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnull(accounting_document_number) 
+                    or accounting_document_number = '')) 
+                    or (central_order_block_code = 'G' 
+                    and (isnull(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnull(accounting_document_number) 
+                    or accounting_document_number = '')), 'Failed check - change Order Block to S',
+                    if((central_order_block_code = 'G' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (ISNULL(accounting_document_number) 
+                    or accounting_document_number = '')) 
+                    or (central_order_block_code = 'SP' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnull(accounting_document_number) 
+                    or accounting_document_number = '')), 'Failed check - change Order Block to E', 
+                    if((central_order_block_code = 'G' 
+                    and (ISNULL(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')) 
+                    or (central_order_block_code = 'E' 
+                    and (isnull(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')), 'Failed check - change Order Block to SP', 
+                    if((central_order_block_code = 'E' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')) 
+                    or (central_order_block_code = 'SP' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')), 'Failed check - change Order Block to G', 
+                    if ((central_order_block_code = 'S' 
+                    and isnotnull(equipment_number)
+                    and equipment_number <> '' 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')), 'Still have equipment and open items', 
+                    if ((central_order_block_code = 'S' 
+                    and (isnull(equipment_number) 
+                    or equipment_number = '') 
+                    and (isnotnull(accounting_document_number) 
+                    and accounting_document_number <> '')), 'Still have open items',
+                    if ((central_order_block_code = 'S' 
+                    and isnotnull(equipment_number) 
+                    and equipment_number <> '' 
+                    and (isnull(accounting_document_number) 
+                    or accounting_document_number = '')), 'Still have equipment',
+                    'N/A'))))))))
+
+#detailed
+  - kind: select
+    name: select_detailed
+    params:
+      columns:
+        customer_name: customer_name
+        customer_code: customer_code
+        account_group_code: account_group_code
+        account_group_name: account_group_name
+        sales_org_code: sales_org_code
+        distribution_channel_code: distribution_channel_code
+        division_code: division_code
+        country_code: country_code
+        central_order_block_code: central_order_block_code
+        order_block_code_sales_area: order_block_code_sales_area
+        open_items: open_items
+        equipment: equipment
+        accuracy_check_order_block_flag: accuracy_check_order_block_flag
+        accuracy_check_order_block_output: accuracy_check_order_block_output
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: order_block_status
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v2
+      refresh_mode: full
+
+#aggregated
+
+  - kind: add
+    name: add_customer_loading_date
+    context_name: select_detailed
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: IF(accuracy_check_order_block_flag = 0, 1, null)
+      - column: total_checks
+        expression: CAST(1 AS INT)
+      - column: quality_category
+        expression: '''accuracy'''        
+
+  - kind: group
+    name: group_total_invalid_checks
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - country_code
+        - central_order_block_code
+        - quality_category
+        - loading_date
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_checks
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        country_code: country_code
+        central_order_block_code: order_block
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        quality_category: quality_category
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: order_block_status
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

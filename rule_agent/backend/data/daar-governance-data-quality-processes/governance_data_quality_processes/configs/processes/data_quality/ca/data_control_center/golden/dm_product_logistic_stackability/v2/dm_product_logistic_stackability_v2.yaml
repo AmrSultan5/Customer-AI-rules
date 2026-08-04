@@ -1,0 +1,137 @@
+transform:
+  name: dm_product_logistic_stackability
+  operations:
+    - name: initialize_schema_configuration
+      kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+      params:
+        module_name: governance_data_quality_processes
+        config_name: dcc_schema_versions
+    - name: zleo_mm_stap_dis
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        dataio:
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        source: sap_s4hana
+        namespace: material_master
+        object_name: zleo_mm_stap_dis
+    - name: zleo_mm_stap_dis
+      kind: select
+      params:
+        columns:
+          stpgr_mid: compatibility_matrix_id
+          stpgrid: stackability_group
+          display: display_flag
+          sap_cluster: sap_cluster
+    - name: zleo_mm_stap_dis
+      kind: filter
+      params:
+        - condition:
+            display_flag = 'X'
+    - name: zleo_mm_stap_dis
+      kind: add
+      params:
+        - column: country_code
+          expression: CASE 
+                        WHEN RIGHT(compatibility_matrix_id, 3) = 'ROI' THEN 'IE'
+                        WHEN RIGHT(compatibility_matrix_id, 2) = 'NI' THEN 'GB'
+                        WHEN compatibility_matrix_id = 'CZECH' THEN 'CZ'
+                        WHEN REGEXP_LIKE(RIGHT(compatibility_matrix_id, 2), '^[A-Za-z]+$') THEN RIGHT(compatibility_matrix_id, 2)
+                        ELSE '' 
+                        END
+        - column: matrix_number
+          expression: if(upper(compatibility_matrix_id) = 'CZECH', 1, TRY_CAST(LEFT(compatibility_matrix_id, 2) AS INT))
+        - column: stackability_group_copy
+          expression: stackability_group
+
+    - name: zleo_mm_stama
+      kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+      config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+      params:
+        dataio:
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        source: sap_s4hana
+        namespace: otc_leo
+        object_name: zleo_mm_stama
+    - name: zleo_mm_stama
+      kind: select
+      params:
+        columns:
+          stpgr_mid: compatibility_matrix_id
+          stpgrid_von: stpgrid_von
+          stpgrid_an: stpgrid_an
+          staubar: stacking_limit
+          sap_cluster: sap_cluster
+
+    - name: zleo_mm_stama_from_to_same_flag
+      kind: select
+      params:
+        distinct: true
+        columns:
+          compatibility_matrix_id: compatibility_matrix_id_stama_copy
+          sap_cluster: sap_cluster_stama_copy
+
+    - name: dm_product_logistic_stackability
+      kind: join
+      context_name: zleo_mm_stap_dis
+      params:
+        - other:
+            zleo_mm_stama
+          how:
+            left
+          columns:
+            compatibility_matrix_id: compatibility_matrix_id
+            stackability_group: stpgrid_von
+            stackability_group_copy: stpgrid_an
+            sap_cluster: sap_cluster
+        - other:
+            zleo_mm_stama_from_to_same_flag
+          how:
+            left
+          columns:
+            compatibility_matrix_id: compatibility_matrix_id_stama_copy
+            sap_cluster: sap_cluster_stama_copy
+    - name: dm_product_logistic_stackability
+      kind: add
+      params:
+        - column: from_to_same_flag
+          expression: CASE WHEN compatibility_matrix_id_stama_copy IS NULL THEN NULL 
+            WHEN stpgrid_von IS NULL OR stpgrid_von = "" OR stpgrid_an IS NULL OR stpgrid_an = "" THEN "0"
+            ELSE "1" END
+    - name: dm_product_logistic_stackability
+      kind: cast
+      params:
+        - column: from_to_same_flag
+          to: integer
+        - column: matrix_number
+          to: integer
+        - column: stacking_limit
+          to: integer
+    - name: dm_product_logistic_stackability
+      kind: drop
+      params:
+        - column: stackability_group_copy
+        - column: stpgrid_von
+        - column: stpgrid_an
+        - column: compatibility_matrix_id_stama_copy
+        - column: sap_cluster_stama_copy
+
+    - name: write_dm_product_logistic_stackability
+      kind: write_dataio
+      params:
+        dataio:
+          layer: application
+          storage_id: '{{dataio.storage_id}}'
+          ad_id: '{{dataio.ad_id}}'
+        application_name: data_quality
+        country: ca
+        module: data_control_center
+        namespace: golden
+        object_name: dm_product_logistic_stackability
+        process_run_id: "{{process_run_id}}"
+        schema_version: v2
+        refresh_mode: full

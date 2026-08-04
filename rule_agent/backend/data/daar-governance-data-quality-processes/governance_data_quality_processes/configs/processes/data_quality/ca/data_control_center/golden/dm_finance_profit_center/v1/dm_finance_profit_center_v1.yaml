@@ -1,0 +1,70 @@
+transform:
+  name: dm_finance_profit_center
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read CEPC
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cepc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: finance
+      object_name: cepc
+
+
+  - kind: select
+    name: select_cepc
+    params:
+      columns:
+        prctr: prctr
+        bukrs: bukrs
+        datab: datab
+        datbi: datbi
+        kokrs: kokrs
+        verak: verak
+        verak_user: verak_user
+        khinr: khinr
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        prctr: profit_center
+        bukrs: company_code
+        datab: valid_from
+        datbi: valid_to
+        kokrs: controlling_area_code
+        verak: person_responsible
+        verak_user: user_responsible
+        khinr: profit_center_area
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_profit_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_profit_center
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

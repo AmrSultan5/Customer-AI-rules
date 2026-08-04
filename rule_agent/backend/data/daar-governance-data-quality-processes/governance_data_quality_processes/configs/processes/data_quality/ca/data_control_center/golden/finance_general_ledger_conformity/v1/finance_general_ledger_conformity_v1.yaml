@@ -1,0 +1,1279 @@
+transform:
+  name: finance_general_ledger_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_general_ledger
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_general_ledger
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_element
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_element
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+#READ conf tables
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_cost_element_categories
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_cost_element_categories
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_cost_element_category
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_cost_element_category
+
+  - kind: select
+    context_name: read_conf_cost_element_categories
+    name: select_ccec
+    params:
+      columns:
+        attribute_mix: attribute_mix
+        ce_group_level_1: ce_group_level_1
+        ce_subcategory: ce_subcategory
+        ce_group_level_2: ce_group_level_2
+        g_l_account_range: g_l_account_range
+        g_l_description: g_l_description
+      distinct: true
+
+  - kind: select
+    name: select_ccecat
+    context_name: read_conf_cost_element_category
+    params:
+      columns:
+        cost_element_from: cost_element_from
+        cost_element_to: cost_element_to
+        cost_element_category: cost_element_category_ccecat
+      distinct: true
+
+  - kind: select
+    name: select_dfgl
+    context_name: read_dm_finance_general_ledger
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts_gl
+        company_code: company_code_gl
+        g_l_account_number: g_l_account_number
+        g_l_account_posted_automatically_ind: g_l_account_posted_automatically_ind
+        g_l_account_group_code: g_l_account_group_code
+        commitment_item: commitment_item
+        reconciliation_account_ind: reconciliation_account_ind
+        relevant_cash_flow_ind: relevant_cash_flow_ind
+        planning_level: planning_level
+        g_l_account_number_description: g_l_account_number_description
+        balance_sheet_account_ind: balance_sheet_account_ind
+        balances_in_local_currency: balances_in_local_currency
+        g_l_account_type: g_l_account_type
+        exchange_rate_difference_key: exchange_rate_difference_key
+        house_bank_code: house_bank_code
+        tax_category: tax_category
+        is_tax_category_allowed: is_tax_category_allowed
+        tax_code_indicator: tax_code_indicator
+        open_items_management_ind: open_items_management_ind
+        layout_rule_sort_key: layout_rule_sort_key
+        field_status_group: field_status_group
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dfce
+    context_name: read_dm_finance_cost_element
+    params:
+      columns:
+        controlling_area_code: controlling_area_code_ce
+        cost_element: cost_element
+        cost_element_category: cost_element_category
+        cost_element_subcategory: cost_element_subcategory
+        cost_element_attributes: cost_element_attributes
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dfca
+    context_name: read_dm_finance_controlling_area
+    params:
+      columns:
+        controlling_area_code: controlling_area_code_ca
+        country_code: country_code_ca
+        company_code: company_code_ca
+        chart_of_accounts: chart_of_accounts_ca
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dfgl_dfca
+    context_name: select_dfgl
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          chart_of_accounts_gl: chart_of_accounts_ca
+          company_code_gl: company_code_ca
+          sap_cluster: sap_cluster  
+
+  - kind: join
+    name: join_dfgl_dfce_dfca
+    context_name: select_dfce
+    params:
+      - other:
+          select_dfca
+        how:
+          inner
+        columns:
+          controlling_area_code_ce: controlling_area_code_ca
+          sap_cluster: sap_cluster
+      - other:
+          select_dfgl
+        how:
+          inner
+        columns:
+          chart_of_accounts_ca: chart_of_accounts_gl
+          company_code_ca: company_code_gl
+          cost_element: g_l_account_number
+          sap_cluster: sap_cluster  
+
+
+  - kind: add
+    name: add_join_condition_categories
+    context_name: join_dfgl_dfce_dfca
+    params:
+      - column: cost_element_substr
+        expression: substring(cost_element, 2, 6)
+      - column: cost_element_subcategory_ltrim
+        expression: ltrim('0', cost_element_subcategory)
+        overwrite: true
+
+  - kind: add
+    name: add_dfgl_dfce_dfca
+    context_name: join_dfgl_dfce_dfca
+    params:
+      - column: join_condition
+        expression: "'1'"
+
+  - kind: add
+    name: add_ccecat
+    context_name: select_ccecat
+    params:
+      - column: join_condition
+        expression: "'1'"
+
+  - kind: join
+    name: join_ccecat_dfgl_dfce_dfca
+    context_name: add_dfgl_dfce_dfca
+    params:
+      - other:
+          add_ccecat
+        how:
+          left
+        columns:
+          join_condition: join_condition
+
+  - kind: filter
+    name: filter_join_ccecat_dfgl_dfce_dfca
+    context_name: join_ccecat_dfgl_dfce_dfca
+    params:
+      - condition:
+          ltrim('0', cost_element) between cost_element_from and cost_element_to
+
+  - kind: join
+    name: join_dfgl_dfce_dfca_categories
+    context_name: add_join_condition_categories
+    params:
+      - other:
+          select_ccec
+        how:
+          left
+        columns:
+          cost_element_substr: g_l_account_range
+          cost_element_subcategory_ltrim: ce_subcategory 
+
+  - kind: join
+    name: join_dfgl_dfce_dfca_categories_account_range
+    context_name: add_join_condition_categories
+    params:
+      - other:
+          select_ccec
+        how:
+          left
+        columns:
+          cost_element_substr: g_l_account_range
+
+#SELECT RFCONF_GL.10
+
+  - kind: select
+    name: select_RFCONF_GL_10
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_posted_automatically_ind: g_l_account_posted_automatically_ind
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_10
+    context_name: select_RFCONF_GL_10
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.10'"
+      - column: check_status
+        expression: if(g_l_account_posted_automatically_ind = 'X', '1', '0')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: g_l_account_posted_automatically_ind
+
+  - kind: select
+    name: select_RFCONF_GL_10_final
+    context_name: add_RFCONF_GL_10
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.11
+
+  - kind: select
+    name: select_RFCONF_GL_11
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        planning_level: planning_level
+        company_code_gl: company_code
+        g_l_account_number_description: g_l_account_number_description
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_11
+    context_name: select_RFCONF_GL_11
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.11'"
+      - column: check_status
+        expression: if(g_l_account_group_code != 'CASH' 
+                    and (isnull(planning_level) or planning_level = ''), 
+                    '0', 
+                    if(g_l_account_group_code = 'CASH' 
+                    and lower(g_l_account_number_description) rlike '.*treasu.*' and
+                    substring(g_l_account_number, length(g_l_account_number), 1) = '3' 
+                    and planning_level = 'B4', '1',
+                    if(g_l_account_group_code = 'CASH' and lower(g_l_account_number_description) rlike '.*treasu.*' 
+                    and planning_level = 'T0', '1', 
+                    if(g_l_account_group_code = 'CASH' 
+                    and (lower(g_l_account_number_description) rlike '.*cash on hand.*' 
+                    or lower(g_l_account_number_description) rlike '.*cash in hand.*') 
+                    and planning_level = 'KO', '1', 
+                    if(g_l_account_group_code = 'CASH' 
+                    and (lower(g_l_account_number_description) rlike '.*cash in vending.*' 
+                    or lower(g_l_account_number_description) rlike '.*cash on vending.*') 
+                    and planning_level = 'VO', 
+                    '1',
+                    if(g_l_account_group_code = 'CASH' 
+                    and lower(g_l_account_number_description) rlike '.*ihc.*clearing.*' 
+                    and planning_level in ('F4', 'F5', 'F6'), '1', 
+                    if(g_l_account_group_code = 'CASH' and substring(g_l_account_number, length(g_l_account_number), 1) = '0' 
+                    and planning_level = 'F0', '1',
+                    if(g_l_account_group_code = 'CASH' 
+                    and substring(g_l_account_number, length(g_l_account_number), 1) in ('1', '3') 
+                    and planning_level = 'B9', '1',
+                    if(g_l_account_group_code = 'CASH' and substring(g_l_account_number, length(g_l_account_number), 1) in ('2', '4') 
+                    and planning_level = 'B2', 
+                    '1', '0')))))))))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: planning_level
+
+  - kind: select
+    name: select_RFCONF_GL_11_final
+    context_name: add_RFCONF_GL_11
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true      
+###############    
+
+
+#SELECT RFCONF_GL.12
+
+  - kind: select
+    name: select_RFCONF_GL_12
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        relevant_cash_flow_ind: relevant_cash_flow_ind
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_12
+    context_name: select_RFCONF_GL_12
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.12'"
+      - column: check_status
+        expression: if(
+                    (g_l_account_group_code = 'CASH' and relevant_cash_flow_ind = 'X') 
+                    or (g_l_account_group_code <> 'CASH' 
+                    and (isnull(relevant_cash_flow_ind) 
+                    or (g_l_account_group_code = 'CASH' 
+                    and relevant_cash_flow_ind = ''))),
+                    '1', '0')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: relevant_cash_flow_ind
+
+  - kind: select
+    name: select_RFCONF_GL_12_final
+    context_name: add_RFCONF_GL_12
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true      
+###############      
+
+#SELECT RFCONF_GL.13
+
+  - kind: select
+    name: select_RFCONF_GL_13
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        commitment_item: commitment_item
+        company_code_gl: company_code
+        reconciliation_account_ind: reconciliation_account_ind
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_13
+    context_name: select_RFCONF_GL_13
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.13'"
+      - column: check_status
+        expression: if(NOT (g_l_account_group_code in ('AS', 'CASH', 'MAT', 'PL', 'RECN')
+                    or company_code not in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796')), 
+                    '',
+                    if(
+                    g_l_account_group_code = 'AS' 
+                    and company_code not in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796') 
+                    and commitment_item = '003030',
+                    '1', 
+                    if(g_l_account_group_code = 'CASH' 
+                    and substring(g_l_account_number, length(g_l_account_number), 1) = '0' 
+                    and commitment_item = '009010',
+                    '1', 
+                    if(g_l_account_group_code = 'CASH' 
+                    and company_code not in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796') 
+                    and substring(g_l_account_number, length(g_l_account_number), 1) <> '0' 
+                    and commitment_item = '008030', 
+                    '1', 
+                    if(g_l_account_group_code = 'MAT' 
+                    and company_code not in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796') 
+                    and commitment_item = '003030', 
+                    '1',
+                    if(g_l_account_group_code = 'RECN'
+                    and company_code not in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796') 
+                    and reconciliation_account_ind = 'D' 
+                    and commitment_item = '006020',
+                    '1', 
+                    if(g_l_account_group_code = 'RECN' 
+                    and company_code not in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796') 
+                    and reconciliation_account_ind = 'K' 
+                    and commitment_item = '006030', 
+                    '1',
+                    if(company_code in ('0301', '0308', '0724', '0726', '0748', '0764', '0772', '0780', '0781', '0783', '0786', '0790', '0794', '0796') 
+                    and isnull(commitment_item), 
+                    '1', 
+                    '0'))))))))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: commitment_item
+
+  - kind: select
+    name: select_RFCONF_GL_13_final
+    context_name: add_RFCONF_GL_13
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true      
+###############
+
+#SELECT RFCONF_GL.14
+
+  - kind: select
+    name: select_RFCONF_GL_14
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        house_bank_code: house_bank_code
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_14
+    context_name: select_RFCONF_GL_14
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.14'"
+      - column: check_status
+        expression: if(g_l_account_group_code = 'CASH' 
+                    and substring(g_l_account_number, length(g_l_account_number), 1) <> '0' 
+                    and house_bank_code = 'X', '1', '0')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: house_bank_code
+
+  - kind: select
+    name: select_RFCONF_GL_14_final
+    context_name: add_RFCONF_GL_14
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+#SELECT RFCONF_GL.2
+
+  - kind: select
+    name: select_RFCONF_GL_2
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_type: g_l_account_type
+        g_l_account_group_code: g_l_account_group_code
+        balance_sheet_account_ind: balance_sheet_account_ind
+        balances_in_local_currency: balances_in_local_currency
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_2
+    context_name: select_RFCONF_GL_2
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.2'"
+      - column: check_status
+        expression: if(g_l_account_group_code not in ('AS', 'MAT'), 
+                    '',
+                    if(g_l_account_group_code IN ('AS', 'MAT') 
+                    and balance_sheet_account_ind = 'X' 
+                    and  balances_in_local_currency = 'X', 
+                    '1', '0'))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: balances_in_local_currency
+
+  - kind: select
+    name: select_RFCONF_GL_2_final
+    context_name: add_RFCONF_GL_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.27
+
+  - kind: select
+    name: select_RFCONF_GL_27
+    context_name: join_dfgl_dfce_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_type: g_l_account_type
+        cost_element_category: cost_element_category
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_27
+    context_name: select_RFCONF_GL_27
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.27'"
+      - column: check_status
+        expression: if(g_l_account_type not in('P', 'S'), 
+                    '',
+                    if(g_l_account_type in('P', 'S') 
+                    and cost_element_category in('01', '03', '04', '11', '12', '21', '22', '31', '41', '42', '43', '90', '50', '51', '52', '61', '66'), 
+                    '1', '0'))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: cost_element_category
+
+  - kind: select
+    name: select_RFCONF_GL_27_final
+    context_name: add_RFCONF_GL_27
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.28
+
+  - kind: select
+    name: select_RFCONF_GL_28
+    context_name: join_dfgl_dfce_dfca_categories
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_type: g_l_account_type
+        cost_element: cost_element
+        cost_element_subcategory: cost_element_subcategory
+        controlling_area_code_ce: controlling_area_code
+        g_l_account_range: g_l_account_range
+        company_code_gl: company_code
+        ce_subcategory: ce_subcategory
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_28
+    context_name: select_RFCONF_GL_28
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.28'"
+      - column: check_status
+        expression: if(not (controlling_area_code in ('0001', '0070', '0599', 'BE01', 'CA01', 'CH01', 'CN01', 'CO01', 'CYM0', 
+                    'CYP0', 'CZ01', 'DE01', 'DE02', 
+                    'ES01', 'FI01', 'FR01', 'HU01', 'JP01', 'KR01', 'KZ01', 'NO01', 'PE01', 'PL01', 'PT01', 'RECO', 'REOB', 
+                    'RERF', 'RU01', 'SE01', 'SG01', 'SK01', 'TR01', 'TW01', 'UA01', 'US01', '0874', '0818') 
+                    and company_code <> '0452'), 
+                    if(
+                    substring(cost_element, 2, 6) = g_l_account_range,
+                    '1',
+                    if(
+                    ltrim( '0', cost_element_subcategory) = ce_subcategory,
+                    '1', 
+                    if(isnull(cost_element_subcategory), '0', '0'))),
+                     '0')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: cost_element_subcategory
+
+  - kind: select
+    name: select_RFCONF_GL_28_final
+    context_name: add_RFCONF_GL_28
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.29
+
+  - kind: select
+    name: select_RFCONF_GL_29
+    context_name: join_dfgl_dfce_dfca_categories_account_range
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        cost_element: cost_element
+        cost_element_attributes: cost_element_attributes
+        controlling_area_code_ce: controlling_area_code
+        g_l_account_range: g_l_account_range
+        attribute_mix: attribute_mix
+        company_code_gl: company_code
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_29
+    context_name: select_RFCONF_GL_29
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.29'"
+      - column: check_status
+        expression: if(company_code <> '0452',
+                    if(substring(cost_element, 2, 6) = g_l_account_range,
+                    '1',
+                    if(coalesce(cost_element_attributes, 'ND') = attribute_mix,
+                    '1', '0'))
+                    , '0')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: cost_element_attributes
+
+  - kind: select
+    name: select_RFCONF_GL_29_final
+    context_name: add_RFCONF_GL_29
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL_30
+  - kind: select
+    name: select_RFCONF_GL_30
+    context_name: filter_join_ccecat_dfgl_dfce_dfca
+    params:
+      columns:
+        cost_element: cost_element
+        cost_element_category: cost_element_category
+        cost_element_category_ccecat: cost_element_category_ccecat
+        cost_element_from: cost_element_from
+        cost_element_to: cost_element_to
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_30
+    context_name: select_RFCONF_GL_30
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.30'"
+      - column: check_status
+        expression: if(ltrim('0', cost_element) not between cost_element_from and cost_element_to, '',
+                    if(ltrim('0', cost_element) between cost_element_from and cost_element_to
+                    and ltrim('0', cost_element_category) = ltrim('0', cost_element_category_ccecat), '1', '0'))
+      - column: finance_value
+        expression: cost_element
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: cost_element || '_' || cost_element_category
+
+  - kind: select
+    name: select_RFCONF_GL_30_final
+    context_name: add_RFCONF_GL_30
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.3
+
+  - kind: select
+    name: select_RFCONF_GL_3
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        exchange_rate_difference_key: exchange_rate_difference_key
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_3
+    context_name: select_RFCONF_GL_3
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.3'"
+      - column: check_status
+        expression: if(g_l_account_group_code not in ('CASH', 'GL'), '', 
+                    if(g_l_account_group_code in ('CASH', 'GL') 
+                    and exchange_rate_difference_key IN ('LEAS', ''), '1','0'))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: exchange_rate_difference_key
+
+  - kind: select
+    name: select_RFCONF_GL_3_final
+    context_name: add_RFCONF_GL_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.4
+
+  - kind: select
+    name: select_RFCONF_GL_4
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        tax_category: tax_category
+        is_tax_category_allowed: is_tax_category_allowed
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_4
+    context_name: select_RFCONF_GL_4
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.4'"
+      - column: check_status
+        expression: if(tax_category IS NULL OR tax_category = '', '',
+                    if(not (isnull(is_tax_category_allowed) 
+                    or is_tax_category_allowed = ''), '1',
+                    if(tax_category in ('*', '+', '-', '>', '<'), '1', '0')))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: tax_category
+
+  - kind: select
+    name: select_RFCONF_GL_4_final
+    context_name: add_RFCONF_GL_4
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.5
+
+  - kind: select
+    name: select_RFCONF_GL_5
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        tax_code_indicator: tax_code_indicator
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_5
+    context_name: select_RFCONF_GL_5
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.5'"
+      - column: check_status
+        expression: if(isnull(tax_code_indicator) 
+                    or tax_code_indicator='', '', 
+                    if( tax_code_indicator != 'X', '0', '1'))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: tax_code_indicator
+
+  - kind: select
+    name: select_RFCONF_GL_5_final
+    context_name: add_RFCONF_GL_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.6
+
+  - kind: select
+    name: select_RFCONF_GL_6
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        reconciliation_account_ind: reconciliation_account_ind
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_6
+    context_name: select_RFCONF_GL_6
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.6'"
+      - column: check_status
+        expression: if(g_l_account_group_code in ('RECN', 'AS'),
+                    if(g_l_account_group_code = 'RECN' 
+                    and reconciliation_account_ind IN ('D', 'K'), '1', 
+                    if(g_l_account_group_code = 'AS' and reconciliation_account_ind = 'A', '1', '0')), '')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: reconciliation_account_ind
+
+  - kind: select
+    name: select_RFCONF_GL_6_final
+    context_name: add_RFCONF_GL_6
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true      
+
+#SELECT RFCONF_GL.7
+
+  - kind: select
+    name: select_RFCONF_GL_7
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        open_items_management_ind: open_items_management_ind
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_7
+    context_name: select_RFCONF_GL_7
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.7'"
+      - column: check_status
+        expression: if(g_l_account_group_code = 'CASH' 
+                    and SUBSTRING(g_l_account_number, LENGTH(g_l_account_number), 1) <> '0' 
+                    and open_items_management_ind = 'X', '1', 
+                    if(g_l_account_group_code <> 'CASH' 
+                    and (open_items_management_ind = '' or isnull(open_items_management_ind)), '1', '0'))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: open_items_management_ind
+
+  - kind: select
+    name: select_RFCONF_GL_7_final
+    context_name: add_RFCONF_GL_7
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+#SELECT RFCONF_GL.8
+
+  - kind: select
+    name: select_RFCONF_GL_8
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        layout_rule_sort_key: layout_rule_sort_key
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_8
+    context_name: select_RFCONF_GL_8
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.8'"
+      - column: check_status
+        expression: if(g_l_account_group_code = 'AS' and layout_rule_sort_key = '018', '1',
+                    if(g_l_account_group_code = 'CASH' 
+                    and SUBSTRING(g_l_account_number, LENGTH(g_l_account_number), 1) <> '0' 
+                    and layout_rule_sort_key = '009', '1',
+                    if(g_l_account_group_code = 'CASH' 
+                    and SUBSTRING(g_l_account_number, LENGTH(g_l_account_number), 1) <> '0' 
+                    and layout_rule_sort_key = '027', 1,
+                    if(g_l_account_group_code = 'MAT' and layout_rule_sort_key = '014', '1', '0'))))
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: layout_rule_sort_key
+
+  - kind: select
+    name: select_RFCONF_GL_8_final
+    context_name: add_RFCONF_GL_8
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT RFCONF_GL.9
+
+  - kind: select
+    name: select_RFCONF_GL_9
+    context_name: join_dfgl_dfca
+    params:
+      columns:
+        g_l_account_number: g_l_account_number
+        g_l_account_group_code: g_l_account_group_code
+        field_status_group: field_status_group
+        country_code_ca: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_RFCONF_GL_9
+    context_name: select_RFCONF_GL_9
+    params:
+      - column: rule_code
+        expression: "'RFCONF_GL.9'"
+      - column: check_status
+        expression: if(g_l_account_group_code IN ('CASH', 'AS', 'MAT', 'PL', 'RECN', 'SECC'), 
+                    if(g_l_account_group_code = 'AS' AND field_status_group = 'G007', '1',
+                    if(g_l_account_group_code = 'CASH' AND field_status_group = 'G005', '1',
+                    if(g_l_account_group_code = 'MAT' AND field_status_group IN ('G045', 'G003', 'G006'), '1',
+                    if(g_l_account_group_code = 'PL' AND field_status_group NOT IN ('G001', 'G002'), '1',
+                    if(g_l_account_group_code = 'RECN' AND field_status_group = 'G067', '1',
+                    if(g_l_account_group_code = 'SECC' AND field_status_group = 'SECC', '1', '0')))))), '')
+      - column: finance_value
+        expression: g_l_account_number
+      - column: attribute_name
+        expression: '''General Ledger'''
+      - column: value_checked
+        expression: field_status_group
+
+  - kind: select
+    name: select_RFCONF_GL_9_final
+    context_name: add_RFCONF_GL_9
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+###############
+
+  - kind: union
+    name: union_all
+    context_name: select_RFCONF_GL_10_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_11_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_12_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_13_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_14_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_2_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_27_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_28_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_29_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_30_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_3_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_4_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_5_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_6_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_7_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_8_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_RFCONF_GL_9_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        finance_value: finance_value
+        attribute_name: attribute_name
+        value_checked: value_checked
+        country_code: country_code
+        sap_cluster: sap_cluster
+        check_date: check_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_finance_general_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: finance_general_ledger_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

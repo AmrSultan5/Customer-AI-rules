@@ -1,0 +1,4386 @@
+transform:
+  name: use_cases_summary
+  operations:
+
+
+#### UC11 #####
+#read zg_partner_function_assignment
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc11
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: zg_partner_function_assignment
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC11
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc11
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc11'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc11_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc11_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc11_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  ##### UC09 #####
+  #read global_customer_trade_name_consistency
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: global_customer_trade_name_consistency
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC09
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc09
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc09'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc09_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date 
+
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc09_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc09_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  ##### UC35 #####
+  #read customer_bank_type
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: customer_bank_type
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC35
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc35
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc35'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc35_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc35_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc35_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+  # ##### UC18 #####
+  # #read partner_function
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: partner_function
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC18
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc18
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc18'''
+      - column: kpi_type
+        expression: '''consistency'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc18_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc18_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc18_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  ##### UC12 #####
+  #read geo_coordinates_basic_checks
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: geo_coordinates_basic_checks
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC12
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc12
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc12'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc12_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc12_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc12_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  ##### UC15 #####
+  #read dunning_procedure
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc15
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: dunning_procedure
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC15
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc12
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc15'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc15_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        failed_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc15_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc15_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  #accuracy - UC15
+
+  - kind: filter
+    name: filter_accuracy
+    context_name: read_aggregated_history_uc15
+    params:
+      - condition:
+          quality_category='accuracy'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc15
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc15'''
+      - column: kpi_type
+        expression: '''accuracy'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc15_accuracy
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        failed_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc15_accuracy
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc15_accuracy_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  #completeness - UC15
+
+  - kind: filter
+    name: filter_completeness
+    context_name: read_aggregated_history_uc15
+    params:
+      - condition:
+          quality_category='completeness'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc15
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc15'''
+      - column: kpi_type
+        expression: '''completeness'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc15_completeness
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        failed_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc15_completeness
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc15_completeness_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: union
+    name: union_total_accuracy_uc15
+    context_name: select_uc15_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc15_accuracy_final
+
+  - kind: union
+    name: union_total_accuracy_completeness_uc15
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc15_completeness_final
+
+  - kind: select
+    name: select_uc15_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+##### UC17 #####
+#read ccaf_standard_compliance
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc17
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ccaf_standard_compliance
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC17
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc17
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc17'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc17_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc17_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc17_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  #accuracy - UC17
+
+  - kind: filter
+    name: filter_accuracy
+    context_name: read_aggregated_history_uc17
+    params:
+      - condition:
+          quality_category='accuracy'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc17
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc17'''
+      - column: kpi_type
+        expression: '''accuracy'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc17_accuracy
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc17_accuracy
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc17_accuracy_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  #completeness - UC17
+
+  - kind: filter
+    name: filter_completeness
+    context_name: read_aggregated_history_uc17
+    params:
+      - condition:
+          quality_category='completeness'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc17
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc17'''
+      - column: kpi_type
+        expression: '''completeness'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc17_completeness
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc17_completeness
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc17_completeness_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: union
+    name: union_total_accuracy_uc17
+    context_name: select_uc17_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc17_accuracy_final
+
+  - kind: union
+    name: union_total_accuracy_completeness_uc17
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc17_completeness_final
+
+  - kind: select
+    name: select_uc17_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+
+##### UC10 #####
+#read order_block_alignment
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc10
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: order_block_alignment
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC10
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc10
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc10'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc10_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc10_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc10_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#accuracy - UC10
+
+  - kind: filter
+    name: filter_accuracy
+    context_name: read_aggregated_history_uc10
+    params:
+      - condition:
+          quality_category='accuracy'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc17
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc10'''
+      - column: kpi_type
+        expression: '''accuracy'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc10_accuracy
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc10_accuracy
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc10_accuracy_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+  - kind: union
+    name: union_total_accuracy_uc10
+    context_name: select_uc10_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc10_accuracy_final
+
+  - kind: select
+    name: select_uc10_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+
+
+# ##### UC13 #####
+# #read coolers_critical_md_checks
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc13
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: coolers_critical_md_checks
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC13
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc13
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc13'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc13_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc13_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc13_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#accuracy - UC13
+
+  - kind: filter
+    name: filter_accuracy
+    context_name: read_aggregated_history_uc13
+    params:
+      - condition:
+          quality_category='accuracy'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc13
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc13'''
+      - column: kpi_type
+        expression: '''accuracy'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc13_accuracy
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc13_accuracy
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc13_accuracy_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#completeness - UC13
+
+  - kind: filter
+    name: filter_completeness
+    context_name: read_aggregated_history_uc13
+    params:
+      - condition:
+          quality_category='completeness'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc13
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc13'''
+      - column: kpi_type
+        expression: '''completeness'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc13_completeness
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc13_completeness
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc13_completeness_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: union
+    name: union_total_accuracy_uc13
+    context_name: select_uc13_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc13_accuracy_final
+
+  - kind: union
+    name: union_total_accuracy_completeness_uc13
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc13_completeness_final
+
+  - kind: select
+    name: select_uc13_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+
+
+
+##### UC01 #####
+#read tccc_indicator
+  - kind: read_dataio
+    name: read_aggregated_history_uc01
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tccc_indicator
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC01
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc01
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc01'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      - column: country_code
+        expression: cast(NULL as string)
+
+
+  - kind: select
+    name: select_uc01_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date    
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc01_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc01_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#accuracy - UC01
+
+  - kind: filter
+    name: filter_accuracy
+    context_name: read_aggregated_history_uc01
+    params:
+      - condition:
+          quality_category='Accuracy'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc13
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc01'''
+      - column: kpi_type
+        expression: '''accuracy'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      - column: country_code
+        expression: cast(NULL as string)
+
+  - kind: select
+    name: select_uc01_accuracy
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc01_accuracy
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc01_accuracy_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#completeness - UC01
+
+  - kind: filter
+    name: filter_completeness
+    context_name: read_aggregated_history_uc01
+    params:
+      - condition:
+          quality_category='Completeness'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc01
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc01'''
+      - column: kpi_type
+        expression: '''completeness'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      - column: country_code
+        expression: cast(NULL as string)
+
+  - kind: select
+    name: select_uc01_completeness
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc01_completeness
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc01_completeness_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#consistency - UC01
+
+  - kind: filter
+    name: filter_completeness
+    context_name: read_aggregated_history_uc01
+    params:
+      - condition:
+          quality_category='Consistency'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc01
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc01'''
+      - column: kpi_type
+        expression: '''consistency'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      - column: country_code
+        expression: cast(NULL as string)
+
+  - kind: select
+    name: select_uc01_consistency
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc01_consistency
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc01_consistency_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+  - kind: union
+    name: union_total_accuracy_uc01
+    context_name: select_uc01_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc01_accuracy_final
+
+  - kind: union
+    name: union_total_accuracy_completeness_uc01
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc01_completeness_final
+
+  - kind: union
+    name: union_total_accuracy_completeness_consistency_uc01
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc01_consistency_final
+
+  - kind: select
+    name: select_uc01_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+##### UC20 #####
+#read bd_territory_assignment_to_customers
+  - kind: read_dataio
+    name: read_aggregated_history_uc20
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: bd_territory_assignment_to_customers
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC20
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc01
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc20'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc20_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc20_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc20_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#completeness - UC20
+
+  - kind: filter
+    name: filter_completeness
+    context_name: read_aggregated_history_uc20
+    params:
+      - condition:
+          quality_category='completeness'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc20
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc20'''
+      - column: kpi_type
+        expression: '''completeness'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc20_completeness
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc20_completeness
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc20_completeness_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: union
+    name: union_total_completeness_uc20
+    context_name: select_uc20_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc20_completeness_final
+
+  - kind: select
+    name: select_uc20_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+##### UC14 #####
+#read order_block_status
+  - kind: read_dataio
+    name: read_aggregated_history_uc14
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: order_block_status
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC14
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc14
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc14'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc14_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc14_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc14_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#accuracy - UC14
+
+  - kind: filter
+    name: filter_accuracy
+    context_name: read_aggregated_history_uc14
+    params:
+      - condition:
+          quality_category='accuracy'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc14
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc14'''
+      - column: kpi_type
+        expression: '''accuracy'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc14_accuracy
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc14_accuracy
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc14_accuracy_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: union
+    name: union_total_accuracy_uc14
+    context_name: select_uc14_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc14_accuracy_final
+
+  - kind: select
+    name: select_uc14_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+
+  ##### UC16 #####
+  #read isscom_standard
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: isscom_standard
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC16
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_UC16
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc16'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc16_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc16_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc16_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  ##### uc21 #####
+  #read customer_link_payer
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: customer_link_payer
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - uc21
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc21
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc21'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc21_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc21_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc21_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+
+  # #total - UC22
+
+
+  - kind: read_dataio
+    name: read_uc22_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tax_number
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1  
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc22
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc22'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc22_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date_uc22
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc22_total
+    params:
+      - other:
+          group_max_date_uc22
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date_uc22
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc22_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+
+  # #total - UC36
+
+
+  - kind: read_dataio
+    name: read_uc36_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tax_classification
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1  
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc36
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc36'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc36_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date_uc36
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc36_total
+    params:
+      - other:
+          group_max_date_uc36
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date_uc36
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc36_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+##### UC07 #####
+  #read product conversion factors
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: product_conversion_factors
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC07
+
+  - kind: add
+    name: add_qlty_category_uc07
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc07'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      - column: country_code
+        expression: "''"
+
+  - kind: select
+    name: select_uc07_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date 
+
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc07_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc07_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+##### UC25 #####
+  #read purchasing info record
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: purchasing_info_record
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC25
+
+  - kind: add
+    name: add_qlty_category_uc25
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc25'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      # - column: country_code
+      #   expression: "''"
+
+  - kind: select
+    name: select_uc25_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date 
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc25_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc25_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+# ##### UC16 #####
+# #read isscom_standard
+#   - kind: read_dataio
+#     name: read_aggregated_history_uc16
+#     params:
+#       dataio:
+#         ad_id: "{{dataio.ad_id}}"
+#         layer: application
+#         storage_id: "{{dataio.storage_id}}"
+#       application_name: data_quality
+#       country: ca
+#       module: isscom_standard
+#       namespace: golden
+#       object_name: aggregated_history
+#       schema_version: v1
+
+# #total - UC16
+#   - kind: add
+#     name: add_domain_uc_code_kpi_type_uc16
+#     params:
+#       - column: domain
+#         expression: '''customer'''
+#       - column: uc_code
+#         expression: '''uc16'''
+#       - column: kpi_type
+#         expression: '''total'''
+#       - column: week_of_year
+#         expression: weekofyear(loading_date)
+#       - column: year_of_date
+#         expression: year(loading_date)
+
+#   - kind: select
+#     name: select_uc16_total
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         total_records: total_checks
+#         invalid_records: invalid_checks
+#         week_of_year: week_of_year
+#         year_of_date: year_of_date
+#       
+#   - kind: group
+#     name: group_max_date
+#     params:
+#       - aggs:
+#           loading_date: max
+#         by:
+#         - week_of_year
+#         - year_of_date
+
+#   - kind: join
+#     name: join_group_max_date
+#     context_name: select_uc16_total
+#     params:
+#       - other:
+#           group_max_date
+#         how:
+#           inner
+#         columns:
+#           loading_date: max_loading_date
+
+#   - kind: group
+#     name: group_country_code_date
+#     params:
+#       - aggs:
+#           total_checks: sum
+#           invalid_checks: sum
+#         by:
+#         - country_code
+#         - loading_date
+#         - domain
+#         - uc_code
+#         - kpi_type
+
+#   - kind: select
+#     name: select_uc16_total_final
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         sum_total_checks: total_checks
+#         sum_invalid_checks: invalid_checks
+#       distinct: true
+
+# #accuracy - UC16
+
+#   - kind: filter
+#     name: filter_accuracy
+#     context_name: read_aggregated_history_uc16
+#     params:
+#       - condition:
+#           quality_category='accuracy'
+
+#   - kind: add
+#     name: add_domain_uc_code_kpi_type_uc16
+#     params:
+#       - column: domain
+#         expression: '''customer'''
+#       - column: uc_code
+#         expression: '''uc16'''
+#       - column: kpi_type
+#         expression: '''accuracy'''
+#       - column: week_of_year
+#         expression: weekofyear(loading_date)
+#       - column: year_of_date
+#         expression: year(loading_date)
+
+
+#   - kind: select
+#     name: select_uc16_accuracy
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         total_records: total_checks
+#         invalid_records: invalid_checks
+#         week_of_year: week_of_year
+#         year_of_date: year_of_date
+#       
+#   - kind: group
+#     name: group_max_date
+#     params:
+#       - aggs:
+#           loading_date: max
+#         by:
+#         - week_of_year
+#         - year_of_date
+
+#   - kind: join
+#     name: join_group_max_date
+#     context_name: select_uc16_accuracy
+#     params:
+#       - other:
+#           group_max_date
+#         how:
+#           inner
+#         columns:
+#           loading_date: max_loading_date
+
+#   - kind: group
+#     name: group_country_code_date
+#     params:
+#       - aggs:
+#           total_checks: sum
+#           invalid_checks: sum
+#         by:
+#         - country_code
+#         - loading_date
+#         - domain
+#         - uc_code
+#         - kpi_type
+
+
+#   - kind: select
+#     name: select_uc16_accuracy_final
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         sum_total_checks: total_checks
+#         sum_invalid_checks: invalid_checks
+#       distinct: true
+
+# #completeness - UC16
+
+#   - kind: filter
+#     name: filter_completeness
+#     context_name: read_aggregated_history_uc16
+#     params:
+#       - condition:
+#           quality_category='completeness'
+
+#   - kind: add
+#     name: add_domain_uc_code_kpi_type_uc16
+#     params:
+#       - column: domain
+#         expression: '''customer'''
+#       - column: uc_code
+#         expression: '''uc16'''
+#       - column: kpi_type
+#         expression: '''completeness'''
+#       - column: week_of_year
+#         expression: weekofyear(loading_date)
+#       - column: year_of_date
+#         expression: year(loading_date)
+
+
+#   - kind: select
+#     name: select_uc16_completeness
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         total_records: total_checks
+#         invalid_records: invalid_checks
+#         week_of_year: week_of_year
+#         year_of_date: year_of_date
+#      
+#   - kind: group
+#     name: group_max_date
+#     params:
+#       - aggs:
+#           loading_date: max
+#         by:
+#         - week_of_year
+#         - year_of_date
+
+#   - kind: join
+#     name: join_group_max_date
+#     context_name: select_uc16_completeness
+#     params:
+#       - other:
+#           group_max_date
+#         how:
+#           inner
+#         columns:
+#           loading_date: max_loading_date
+
+#   - kind: group
+#     name: group_country_code_date
+#     params:
+#       - aggs:
+#           total_checks: sum
+#           invalid_checks: sum
+#         by:
+#         - country_code
+#         - loading_date
+#         - domain
+#         - uc_code
+#         - kpi_type
+
+
+#   - kind: select
+#     name: select_uc16_completeness_final
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         sum_total_checks: total_checks
+#         sum_invalid_checks: invalid_checks
+#       distinct: true
+
+#   - kind: union
+#     name: union_total_accuracy_uc16
+#     context_name: select_uc16_total_final
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_uc16_accuracy_final
+
+#   - kind: union
+#     name: union_total_accuracy_completeness_uc16
+#     params:
+#       allow_missing: false
+#       by_name: true
+#       other: select_uc16_completeness_final
+
+#   - kind: select
+#     name: select_uc16_final
+#     params:
+#       columns:
+#         domain: domain
+#         uc_code: uc_code
+#         country_code: country_code
+#         loading_date: loading_date
+#         kpi_type: kpi_type
+#         total_checks: total_checks
+#         invalid_checks: invalid_checks
+#       distinct: true
+
+  ##UC03 Serving Indicators
+
+  - kind: read_dataio
+    name: read_uc03_serving_indicators
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: serving_indicators
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc03
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc03'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+      - column: country_code
+        expression: cast(NULL as string)
+
+
+  - kind: select
+    name: select_uc03_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date_uc03
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date_uc03
+    context_name: select_uc03_total
+    params:
+      - other:
+          group_max_date_uc03
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date_uc03
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc03_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#read ipm_indirect_partner
+  - kind: read_dataio
+    name: read_aggregated_history_uc04
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ipm_indirect_partner
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+#total - UC04
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc04
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc04'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc04_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc04_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc04_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+#wholesalers - UC04
+
+  - kind: filter
+    name: filter_wholesalers
+    context_name: read_aggregated_history_uc04
+    params:
+      - condition:
+          group_name='Wholesalers'
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc04
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc04'''
+      - column: kpi_type
+        expression: '''Wholesalers'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc04_wholesalers
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc04_wholesalers
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+
+  - kind: select
+    name: select_uc04_wholesalers_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: union
+    name: union_total_wholesalers_uc04
+    context_name: select_uc04_total_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc04_wholesalers_final
+
+  - kind: select
+    name: select_uc04_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+#read reconciliation_account
+#total - UC34
+  - kind: read_dataio
+    name: read_aggregated_history_uc04
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: reconciliation_account
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc34
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc34'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+
+  - kind: select
+    name: select_uc34_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc34_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc34_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+
+    ##### UC24 #####
+  #read bom
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc24
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: bom
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v2
+
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc24
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc24'''
+      - column: kpi_type
+        expression: '''total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+ 
+
+  - kind: select
+    name: select_uc24_accuracy_sales
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+
+  - kind: join
+    name: join_last_3_months
+    context_name: select_uc24_accuracy_sales
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          invalid_checks: sum
+          total_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc24_final_accuracy_sales
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  - kind: add
+    name: add_upper_country
+    params:
+     - column: country_code
+       expression: UPPER(country_code)
+       overwrite: true
+       
+  - kind: select
+    name: select_uc24_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+      distinct: true
+
+  ##### UC29 #####
+  #read spr
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc29
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: spr
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #uc29
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc29
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc29'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc29_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc29_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc29_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+### UC26
+
+  - kind: read_dataio
+    name: read_aggregated_history_uc26
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: procurement_alternative_and_mixing_ratio
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc26
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc26'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc26_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc26_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc26_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  # #total - UC43
+
+
+  - kind: read_dataio
+    name: read_uc43_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: vendor_suppression
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1  
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_qlty_category_uc43
+    params:
+      - column: domain
+        expression: '''vendor'''
+      - column: uc_code
+        expression: '''uc43'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc43_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        failed_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date_uc43
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc43_total
+    params:
+      - other:
+          group_max_date_uc43
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date_uc43
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc43_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+  ##### UC23 #####
+  #read sc pending open orders
+
+  - kind: read_dataio
+    name: read_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: sc_pending_open_orders
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  #total - UC23
+
+  - kind: add
+    name: add_qlty_category_uc23
+    params:
+      - column: domain
+        expression: '''product'''
+      - column: uc_code
+        expression: '''uc23'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: quality_category
+        expression: cast(null as string)
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc23_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        invalid_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date 
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc23_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc23_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+# UC46 (old UC41)
+  - kind: read_dataio
+    name: read_aggregated_history_uc46
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cost_center_check
+      namespace: golden
+      object_name: aggregated_history
+      schema_version: v1
+
+  - kind: add
+    name: add_domain_uc_code_kpi_type_uc46
+    params:
+      - column: domain
+        expression: '''customer'''
+      - column: uc_code
+        expression: '''uc46'''
+      - column: kpi_type
+        expression: '''Total'''
+      - column: week_of_year
+        expression: weekofyear(loading_date)
+      - column: year_of_date
+        expression: year(loading_date)
+
+  - kind: select
+    name: select_uc46_total
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        total_checks: total_checks
+        failed_checks: invalid_checks
+        week_of_year: week_of_year
+        year_of_date: year_of_date
+
+  - kind: group
+    name: group_max_date
+    params:
+      - aggs:
+          loading_date: max
+        by:
+        - week_of_year
+        - year_of_date
+
+  - kind: join
+    name: join_group_max_date
+    context_name: select_uc46_total
+    params:
+      - other:
+          group_max_date
+        how:
+          inner
+        columns:
+          loading_date: max_loading_date
+
+  - kind: group
+    name: group_country_code_date
+    params:
+      - aggs:
+          total_checks: sum
+          invalid_checks: sum
+        by:
+        - country_code
+        - loading_date
+        - domain
+        - uc_code
+        - kpi_type
+
+  - kind: select
+    name: select_uc46_total_final
+    params:
+      columns:
+        domain: domain
+        uc_code: uc_code
+        country_code: country_code
+        loading_date: loading_date
+        kpi_type: kpi_type
+        sum_total_checks: total_checks
+        sum_invalid_checks: invalid_checks
+      distinct: true
+
+########################################### unions ######################################
+
+  - kind: union
+    name: union_all
+    context_name: select_uc10_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc14_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc12_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc17_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc13_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc15_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc16_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc21_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc20_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc22_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc01_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc36_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc03_total_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc11_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc04_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc34_total_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc09_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc35_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc18_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc24_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc29_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc07_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc25_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc43_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc23_final
+
+  # - kind: union
+  #   name: union_all
+  #   params:
+  #     allow_missing: false
+  #     by_name: true
+  #     other: select_uc25_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc26_final
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_uc46_total_final
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: total_checks
+        to: integer
+      - column: invalid_checks
+        to: integer
+
+  - kind: filter
+    name: filter_loading_date
+    params:
+      - condition:
+          loading_date >= add_months(current_date(), -12)
+
+  - kind: write_dataio
+    name: write_use_cases_summary
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: golden
+      object_name: use_cases_summary
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

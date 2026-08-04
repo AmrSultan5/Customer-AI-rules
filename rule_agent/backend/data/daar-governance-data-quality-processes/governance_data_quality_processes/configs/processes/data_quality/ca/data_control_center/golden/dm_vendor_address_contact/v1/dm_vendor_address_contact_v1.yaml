@@ -1,0 +1,366 @@
+
+transform:
+  name: dm_vendor_address_contact
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+  # ── BUT020: base vendor-address relationship ──────────────────────────
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+
+  - kind: filter
+    name: filter_but020
+    context_name: read_but020
+    params:
+      - condition: "addr_valid_to = '99991231235959'"
+      - condition: "substring(partner, 1, 3) IN ('V43', 'V40', '400', '900', '200', '300', '700')"
+
+  - kind: add
+    name: add_vendor_code
+    context_name: filter_but020
+    params:
+      - column: vendor_code
+        expression: "CASE
+                    WHEN substring(partner,0,3) ='V43' THEN replace(partner,LEFT(partner,3),'430')
+                    WHEN substring(partner,0,3) ='V40' THEN replace(partner,LEFT(partner,3),'400')
+                    WHEN substring(partner,0,3) ='V90' THEN replace(partner,LEFT(partner,3),'900')
+                    ELSE partner END"
+
+  - kind: select
+    name: select_but020
+    context_name: add_vendor_code
+    params:
+      columns:
+        partner: partner_code
+        vendor_code: vendor_code
+        addrnumber: address_number
+
+      distinct: true
+
+  # ── T005: country reference ───────────────────────────────────────────
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t005
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t005
+
+  - kind: select
+    name: select_t005
+    context_name: read_t005
+    params:
+      columns:
+        land1: land1
+
+
+  # ── ADR2: phone / mobile ──────────────────────────────────────────────
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_adr2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr2
+
+  - kind: filter
+    name: filter_adr2
+    context_name: read_adr2
+    params:
+      - condition: r3_user in('1', '3')
+
+  - kind: add
+    name: add_adr2
+    context_name: filter_adr2
+    params:
+      - column: contact_medium_type
+        expression: if(r3_user = '1', 'fixed_tel_number', 'mobile_tel_number')
+      - column: source
+        expression: '''s4'''
+
+  - kind: select
+    name: select_adr2
+    context_name: add_adr2
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        tel_number: contact_medium_value
+        valid_to: valid_to
+        source: source
+
+
+  # ── ADR3: fax ─────────────────────────────────────────────────────────
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_adr3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr3
+
+  - kind: add
+    name: add_adr3
+    context_name: read_adr3
+    params:
+      - column: contact_medium_type
+        expression: '''fax_number'''
+      - column: source
+        expression: '''s4'''
+
+  - kind: select
+    name: select_adr3
+    context_name: add_adr3
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        fax_number: contact_medium_value
+        fax_extens: fax_extension
+        valid_to: valid_to
+        source: source
+
+
+  # ── ADR6: email ───────────────────────────────────────────────────────
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_adr6
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr6
+
+  - kind: add
+    name: add_adr6
+    context_name: read_adr6
+    params:
+      - column: contact_medium_type
+        expression: '''email_address'''
+      - column: country_code
+        expression: cast(NULL as string)
+      - column: source
+        expression: '''s4'''
+
+  - kind: select
+    name: select_adr6
+    context_name: add_adr6
+    params:
+      columns:
+        persnumber: person_number
+        addrnumber: address_number
+        consnumber: sequence_number
+        country_code: country_code
+        contact_medium_type: contact_medium_type
+        smtp_addr: contact_medium_value
+        valid_to: valid_to
+        source: source
+
+
+  # ── JOIN but020 × ADR2 × T005 ─────────────────────────────────────────
+  - kind: join
+    name: join_but020_adr2
+    context_name: select_but020
+    params:
+      - other: select_adr2
+        how: inner
+        columns:
+          address_number: address_number
+  
+      - other: select_t005
+        how: left
+        columns:
+          country_code: land1
+  
+
+  - kind: add
+    name: add_is_allowed_adr2
+    context_name: join_but020_adr2
+    params:
+      - column: is_allowed_country_code
+        expression: if(isnotnull(land1),'1','0')
+      - column: fax_extension
+        expression: ''''''
+
+  - kind: select
+    name: select_final_adr2
+    context_name: add_is_allowed_adr2
+    params:
+      columns:
+        vendor_code: vendor_code
+        partner_code: partner_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        fax_extension: fax_extension
+        valid_to: valid_to
+        source: source
+
+
+  # ── JOIN but020 × ADR3 × T005 ─────────────────────────────────────────
+  - kind: join
+    name: join_but020_adr3
+    context_name: select_but020
+    params:
+      - other: select_adr3
+        how: inner
+        columns:
+          address_number: address_number
+  
+      - other: select_t005
+        how: left
+        columns:
+          country_code: land1
+  
+
+  - kind: add
+    name: add_is_allowed_adr3
+    context_name: join_but020_adr3
+    params:
+      - column: is_allowed_country_code
+        expression: if(isnotnull(land1),'1','0')
+
+  - kind: select
+    name: select_final_adr3
+    context_name: add_is_allowed_adr3
+    params:
+      columns:
+        vendor_code: vendor_code
+        partner_code: partner_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        fax_extension: fax_extension
+        valid_to: valid_to
+        source: source
+
+
+  # ── JOIN but020 × ADR6 ────────────────────────────────────────────────
+  - kind: join
+    name: join_but020_adr6
+    context_name: select_but020
+    params:
+      - other: select_adr6
+        how: inner
+        columns:
+          address_number: address_number
+  
+
+  - kind: add
+    name: add_is_allowed_adr6
+    context_name: join_but020_adr6
+    params:
+      - column: is_allowed_country_code
+        expression: cast(NULL as string)
+      - column: fax_extension
+        expression: ''''''
+
+  - kind: select
+    name: select_final_adr6
+    context_name: add_is_allowed_adr6
+    params:
+      columns:
+        vendor_code: vendor_code
+        partner_code: partner_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        fax_extension: fax_extension
+        valid_to: valid_to
+        source: source
+
+
+  # ── UNION ADR2 + ADR3 + ADR6 ──────────────────────────────────────────
+  - kind: union
+    name: union_all
+    context_name: select_final_adr2
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_final_adr3
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_final_adr6
+
+  - kind: select
+    name: select_dm_vendor_address_contact
+    params:
+      columns:
+        vendor_code: vendor_code
+        partner_code: partner_code
+        address_number: address_number
+        person_number: person_number
+        sequence_number: sequence_number
+        country_code: country_code
+        is_allowed_country_code: is_allowed_country_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        fax_extension: fax_extension
+        valid_to: valid_to
+        source: source
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_address_contact
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

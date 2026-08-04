@@ -1,0 +1,1111 @@
+transform:
+  name: customer_contact_uniqueness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+#READ dm_customer_address_contact_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_contact
+
+  - kind: select
+    context_name: read_dm_customer_address_contact
+    name: select_dcac
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        source: source
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    context_name: read_dm_customer_address_contact
+    name: select_dcac_v2
+    params:
+      columns:
+        customer_code: customer_code_cac
+        contact_medium_type: contact_medium_type_cac
+        contact_medium_value: contact_medium_value_cac
+        source: source_cac
+        country_code: country_code_cac
+        sap_cluster: sap_cluster_cac
+      distinct: true
+
+#READ dm_customer_general_v3
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: add
+    name: add_legal_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      - column: legal_entity
+        expression: if(tax_0_value is not null and tax_0_value != '', tax_0_value,
+                    if(tax_1_value is not null and tax_1_value != '', tax_1_value,
+                    if(tax_2_value is not null and tax_2_value != '', tax_2_value,
+                    if(tax_3_value is not null and tax_3_value != '', tax_3_value,
+                    if(legal_name is not null and replace(legal_name, ' ', '') != '', upper(replace(legal_name, ' ', '')), '')))))
+
+  - kind: select
+    name: select_dcg
+    context_name: add_legal_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        account_group_code: account_group_code
+        country_code: country_code
+        legal_name: general_legal_name
+        legal_entity: legal_entity
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        sap_cluster: sap_cluster
+      distinct: true    
+
+#READ dm_customer_contact_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_contact
+
+  - kind: select
+    context_name: read_dm_customer_contact
+    name: select_dcc
+    params:
+      columns:
+        customer_code: customer_code
+        customer_partner_code: customer_partner_code
+        function_of_partner: function_of_partner
+        source: source
+        first_name: first_name
+        last_name: last_name
+        email_address: email_address
+        sap_cluster: sap_cluster
+      distinct: true
+
+#CONTACT
+  - kind: select
+    name: select_dccont
+    context_name: read_dm_customer_contact
+    params:
+      columns:
+        customer_code: customer_code_cont
+        function_of_partner: function_of_partner_cont
+        last_name: last_name_cont
+        first_name: first_name_cont
+        source: source_cont
+        email_address: email_address_cont
+        tel_number: mobile_tel_number_cont
+        sap_cluster: sap_cluster_cont
+      distinct: true
+  - kind: filter
+    name: filter_dm_customer_contact
+    context_name: select_dcc
+    params:
+      - condition:
+          email_address is not null and email_address != ''
+
+#ADDRESS
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        legal_name: address_legal_name
+        name_above_door: address_name_above_door
+        sap_cluster: sap_cluster
+      distinct: true
+
+# JOINS
+  - kind: join
+    name: left_join_dcg_dca_dccont
+    context_name: select_dcg
+    params:
+      - other:
+          select_dca
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dccont
+        how:
+          left
+        columns:
+          customer_code: customer_code_cont
+          sap_cluster: sap_cluster_cont
+      - other:
+          select_dcac_v2
+        how:
+          left
+        columns:
+          customer_code: customer_code_cac
+          sap_cluster: sap_cluster_cac
+
+  - kind: select
+    name: select_rcuniq_370_9
+    context_name: left_join_dcg_dca_dccont
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: address_legal_name
+        general_legal_name: general_legal_name
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        source_cont: source
+        last_name_cont: last_name
+        first_name_cont: first_name
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_370_9_address
+    context_name: select_rcuniq_370_9
+    params:
+      - condition:
+          address_legal_name != '-1'
+
+  - kind: select
+    name: select_address_370_9
+    context_name: filter_370_9_address
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: legal_name
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        source: source
+        last_name: last_name
+        first_name: first_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: aggregation_370_9
+    context_name: select_address_370_9
+    params:
+      - aggs:
+          legal_name: max
+        by:
+        - customer_code
+        - sap_cluster
+
+  - kind: join
+    name: join_dcg_dcc_cpgm_dch
+    context_name: select_rcuniq_370_9
+    params:
+      - other:
+          aggregation_370_9
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+# START logic for rule 39_1
+  - kind: add
+    name: mobile_number_cleansing_39_1
+    context_name: select_dcac
+    params:
+      - column: final_mobile_number
+        expression: REGEXP_REPLACE(REGEXP_REPLACE(contact_medium_value, '[^0-9]', ''), '^0+', '')
+
+  - kind: filter
+    name: filter_39_1_dcac
+    context_name: mobile_number_cleansing_39_1
+    params:
+      - condition:
+          (contact_medium_type = 'mobile_tel_number' AND source = 's4' AND final_mobile_number != '' AND final_mobile_number is not NULL)
+
+# universe for 39_1
+  - kind: join
+    name: universe_39_1
+    context_name: select_dcg
+    params:
+      - other:
+          filter_39_1_dcac
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_in_scope_cols_39_1
+    context_name: universe_39_1
+    params:
+      - column: order_block_code_in_scope
+        expression: central_order_block_code NOT IN ('E', 'G', 'SP', 'R', 'U')
+      - column: legal_entity_in_scope
+        expression: CASE WHEN order_block_code_in_scope THEN legal_entity END
+
+  - kind: group
+    name: count_legal_entities_per_mobile_39_1
+    context_name: add_in_scope_cols_39_1
+    params:
+      - aggs:
+          legal_entity_in_scope: countDistinct
+        by:
+        - final_mobile_number
+
+  - kind: select
+    name: select_number_of_legal_entities_per_mobile_39_1
+    context_name: count_legal_entities_per_mobile_39_1
+    params:
+      columns:
+        final_mobile_number: final_mobile_number
+        countDistinct_legal_entity_in_scope: count_legal_entity
+      distinct: true
+
+  - kind: join
+    name: join_universe_with_number_of_entities_39_1
+    context_name: add_in_scope_cols_39_1
+    params:
+      - other:
+          select_number_of_legal_entities_per_mobile_39_1
+        how:
+          left
+        columns:
+          final_mobile_number: final_mobile_number
+
+# rule for 39_1
+  - kind: add
+    name: number_of_legal_entities_per_mobile_39_1
+    context_name: join_universe_with_number_of_entities_39_1
+    params:
+      - column: rule_code
+        expression: "'RCUNIQ_39.1'"
+      - column: check_status
+        expression: IF(final_mobile_number IS NOT NULL AND order_block_code_in_scope, IF(count_legal_entity >= 10, '0', '1'), '')
+
+# FINAL table for rule 39_1
+  - kind: select
+    name: select_rcuniq_39_1_final
+    context_name: number_of_legal_entities_per_mobile_39_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        final_mobile_number: value_checked
+      distinct: true
+
+# START logic for rule 41_8 
+  - kind: filter
+    name: filter_41_8_dcac
+    context_name: select_dcac
+    params:
+      - condition:
+          (contact_medium_type = 'email_address' AND source = 's4' AND contact_medium_value != '' AND contact_medium_value is not NULL)
+
+  - kind: add
+    name: add_41_8_dcac_contact_medium_value_lowercase
+    context_name: filter_41_8_dcac
+    params:
+      - column: contact_medium_value_lowercase
+        expression: lower(contact_medium_value)
+
+  - kind: select
+    name: select_41_8_dcac
+    context_name: add_41_8_dcac_contact_medium_value_lowercase
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_value_lowercase: final_email
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: select_dcc_email_address_lowercase
+    context_name: select_dcc
+    params:
+      - column: email_address_lowercase
+        expression: lower(email_address)
+
+  - kind: filter
+    name: filter_41_8_dcc
+    context_name: select_dcc_email_address_lowercase
+    params:
+      - condition:
+          (function_of_partner = 'Z3' AND source = 'crm' AND email_address_lowercase != '' and email_address_lowercase is not NULL)
+
+  - kind: select
+    name: select_41_8_dcc
+    context_name: filter_41_8_dcc
+    params:
+      columns:
+        customer_code: customer_code
+        email_address_lowercase: final_email
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_z5_emails
+    context_name: select_dcc_email_address_lowercase
+    params:
+      - condition: (function_of_partner = 'Z5' AND email_address_lowercase != '' AND email_address_lowercase IS NOT NULL)
+
+  - kind: select
+    name: customers_with_z5_emails
+    context_name: filter_z5_emails
+    params:
+      columns:
+        email_address_lowercase: final_email
+      distinct: true
+
+  - kind: add
+    name: customers_with_z5_emails_flagged
+    context_name: customers_with_z5_emails
+    params:
+      - column: is_z5_flag
+        expression: 1=1
+
+# universe for 41_8
+  - kind: join
+    name: join_dcg_dcac
+    context_name: select_dcg
+    params:
+      - other:
+          select_41_8_dcac
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dcg_dcc
+    context_name: select_dcg
+    params:
+      - other:
+          select_41_8_dcc
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: union
+    name: universe_41_8
+    context_name: join_dcg_dcac
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_dcg_dcc
+
+  - kind: select
+    name: universe_41_8_distinct
+    context_name: universe_41_8
+    params:
+      columns:
+        customer_code: customer_code
+        final_email: final_email
+        central_order_block_code: central_order_block_code
+        legal_entity: legal_entity
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_in_scope_cols_41_8
+    context_name: universe_41_8_distinct
+    params:
+      - column: order_block_code_in_scope
+        expression: central_order_block_code NOT IN ('E', 'G', 'SP', 'R', 'U')
+      - column: legal_entity_in_scope
+        expression: CASE WHEN order_block_code_in_scope THEN legal_entity END
+
+  - kind: group
+    name: count_legal_entities_per_mail
+    context_name: add_in_scope_cols_41_8
+    params:
+      - aggs:
+          legal_entity_in_scope: countDistinct
+        by:
+        - final_email
+
+  - kind: select
+    name: select_number_of_legal_entities_per_mail
+    context_name: count_legal_entities_per_mail
+    params:
+      columns:
+        final_email: final_email
+        countDistinct_legal_entity_in_scope: count_legal_entity
+      distinct: true
+
+  - kind: join
+    name: join_universe_with_z5_emails_41_8
+    context_name: add_in_scope_cols_41_8
+    params:
+      - other:
+          select_number_of_legal_entities_per_mail
+        how:
+          left
+        columns:
+          final_email: final_email
+      - other:
+          customers_with_z5_emails_flagged
+        how:
+          left
+        columns:
+          final_email: final_email
+
+# rule for 41_8
+  - kind: add
+    name: number_of_legal_entities_per_z5_mail
+    context_name: join_universe_with_z5_emails_41_8
+    params:
+      - column: rule_code
+        expression: "'RCUNIQ_41.8'"
+      - column: check_status
+        expression: IF(is_z5_flag AND order_block_code_in_scope AND final_email IS NOT NULL, IF(count_legal_entity >= 10, '0', '1'), '')
+
+  - kind: select
+    name: select_rcuniq_41_8_final
+    context_name: number_of_legal_entities_per_z5_mail
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        final_email: value_checked
+      distinct: true
+
+# START logic for rule 370_9
+  - kind: filter
+    name: filter_370_9_dcc
+    context_name: select_dcc
+    params:
+      - condition:
+          source = 's4'
+
+# universe for 370_9
+  - kind: join
+    name: universe_370_9
+    context_name: select_dcg
+    params:
+      - other:
+          filter_370_9_dcc
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_in_scope_cols_370_9
+    context_name: universe_370_9
+    params:
+      - column: order_block_code_in_scope
+        expression: central_order_block_code NOT IN ('E', 'G', 'SP', 'R', 'U')
+      - column: legal_entity_in_scope
+        expression: CASE WHEN order_block_code_in_scope THEN legal_entity END
+
+  - kind: group
+    name: count_legal_entities_per_contact_name
+    context_name: add_in_scope_cols_370_9
+    params:
+      - aggs:
+          legal_entity_in_scope: countDistinct
+        by:
+        - last_name
+        - first_name
+
+  - kind: select
+    name: select_number_of_legal_entities_per_contact_name
+    context_name: count_legal_entities_per_contact_name
+    params:
+      columns:
+        last_name: last_name
+        first_name: first_name
+        countDistinct_legal_entity_in_scope: count_legal_entity
+      distinct: true
+
+  - kind: filter
+    name: filter_z5_contact_names
+    context_name: filter_370_9_dcc
+    params:
+      - condition: (function_of_partner = 'Z5' AND last_name != '' AND last_name IS NOT NULL AND first_name != '' AND first_name IS NOT NULL)
+
+  - kind: select
+    name: customers_with_z5_contact_names
+    context_name: filter_z5_contact_names
+    params:
+      columns:
+        first_name: first_name
+        last_name: last_name
+      distinct: true
+
+  - kind: add
+    name: customers_with_z5_contact_names_flagged
+    context_name: customers_with_z5_contact_names
+    params:
+      - column: is_z5_flag
+        expression: 1=1
+
+  - kind: join
+    name: join_universe_with_z5_contact_names_370_9
+    context_name: add_in_scope_cols_370_9
+    params:
+      - other:
+          select_number_of_legal_entities_per_contact_name
+        how:
+          left
+        columns:
+          last_name: last_name
+          first_name: first_name
+      - other:
+          customers_with_z5_contact_names_flagged
+        how:
+          left
+        columns:
+          last_name: last_name
+          first_name: first_name
+
+# rule for 370_9
+  - kind: add
+    name: number_of_legal_entities_per_z5_contact_name
+    context_name: join_universe_with_z5_contact_names_370_9
+    params:
+      - column: contact_name
+        expression: CONCAT(last_name, ', ', first_name)
+      - column: rule_code
+        expression: "'RCUNIQ_370.9'"
+      - column: check_status
+        expression: IF(is_z5_flag AND order_block_code_in_scope AND first_name IS NOT NULL AND last_name IS NOT NULL, IF(count_legal_entity >= 10, '0', '1'), '')
+
+  - kind: select
+    name: select_rcuniq_370_9_final
+    context_name: number_of_legal_entities_per_z5_contact_name
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        contact_name: value_checked
+      distinct: true
+
+# START logic for rule 370_9
+#RULE 370_9
+  - kind: add
+    name: add_legal_name_370_9
+    context_name: join_dcg_dcc_cpgm_dch
+    params:
+      - column: rule_code
+        expression: "'RCCONF_370.9'"
+      - column: final_legal_name
+        expression: if(general_legal_name = '-1', max_legal_name, general_legal_name)
+      - column: value_checked
+        expression: upper(regexp_replace(concat_ws('', first_name, last_name), '\\s+', ''))
+
+  - kind: filter
+    name: filter_null_values_370_9
+    context_name: add_legal_name_370_9
+    params:
+      - condition:
+          source = 's4' and last_name is not null and last_name != ''
+
+  - kind: select
+    name: select_tax_370_9
+    context_name: filter_null_values_370_9
+    params:
+      columns:
+        country_code: country_code
+        last_name: last_name
+        first_name: first_name
+        sap_cluster: sap_cluster
+        final_legal_name: final_legal_name
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+      distinct: true
+
+  - kind: add
+    name: add_legal_entity_370_9
+    context_name: select_tax_370_9
+    params:
+      - column: legal_entity
+        expression: if(tax_0_value is not null and tax_0_value != '', tax_0_value,
+                    if(tax_1_value is not null and tax_1_value != '', tax_1_value,
+                    if(tax_2_value is not null and tax_2_value != '', tax_2_value,
+                    if(tax_3_value is not null and tax_3_value != '', tax_3_value,
+                    if(final_legal_name is not null and final_legal_name != '', final_legal_name, '')))))
+      - column: value_checked
+        expression: upper(regexp_replace(concat_ws('', first_name, last_name), '\\s+', ''))
+
+  - kind: group
+    name: aggregation_tax_370_9
+    context_name: add_legal_entity_370_9
+    params:
+      - aggs:
+          legal_entity: count
+        by:
+        - value_checked
+        - country_code
+        - sap_cluster
+
+#JOIN self join
+  - kind: join
+    name: join_tax_aggregation_370_9
+    context_name: add_legal_name_370_9
+    params:
+      - other:
+          aggregation_tax_370_9
+        how:
+          left
+        columns:
+          country_code: country_code
+          value_checked: value_checked
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_rcuniq_370_9
+    context_name: join_tax_aggregation_370_9
+    params:
+      - column: check_status
+        expression: if(central_order_block_code IN ('E', 'G', 'SP', 'R', 'U') OR last_name IS NULL OR last_name = '' 
+                    OR first_name IS NULL OR last_name IS NULL OR source != 's4', '',
+                    if(count_legal_entity >= 5, '0', '1'))
+
+  - kind: select
+    name: select_rcuniq_370_9_final
+    context_name: add_rcuniq_370_9
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+# START logic for rule 41_8
+  - kind: select
+    name: select_rcuniq_41_8
+    context_name: left_join_dcg_dca_dccont
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: address_legal_name
+        general_legal_name: general_legal_name
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        source_cac: source_cac
+        source_cont: source
+        contact_medium_type_cac: contact_medium_type
+        contact_medium_value_cac: contact_medium_value
+        function_of_partner_cont: function_of_partner
+        email_address_cont: email_address
+        mobile_tel_number_cont: mobile_tel_number
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_41_8_main
+    context_name: select_rcuniq_41_8
+    params:
+      - condition:
+          (contact_medium_type = 'email_address' AND source = 's4') OR (function_of_partner = 'Z3' AND source_cac = 'crm')
+
+  - kind: filter
+    name: filter_41_8_address
+    context_name: filter_41_8_main
+    params:
+      - condition:
+          address_legal_name != '-1'
+
+  - kind: select
+    name: select_address_41_8
+    context_name: filter_41_8_address
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: legal_name
+        central_order_block_code: central_order_block_code
+        source_cac: source_cac
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: aggregation_41_8
+    context_name: select_address_41_8
+    params:
+      - aggs:
+          legal_name: max
+        by:
+        - customer_code
+        - sap_cluster
+
+#JOIN self join
+  - kind: join
+    name: join_41_8_legal_name
+    context_name: select_rcuniq_41_8
+    params:
+      - other:
+          aggregation_41_8
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#RULE 41_8
+  - kind: add
+    name: add_legal_name_41_8
+    context_name: join_41_8_legal_name
+    params:
+      - column: rule_code
+        expression: "'RCCONF_41.8'"
+      - column: final_legal_name
+        expression: if(general_legal_name = '-1', max_legal_name, general_legal_name)
+      - column: final_email
+        expression: if(contact_medium_value is null or contact_medium_value != '', email_address, contact_medium_value)
+
+  - kind: select
+    name: select_tax_41_8
+    context_name: add_legal_name_41_8
+    params:
+      columns:
+        country_code: country_code
+
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        sap_cluster: sap_cluster
+        final_email: final_email
+        final_legal_name: final_legal_name
+      distinct: true
+
+  - kind: add
+    name: add_legal_entity_41_8
+    context_name: select_tax_41_8
+    params:
+      - column: legal_entity
+        expression: if(tax_0_value is not null and tax_0_value != '', tax_0_value,
+                    if(tax_1_value is not null and tax_1_value != '', tax_1_value,
+                    if(tax_2_value is not null and tax_2_value != '', tax_2_value,
+                    if(tax_3_value is not null and tax_3_value != '', tax_3_value,
+                    if(final_legal_name is not null and final_legal_name != '', final_legal_name, '')))))
+
+  - kind: group
+    name: aggregation_tax_41_8
+    context_name: add_legal_entity_41_8
+    params:
+      - aggs:
+          legal_entity: count
+        by:
+        - final_email
+        - country_code
+        - sap_cluster
+
+  - kind: join
+    name: join_tax_aggregation_41_8
+    context_name: add_legal_name_41_8
+    params:
+      - other:
+          aggregation_tax_41_8
+        how:
+          left
+        columns:
+          country_code: country_code
+          final_email: final_email
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_rcuniq_41_8
+    context_name: join_tax_aggregation_41_8
+    params:
+      - column: check_status
+        expression: if((contact_medium_type != 'email_address' OR source != 's4') AND (function_of_partner != 'Z3' OR source_cac != 'crm'), '',
+                    if(contact_medium_value is null OR contact_medium_value = '' OR email_address is null OR email_address = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '',
+                    if(count_legal_entity >= 5, '0', '1')))
+
+  - kind: select
+    name: select_rcuniq_41_8_final
+    context_name: add_rcuniq_41_8
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        final_email: value_checked
+      distinct: true
+
+#-------------------------------39.6----------------
+
+  - kind: filter
+    name: filter_39_6_main
+    context_name: select_rcuniq_41_8
+    params:
+      - condition:
+          (contact_medium_type = 'mobile_tel_number' AND source = 's4') OR (function_of_partner = 'Z3' AND source_cac = 'crm')
+
+  - kind: filter
+    name: filter_39_6_address
+    context_name: filter_39_6_main
+    params:
+      - condition:
+          address_legal_name != '-1'
+
+  - kind: select
+    name: select_address_39_6
+    context_name: filter_39_6_address
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: legal_name
+        central_order_block_code: central_order_block_code
+        source_cac: source_cac
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: aggregation_39_6
+    context_name: select_address_39_6
+    params:
+      - aggs:
+          legal_name: max
+        by:
+        - customer_code
+        - sap_cluster
+
+#JOIN self join
+  - kind: join
+    name: join_39_6_legal_name
+    context_name: select_rcuniq_41_8
+    params:
+      - other:
+          aggregation_39_6
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+# START logic for rule 39.6
+  - kind: add
+    name: add_legal_name_39_6
+    context_name: join_39_6_legal_name
+    params:
+      - column: rule_code
+        expression: "'RCUNIQ_39.6'"
+      - column: final_legal_name
+        expression: if(general_legal_name = '-1', max_legal_name, general_legal_name)
+      - column: final_mobile
+        expression: if(contact_medium_value is null or contact_medium_value != '', mobile_tel_number, contact_medium_value)
+
+  - kind: select
+    name: select_tax_39_6
+    context_name: add_legal_name_39_6
+    params:
+      columns:
+        country_code: country_code
+        sap_cluster: sap_cluster
+        final_mobile: final_mobile
+        final_legal_name: final_legal_name
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+      distinct: true
+
+  - kind: add
+    name: add_legal_entity_39_6
+    context_name: select_tax_39_6
+    params:
+      - column: legal_entity
+        expression: if(tax_0_value is not null and tax_0_value != '', tax_0_value,
+                    if(tax_1_value is not null and tax_1_value != '', tax_1_value,
+                    if(tax_2_value is not null and tax_2_value != '', tax_2_value,
+                    if(tax_3_value is not null and tax_3_value != '', tax_3_value,
+                    if(final_legal_name is not null and final_legal_name != '', final_legal_name, '')))))
+
+  - kind: select
+    name: select_legal_entity
+    context_name: add_legal_entity_39_6
+    params:
+      columns:
+        legal_entity: legal_entity
+        final_mobile: final_mobile
+        country_code: country_code
+      distinct: true
+
+  - kind: group
+    name: aggregation_tax_39_6
+    context_name: select_legal_entity
+    params:
+      - aggs:
+          legal_entity: count
+        by:
+        - final_mobile
+        - country_code
+
+  - kind: join
+    name: join_tax_aggregation_39_6
+    context_name: add_legal_name_39_6
+    params:
+      - other:
+          aggregation_tax_39_6
+        how:
+          left
+        columns:
+          final_mobile: final_mobile
+          country_code: country_code
+
+  - kind: add
+    name: add_rcuniq_39_6
+    context_name: join_tax_aggregation_39_6
+    params:
+      - column: check_status
+        expression: if((contact_medium_type != 'mobile_tel_number' OR source != 's4') AND (function_of_partner != 'Z3' OR source_cac != 'crm'), '',
+                    if(contact_medium_value is null OR contact_medium_value = '' OR mobile_tel_number is null OR mobile_tel_number = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '',
+                    if(count_legal_entity >= 5, '0', '1')))
+
+  - kind: select
+    name: select_rcuniq_39_6_final
+    context_name: add_rcuniq_39_6
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        final_mobile: value_checked
+      distinct: true
+
+# union all
+  - kind: union
+    name: union_customer_contact_uniqueness
+    context_name: select_rcuniq_39_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcuniq_41_8_final
+
+  - kind: union
+    name: union_customer_contact_uniqueness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcuniq_370_9_final
+
+  - kind: union
+    name: union_customer_contact_uniqueness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcuniq_370_9_final
+  
+  - kind: union
+    name: union_customer_contact_uniqueness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcuniq_41_8_final
+
+  - kind: union
+    name: union_customer_contact_uniqueness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcuniq_39_6_final
+
+  - kind: union
+    name: union_customer_contact_uniqueness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcuniq_370_9_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true 
+  
+  - kind: write_dataio
+    name: write_customer_contact_uniquness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_contact_uniqueness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

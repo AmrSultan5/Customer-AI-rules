@@ -1,0 +1,177 @@
+transform:
+  name: dm_production_orders
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_afpo
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: afpo
+
+  - kind: filter
+    name: filter_afpo
+    params:
+      - condition:
+          to_date(ltrmi, 'YYYY-mm-DD') > trunc(add_months(current_date(),-24), 'year')
+
+  - kind: select
+    name: select_afpo
+    params:
+      columns:
+        matnr: matnr
+        aufnr: aufnr
+        posnr: posnr
+        dgltp: dgltp
+        wemng: wemng
+        meins: meins
+        ltrmi: ltrmi
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_afko
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: afko
+
+  # - kind: filter
+  #   name: filter_afko
+  #   params:
+  #     - condition:
+  #         to_date(gltrp, 'YYYY-mm-DD') > trunc(add_months(current_date(),-24), 'year')
+
+  - kind: select
+    name: select_afko
+    params:
+      columns:
+        aufnr: aufnr
+        gltrp: gltrp
+        gamng: gamng
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_aufk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: aufk
+
+  - kind: filter
+    name: filter_aufk
+    params:
+      - condition:
+          auart like 'ZPP%'
+
+  - kind: select
+    name: select_aufk
+    params:
+      columns:
+        aufnr: aufnr
+        bukrs: bukrs
+        werks: werks
+        autyp: autyp
+        auart: auart
+        sap_cluster: sap_cluster
+
+
+  - kind: add
+    name: add_aufk
+    params:
+      - column: left_werks
+        expression: left(werks, 2)
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+
+  - kind: join
+    name: join_afpo_afko_aufk
+    context_name: select_afpo
+    params:
+      - other:
+          select_afko
+        how:
+          inner
+        columns:
+          aufnr: aufnr
+          sap_cluster: sap_cluster
+      - other:
+          add_aufk
+        how:
+          inner
+        columns:
+          aufnr: aufnr
+          sap_cluster: sap_cluster
+      - other:
+          read_plant_code_mapping
+        how:
+          inner
+        columns:
+          left_werks: plant_code_short
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_dm_production_orders
+    params:
+      columns:
+        matnr: material_code
+        aufnr: order_number
+        posnr: order_item_number
+        dgltp: finish_date
+        ltrmi: delivery_finish_date
+        bukrs: company_code
+        country_code: country_code
+        werks: plant_code
+        autyp: order_category
+        auart: order_type
+        gltrp: delivery_date
+        gamng: quantity_ordered
+        wemng: quantity_delivered
+        meins: unit_of_measure
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_production_orders
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_production_orders
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

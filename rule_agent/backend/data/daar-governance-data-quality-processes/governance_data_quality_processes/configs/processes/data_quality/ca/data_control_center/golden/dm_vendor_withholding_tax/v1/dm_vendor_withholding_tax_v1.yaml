@@ -1,0 +1,49 @@
+transform:
+  name: dm_vendor_withholding_tax
+  operations:
+
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfbw
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfbw
+
+  - kind: select
+    name: select_lfbw
+    params:
+      columns:
+        lifnr: vendor_code
+        bukrs: company_code
+        witht: withholding_tax_type_code
+        qsrec: withholding_tax_recipient_type
+        wt_subjct: subject_to_withholding_tax_flag
+        wt_withcd: withholding_tax_code
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_withholding_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_withholding_tax
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

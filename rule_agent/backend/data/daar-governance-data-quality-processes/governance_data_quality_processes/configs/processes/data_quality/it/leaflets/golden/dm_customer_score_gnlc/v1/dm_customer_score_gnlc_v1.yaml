@@ -1,0 +1,222 @@
+transform:
+  name: dm_customer_score_gnlc
+  operations:
+
+  - kind: read_dataio
+    name: read_md_customer_score_gnlc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_score_gnlc
+      schema_version: v2
+
+  - kind: add
+    name: add_upper_insegna
+    context_name: read_md_customer_score_gnlc
+    params:
+      - column: upper_insegna
+        expression: UPPER(insegna)
+
+  - kind: select
+    name: select_csg
+    context_name: add_upper_insegna
+    params:
+      columns:
+        gruppo: gruppo_csg
+        cedec_gnlc: cedec_gnlc_csg
+        insegna: insegna_csg
+        gruppo_cedec_insegna: gruppo_cedec_insegna_csg
+        sum_of_potenziale_bevande_0_00: sum_of_potenziale_bevande_0_00_csg
+        aggregated_sum_glnc: aggregated_sum_glnc_csg
+        country: country_csg
+        upper_insegna: upper_insegna_csg
+      distinct: true
+
+  - kind: read_dataio
+    name: read_md_customer_map_cedec_gnlc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_map_cedec_gnlc
+      schema_version: v2
+
+  - kind: select
+    name: select_cmcg
+    context_name: read_md_customer_map_cedec_gnlc
+    params:
+      columns:
+        cpl_code: cpl_code_cmcg
+        cedec_gnlc: cedec_gnlc_cmcg
+        ch6_code: ch6_code_cmcg
+      distinct: true
+
+  - kind: read_dataio
+    name: read_banner_tags_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: banner_tags_mapping
+      schema_version: v3
+
+  - kind: filter
+    name: filter_not_null_cpl
+    context_name: read_banner_tags_mapping
+    params:
+      - condition:
+          customer_code IS NULL OR customer_code = ''
+
+  - kind: filter
+    name: filter_not_null_cust_nbr
+    context_name: read_banner_tags_mapping
+    params:
+      - condition:
+          customer_code IS NOT NULL AND customer_code != ''
+
+  - kind: join
+    name: join_customer_banner_cpl
+    context_name: select_cmcg
+    params:
+      - other:
+          filter_not_null_cpl
+        how:
+          inner
+        columns:
+          cpl_code_cmcg: cpl_code
+
+  - kind: join
+    name: join_customer_banner_nbr
+    context_name: select_cmcg
+    params:
+      - other:
+          filter_not_null_cust_nbr
+        how:
+          inner
+        columns:
+          cpl_code_cmcg: cpl_code
+          ch6_code_cmcg: customer_code
+
+  - kind: union
+    name: union_btm
+    context_name: join_customer_banner_cpl
+    params:
+      allow_missing: false
+      by_name: true
+      other: join_customer_banner_nbr
+
+  - kind: add
+    name: add_upper_banners
+    context_name: union_btm
+    params:
+      - column: upper_banners
+        expression: UPPER(banners)
+
+  - kind: select
+    name: select_btm
+    context_name: add_upper_banners
+    params:
+      columns:
+        cpl_code: cpl_code_btm
+        tag: tag_btm
+        banners: banners_btm
+        cedec_gnlc_cmcg: cedec_gnlc_btm
+        ch6_code_cmcg: ch6_code_btm
+        upper_banners: upper_banners_btm
+
+  - kind: join
+    name: join_insegna_banner
+    context_name: select_csg
+    params:
+      - other:
+          select_btm
+        how:
+          left
+        columns:
+          upper_insegna_csg: upper_banners_btm
+
+  - kind: filter
+    name: filter_cedec_gnlc
+    context_name: join_insegna_banner
+    params:
+      - condition:
+          cedec_gnlc_csg = cedec_gnlc_btm
+
+  - kind: select
+    name: select_cedec_gnlc_btm
+    context_name: filter_cedec_gnlc
+    params:
+      columns:
+        gruppo_csg: gruppo_csg_btm
+        cedec_gnlc_csg: cedec_gnlc_csg_btm
+        insegna_csg: insegna_csg_btm
+        sum_of_potenziale_bevande_0_00_csg: sum_of_potenziale_bevande_0_00_csg_btm
+      distinct: true
+
+  - kind: add
+    name: add_row_number
+    context_name: read_md_customer_score_gnlc
+    params:
+      - column: row_number  
+        expression: 'ROW_NUMBER() OVER (PARTITION BY gruppo, cedec_gnlc ORDER BY  gruppo, cedec_gnlc, sum_of_potenziale_bevande_0_00 desc)'
+
+  - kind: filter
+    name: filter_max_sum
+    context_name: add_row_number
+    params:
+      - condition:
+          row_number = 1
+
+  - kind: join
+    name: join_btm
+    context_name: filter_max_sum
+    params:
+      - other:
+          select_cedec_gnlc_btm
+        how:
+          left
+        columns:
+          gruppo: gruppo_csg_btm
+          cedec_gnlc: cedec_gnlc_csg_btm
+
+  - kind: select
+    name: select_btm_final
+    context_name: join_btm
+    params:
+      columns:
+        gruppo: gruppo
+        cedec_gnlc: cedec_gnlc
+        insegna: insegna
+        gruppo_cedec_insegna: gruppo_cedec_insegna
+        sum_of_potenziale_bevande_0_00: sum_of_potenziale_bevande_0_00
+        aggregated_sum_glnc: aggregated_sum_glnc
+        country: country
+        insegna_csg_btm: insegna_btm
+        sum_of_potenziale_bevande_0_00_csg_btm: sum_of_potenziale_bevande_0_00_btm
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_score_gnlc
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_customer_score_gnlc
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

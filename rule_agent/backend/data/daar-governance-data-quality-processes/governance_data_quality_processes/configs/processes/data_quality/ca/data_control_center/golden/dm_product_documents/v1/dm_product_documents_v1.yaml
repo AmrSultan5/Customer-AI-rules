@@ -1,0 +1,158 @@
+transform:
+  name: dm_product_documents
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+#MSEG
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_mseg
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: mseg
+
+  - kind: filter
+    name: filter_mseg
+    params:
+      - condition:
+          budat_mkpf > current_date() - 3*365
+  
+  - kind: select
+    name: select_mseg
+    params:
+      columns:
+        matnr: material_code
+        mjahr: mjahr
+        werks: plant_code
+        lgort: storage_location_code
+        zeile: document_item
+        bwart: movement_type_code
+        mblnr: mblnr
+        sap_cluster: sap_cluster_ms
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_werks
+    params:
+      - column: werks_short
+        expression: left(plant_code,2)
+
+#MKPF
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_mkpf
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: mkpf
+
+  - kind: filter
+    name: filter_mkpf
+    params:
+      - condition:
+          budat > current_date() - 3*365
+
+  - kind: select
+    name: select_mkpf
+    params:
+      columns:
+        mblnr: document_number
+        mjahr: document_year
+        budat: posting_date
+        blart: document_type_code
+        vgart: transaction_type_code
+        sap_cluster: sap_cluster_mk
+      distinct: true
+    skip_next: false
+
+#plant_code_mapping
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+
+  - kind: select
+    name: select_plant_code_mapping
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster_pcm
+      distinct: true
+    skip_next: false
+
+
+  - kind: join
+    name: join_ms_mk_pcm
+    context_name: select_mkpf
+    params:
+      - other:
+          add_werks
+        how:
+          inner
+        columns:
+          document_number: mblnr
+          document_year: mjahr
+          sap_cluster_mk: sap_cluster_ms
+      - other:
+          select_plant_code_mapping
+        how:
+          inner
+        columns:
+          werks_short: plant_code_short
+          sap_cluster_ms: sap_cluster_pcm
+
+  - kind: select
+    name: select_dm_product_documents
+    params:
+      columns:
+        material_code: material_code
+        document_number: document_number
+        document_year: document_year
+        posting_date: posting_date
+        document_type_code: document_type_code
+        transaction_type_code: transaction_type_code
+        plant_code: plant_code
+        country_code: country_code
+        storage_location_code: storage_location_code
+        document_item: document_item
+        movement_type_code: movement_type_code
+        sap_cluster_mk: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_product_documents
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_documents
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

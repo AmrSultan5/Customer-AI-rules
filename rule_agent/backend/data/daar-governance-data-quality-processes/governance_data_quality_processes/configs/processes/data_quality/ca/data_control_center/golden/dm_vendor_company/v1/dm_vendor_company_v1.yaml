@@ -1,0 +1,518 @@
+transform:
+  name: dm_vendor_company
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfa1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfa1
+
+  - kind: filter
+    name: filter_lfa1
+    context_name: read_lfa1
+    params:
+        - condition: (ifnull(SPERR,'') <> 'X' OR ifnull(SPERM,'') <> 'X' OR ifnull(LOEVM,'') <> 'X') AND ifnull(NODEL,'')<>'X' AND KTOKK IN('4000', '9000', '2000', '3000', '7000')
+
+
+  - kind: select
+    name: select_lfa1
+    context_name: filter_lfa1
+    params:
+      columns:
+        lifnr: lifnr
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_lfb1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: vendor
+      object_name: lfb1
+
+  - kind: filter
+    name: filter_lfb1
+    context_name: read_lfb1
+    params:
+        - condition: (ifnull(SPERR,'') <> 'X' OR ifnull(LOEVM,'') <> 'X')
+
+
+  - kind: select
+    name: select_lfb1
+    context_name: filter_lfb1
+    params:
+      columns:
+        lifnr: lifnr
+        zterm: zterm
+        fdgrv: fdgrv
+        bukrs: bukrs
+        akont: akont
+        xausz: xausz
+        pernr: pernr
+        zwels: zwels
+        erdat: erdat
+        begru: begru
+        uzawe: uzawe
+        hbkid: hbkid
+        lnrzb: lnrzb
+        xlfzb: xlfzb
+        sperr: sperr
+        loevm: loevm
+        nodel: nodel
+        zahls: zahls
+        zuawa: zuawa
+        mindk: mindk
+        altkn: altkn
+        zgrup: zgrup
+        qland: qland
+        qsskz: qsskz
+        xverr: xverr
+        reprf: reprf
+        togru: togru
+        xpore: xpore
+        frgrp: frgrp
+        busab: accounting_clerk
+        cvp_xblck_b: business_purpose_completed_flag
+        eikto: our_account_number_with_vendor
+        kverm: account_memo
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t052u
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t052u
+
+  - kind: filter
+    name: filter_t052u
+    context_name: read_t052u
+    params:
+        - condition: SPRAS = 'E'
+
+  - kind: select
+    name: select_t052u
+    context_name: filter_t052u
+    params:
+      columns:
+        zterm: zterm
+        text1: text1_t052u
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t035t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t035t
+
+  - kind: filter
+    name: filter_t035t
+    context_name: read_t035t
+    params:
+        - condition: SPRAS = 'E'
+
+  - kind: select
+    name: select_t035t
+    context_name: filter_t035t
+    params:
+      columns:
+        grupp: grupp
+        textl: textl
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t012
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t012
+
+  - kind: select
+    name: select_t012
+    context_name: read_t012
+    params:
+      columns:
+        hbkid: hbkid_t012
+        bukrs: bukrs
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t012t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t012t
+
+  - kind: select
+    name: select_t012t
+    context_name: read_t012t
+    params:
+      columns:
+        hbkid: hbkid
+        bukrs: bukrs
+      distinct: true
+    skip_next: false    
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t042e
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t042e
+
+  - kind: select
+    name: select_t042e
+    params:
+      columns:
+        zbukr: zbukr
+        zlsch: zlsch_t042e
+      distinct: true
+    skip_next: false  
+
+  - kind: group
+    name: group_zbukr
+    params:
+      - aggs:
+          zlsch_t042e: collect_list
+        by:
+        -  zbukr
+
+  - kind: add
+    name: add_payment_method_code_array
+    params:
+      - column: zlsch_t042e_array
+        expression: sort_array(collect_list_zlsch_t042e)
+
+  - kind: add
+    name: add_payment_method_code
+    params:
+      - column: zlsch_t042e_concat_ws
+        expression: concat_ws('/', zlsch_t042e_array)
+
+  - kind: select
+    name: select_t042e_finall
+    params:
+      columns:
+        zbukr: zbukr
+        zlsch_t042e_concat_ws: zlsch
+      distinct: false
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t042z
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t042z
+
+  - kind: select
+    name: select_t042z
+    context_name: read_t042z
+    params:
+      columns:
+        zlsch: zlsch
+      distinct: true
+    skip_next: false  
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t048l
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t048l
+
+  - kind: filter
+    name: filter_t048l
+    context_name: read_t048l
+    params:
+        - condition: SPRAS = 'E'
+
+  - kind: select
+    name: select_t048l
+    context_name: filter_t048l
+    params:
+      columns:
+        xausz: xausz
+        text1: text1_t048l
+      distinct: true
+    skip_next: false    
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t001
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: reference_data
+      object_name: t001
+
+  - kind: select
+    name: select_t001
+    context_name: read_t001
+    params:
+      columns:
+        bukrs: bukrs
+        butxt: butxt
+      distinct: true
+    skip_next: false 
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_skb1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: finance
+      object_name: skb1
+
+  - kind: filter
+    name: filter_skb1
+    context_name: read_skb1
+    params:
+        - condition: mitkz = 'K'
+
+  - kind: select
+    name: select_skb1
+    context_name: filter_skb1
+    params:
+      columns:
+        saknr: saknr
+        bukrs: bukrs
+      distinct: true
+    skip_next: false    
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_company_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: company_code_mapping
+
+  - kind: select
+    name: select_company_code_mapping
+    context_name: read_company_code_mapping
+    params:
+      columns:
+        company_code: company_code
+        country_code: country_code
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_vendor
+    context_name: select_lfb1
+    params:
+      - other:
+          select_lfa1
+        how:
+          inner
+        columns:
+          lifnr: lifnr
+      - other:
+          select_t052u
+        how:
+          left
+        columns:
+          zterm: zterm
+      - other:
+          select_t035t
+        how:
+          left
+        columns:
+          fdgrv: grupp      
+      - other:
+          select_t001
+        how:
+          left
+        columns:
+          bukrs: bukrs
+      - other:
+          select_skb1
+        how:
+          left
+        columns:
+          akont: saknr
+          bukrs: bukrs
+      - other:
+          select_company_code_mapping
+        how:
+          inner
+        columns:
+          bukrs: company_code
+      - other:
+          select_t042e_finall
+        how:
+          left
+        columns:
+          bukrs: zbukr
+      - other:
+          select_t048l
+        how:
+          left
+        columns:
+          xausz: xausz
+      - other:
+          select_t012
+        how:
+          left
+        columns:
+          hbkid: hbkid_t012
+          bukrs: bukrs
+      - other:
+          select_t012t
+        how:
+          left
+        columns:
+          hbkid: hbkid
+          bukrs: bukrs
+
+  - kind: add
+    name: add_columns
+    params:
+      - column: is_reconciliation_account_allowed
+        expression: IF(saknr is not null, '1', '0')  
+        overwrite: true
+      - column: is_house_bank_code_allowed
+        expression: IF(hbkid_t012 is not null, '1', '0')  
+        overwrite: true
+      - column: erdat
+        expression: TO_TIMESTAMP(erdat, 'yyyyMMdd')
+        overwrite: true
+
+  - kind: cast
+    name: cast_personal_number
+    params:
+      - column: pernr
+        to: decimal(8,0)
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        lifnr: vendor_code
+        bukrs: company_code
+        butxt: company_name
+        country_code: country_code
+        akont: reconciliation_account_general_ledger
+        is_reconciliation_account_allowed: is_reconciliation_account_allowed
+        pernr: personnel_number
+        lnrzb: alternative_payee_account_number
+        zwels: payment_methods_list
+        erdat: created_date
+        zlsch: payment_method_code
+        zterm: terms_of_payment_code
+        text1_t052u: terms_of_payment_description
+        begru: authorization_group
+        uzawe: payment_method_supplement
+        hbkid: house_bank_code
+        is_house_bank_code_allowed: is_house_bank_code_allowed
+        fdgrv: planning_group_code
+        textl: planning_group_description
+        xlfzb: alternative_payee_use_account_number_flag
+        sperr: company_level_posting_block
+        loevm: company_level_deletion_flag
+        nodel: company_level_deletion_block
+        zahls: block_key_for_payment
+        zuawa: assignment_numbers_sorting_key
+        mindk: minority_indicators
+        altkn: previous_master_record_number
+        zgrup: key_for_payment_grouping
+        qland: withholding_tax_country_key
+        qsskz: withholding_tax_code
+        xverr: clearing_between_customer_vendor_flag
+        reprf: double_invoices_flag
+        togru: business_partner_account_tolerance_group
+        xpore: all_items_separately_paid_flag
+        frgrp: release_approval_group
+        xausz: periodic_account_statements_code
+        text1_t048l: periodic_account_statements_description
+        accounting_clerk: accounting_clerk
+        business_purpose_completed_flag: business_purpose_completed_flag
+        our_account_number_with_vendor: our_account_number_with_vendor
+        account_memo: account_memo
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

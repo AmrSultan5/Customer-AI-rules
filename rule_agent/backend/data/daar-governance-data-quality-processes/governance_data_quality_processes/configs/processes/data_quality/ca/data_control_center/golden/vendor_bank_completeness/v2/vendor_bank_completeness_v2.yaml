@@ -1,0 +1,250 @@
+transform:
+  name: vendor_bank_completeness
+  operations:
+
+# ── RVCOMP_181.1  Missing Bank Type ID       (4000 AG only)
+# ── RVCOMP_182.1  Missing Bank Country       (4000 AG only)
+# ── RVCOMP_183.1  Missing Bank Key           (4000 AG only)
+# ── RVCOMP_184.1  Missing Bank Account Nbr   (4000 AG only)
+# ── RVCOMP_185.1  Missing IBAN               (4000 AG only)
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_bank
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_account_group_code: vendor_account_group_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_bank
+    context_name: read_dm_vendor_bank
+    params:
+      columns:
+        vendor_code: vendor_code
+        bank_details_id: bank_details_id
+        bank_country_code: bank_country_code
+        bank_code: bank_code
+        bank_account_number: bank_account_number
+        iban: iban
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_bank
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_181_1
+        expression: if(vendor_account_group_code = '4000',
+                    if(isnull(bank_details_id) or bank_details_id = '', '0', '1'), '')
+      - column: rcvomp_182_1
+        expression: if(vendor_account_group_code = '4000',
+                    if(isnull(bank_country_code) or bank_country_code = '', '0', '1'), '')
+      - column: rcvomp_183_1
+        expression: if(vendor_account_group_code = '4000',
+                    if(isnull(bank_code) or bank_code = '', '0', '1'), '')
+      - column: rcvomp_184_1
+        expression: if(vendor_account_group_code = '4000',
+                    if(isnull(bank_account_number) or bank_account_number = '', '0', '1'), '')
+      - column: rcvomp_185_1
+        expression: if(vendor_account_group_code = '4000',
+                    if(isnull(iban) or iban = '', '0', '1'), '')
+      - column: rule_code_rcvomp_181_1
+        expression: '''RVCOMP_181.1'''
+      - column: rule_code_rcvomp_182_1
+        expression: '''RVCOMP_182.1'''
+      - column: rule_code_rcvomp_183_1
+        expression: '''RVCOMP_183.1'''
+      - column: rule_code_rcvomp_184_1
+        expression: '''RVCOMP_184.1'''
+      - column: rule_code_rcvomp_185_1
+        expression: '''RVCOMP_185.1'''
+      - column: bank_country_value
+        expression: bank_country_code
+      - column: subdomain
+        expression: '''bank_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_181_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_181_1: rule_code
+        rcvomp_181_1: check_status
+        vendor_code: vendor_code
+        bank_details_id: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_182_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_182_1: rule_code
+        rcvomp_182_1: check_status
+        vendor_code: vendor_code
+        bank_country_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_183_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_183_1: rule_code
+        rcvomp_183_1: check_status
+        vendor_code: vendor_code
+        bank_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_184_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_184_1: rule_code
+        rcvomp_184_1: check_status
+        vendor_code: vendor_code
+        bank_account_number: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_185_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_185_1: rule_code
+        rcvomp_185_1: check_status
+        vendor_code: vendor_code
+        iban: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_181_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_182_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_183_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_184_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_185_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

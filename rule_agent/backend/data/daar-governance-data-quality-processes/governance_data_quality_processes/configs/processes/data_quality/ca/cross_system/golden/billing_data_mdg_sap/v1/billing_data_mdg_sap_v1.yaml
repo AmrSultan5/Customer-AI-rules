@@ -1,0 +1,1417 @@
+transform:
+  name: Billing_data_mdg_sap
+  operations:
+    - kind: read_dataio
+      name: read_mdg_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_knvv
+      context_name: read_mdg_knvv
+      params:
+        columns:
+          KUNNR: PARTNER
+          KVGR4: KVGR4
+          vkorg: vkorg
+          vtweg: vtweg
+          spart: spart
+          PERRL: PERRL
+          KTGRD: KTGRD
+          INCO1: INCO1
+          INCO2: INCO2
+          PRFRE: PRFRE
+          ZTERM: ZTERM
+          aufsd: aufsd
+ 
+    - kind: add
+      name: add_mdg_HASH
+      context_name: select_mdg_knvv
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(PARTNER,vkorg,vtweg,spart,PERRL,KTGRD,INCO1,INCO2,PRFRE,ZTERM))
+
+    - kind: filter
+      name: filter_mdg_knvv
+      context_name: add_mdg_HASH
+      params:
+        - condition: PARTNER LIKE any('12%','13%','40%','18%','30%','16%','29%','17%','24%','26%','21%','19%','96%','28%','27%','32%','35%','25%','34%','42%','33%','31%','15%','95%','94%','14%','22%','47%') and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: mdg
+      context_name: filter_mdg_knvv
+      params:
+        columns:
+          PARTNER: PARTNER_mdg
+          KVGR4: KVGR4_mdg
+          vkorg: vkorg_mdg
+          vtweg: vtweg_mdg
+          spart: spart_mdg
+          PERRL: PERRL_mdg
+          KTGRD: KTGRD_mdg
+          INCO1: INCO1_mdg
+          INCO2: INCO2_mdg
+          PRFRE: PRFRE_mdg
+          ZTERM: ZTERM_mdg
+          aufsd: aufsd_mdg
+          HASH: HASH_mdg
+
+    - kind: read_dataio
+      name: read_s4hana_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+
+    - kind: select
+      name: select_s4hana_knvv
+      context_name: read_s4hana_knvv
+      params:
+        columns:
+          KUNNR: PARTNER
+          KVGR4: KVGR4
+          vkorg: vkorg
+          vtweg: vtweg
+          spart: spart
+          PERRL: PERRL
+          KTGRD: KTGRD
+          INCO1: INCO1
+          INCO2: INCO2
+          PRFRE: PRFRE
+          ZTERM: ZTERM
+          aufsd: aufsd
+          SAP_CLUSTER: SAP_CLUSTER
+
+    - kind: add
+      name: add_s4hana_HASH
+      context_name: select_s4hana_knvv
+      params:
+      - column: HASH
+        expression: MD5(CONCAT(PARTNER,vkorg,vtweg,spart,PERRL,KTGRD,INCO1,INCO2,PRFRE,ZTERM))
+
+    - kind: filter
+      name: s4hana_union
+      context_name: add_s4hana_HASH
+      params:
+        - condition: if(SAP_CLUSTER = 'CL1', PARTNER like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'),PARTNER like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%')) and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: s4hana
+      context_name: s4hana_union
+      params:
+        columns:
+          PARTNER: PARTNER_s4hana
+          KVGR4: KVGR4_s4hana
+          vkorg: vkorg_s4hana
+          vtweg: vtweg_s4hana
+          spart: spart_s4hana
+          PERRL: PERRL_s4hana
+          KTGRD: KTGRD_s4hana
+          INCO1: INCO1_s4hana
+          INCO2: INCO2_s4hana
+          PRFRE: PRFRE_s4hana
+          ZTERM: ZTERM_s4hana
+          aufsd: aufsd_s4hana
+          HASH: HASH_s4hana
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            s4hana
+          how:
+            full
+          columns:
+            HASH_mdg: HASH_s4hana
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_s4hana is null or HASH_s4hana = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          PARTNER_mdg: PARTNER_mdg
+          KVGR4_mdg: KVGR4_mdg
+          vkorg_mdg: vkorg_mdg
+          vtweg_mdg: vtweg_mdg
+          spart_mdg: spart_mdg
+          PERRL_mdg: PERRL_mdg
+          KTGRD_mdg: KTGRD_mdg
+          INCO1_mdg: INCO1_mdg
+          INCO2_mdg: INCO2_mdg
+          PRFRE_mdg: PRFRE_mdg
+          ZTERM_mdg: ZTERM_mdg
+          aufsd_mdg: aufsd_mdg
+          HASH_mdg: HASH_mdg
+
+    - kind: filter
+      name: non_matching_s4hana
+      context_name: join_non_matching_mdg
+      params:
+        - condition: HASH_mdg is null or HASH_mdg = ''
+
+    - kind: select
+      name: non_matching_s4hana_select
+      context_name: non_matching_s4hana
+      params:
+        columns:
+          PARTNER_s4hana: PARTNER_s4hana
+          KVGR4_s4hana: KVGR4_s4hana
+          vkorg_s4hana: vkorg_s4hana
+          vtweg_s4hana: vtweg_s4hana
+          spart_s4hana: spart_s4hana
+          PERRL_s4hana: PERRL_s4hana
+          KTGRD_s4hana: KTGRD_s4hana
+          INCO1_s4hana: INCO1_s4hana
+          INCO2_s4hana: INCO2_s4hana
+          PRFRE_s4hana: PRFRE_s4hana
+          ZTERM_s4hana: ZTERM_s4hana
+          aufsd_s4hana: aufsd_s4hana
+          HASH_s4hana: HASH_s4hana
+
+###data missing from mdg
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_s4hana_select
+          how:
+            full
+          columns:
+            PARTNER_mdg: PARTNER_s4hana
+            vkorg_mdg: vkorg_s4hana
+            vtweg_mdg: vtweg_s4hana
+            spart_mdg: spart_s4hana
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: msg_mdg
+          expression: CASE WHEN PARTNER_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_s4hana
+          expression: CASE WHEN PARTNER_s4hana IS NULL THEN 'data missing from sap' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string)   
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          PARTNER_s4hana: partner
+          vkorg_s4hana: VKORG
+          vtweg_s4hana: VTWEG
+          spart_s4hana: SPART
+          KVGR4_s4hana: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+###data missing from S4HANA
+
+    - kind: filter
+      name: join_data_missing_from_s4hana_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_s4hana is null
+
+    - kind: select
+      name: final_data_missing_from_s4hana
+      context_name: join_data_missing_from_s4hana_filter
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_s4hana: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+##BILLING DATA: Invoice List Schedule
+    - kind: filter
+      name: billing_data_invoice_list_schedule_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND PERRL_s4hana <> PERRL_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_invoice_list_schedule
+      context_name: billing_data_invoice_list_schedule_filter
+      params:
+        - column: attr_name_billing_data_invoice_list_schedule
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND PERRL_s4hana <> PERRL_mdg THEN concat('BILLING DATA:',' Invoice List Schedule') END
+        - column: msg_billing_data_invoice_list_schedule
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND PERRL_s4hana <> PERRL_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_invoice_list_schedule
+      context_name: add_missing_columns_billing_data_invoice_list_schedule
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_invoice_list_schedule: msg
+          attr_name_billing_data_invoice_list_schedule: attr_name
+          PERRL_s4hana: tgt_attr
+          PERRL_mdg: src_attr
+
+###BILLING DATA: Account Assignment Group---
+    - kind: filter
+      name: billing_data_account_assignment_group_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND KTGRD_s4hana <> KTGRD_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_account_assignment_group
+      context_name: billing_data_account_assignment_group_filter
+      params:
+        - column: attr_name_billing_data_account_assignment_group
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND KTGRD_s4hana <> KTGRD_mdg THEN concat('BILLING DATA:',' Account Assignment Group') END
+        - column: msg_billing_data_account_assignment_group
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND KTGRD_s4hana <> KTGRD_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_account_assignment_group
+      context_name: add_missing_columns_billing_data_account_assignment_group
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_account_assignment_group: msg
+          attr_name_billing_data_account_assignment_group: attr_name
+          KTGRD_s4hana: tgt_attr
+          KTGRD_mdg: src_attr
+
+##BILLING DATA: Incoterms
+    - kind: filter
+      name: billing_data_incoterms_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND INCO1_s4hana <> INCO1_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_incoterms
+      context_name: billing_data_incoterms_filter
+      params:
+        - column: attr_name_billing_data_incoterms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND INCO1_s4hana <> INCO1_mdg THEN concat('BILLING DATA:',' Incoterms') END
+        - column: msg_billing_data_incoterms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND INCO1_s4hana <> INCO1_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_incoterms
+      context_name: add_missing_columns_billing_data_incoterms
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_incoterms: msg
+          attr_name_billing_data_incoterms: attr_name
+          INCO1_s4hana: tgt_attr
+          INCO1_mdg: src_attr
+
+###BILLING DATA: Incoterms2
+
+    - kind: filter
+      name: billing_data_incoterms2_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND INCO2_s4hana <> INCO2_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_incoterms2
+      context_name: billing_data_incoterms2_filter
+      params:
+        - column: attr_name_billing_data_incoterms2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND INCO2_s4hana <> INCO2_mdg THEN concat('BILLING DATA:',' Incoterms2') END
+        - column: msg_billing_data_incoterms2
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND INCO2_s4hana <> INCO2_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_incoterms2
+      context_name: add_missing_columns_billing_data_incoterms2
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_incoterms2: msg
+          attr_name_billing_data_incoterms2: attr_name
+          INCO2_s4hana: tgt_attr
+          INCO2_mdg: src_attr
+
+###BILLING DATA: Pricing
+    - kind: filter
+      name: billing_data_pricing_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND PRFRE_s4hana <> PRFRE_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_pricing
+      context_name: billing_data_pricing_filter
+      params:
+        - column: attr_name_billing_data_pricing
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND PRFRE_s4hana <> PRFRE_mdg THEN concat('BILLING DATA:',' Pricing') END
+        - column: msg_billing_data_pricing
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND PRFRE_s4hana <> PRFRE_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_pricing
+      context_name: add_missing_columns_billing_data_pricing
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_pricing: msg
+          attr_name_billing_data_pricing: attr_name
+          PRFRE_s4hana: tgt_attr
+          PRFRE_mdg: src_attr
+
+###BILLING DATA: Payment Terms
+    - kind: filter
+      name: billing_data_payment_terms_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND ZTERM_s4hana <> ZTERM_mdg
+
+    - kind: add
+      name: add_missing_columns_billing_data_payment_terms
+      context_name: billing_data_payment_terms_filter
+      params:
+        - column: attr_name_billing_data_payment_terms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND ZTERM_s4hana <> ZTERM_mdg THEN concat('BILLING DATA:',' Payment Terms') END
+        - column: msg_billing_data_payment_terms
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND ZTERM_s4hana <> ZTERM_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_billing_data_payment_terms
+      context_name: add_missing_columns_billing_data_payment_terms
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_billing_data_payment_terms: msg
+          attr_name_billing_data_payment_terms: attr_name
+          ZTERM_s4hana: tgt_attr
+          ZTERM_mdg: src_attr
+
+###BLOCKING: Order Block - Sales Area
+    - kind: filter
+      name: blocking_order_block_sales_area_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND aufsd_s4hana <> aufsd_mdg
+
+    - kind: add
+      name: add_missing_columns_blocking_order_block_sales_area
+      context_name: blocking_order_block_sales_area_filter
+      params:
+        - column: attr_name_blocking_order_block_sales_area
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND aufsd_s4hana <> aufsd_mdg THEN concat('BLOCKING:',' Order Block - Sales Area') END
+        - column: msg_blocking_order_block_sales_area
+          expression: CASE WHEN PARTNER_mdg = PARTNER_s4hana AND vkorg_mdg = vkorg_s4hana AND vtweg_mdg = vtweg_s4hana AND spart_mdg = spart_s4hana AND aufsd_s4hana <> aufsd_mdg THEN 'attributes are mismatching' END
+
+    - kind: select
+      name: final_blocking_order_block_sales_area
+      context_name: add_missing_columns_blocking_order_block_sales_area
+      params:
+        columns:
+          PARTNER_mdg: partner
+          vkorg_mdg: VKORG
+          vtweg_mdg: VTWEG
+          spart_mdg: SPART
+          KVGR4_mdg: KVGR4
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_blocking_order_block_sales_area: msg
+          attr_name_blocking_order_block_sales_area: attr_name
+          aufsd_s4hana: tgt_attr
+          aufsd_mdg: src_attr
+
+    - kind: union
+      name: union_comparison
+      context_name: final_data_missing_from_mdg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_s4hana
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_invoice_list_schedule
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_account_assignment_group
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms2
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_pricing
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_payment_terms
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_blocking_order_block_sales_area
+
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          name_last: name_last_mdg_but000
+          name_first: name_first_mdg_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            KVGR4: KVGR4_tvv4t
+
+    - kind: filter
+      name: filter_final
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('BILLING DATA' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(KVGR4,' - ',BEZEI_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          name_first_mdg_but000: attribute1
+          name_last_mdg_but000: attribute2
+          NULL_Value: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          VKORG: attribute6
+          VTWEG: attribute7
+          SPART: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+
+    - kind: write_dataio
+      name: write_shipping_data
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+## agg ##
+### mdg ###
+    - kind: join
+      name: join_mdg_agg
+      context_name: mdg
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner_mdg: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_mdg: kunnr_kna1
+
+    - kind: filter
+      name: filter_mdg_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg_mdg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_mdg_agg
+      context_name: filter_mdg_agg
+      params:
+        columns:
+          PARTNER_mdg: PARTNER_mdg
+          HASH_mdg: HASH_mdg
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            HASH_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### s4hana ###
+    - kind: join
+      name: join_s4hana_agg
+      context_name: s4hana
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner_s4hana: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_s4hana: kunnr_kna1
+
+    - kind: filter
+      name: filter_s4hana_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg_s4hana IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_s4hana_agg
+      context_name: filter_s4hana_agg
+      params:
+        columns:
+          PARTNER_s4hana: PARTNER_s4hana
+          HASH_s4hana: HASH_s4hana
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_s4hana_agg
+      context_name: select_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_s4hana, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_s4hana, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_s4hana_agg
+      context_name: add_missing_columns_s4hana_agg
+      params:
+        - aggs:
+            HASH_s4hana: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_s4hana_agg_final
+      context_name: group_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_HASH_s4hana: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_mdg ###
+    - kind: join
+      name: join_missing_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_mdg_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: filter_missing_mdg_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('sap' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### data_missing_from_s4hana ###
+    - kind: join
+      name: join_missing_s4hana_agg
+      context_name: final_data_missing_from_s4hana
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_missing_s4hana_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_data_missing_from_s4hana_agg
+      context_name: filter_missing_s4hana_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_s4hana_agg
+      context_name: select_data_missing_from_s4hana_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM SAP' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_s4hana_agg
+      context_name: add_missing_columns_data_missing_from_s4hana_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_s4hana_final
+      context_name: group_data_missing_from_s4hana_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+### mismatch ###
+    - kind: union
+      name: union_comparison_agg
+      context_name: final_billing_data_invoice_list_schedule
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_account_assignment_group
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_incoterms2
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_pricing
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_billing_data_payment_terms
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_blocking_order_block_sales_area
+
+    - kind: join
+      name: join_final_agg
+      context_name: union_comparison_agg
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            left
+          columns:
+            partner: partner_mdg_but000
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            KVGR4: KVGR4_tvv4t
+
+    - kind: filter
+      name: filter_final_agg
+      params:
+        - condition:
+            aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','') AND vkorg IN (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: filter_final_agg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('BILLING DATA' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('sap' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true  
+
+### write agg ###
+    - kind: union
+      name: union_comparison_agg_final
+      context_name: select_mdg_agg_final
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_s4hana_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_mdg_agg_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_missing_from_s4hana_final
+
+    - kind: union
+      name: union_comparison_agg
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_data_mismatch_final
+
+    - kind: cast
+      name: cast_cnt
+      context_name: union_comparison_agg
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

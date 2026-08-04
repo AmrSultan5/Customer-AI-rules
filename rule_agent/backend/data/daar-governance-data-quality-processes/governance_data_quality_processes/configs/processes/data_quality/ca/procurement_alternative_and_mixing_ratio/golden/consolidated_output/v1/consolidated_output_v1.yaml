@@ -1,0 +1,1516 @@
+transform:
+  name: du
+  operations:
+
+######################## read dm_material_plant ################################
+  - kind: read_dataio
+    name: read_dm_material_plant
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_plant
+      schema_version: v3
+
+  - kind: select
+    name: select_mpl
+    context_name: read_dm_material_plant
+    params:
+      columns:
+        material_code: material_code_mpl
+        plant_code: plant_code_mpl
+        procurement_type: procurement_type_mpl
+        country_code: country_code_mpl
+        country_code_of_origin: country_code_of_origin_mpl
+        material_status_code: material_status_code_mpl
+        do_not_cost_indicator: do_not_cost_indicator_mpl  
+        lot_size: lot_size_mpl
+        commodity_code: commodity_code_mpl
+        sap_cluster: sap_cluster_mpl
+      distinct: true           
+      
+  - kind: filter
+    name: filter_mpl
+    context_name: select_mpl
+    params:
+      - condition:
+         material_status_code_mpl NOT IN ('97', '98', '99', 'ZA', 'Z8','Z9') AND
+         do_not_cost_indicator_mpl <> 'X' AND
+         procurement_type_mpl IN ('E', 'F', 'X') AND
+         plant_code_mpl NOT IN ('5503', '1201', '1281', '1295', '5125', '9197')
+         
+####################### read dm_material #################################
+
+  - kind: read_dataio
+    name: read_dm_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material
+      schema_version: v6
+      
+  - kind: select
+    name: select_m
+    context_name: read_dm_material
+    params:
+      columns:
+        material_code: material_code_m
+        material_type_code: material_type_code_m
+        material_group_code: material_group_code_m
+        maintenance_status: maintenance_status_m
+        unit_of_measure_code: unit_of_measure_code_m
+        material_status: material_status_code_m
+        sap_cluster: sap_cluster_m
+      distinct: true     
+      
+  - kind: filter
+    name: filter_m
+    context_name: select_m
+    params:
+      - condition:
+         material_type_code_m IN ('ZFG', 'ZFGA', 'ZFGC', 'ZFGM', 'ZFGP', 'ZFGS', 'ZMM', 'ZRW', 'ZRWT', 'ZSF', 'ZSFT') AND
+         material_group_code_m <> '1110000' AND
+         (maintenance_status_m LIKE '%B%' and maintenance_status_m LIKE '%G%') AND
+         material_status_code_m NOT IN ('97', '98', '99', 'ZA', 'Z8','Z9')
+         
+####################### read dm_material_procurement #################################
+
+  - kind: read_dataio
+    name: read_dm_material_procurement
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_procurement
+      schema_version: v1
+      
+  - kind: select
+    name: select_mpr
+    context_name: read_dm_material_procurement
+    params:
+      columns:
+        material_code: material_code_mpr
+        plant_code: plant_code_mpr
+        quantity_structure_type: quantity_structure_type_mpr
+        posting_period: posting_period_mpr
+        purchasing_organization_code: purchasing_organization_code_mpr
+        procurement_alternative_process_category: procurement_alternative_process_category_mpr
+        lot_size_procurement_alternative: lot_size_procurement_alternative_mpr
+        lot_size_mixing: lot_size_mixing_mpr
+        special_procurement_plant_code: special_procurement_plant_code_mpr
+        vendor_code: vendor_code_mpr
+        production_version: production_version_mpr
+        bom_usage: bom_usage_mpr
+        bom_alternative: bom_alternative_mpr
+        mixing_ratio: mixing_ratio_mpr
+        quantity_structure_type: quantity_structure_type_mpr
+        fiscal_year: fiscal_year_mpr
+        sap_cluster: sap_cluster_mpr
+      distinct: true     
+      
+  - kind: add
+    name: add_posting_period_filter
+    context_name: select_mpr
+    params:
+      - column: posting_period_filter
+        expression: "CASE WHEN SUBSTR(plant_code_mpr, 1, 2) != 49 AND posting_period_mpr = '0' THEN 'X' 
+                    WHEN SUBSTR(plant_code_mpr, 1, 2) = 49 AND posting_period_mpr = MONTH(GETDATE()) THEN 'X'
+                    ELSE ''
+                    END"                       
+      
+  - kind: filter
+    name: filter_mpr
+    context_name: add_posting_period_filter
+    params:
+      - condition:
+         fiscal_year_mpr = YEAR(current_date()) AND
+         fiscal_year_mpr is not null AND
+         quantity_structure_type_mpr IN ('ZZ02', 'ZZ01') AND
+         posting_period_filter = 'X'
+         
+ ####################### read dm_material_valuation #################################
+
+  - kind: read_dataio
+    name: read_dm_material_valuation
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_material_valuation
+      schema_version: v1
+      
+  - kind: select
+    name: select_mv
+    context_name: read_dm_material_valuation
+    params:
+      columns:
+        material_code: material_code_mv
+        plant_valuation_area: plant_valuation_area_mv
+        valuation_class_code: valuation_class_code_mv
+        price_control_flag: price_control_flag_mv
+        sap_cluster: sap_cluster_mv
+      distinct: true     
+      
+  - kind: filter
+    name: filter_mv
+    context_name: select_mv
+    params:
+      - condition:
+         price_control_flag_mv = 'S' AND
+         valuation_class_code_mv NOT IN ('0000','1990','2091','4099')
+             
+####################### second filter on dm_material_procurement (BG) #################################
+
+  - kind: select
+    name: select_mpr1
+    context_name: read_dm_material_procurement
+    params:
+      columns:
+        material_code: material_code_mpr1
+        plant_code: plant_code_mpr1
+        quantity_structure_type: quantity_structure_type_mpr1
+        posting_period: posting_period_mpr1
+        purchasing_organization_code: purchasing_organization_code_mpr1
+        procurement_alternative_process_category: procurement_alternative_process_category_mpr1
+        lot_size_procurement_alternative: lot_size_procurement_alternative_mpr1
+        lot_size_mixing: lot_size_mixing_mpr1
+        special_procurement_plant_code: special_procurement_plant_code_mpr1
+        vendor_code: vendor_code_mpr1
+        production_version: production_version_mpr1
+        bom_usage: bom_usage_mpr1
+        bom_alternative: bom_alternative_mpr1
+        mixing_ratio: mixing_ratio_mpr1
+        quantity_structure_type: quantity_structure_type_mpr1
+        fiscal_year: fiscal_year_mpr1
+        sap_cluster: sap_cluster_mpr1
+      distinct: true     
+
+  - kind: filter
+    name: filter_mpr1
+    context_name: select_mpr1
+    params:
+      - condition:
+         fiscal_year_mpr1 = YEAR(current_date()) AND
+         fiscal_year_mpr1 is not null AND
+         quantity_structure_type_mpr1 IN ('ZZ02', 'ZZ01') AND
+         SUBSTR(plant_code_mpr1, 1, 2) = 49 
+          
+  # finding periods with no lot size procurement alternative
+  - kind: filter
+    name: filter_mpr1_lot_size_procurement_alternative
+    context_name: filter_mpr1
+    params:
+      - condition:
+         (lot_size_procurement_alternative_mpr1 IS NULL OR lot_size_procurement_alternative_mpr1 = 0 OR lot_size_procurement_alternative_mpr1 = '')         
+
+  - kind: group
+    name: group_posting_periods_no_procurement
+    context_name: filter_mpr1_lot_size_procurement_alternative
+    params:
+      - aggs:
+          posting_period_mpr1: collect_list
+        by:
+        - material_code_mpr1
+        - plant_code_mpr1
+        - sap_cluster_mpr1
+
+  - kind: add
+    name: add_posting_periods_no_procurement
+    context_name: group_posting_periods_no_procurement
+    params:
+      - column: posting_period_array
+        expression: sort_array(collect_list_posting_period_mpr1)
+
+  - kind: add
+    name: add_posting_periods_no_procurement_2
+    context_name: add_posting_periods_no_procurement
+    params:
+      - column:  posting_period_no_procurement_concat_ws
+        expression: concat_ws(',', posting_period_array)
+
+  - kind: select
+    name: select_posting_periods_no_procurement
+    context_name: add_posting_periods_no_procurement_2
+    params:
+      columns:
+        material_code_mpr1: material_code_mpr1
+        plant_code_mpr1: plant_code_mpr1
+        sap_cluster_mpr1: sap_cluster_mpr1
+        posting_period_no_procurement_concat_ws: posting_period_no_procurement_concat_ws
+      distinct: true
+ 
+  # finding periods with no lot size mixing
+  - kind: filter
+    name: filter_mpr1_lot_size_mixing
+    context_name: filter_mpr1
+    params:
+      - condition:
+         (lot_size_mixing_mpr1 IS NULL OR lot_size_mixing_mpr1 = 0 OR lot_size_mixing_mpr1 = '')        
+
+  - kind: group
+    name: group_posting_periods_no_mixing
+    context_name: filter_mpr1_lot_size_mixing
+    params:
+      - aggs:
+          posting_period_mpr1: collect_list
+        by:
+        - material_code_mpr1
+        - plant_code_mpr1
+        - sap_cluster_mpr1
+
+  - kind: add
+    name: add_posting_periods_no_mixing
+    context_name: group_posting_periods_no_mixing
+    params:
+      - column: posting_period_array
+        expression: sort_array(collect_list_posting_period_mpr1)
+
+  - kind: add
+    name: add_posting_periods_no_mixing_2
+    context_name: add_posting_periods_no_mixing
+    params:
+      - column:  posting_period_no_mixing_concat_ws
+        expression: concat_ws(',', posting_period_array)
+
+  - kind: select
+    name: select_posting_periods_no_mixing
+    context_name: add_posting_periods_no_mixing_2
+    params:
+      columns:
+        material_code_mpr1: material_code_mpr1
+        plant_code_mpr1: plant_code_mpr1
+        sap_cluster_mpr1: sap_cluster_mpr1
+        posting_period_no_mixing_concat_ws: posting_period_no_mixing_concat_ws
+      distinct: true
+
+ # joining new tables with mpr1
+  - kind: join
+    name: join_group_lot_size_procurement_alternative_mixing
+    context_name: filter_mpr1
+    params:
+      - other: 
+          select_posting_periods_no_procurement
+        how:
+          left
+        columns:
+          material_code_mpr1: material_code_mpr1
+          plant_code_mpr1: plant_code_mpr1
+          sap_cluster_mpr1: sap_cluster_mpr1
+      - other: 
+          select_posting_periods_no_mixing
+        how:
+          left
+        columns:
+          material_code_mpr1: material_code_mpr1
+          plant_code_mpr1: plant_code_mpr1
+          sap_cluster_mpr1: sap_cluster_mpr1
+
+####################### read country_code_vs_material_type_code_matrix table and reformat to long #################################
+
+  - kind: read_dataio
+    name: read_country_vs_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: master_data_quality
+      object_name: country_code_vs_material_type_code_matrix
+      schema_version: v2
+
+  - kind: select
+    name: select_country_vs_material
+    context_name: read_country_vs_material
+    params:
+      columns:
+        country_code: country_code_cvm
+        zfg: zfg
+        zfgs: zfgs
+        zsf: zsf
+        zsft: zsft
+        zrw: zrw
+        zrwt: zrwt
+        zfgc: zfgc
+        zfga: zfga
+        zmm: zmm
+        zfgm: zfgm
+        zfgp: zfgp
+      distinct: true     
+
+  - kind: filter
+    name: filter_zfg
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zfg = '1'
+
+  - kind: add
+    name: add_zfg
+    context_name: filter_zfg
+    params:
+      - column: material_helper_column
+        expression: '''ZFG'''    
+
+  - kind: filter
+    name: filter_zfgs
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zfgs = '1'
+
+  - kind: add
+    name: add_zfgs
+    context_name: filter_zfgs
+    params:
+      - column: material_helper_column
+        expression: '''ZFGS'''    
+
+  - kind: filter
+    name: filter_zsf
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zsf = '1'
+
+  - kind: add
+    name: add_zsf
+    context_name: filter_zsf
+    params:
+      - column: material_helper_column
+        expression: '''ZSF'''    
+
+  - kind: filter
+    name: filter_zsft
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zsft = '1'
+
+  - kind: add
+    name: add_zsft
+    context_name: filter_zsft
+    params:
+      - column: material_helper_column
+        expression: '''ZSFT'''    
+
+  - kind: filter
+    name: filter_zrw
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zrw = '1'
+
+  - kind: add
+    name: add_zrw
+    context_name: filter_zrw
+    params:
+      - column: material_helper_column
+        expression: '''ZRW'''    
+
+  - kind: filter
+    name: filter_zrwt
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zrwt = '1'
+
+  - kind: add
+    name: add_zrwt
+    context_name: filter_zrwt
+    params:
+      - column: material_helper_column
+        expression: '''ZRWT'''    
+
+  - kind: filter
+    name: filter_zfgc
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zfgc = '1'
+
+  - kind: add
+    name: add_zfgc
+    context_name: filter_zfgc
+    params:
+      - column: material_helper_column
+        expression: '''ZFGC'''    
+
+  - kind: filter
+    name: filter_zfga
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zfga = '1'
+
+  - kind: add
+    name: add_zfga
+    context_name: filter_zfga
+    params:
+      - column: material_helper_column
+        expression: '''ZFGA'''    
+
+  - kind: filter
+    name: filter_zmm
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zmm = '1'
+
+  - kind: add
+    name: add_zmm
+    context_name: filter_zmm
+    params:
+      - column: material_helper_column
+        expression: '''ZMM'''    
+
+  - kind: filter
+    name: filter_zfgm
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zfgm = '1'
+
+  - kind: add
+    name: add_zfgm
+    context_name: filter_zfgm
+    params:
+      - column: material_helper_column
+        expression: '''ZFGM'''    
+
+  - kind: filter
+    name: filter_zfgp
+    context_name: select_country_vs_material
+    params:
+      - condition:
+         zfgp = '1'
+
+  - kind: add
+    name: add_zfgp
+    context_name: filter_zfgp
+    params:
+      - column: material_helper_column
+        expression: '''ZFGP'''    
+
+  - kind: union
+    name: union_country_vs_material_1
+    context_name: add_zfg
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zfgs
+
+  - kind: union
+    name: union_country_vs_material_2
+    context_name: union_country_vs_material_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zsf
+
+  - kind: union
+    name: union_country_vs_material_3
+    context_name: union_country_vs_material_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zsft
+
+  - kind: union
+    name: union_country_vs_material_4
+    context_name: union_country_vs_material_3
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zrw
+
+  - kind: union
+    name: union_country_vs_material_5
+    context_name: union_country_vs_material_4
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zrwt
+
+  - kind: union
+    name: union_country_vs_material_6
+    context_name: union_country_vs_material_5
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zfgc
+
+  - kind: union
+    name: union_country_vs_material_7
+    context_name: union_country_vs_material_6
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zfga
+
+  - kind: union
+    name: union_country_vs_material_8
+    context_name: union_country_vs_material_7
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zmm
+
+  - kind: union
+    name: union_country_vs_material_9
+    context_name: union_country_vs_material_8
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zfgm
+      
+  - kind: union
+    name: union_country_vs_material_10
+    context_name: union_country_vs_material_9
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_zfgp
+
+  - kind: select
+    name: select_country_vs_material_long
+    context_name: union_country_vs_material_10
+    params:
+      columns:
+        country_code_cvm: country_code_cvm
+        material_helper_column: material_helper_column
+      distinct: true     
+
+####################### joins ################################
+ 
+  - kind: join
+    name: join_m_mpl_mv_mpr_mpr1
+    context_name: filter_m
+    params:
+      - other:
+          filter_mpl
+        how:
+          inner
+        columns:
+          material_code_m: material_code_mpl
+          sap_cluster_m: sap_cluster_mpl
+      - other:
+          filter_mv
+        how:
+          inner
+        columns:
+          material_code_mpl: material_code_mv
+          plant_code_mpl: plant_valuation_area_mv
+          sap_cluster_mpl: sap_cluster_mv
+      - other:
+          filter_mpr
+        how:
+          left
+        columns:
+          material_code_mpl: material_code_mpr
+          plant_code_mpl: plant_code_mpr
+          sap_cluster_mpl: sap_cluster_mpr
+      - other:
+          join_group_lot_size_procurement_alternative_mixing
+        how:
+          left
+        columns:
+          material_code_mpl: material_code_mpr1
+          plant_code_mpl: plant_code_mpr1
+          sap_cluster_mpl: sap_cluster_mpr1
+      - other:
+          select_country_vs_material_long
+        how:
+          left
+        columns:
+          country_code_mpl: country_code_cvm
+          material_type_code_m: material_helper_column
+ 
+  - kind: checkpoint
+    name: checkpoint_join_m_mpl_mv_mpr_mpr1
+    context_name: join_m_mpl_mv_mpr_mpr1
+
+ ####################### adding checks columns ################################
+ 
+  - kind: add
+    name: add_mixing_ratio_completeness_flag_pa_completeness_flag
+    context_name: join_m_mpl_mv_mpr_mpr1
+    params:
+      - column: mixing_ratio_completeness_flag
+        expression: "CASE WHEN (mixing_ratio_mpr IS NULL OR mixing_ratio_mpr = '' OR TRIM(mixing_ratio_mpr) = '') THEN '0' 
+                    ELSE '1' 
+                    END" 
+      - column: pa_completeness_flag
+        expression: "CASE WHEN (procurement_alternative_process_category_mpr IS NULL OR procurement_alternative_process_category_mpr = '') THEN '0' 
+                    ELSE '1' 
+                    END"                   
+                    
+  - kind: add
+    name: add_flags
+    context_name: add_mixing_ratio_completeness_flag_pa_completeness_flag
+    params:
+      - column: pa_mr_completeness_flag
+        expression: "CASE WHEN mixing_ratio_completeness_flag = '0' AND pa_completeness_flag = '0' THEN '0'
+                    WHEN mixing_ratio_completeness_flag = '1' AND pa_completeness_flag = '1' THEN '1' 
+                    ELSE '' 
+                    END" 
+      - column: pa_accuracy_flag
+        expression: "CASE WHEN pa_completeness_flag = '0' THEN '' 
+                    WHEN (procurement_type_mpl = 'E' AND procurement_alternative_process_category_mpr IN ('BF', 'BL')) OR 
+                    (procurement_type_mpl = 'F' AND procurement_alternative_process_category_mpr IN ('BB', 'BU')) OR 
+                    (procurement_type_mpl = 'X' AND procurement_alternative_process_category_mpr IN ('BB', 'BF', 'BL', 'BU')) THEN '1' 
+                    ELSE '0'
+                    END" 
+      - column: lot_size_completeness_flag
+        expression: "CASE WHEN (
+                    (material_status_code_mpl NOT IN ('98', '', 'ZA')) OR 
+                    (procurement_alternative_process_category_mpr NOT IN ('BB', 'BF', 'BL', 'BU')) OR 
+                    (production_version_mpr IN ('HAUL')) OR 
+                    (pa_completeness_flag != '1') OR 
+                    (material_helper_column IS NULL OR material_helper_column = '')
+                    ) THEN ''
+                    WHEN (country_code_mpl != 'BG' AND (lot_size_procurement_alternative_mpr IS NULL OR lot_size_procurement_alternative_mpr = '0' OR lot_size_procurement_alternative_mpr = '')) THEN '2'
+                    WHEN (country_code_mpl != 'BG' AND (lot_size_mixing_mpr IS NULL OR lot_size_mixing_mpr = '0' OR lot_size_mixing_mpr = '')) THEN '3'
+                    WHEN country_code_mpl = 'BG' AND (posting_period_no_procurement_concat_ws IS NOT NULL AND posting_period_no_procurement_concat_ws != '') THEN '2'
+                    WHEN country_code_mpl = 'BG' AND (posting_period_no_mixing_concat_ws IS NOT NULL AND posting_period_no_mixing_concat_ws != '') THEN '3'
+                    ELSE '1' 
+                    END" 
+
+##################### lot_size_accuracy_flag for BG #############################
+
+# finding periods with mismatch in lot size procurement alternative
+  - kind: filter
+    name: filter_lot_size_lot_size_procurement_alternative_for_BG
+    context_name: add_flags
+    params:
+      - condition:
+         country_code_mpl = 'BG' AND       
+         ((MONTH(current_date()) = 12 AND posting_period_mpr1 = 12) OR (MONTH(current_date()) != 12 AND posting_period_mpr1 > MONTH(current_date()))) AND
+         lot_size_mpl != lot_size_procurement_alternative_mpr1 AND
+         lot_size_procurement_alternative_mpr1 IS NOT NULL AND
+         lot_size_procurement_alternative_mpr1 != '0' AND
+         lot_size_procurement_alternative_mpr1 != ''
+
+  - kind: group
+    name: group_posting_periods_mismatch_procurement_alternative
+    context_name: filter_lot_size_lot_size_procurement_alternative_for_BG
+    params:
+      - aggs:
+          posting_period_mpr1: collect_list
+        by:
+        - material_code_mpr1
+        - plant_code_mpr1
+        - sap_cluster_mpr1
+
+  - kind: add
+    name: add_posting_periods_mismatch_procurement_alternative
+    context_name: group_posting_periods_mismatch_procurement_alternative
+    params:
+      - column: posting_period_array
+        expression: sort_array(collect_list_posting_period_mpr1)
+
+  - kind: add
+    name: add_posting_periods_mismatch_procurement_alternative_2
+    context_name: add_posting_periods_mismatch_procurement_alternative
+    params:
+      - column:  posting_period_mismatch_procurement_concat_ws
+        expression: concat_ws(',', posting_period_array)
+
+  - kind: select
+    name: select_posting_periods_mismatch_procurement_alternative
+    context_name: add_posting_periods_mismatch_procurement_alternative_2
+    params:
+      columns:
+        material_code_mpr1: material_code_mpr1
+        plant_code_mpr1: plant_code_mpr1
+        sap_cluster_mpr1: sap_cluster_mpr1
+        posting_period_mismatch_procurement_concat_ws: posting_period_mismatch_procurement_concat_ws
+      distinct: true   
+
+# finding periods with mismatch in lot size mixing 
+  - kind: filter
+    name: filter_lot_size_lot_size_mixing_for_BG
+    context_name: add_flags    
+    params:
+      - condition:
+         country_code_mpl = 'BG' AND    
+         ((MONTH(current_date()) = 12 AND posting_period_mpr1 = 12) OR (MONTH(current_date()) != 12 AND posting_period_mpr1 > MONTH(current_date()))) AND
+         lot_size_mpl != lot_size_mixing_mpr1 AND
+         lot_size_mixing_mpr1 IS NOT NULL AND
+         lot_size_mixing_mpr1 != '0' AND
+         lot_size_mixing_mpr1 != ''
+
+  - kind: group
+    name: group_posting_periods_mismatch_mixing
+    context_name: filter_lot_size_lot_size_mixing_for_BG
+    params:
+      - aggs:
+          posting_period_mpr1: collect_list
+        by:
+        - material_code_mpr1
+        - plant_code_mpr1
+        - sap_cluster_mpr1
+
+  - kind: add
+    name: add_posting_periods_mismatch_mixing
+    context_name: group_posting_periods_mismatch_mixing
+    params:
+      - column: posting_period_array
+        expression: sort_array(collect_list_posting_period_mpr1)
+
+  - kind: add
+    name: add_posting_periods_mismatch_mixing_2
+    context_name: add_posting_periods_mismatch_mixing
+    params:
+      - column:  posting_period_mismatch_mixing_concat_ws
+        expression: concat_ws(',', posting_period_array)
+
+  - kind: select
+    name: select_posting_periods_mismatch_mixing
+    context_name: add_posting_periods_mismatch_mixing_2
+    params:
+      columns:
+        material_code_mpr1: material_code_mpr1
+        plant_code_mpr1: plant_code_mpr1
+        sap_cluster_mpr1: sap_cluster_mpr1
+        posting_period_mismatch_mixing_concat_ws: posting_period_mismatch_mixing_concat_ws
+      distinct: true
+
+  - kind: join
+    name: join_group_lot_size_lot_size_procurement_alternative_for_BG
+    context_name: add_flags
+    params:
+      - other:
+          select_posting_periods_mismatch_procurement_alternative
+        how:
+          left
+        columns:
+          material_code_mpr1: material_code_mpr1
+          plant_code_mpr1: plant_code_mpr1
+          sap_cluster_mpr1: sap_cluster_mpr1
+      - other:
+          select_posting_periods_mismatch_mixing
+        how:
+          left
+        columns:
+          material_code_mpr1: material_code_mpr1
+          plant_code_mpr1: plant_code_mpr1
+          sap_cluster_mpr1: sap_cluster_mpr1
+
+  - kind: add
+    name: add_lot_size_accuracy_flag
+    context_name: join_group_lot_size_lot_size_procurement_alternative_for_BG
+    params:
+      - column: lot_size_accuracy_flag
+        expression: "CASE WHEN country_code_mpl != 'BG' AND lot_size_completeness_flag != '1' THEN ''
+                    WHEN country_code_mpl != 'BG' AND lot_size_mpl != lot_size_procurement_alternative_mpr THEN '2'
+                    WHEN country_code_mpl != 'BG' AND lot_size_mpl != lot_size_mixing_mpr THEN '3'      
+                    WHEN country_code_mpl = 'BG' AND posting_period_mpr1 = MONTH(getdate()) AND (lot_size_mixing_mpr1 IS NULL OR lot_size_mixing_mpr1 = '0' OR lot_size_mixing_mpr1 = '' OR lot_size_procurement_alternative_mpr1 IS NULL OR lot_size_procurement_alternative_mpr1 = '0' OR lot_size_procurement_alternative_mpr1 = '') THEN ''
+                    WHEN country_code_mpl = 'BG' AND (posting_period_mismatch_procurement_concat_ws IS NOT NULL AND posting_period_mismatch_procurement_concat_ws != '') THEN '2'
+                    WHEN country_code_mpl = 'BG' AND (posting_period_mismatch_mixing_concat_ws IS NOT NULL AND posting_period_mismatch_mixing_concat_ws != '') THEN '3'              
+                    ELSE '1' 
+                    END" 
+
+####################################################################
+
+  - kind: select
+    name: select_du
+    context_name: add_lot_size_accuracy_flag
+    params:
+      columns:
+        country_code_mpl: country_code
+        plant_code_mpl: plant_code
+        material_code_m: material_code 
+        material_type_code_m: material_type
+        material_status_code_mpl: plant_material_status_code
+        valuation_class_code_mv: valuation_class_code
+        do_not_cost_indicator_mpl: do_not_cost_indicator
+        procurement_type_mpl: procurement_type
+        procurement_alternative_process_category_mpr: procurement_alternative_process_category
+        purchasing_organization_code_mpr: purchasing_organization_code
+        special_procurement_plant_code_mpr: special_procurement_plant_code
+        lot_size_procurement_alternative_mpr: lot_size_procurement_alternative
+        lot_size_mixing_mpr: lot_size_mixing
+        lot_size_mpl: lot_size
+        vendor_code_mpr: vendor_code
+        production_version_mpr: production_version
+        bom_usage_mpr: bom_usage
+        bom_alternative_mpr: bom_alternative
+        mixing_ratio_mpr: mixing_ratio
+        quantity_structure_type_mpr: quantity_structure_type
+        price_control_flag_mv: price_control_flag
+        fiscal_year_mpr: fiscal_year
+        posting_period_mpr: posting_period
+        mixing_ratio_completeness_flag: mixing_ratio_completeness_flag
+        pa_completeness_flag: pa_completeness_flag
+        pa_mr_completeness_flag: pa_mr_completeness_flag
+        pa_accuracy_flag: pa_accuracy_flag
+        lot_size_completeness_flag: lot_size_completeness_flag
+        lot_size_accuracy_flag: lot_size_accuracy_flag
+        posting_period_no_procurement_concat_ws: posting_period_no_procurement_concat_ws
+        posting_period_no_mixing_concat_ws: posting_period_no_mixing_concat_ws
+        posting_period_mismatch_procurement_concat_ws: posting_period_mismatch_procurement_concat_ws
+        posting_period_mismatch_mixing_concat_ws: posting_period_mismatch_mixing_concat_ws
+        sap_cluster_m: sap_cluster
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_du
+    context_name: select_du
+    
+  - kind: select
+    name: select_final_du
+    context_name: add_lot_size_accuracy_flag
+    params:
+      columns:
+        country_code_mpl: country_code
+        plant_code_mpl: plant_code
+        material_code_m: material_code 
+        material_type_code_m: material_type
+        material_status_code_mpl: plant_material_status_code
+        valuation_class_code_mv: valuation_class_code
+        do_not_cost_indicator_mpl: do_not_cost_indicator
+        procurement_type_mpl: procurement_type
+        procurement_alternative_process_category_mpr: procurement_alternative_process_category
+        purchasing_organization_code_mpr: purchasing_organization_code
+        special_procurement_plant_code_mpr: special_procurement_plant_code
+        lot_size_procurement_alternative_mpr: lot_size_procurement_alternative
+        lot_size_mixing_mpr: lot_size_mixing
+        lot_size_mpl: lot_size
+        vendor_code_mpr: vendor_code
+        production_version_mpr: production_version
+        bom_usage_mpr: bom_usage
+        bom_alternative_mpr: bom_alternative
+        mixing_ratio_mpr: mixing_ratio
+        quantity_structure_type_mpr: quantity_structure_type
+        price_control_flag_mv: price_control_flag
+        fiscal_year_mpr: fiscal_year
+        posting_period_mpr: posting_period
+        mixing_ratio_completeness_flag: mixing_ratio_completeness_flag
+        pa_completeness_flag: pa_completeness_flag
+        pa_mr_completeness_flag: pa_mr_completeness_flag
+        pa_accuracy_flag: pa_accuracy_flag
+        lot_size_completeness_flag: lot_size_completeness_flag
+        lot_size_accuracy_flag: lot_size_accuracy_flag
+        sap_cluster_m: sap_cluster
+      distinct: true
+
+### DETAILED
+
+  - kind: add
+    name: add_lot_size_completeness
+    context_name: checkpoint_du
+    params:
+      - column: quality_type
+        expression: '''Lot Size'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: "CASE WHEN lot_size_completeness_flag = '' THEN 'N/A'
+                     WHEN lot_size_completeness_flag = '2' AND country_code = 'BG' THEN CONCAT('Lot size is missing in PA for ', posting_period_no_procurement_concat_ws)
+                     WHEN lot_size_completeness_flag = '2' AND country_code != 'BG' THEN 'Lot size is missing in PA'
+                     WHEN lot_size_completeness_flag = '3' AND country_code = 'BG' THEN CONCAT('Lot size is missing in Mixing ratio for ', posting_period_no_mixing_concat_ws)
+                     WHEN lot_size_completeness_flag = '3' AND country_code != 'BG' THEN 'Lot size is missing in Mixing ratio'
+                     ELSE 'OK'
+                     END"
+      - column: dq_flag_output
+        expression: CASE WHEN lot_size_completeness_flag IN ('2', '3') THEN '0' ELSE lot_size_completeness_flag END
+
+  - kind: add
+    name: add_lot_size_accuracy
+    context_name: checkpoint_du
+    params:
+      - column: quality_type
+        expression: '''Lot Size'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: "CASE WHEN lot_size_accuracy_flag = '' THEN 'N/A'
+                     WHEN lot_size_accuracy_flag = '2' AND country_code = 'BG' THEN CONCAT('Material lot size is not matching with: PA of the material for ', posting_period_mismatch_procurement_concat_ws)
+                     WHEN lot_size_accuracy_flag = '2' AND country_code != 'BG' THEN 'Material lot size is not matching with: PA of the material'
+                     WHEN lot_size_accuracy_flag = '3' AND country_code = 'BG' THEN CONCAT('Material lot size is not matching with: Mixing ratio for ', posting_period_mismatch_mixing_concat_ws)
+                     WHEN lot_size_accuracy_flag = '3' AND country_code != 'BG' THEN 'Material lot size is not matching with: Mixing ratio'
+                     ELSE 'OK'
+                     END"
+      - column: dq_flag_output
+        expression: CASE WHEN lot_size_accuracy_flag IN ('2', '3') THEN '0' ELSE lot_size_accuracy_flag END
+
+  - kind: add
+    name: add_pa_mr
+    context_name: checkpoint_du
+    params:
+      - column: quality_type
+        expression: '''PA & MR'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN pa_mr_completeness_flag = '0' THEN 'Missing PAMR' ELSE 'OK' END
+      - column: dq_flag_output
+        expression: pa_mr_completeness_flag
+
+  - kind: add
+    name: add_mixing_ratio
+    context_name: checkpoint_du
+    params:
+      - column: quality_type
+        expression: '''Mixing Ratio'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN mixing_ratio_completeness_flag = '0' THEN 'Missing MR' ELSE 'OK' END
+      - column: dq_flag_output
+        expression: mixing_ratio_completeness_flag
+
+  - kind: add
+    name: add_procurement_alternative_com
+    context_name: checkpoint_du
+    params:
+      - column: quality_type
+        expression: '''Procurement Alternative'''
+      - column: quality_category
+        expression: '''Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN pa_completeness_flag = '0' THEN 'Missing PA' ELSE 'OK' END
+      - column: dq_flag_output
+        expression: pa_completeness_flag
+
+  - kind: add
+    name: add_procurement_alternative_acu
+    context_name: checkpoint_du
+    params:
+      - column: quality_type
+        expression: '''Procurement Alternative'''
+      - column: quality_category
+        expression: '''Accuracy'''
+      - column: dq_message_output
+        expression: CASE WHEN pa_completeness_flag = '0' THEN 'Failed at completeness' 
+                    WHEN pa_accuracy_flag = '0' THEN 'Wrong PA Type' 
+                    WHEN pa_accuracy_flag = '1' THEN 'OK' 
+                    ELSE 'N/A' END
+      - column: dq_flag_output
+        expression: pa_accuracy_flag
+
+  - kind: union
+    name: union_pamr_0
+    context_name: add_lot_size_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_lot_size_accuracy
+
+  - kind: union
+    name: union_pamr_1
+    context_name: union_pamr_0
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_pa_mr
+
+  - kind: union
+    name: union_pamr_2
+    context_name: union_pamr_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_mixing_ratio
+
+  - kind: union
+    name: union_pamr_3
+    context_name: union_pamr_2
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_procurement_alternative_com
+
+  - kind: union
+    name: union_pamr_4
+    context_name: union_pamr_3
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_procurement_alternative_acu
+
+  - kind: select
+    name: select_final_detailed
+    context_name: union_pamr_4
+    params:
+      columns:
+        country_code: country_code
+        plant_code: plant_code
+        material_code: material_code
+        material_type: material_type_code
+        plant_material_status_code: plant_material_status_code    
+        valuation_class_code: valuation_class_code
+        price_control_flag: price_control_flag
+        do_not_cost_indicator: do_not_cost_indicator
+        procurement_type: procurement_type
+        procurement_alternative_process_category: procurement_alternative_process_category
+        purchasing_organization_code: purchasing_organization_code
+        special_procurement_plant_code: special_procurement_plant_code
+        vendor_code: vendor_code
+        lot_size_procurement_alternative: lot_size_procurement_alternative
+        lot_size_mixing: lot_size_mixing
+        lot_size: lot_size_plant
+        production_version: production_version
+        bom_usage: bom_usage
+        bom_alternative: bom_alternative
+        mixing_ratio: mixing_ratio
+        quantity_structure_type: quantity_structure_type
+        fiscal_year: fiscal_year
+        posting_period: posting_period
+        quality_category: quality_category
+        quality_type: quality_type
+        dq_message_output: dq_message_output
+        dq_flag_output: dq_flag_output
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    context_name: select_final_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: procurement_alternative_and_mixing_ratio
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      
+########################################## aggregated ######################################
+
+# lot size completeness
+  - kind: add
+    name: add_lot_size_completeness_flag
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(lot_size_completeness_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Lot Size'''       
+      - column: invalid_checks
+        expression: IF(lot_size_completeness_flag IN ('2', '3'), 1, NULL)
+        
+  - kind: group
+    name: group_lot_size_completeness
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_lot_size_completeness
+    context_name: group_lot_size_completeness
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_lot_size_completeness
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+# lot size accuracy
+  - kind: add
+    name: add_lot_size_accuracy_flag
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(lot_size_accuracy_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''Lot Size'''       
+      - column: invalid_checks
+        expression: IF(lot_size_accuracy_flag IN ('2', '3'), 1, NULL)
+        
+  - kind: group
+    name: group_lot_size_accuracy
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_lot_size_accuracy
+    context_name: group_lot_size_accuracy
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_lot_size_accuracy
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+# PA & MR
+  - kind: add
+    name: add_pa_mr_completeness_flag
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(pa_mr_completeness_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''PA & MR'''       
+      - column: invalid_checks
+        expression: IF(pa_mr_completeness_flag = '0', 1, NULL)
+        
+  - kind: group
+    name: group_pa_mr_completeness_flag
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_pa_mr_completeness_flag
+    context_name: group_pa_mr_completeness_flag
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_pa_mr_completeness_flag
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Mixing Ratio
+  - kind: add
+    name: add_mixing_ratio_completeness_flag
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(mixing_ratio_completeness_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Mixing Ratio'''       
+      - column: invalid_checks
+        expression: IF(mixing_ratio_completeness_flag = '0', 1, NULL)
+        
+  - kind: group
+    name: group_mixing_ratio_completeness_flag
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_mixing_ratio_completeness_flag
+    context_name: group_mixing_ratio_completeness_flag
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_mixing_ratio_completeness_flag
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Procurement Alternative completeness
+  - kind: add
+    name: add_pa_completeness_flag
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(pa_completeness_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Completeness''' 
+      - column: quality_type
+        expression: '''Procurement Alternative'''       
+      - column: invalid_checks
+        expression: IF(pa_completeness_flag = '0', 1, NULL)
+        
+  - kind: group
+    name: group_pa_completeness_flag
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_pa_completeness_flag
+    context_name: group_pa_completeness_flag
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_pa_completeness_flag
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Procurement Alternative accuracy
+  - kind: add
+    name: add_pa_accuracy_flag
+    context_name: checkpoint_du
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: total_records
+        expression: cast(1 as int)
+      - column: total_checks
+        expression: IF(pa_accuracy_flag != '', 1, NULL)
+      - column: quality_category
+        expression: '''Accuracy''' 
+      - column: quality_type
+        expression: '''Procurement Alternative'''       
+      - column: invalid_checks
+        expression: IF(pa_accuracy_flag = '0', 1, NULL)
+        
+  - kind: group
+    name: group_pa_accuracy_flag
+    params:
+      - aggs:
+          total_records: count
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - quality_type
+        - quality_category
+        - loading_date
+        - sap_cluster
+
+  - kind: add
+    name: add_new_columns_pa_accuracy_flag
+    context_name: group_pa_accuracy_flag
+    params:
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_records AS INT)
+
+  - kind: select
+    name: select_pa_accuracy_flag
+    params:
+      columns:
+        loading_date: loading_date
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+################################## unions #################################
+
+  - kind: union
+    name: union_material_pamr_agg
+    context_name: select_lot_size_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_lot_size_accuracy      
+      
+  - kind: union
+    name: union_material_pamr_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pa_mr_completeness_flag     
+      
+  - kind: union
+    name: union_material_pamr_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_mixing_ratio_completeness_flag
+      
+  - kind: union
+    name: union_material_pamr_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pa_completeness_flag
+      
+  - kind: union
+    name: union_material_pamr_agg
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_pa_accuracy_flag
+      
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        quality_type: quality_type
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: procurement_alternative_and_mixing_ratio
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

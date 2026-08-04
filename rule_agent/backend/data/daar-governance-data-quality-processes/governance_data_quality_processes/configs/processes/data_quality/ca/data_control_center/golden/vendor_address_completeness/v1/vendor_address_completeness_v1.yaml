@@ -1,0 +1,182 @@
+transform:
+  name: vendor_address_completeness
+  operations:
+
+# ── RVCOMP_101.1  Missing Vendor Name 1
+# ── RVCOMP_121.1  Missing Street
+# ── RVCOMP_122.1  Missing Postal Code
+# ── RVCOMP_123.1  Missing City
+# ── RVCOMP_124.1  Missing Country
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_address
+
+  - kind: select
+    name: select_dm_vendor_address
+    context_name: read_dm_vendor_address
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+        vendor_name_1: vendor_name_1
+        street: street
+        postal_code: postal_code
+        city: city
+      distinct: true
+
+  - kind: add
+    name: add_checks
+    context_name: select_dm_vendor_address
+    params:
+      - column: rcvomp_101_1
+        expression: if(isnull(vendor_name_1) or vendor_name_1 = '', '0', '1')
+      - column: rcvomp_121_1
+        expression: if(isnull(street) or street = '', '0', '1')
+      - column: rcvomp_122_1
+        expression: if(isnull(postal_code) or postal_code = '', '0', '1')
+      - column: rcvomp_123_1
+        expression: if(isnull(city) or city = '', '0', '1')
+      - column: rcvomp_124_1
+        expression: if(isnull(country_code) or country_code = '', '0', '1')
+      - column: rule_code_rcvomp_101_1
+        expression: '''RVCOMP_101.1'''
+      - column: rule_code_rcvomp_121_1
+        expression: '''RVCOMP_121.1'''
+      - column: rule_code_rcvomp_122_1
+        expression: '''RVCOMP_122.1'''
+      - column: rule_code_rcvomp_123_1
+        expression: '''RVCOMP_123.1'''
+      - column: rule_code_rcvomp_124_1
+        expression: '''RVCOMP_124.1'''
+      - column: country_value
+        expression: country_code
+      - column: subdomain
+        expression: '''address_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_101_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_101_1: rule_code
+        rcvomp_101_1: check_status
+        vendor_code: vendor_code
+        vendor_name_1: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_121_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_121_1: rule_code
+        rcvomp_121_1: check_status
+        vendor_code: vendor_code
+        street: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_122_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_122_1: rule_code
+        rcvomp_122_1: check_status
+        vendor_code: vendor_code
+        postal_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_123_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_123_1: rule_code
+        rcvomp_123_1: check_status
+        vendor_code: vendor_code
+        city: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_124_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_124_1: rule_code
+        rcvomp_124_1: check_status
+        vendor_code: vendor_code
+        country_value: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_101_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_121_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_122_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_123_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_124_1
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

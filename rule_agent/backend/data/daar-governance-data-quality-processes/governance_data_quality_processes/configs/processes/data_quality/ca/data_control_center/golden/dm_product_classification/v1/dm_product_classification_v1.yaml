@@ -1,0 +1,130 @@
+transform:
+  name: dm_product_classification
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_kssk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: kssk
+
+  - kind: select
+    name: select_kssk
+    params:
+      columns:
+        objek: material_code
+        clint: class_code
+        klart: class_type_code
+        sap_cluster: sap_cluster_kp
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_klah
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: klah
+
+  - kind: select
+    name: select_klah
+    params:
+      columns:
+        clint: clint
+        class: class_name
+        sap_cluster: sap_cluster_kl
+      distinct: true
+    skip_next: false
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tclat
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tclat
+
+  - kind: select
+    name: select_tclat
+    params:
+      columns:
+        spras: spras
+        artxt: class_type_name
+        klart: klart
+        sap_cluster: sap_cluster_tc
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_tclat
+    params:
+      - condition:
+          (spras == 'E')
+
+  - kind: join
+    name: join_kp_kl_tc
+    context_name: select_kssk
+    params:
+      - other:
+          select_klah
+        how:
+          left
+        columns:
+          class_code: clint
+          sap_cluster_kp: sap_cluster_kl
+      - other:
+          filter_tclat
+        how:
+          left
+        columns:
+          class_type_code: klart
+          sap_cluster_kp: sap_cluster_tc
+
+  - kind: select
+    name: select_dm_product_classification
+    params:
+      columns:
+        material_code: material_code
+        class_code: class_code
+        class_name: class_name
+        class_type_code: class_type_code
+        class_type_name: class_type_name
+        sap_cluster_kp: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+  - kind: write_dataio
+    name: write_dm_product_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_classification
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

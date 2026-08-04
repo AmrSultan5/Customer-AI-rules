@@ -1,0 +1,225 @@
+transform:
+  name: vendor_bank_conformity
+  operations:
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_bank
+
+  - kind: read_dataio
+    name: read_conf_iban_format
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_iban_format
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_of_origin: country_of_origin
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_bank
+    context_name: read_dm_vendor_bank
+    params:
+      columns:
+        vendor_code: vendor_code
+        iban: iban
+      distinct: true
+
+  - kind: select
+    name: select_conf_iban_format
+    context_name: read_conf_iban_format
+    params:
+      columns:
+        country_code: country_of_origin_conf
+        iban_format: iban_format
+        length: length
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_bank
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_conf_iban_format
+        how:
+          left
+        columns:
+          country_of_origin: country_of_origin_conf
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_181_1
+        expression: if(isnull(iban) or iban = '' or isnull(country_of_origin_conf), '', 
+                    if(regexp(iban, iban_format) and length(iban) = length, '1', '0'))
+      - column: rule_code_rcvomp_181_1
+        expression: '''RVCONF_181.1'''
+      - column: subdomain
+        expression: '''bank_conformity'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: filter
+    name: filter_rcvomp_181_1_passed
+    context_name: add_checks
+    params:
+      - condition:
+          rcvomp_181_1 = '1'
+
+  - kind: filter
+    name: filter_rcvomp_181_1_failed
+    context_name: add_checks
+    params:
+      - condition:
+          rcvomp_181_1 <> '1'
+
+  - kind: select
+    name: select_rcvomp_181_1_passed_anti
+    context_name: filter_rcvomp_181_1_passed
+    params:
+      columns:
+        rule_code_rcvomp_181_1: rule_code_rcvomp_181_1
+        vendor_code: vendor_code
+        iban: iban
+        country_of_origin: country_of_origin
+        subdomain: subdomain
+      distinct: true
+
+
+  - kind: join
+    name: join_rcvomp_181_1_failed
+    context_name: filter_rcvomp_181_1_failed
+    params:
+      - other:
+          select_rcvomp_181_1_passed_anti
+        how:
+          anti
+        columns:
+          rule_code_rcvomp_181_1: rule_code_rcvomp_181_1
+          vendor_code: vendor_code
+          iban: iban
+          country_of_origin: country_of_origin
+          subdomain: subdomain
+
+
+  - kind: select
+    name: select_rcvomp_181_1_passed
+    context_name: filter_rcvomp_181_1_passed
+    params:
+      columns:
+        rule_code_rcvomp_181_1: rule_code
+        rcvomp_181_1: check_status
+        vendor_code: vendor_code
+        iban: value_checked
+        check_date: check_date
+        country_of_origin: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_181_1_failed
+    context_name: join_rcvomp_181_1_failed
+    params:
+      columns:
+        rule_code_rcvomp_181_1: rule_code
+        rcvomp_181_1: check_status
+        vendor_code: vendor_code
+        iban: value_checked
+        check_date: check_date
+        country_of_origin: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_181_1_passed
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_181_1_failed
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

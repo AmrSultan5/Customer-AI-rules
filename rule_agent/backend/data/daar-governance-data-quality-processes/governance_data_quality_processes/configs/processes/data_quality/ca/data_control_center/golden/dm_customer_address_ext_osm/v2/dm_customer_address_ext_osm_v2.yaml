@@ -1,0 +1,395 @@
+transform:
+  name: dm_customer_address_ext_osm
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: read_dataio
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: read_dataio
+    name: read_dm_customer_address_ext_osm_reverse
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_ext_osm_reverse
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_customer_address_ext_osm_search
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_ext_osm_search
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      - condition:
+          country_code = '{{ country_filter }}'
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: filter_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dm_customer_address
+    params:
+      columns:
+        address_number: address_number
+        customer_code: customer_code
+        country_code: sap_country_code
+        latitude: sap_latitude
+        longitude: sap_longitude
+        sap_cluster: sap_cluster
+        house_number: sap_house_number
+        street_1_name: sap_street_1_name
+        post_code: sap_post_code
+        city: sap_city
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_address_ext_osm_reverse
+    context_name: read_dm_customer_address_ext_osm_reverse
+    params:
+      - condition:
+          sap_country_code = '{{ country_filter }}'
+
+  - kind: filter
+    name: filter_dm_customer_address_ext_osm_search
+    context_name: read_dm_customer_address_ext_osm_search
+    params:
+      - condition:
+          sap_country_code = '{{ country_filter }}'
+
+  - kind: select
+    name: select_dm_customer_address_ext_osm_reverse
+    context_name: filter_dm_customer_address_ext_osm_reverse
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        sap_cluster: sap_cluster
+        country_code: country_code
+        postcode: postcode
+        city: city
+        road: road
+        street: street
+        house_number: house_number
+        house_name: house_name
+        type: type
+        display_name: display_name
+        adresstype: adresstype
+        place_id: place_id
+        osm_id: osm_id
+        importance_api_reverse: importance_api_reverse
+        state_district: state_district
+        county: county
+        municipality: municipality
+        village: village
+        town: town
+        region: region
+        district: district
+        suburb: suburb
+        state: state
+        api_reverse_result_status: api_reverse_result_status
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_address_ext_osm_search
+    context_name: filter_dm_customer_address_ext_osm_search
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        sap_cluster: sap_cluster
+        latitude: latitude
+        longitude: longitude
+        importance_api_search: importance_api_search
+        api_search_result_status: api_search_result_status
+      distinct: true
+
+  - kind: join
+    name: join_dm_customer_address_ext_osm
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dm_customer_address
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_address_ext_osm_reverse
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          address_number: address_number
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_address_ext_osm_search
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_dm_customer_address_ext_osm
+    context_name: join_dm_customer_address_ext_osm
+    params:
+      - condition:
+          isnotnull(api_reverse_result_status) or isnotnull(api_search_result_status)
+
+  - kind: add
+    name: add_execution_date
+    context_name: filter_dm_customer_address_ext_osm
+    params:
+      - column: execution_date
+        expression: cast(current_date() as date)
+
+  - kind: select
+    name: select_dm_customer_address_ext_osm
+    context_name: add_execution_date
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        sap_cluster: sap_cluster
+        country_code: country_code
+        postcode: postcode
+        city: city
+        road: road
+        street: street
+        house_number: house_number
+        house_name: house_name
+        latitude: latitude
+        longitude: longitude
+        type: type
+        display_name: display_name
+        adresstype: adresstype
+        place_id: place_id
+        osm_id: osm_id
+        importance_api_reverse: importance_api_reverse
+        importance_api_search: importance_api_search
+        state_district: state_district
+        county: county
+        municipality: municipality
+        village: village
+        town: town
+        region: region
+        district: district
+        suburb: suburb
+        state: state
+        api_reverse_result_status: api_reverse_result_status
+        api_search_result_status: api_search_result_status
+        sap_latitude: sap_latitude
+        sap_longitude: sap_longitude
+        sap_house_number: sap_house_number
+        sap_street_1_name: sap_street_1_name
+        sap_post_code: sap_post_code
+        sap_city: sap_city
+        sap_country_code: sap_country_code
+        execution_date: execution_date
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_address_ext_osm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_ext_osm
+      schema_version: v3
+
+  - kind: filter
+    name: filter_dm_customer_address_ext_osm
+    context_name: read_dm_customer_address_ext_osm
+    params:
+      - condition:
+          sap_country_code = '{{ country_filter }}'
+
+  - kind: join
+    name: join_dm_customer_address_ext_osm
+    context_name: filter_dm_customer_address_ext_osm
+    params:
+      - other:
+          add_execution_date
+        how:
+          anti
+        columns:
+          customer_code: customer_code
+          address_number: address_number
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_dm_customer_address_ext_osm_hist
+    context_name: join_dm_customer_address_ext_osm
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        sap_cluster: sap_cluster
+        country_code: country_code
+        postcode: postcode
+        city: city
+        road: road
+        street: street
+        house_number: house_number
+        house_name: house_name
+        latitude: latitude
+        longitude: longitude
+        type: type
+        display_name: display_name
+        adresstype: adresstype
+        place_id: place_id
+        osm_id: osm_id
+        importance_api_reverse: importance_api_reverse
+        importance_api_search: importance_api_search
+        state_district: state_district
+        county: county
+        municipality: municipality
+        village: village
+        town: town
+        region: region
+        district: district
+        suburb: suburb
+        state: state
+        api_reverse_result_status: api_reverse_result_status
+        api_search_result_status: api_search_result_status
+        sap_latitude: sap_latitude
+        sap_longitude: sap_longitude
+        sap_house_number: sap_house_number
+        sap_street_1_name: sap_street_1_name
+        sap_post_code: sap_post_code
+        sap_city: sap_city
+        sap_country_code: sap_country_code
+        execution_date: execution_date
+      distinct: true
+
+  - kind: union
+    name: union_dm_customer_address_ext_osm
+    context_name: select_dm_customer_address_ext_osm_hist
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_dm_customer_address_ext_osm
+
+  - kind: add
+    name: add_country_code_out
+    context_name: union_dm_customer_address_ext_osm
+    params:
+      - column: country_code_out
+        expression: if(country_code = 'xk', 'kv', country_code)
+
+  - kind: select
+    name: select_dm_customer_address_ext_osm_out
+    context_name: add_country_code_out
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        sap_cluster: sap_cluster
+        country_code_out: country_code
+        postcode: postcode
+        city: city
+        road: road
+        street: street
+        house_number: house_number
+        house_name: house_name
+        latitude: latitude
+        longitude: longitude
+        type: type
+        display_name: display_name
+        adresstype: adresstype
+        place_id: place_id
+        osm_id: osm_id
+        importance_api_reverse: importance_api_reverse
+        importance_api_search: importance_api_search
+        state_district: state_district
+        county: county
+        municipality: municipality
+        village: village
+        town: town
+        region: region
+        district: district
+        suburb: suburb
+        state: state
+        api_reverse_result_status: api_reverse_result_status
+        api_search_result_status: api_search_result_status
+        sap_latitude: sap_latitude
+        sap_longitude: sap_longitude
+        sap_house_number: sap_house_number
+        sap_street_1_name: sap_street_1_name
+        sap_post_code: sap_post_code
+        sap_city: sap_city
+        sap_country_code: sap_country_code
+        execution_date: execution_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_address_ext_osm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_ext_osm
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: '{{ refresh_mode }}'

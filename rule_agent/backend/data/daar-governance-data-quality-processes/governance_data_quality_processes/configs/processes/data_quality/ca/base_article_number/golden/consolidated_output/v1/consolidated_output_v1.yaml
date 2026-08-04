@@ -1,0 +1,515 @@
+transform:
+  name: base_article_number
+  operations:
+
+#DETAILED
+#read base_article_number
+  - kind: read_dataio
+    name: read_du_base_article_number
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: base_article_number
+      schema_version: v1
+
+
+  - kind: add
+    name: add_du_base_article_number_compl_ban_assign
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''BAN Assignment'''
+      - column: dq_message_output
+        expression: CASE WHEN ban_completeness_flag= '0' THEN 'Missing BAN' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: ban_completeness_flag
+
+
+  - kind: add
+    name: add_du_base_article_number_compl_ban_in_mara
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''BAN In MARA And MVKE'''
+      - column: dq_message_output
+        expression: CASE WHEN ban_in_mara_and_mvke_completeness_flag= '' THEN 'Material-N/A' WHEN ban_in_mara_and_mvke_completeness_flag='0' THEN 'BAN not extended to 0001/01' WHEN ban_in_mara_and_mvke_completeness_flag='2' THEN 'Wrong BAN Assignment' WHEN ban_in_mara_and_mvke_completeness_flag='3' THEN 'Wrong Material Group' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN ban_in_mara_and_mvke_completeness_flag IN ('','2','3') THEN '' WHEN ban_in_mara_and_mvke_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_compl_brand
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''Brand Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN brand_completeness_flag= '' THEN 'Missing BAN assignment, check cannot be performed' WHEN brand_completeness_flag= '0' THEN 'Missing Brand' WHEN brand_completeness_flag= '2' THEN 'Wrong BAN Assignment, check cannot be performed' WHEN brand_completeness_flag= '3' THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN brand_completeness_flag IN ('','2','3') THEN '' WHEN brand_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_compl_flavor
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''Flavor Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN flavor_completeness_flag= '' THEN 'Missing BAN assignment, check cannot be performed' WHEN flavor_completeness_flag= '0' THEN 'Missing Flavor' WHEN flavor_completeness_flag= '2' THEN 'Wrong BAN Assignment, check cannot be performed' WHEN flavor_completeness_flag= '3' THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN flavor_completeness_flag IN ('','2','3') THEN '' WHEN flavor_completeness_flag = '1' THEN '1' ELSE '0' END
+  
+  - kind: add
+    name: add_du_base_article_number_compl_pack_type
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''Pack Type Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN pack_type_completeness_flag= '' THEN 'Missing BAN assignment, check cannot be performed' WHEN pack_type_completeness_flag= '0' THEN 'Missing Pack type' WHEN pack_type_completeness_flag= '2' THEN 'Wrong BAN Assignment, check cannot be performed' WHEN pack_type_completeness_flag= '3' THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN pack_type_completeness_flag IN ('','2','3') THEN '' WHEN pack_type_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_compl_pack_size
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''Pack Size Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN pack_size_completeness_flag= '' THEN 'Missing BAN assignment, check cannot be performed' WHEN pack_size_completeness_flag= '0' THEN 'Missing Pack size' WHEN pack_size_completeness_flag= '2' THEN 'Wrong BAN Assignment, check cannot be performed' WHEN pack_size_completeness_flag= '3' THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN pack_size_completeness_flag IN ('','2','3') THEN '' WHEN pack_size_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_compl_sales_unit
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''Sales Unit Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN sales_unit_completeness_flag = '' THEN 'Missing BAN assignment, check cannot be performed' WHEN sales_unit_completeness_flag = 0 THEN 'Missing Sales Unit' WHEN sales_unit_completeness_flag = 2 THEN 'Wrong BAN Assignment, check cannot be performed' WHEN sales_unit_completeness_flag = 3 THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN sales_unit_completeness_flag IN ('','2','3') THEN '' WHEN sales_unit_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_compl_prod_hier
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''Product Hierarchy Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN product_hierarchy_completeness_flag= '' THEN 'Missing BAN assignment, check cannot be performed' WHEN product_hierarchy_completeness_flag = '0' THEN 'Missing PRODH' WHEN product_hierarchy_completeness_flag= '2' THEN 'Wrong BAN Assignment, check cannot be performed' WHEN product_hierarchy_completeness_flag= '3' THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN product_hierarchy_completeness_flag IN ('','2','3') THEN '' WHEN product_hierarchy_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_compl_bp
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''completeness'''
+      - column: rule_name
+        expression: '''BP Completeness'''
+      - column: dq_message_output
+        expression: CASE WHEN bp_completeness_flag= '' THEN 'Missing BAN assignment, check cannot be performed' WHEN bp_completeness_flag = '0' THEN 'Missing BP' WHEN bp_completeness_flag= '2' THEN 'Wrong BAN Assignment, check cannot be performed' WHEN bp_completeness_flag= '3' THEN 'Wrong Material Group, check cannot be performed' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN bp_completeness_flag IN ('','2','3') THEN '' WHEN bp_completeness_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_accur_material_grp
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''accuracy'''
+      - column: rule_name
+        expression: '''Material Group Correctness'''
+      - column: dq_message_output
+        expression: CASE WHEN material_group_completeness_flag = '' THEN 'Missing BAN assignment, check cannot be performed' WHEN material_group_completeness_flag = '0' THEN 'Incorrect Material Group' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: material_group_completeness_flag
+
+  - kind: add
+    name: add_du_base_article_number_accur_ban_std
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''accuracy'''
+      - column: rule_name
+        expression: '''BAN Duplication for Standard Products'''
+      - column: dq_message_output
+        expression: CASE WHEN regular_finished_product_accuracy_flag = '2' THEN 'Failed at completeness' WHEN regular_finished_product_accuracy_flag = '0' THEN 'Duplicate code' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN regular_finished_product_accuracy_flag IN ('','2') THEN '' WHEN regular_finished_product_accuracy_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_accur_ban_pre_post
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''accuracy'''
+      - column: rule_name
+        expression: '''BAN Duplication for PRE/POST Mixes'''
+      - column: dq_message_output
+        expression: CASE WHEN finished_product_pre_post_mix_accuracy_flag = '2' THEN 'Failed at completeness' WHEN finished_product_pre_post_mix_accuracy_flag = '0' THEN 'Duplicate code' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN finished_product_pre_post_mix_accuracy_flag IN ('','2') THEN '' WHEN finished_product_pre_post_mix_accuracy_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_accur_ban_variety
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''accuracy'''
+      - column: rule_name
+        expression: '''BAN Duplication for Variety Packs'''
+      - column: dq_message_output
+        expression: CASE WHEN variety_pack_and_mix_pallet_accuracy_flag = '2' THEN 'Failed at completeness' WHEN variety_pack_and_mix_pallet_accuracy_flag=0 THEN 'Duplicate code' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: CASE WHEN finished_product_pre_post_mix_accuracy_flag IN ('','2') THEN '' WHEN finished_product_pre_post_mix_accuracy_flag = '1' THEN '1' ELSE '0' END
+
+  - kind: add
+    name: add_du_base_article_number_accur_attr
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''accuracy'''
+      - column: rule_name
+        expression: '''Attribute Incorrectness'''
+      - column: dq_message_output
+        expression: CASE WHEN MATKL_attributes_unique_accuracy_flag= '' THEN 'Base article' WHEN MATKL_attributes_unique_accuracy_flag= '0' THEN 'Attributes mismatch' WHEN MATKL_attributes_unique_accuracy_flag= '2' THEN 'Failed at completeness' ELSE 'OK' END
+      - column: quality_check_flag
+        expression: matkl_attributes_unique_accuracy_flag
+
+  - kind: add
+    name: add_du_base_article_number_consist_cl_missing_mat
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''consistency'''
+      - column: rule_name
+        expression: '''Cluster Inconsistency Missing Material'''
+      - column: dq_message_output
+        expression: CASE WHEN material_consistency_flag= 0 THEN concat_ws(' ','Missing in MVKE 0001/01 Cluster',sap_cluster) ELSE 'OK' END
+      - column: quality_check_flag
+        expression: material_consistency_flag
+
+  - kind: add
+    name: add_du_base_article_number_consist_cl
+    context_name: read_du_base_article_number
+    params:
+      - column: quality_category
+        expression: '''consistency'''
+      - column: rule_name
+        expression: '''Cluster Inconsistency'''
+      - column: dq_message_output
+        expression: CASE WHEN attribute_consistency_flag = 0 THEN concat_ws(' ','Inconsistency between clusters:',attributes) ELSE 'OK' END
+      - column: quality_check_flag
+        expression: attribute_consistency_flag
+
+
+  - kind: union
+    name: union_ban
+    context_name: add_du_base_article_number_compl_ban_assign
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_ban_in_mara
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_brand
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_flavor
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_pack_type
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_pack_size
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_sales_unit
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_prod_hier
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_compl_bp
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_accur_material_grp
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_accur_ban_std
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_accur_ban_pre_post
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_accur_ban_variety
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_accur_attr
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_consist_cl_missing_mat
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_du_base_article_number_consist_cl
+
+  - kind: add
+    name: add_du_base_article_number_qlty_rule
+    params:
+      - column: quality_rule
+        expression: CONCAT(rule_name, ' ', quality_category)
+
+  - kind: select
+    name: select_du_base_article_number
+    params:
+      columns:
+        material_code: material_code
+        material_code_mvke: material_code_mvke
+        material_type: material_type
+        ban_flag: ban_flag
+        basic_material: basic_material
+        material_description: material_description
+        sales_organization: sales_organization
+        distribution_channel: distribution_channel
+        brand: brand
+        brand_description: brand_description
+        flavour: flavour
+        flavour_description: flavour_description
+        pack_type: pack_type
+        pack_type_description: pack_type_description
+        pack_size: pack_size
+        pack_size_description: pack_size_description
+        sales_unit: sales_unit
+        sales_unit_name: sales_unit_name
+        bpp_code: bpp_code
+        bp_code: bp_code
+        product_hierarchy: product_hierarchy
+        product_hierarchy_level_4: product_hierarchy_level_4
+        product_hierarchy_level_4_description: product_hierarchy_level_4_description
+        product_hierarchy_level_5: product_hierarchy_level_5
+        product_hierarchy_level_5_description: product_hierarchy_level_5_description
+        alternative_unit_of_measure: alternative_unit_of_measure
+        numerator_for_conversion: numerator_for_conversion
+        denominator_for_conversion: denominator_for_conversion
+        sap_cluster: sap_cluster
+        quality_category: quality_category
+        rule_name: rule_name
+        quality_rule: quality_rule
+        dq_message_output: dq_message_output
+        quality_check_flag: quality_check_flag
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: base_article_number
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#aggregated
+
+#read base_article_number
+
+  - kind: select
+    name: select_base_article_number
+    context_name: select_du_base_article_number
+    params:
+      columns:
+        quality_rule: quality_rule
+        rule_name: rule_name
+        quality_category: quality_category
+        sap_cluster: sap_cluster
+        quality_check_flag: quality_check_flag
+
+  - kind: filter
+    name: filter_accuracy
+    params:
+      - condition:
+          quality_category = 'accuracy'
+
+  - kind: add
+    name: add_base_article_number_accuracy
+    params:
+      - column: total_checks
+        expression: IF(quality_check_flag!='', 1, NULL)
+      - column: invalid_checks
+        expression: IF(quality_check_flag= '0', 1, NULL)
+
+  - kind: group
+    name: group_ban_accuracy
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - quality_rule
+        - rule_name
+        - quality_category
+        - sap_cluster
+
+  - kind: filter
+    name: filter_not_accuracy
+    context_name: select_base_article_number
+    params:
+      - condition:
+          quality_category != 'accuracy'
+
+  - kind: add
+    name: add_base_article_number_not_accuracy
+    params:
+      - column: total_checks
+        expression: '''1'''
+      - column: invalid_checks
+        expression: IF(quality_check_flag= '0', 1, NULL)
+
+  - kind: group
+    name: group_ban_not_accuracy
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - quality_rule
+        - rule_name
+        - quality_category
+        - sap_cluster
+
+  - kind: union
+    name: union_ban
+    params:
+      allow_missing: false
+      by_name: true
+      other: group_ban_accuracy
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: count_total_checks
+        to: integer
+      - column: count_invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        count_total_checks: total_checks
+        quality_category: quality_category
+        rule_name: rule_name
+        quality_rule: quality_rule
+        count_invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: base_article_number
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

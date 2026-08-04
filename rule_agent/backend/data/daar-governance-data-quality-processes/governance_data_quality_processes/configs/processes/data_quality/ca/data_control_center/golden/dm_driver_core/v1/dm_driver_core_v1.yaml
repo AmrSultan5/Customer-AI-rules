@@ -1,0 +1,119 @@
+transform:
+  name: dm_driver_core
+  operations:
+
+  # Read LOT_VO_DRIVER (driver master)
+  - kind: read_dataio
+    name: read_lot_vo_driver
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: otc_leo
+      object_name: lot_vo_driver
+      schema_version: v1
+
+  # Add type casting for decimal columns
+  - kind: add
+    name: add_type_casts
+    context_name: read_lot_vo_driver
+    params:
+      - column: wktdur_cast
+        expression: cast(coalesce(wktdur, 0) as decimal(38,18))
+      - column: ovtdur_cast
+        expression: cast(coalesce(ovtdur, 0) as decimal(38,18))
+      - column: nowkt_cast
+        expression: cast(coalesce(nowkt, 0) as decimal(38,18))
+      - column: noovt_cast
+        expression: cast(coalesce(noovt, 0) as decimal(38,18))
+      - column: cpass_cast
+        expression: cast(coalesce(cpass, 0) as decimal(38,18))
+      - column: cpkm_cast
+        expression: cast(coalesce(cpkm, 0) as decimal(38,18))
+      - column: cpwkth_cast
+        expression: cast(coalesce(cpwkth, 0) as decimal(38,18))
+      - column: cpovth_cast
+        expression: cast(coalesce(cpovth, 0) as decimal(38,18))
+      - column: lutidu_cast
+        expression: cast(coalesce(lutidu, 0) as decimal(38,18))
+      - column: stime_max_cast
+        expression: cast(coalesce(stime_max, 0) as decimal(38,18))
+      - column: cowa_geolon_cast
+        expression: cast(coalesce(cowa_geolon, 0) as decimal(38,18))
+      - column: cowa_geolat_cast
+        expression: cast(coalesce(cowa_geolat, 0) as decimal(38,18))
+      - column: cowa_radius_cast
+        expression: cast(coalesce(cowa_radius, 0) as decimal(38,18))
+      - column: cowa_weight_cast
+        expression: cast(coalesce(cowa_weight, 0) as decimal(38,18))
+
+  # Select and rename columns for final datamart schema (matching target schema order)
+  - kind: select
+    name: select_dm_driver_core
+    context_name: add_type_casts
+    params:
+      columns:
+        drv_id: driver_id
+        operation: operation
+        sap_cluster: sap_cluster
+        sap_read_timestamp: sap_read_timestamp
+        name1: driver_name
+        foragnt: forwarding_agent
+        drvhelp: driver_role
+        brk_id: leo_break_profile
+        stdate: availability_from_date
+        eddate: availability_to_date
+        nodays: number_of_working_days
+        wktstart: work_time_start
+        wktend: work_time_end
+        wktdur_cast: work_time_duration
+        ovtstart: overtime_start
+        ovtend: overtime_end
+        ovtdur_cast: overtime_duration
+        nowkt_cast: normal_work_time_total
+        noovt_cast: overtime_total
+        cpass_cast: cost_per_use
+        cpkm_cast: cost_per_distance_unit
+        cpwkth_cast: cost_per_work_time
+        cpovth_cast: cost_per_overtime
+        zz_temp_drv: temporary_driver_flag
+        lutiaf: availability_start_time
+        lutibe: availability_end_time
+        lutidu_cast: availability_duration
+        dummy_drv: dummy_driver_flag
+        start_adnr: start_address_number
+        startloc: start_location
+        endloc: end_location
+        stime_max_cast: start_time_maximum
+        cowa_cnmsid: cowa_reference_id_of_map
+        cowa_geolon_cast: cowa_geo_longitude
+        cowa_geolat_cast: cowa_geo_latitude
+        cowa_radius_cast: cowa_radius
+        cowa_weight_cast: cowa_weight
+        cowa_type: cowa_type
+        cowa_stras: cowa_street
+        cowa_hsnm1: cowa_house_number
+        cowa_pstlz: cowa_postal_code
+        cowa_ort01: cowa_city
+        cowa_land1: cowa_country
+        cowa_region: cowa_region
+      distinct: true
+
+  # Write to golden datamart
+  - kind: write_dataio
+    name: write_dm_driver_core
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_driver_core
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

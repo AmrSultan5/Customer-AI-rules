@@ -1,0 +1,524 @@
+transform:
+  name: matching_statistics_detailed
+  operations:
+
+####################### PMM #############################
+# pmh - initial transformations
+  - kind: read_dataio
+    name: read_pmh
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: results_history
+      schema_version: v1
+
+  - kind: filter
+    name: filter_system_pmh
+    context_name: read_pmh
+    params:
+      - condition:
+          source_system = 'ered'
+
+  - kind: select
+    name: select_initial_pmh
+    context_name: filter_system_pmh
+    params:
+      columns:
+        ext_product_name: ext_product_name_pmh
+        ext_country_code: ext_country_code_pmh
+        sap_product_code: sap_product_code_pmh
+        matching_score: matching_score
+        # status_code: status_code
+        processing_date: processing_date
+        source_system: source_system_pmh
+
+  - kind: group
+    name: group_date_system_pmh
+    context_name: select_initial_pmh
+    params:
+      - aggs:
+          processing_date: max
+        by:
+        - source_system_pmh
+
+  - kind: join
+    name: join_date_system_pmh
+    context_name: select_initial_pmh
+    params:
+      - other:
+          group_date_system_pmh
+        how:
+          inner
+        columns:
+          source_system_pmh : source_system_pmh
+          processing_date: max_processing_date
+
+# Read spu after basic load
+# sap_products_universe - spu
+  - kind: read_dataio
+    name: read_spu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: sap_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_spu
+    context_name: read_spu
+    params:
+      columns:
+        product_code: sap_product_code_spu
+        country_code: country_code_spu
+        product_name_raw: sap_product_name_spu
+        ean_code: sap_ean_code
+        brand_name: sap_brand_name
+        flavour_name: sap_flavour_name
+        pack_size_name: sap_pack_size_name
+        pack_type_name: sap_pack_type_name
+        sales_unit_name: sap_sales_unit_name
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+
+# Read epu after basic load
+# external_products_universe - epu
+  - kind: read_dataio
+    name: read_epu
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: external_products_universe
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_epu
+    context_name: read_epu
+    params:
+      columns:
+        product_name_raw: ext_product_name_epu
+        source_system: source_system_epu
+        country_code: country_code_epu
+        brand_name: ext_brand_name
+        flavour_name: ext_flavour_name
+        pack_size_name: ext_pack_size_name
+        pack_type_name: ext_pack_type_name
+        sales_unit_name: ext_sales_unit_name
+        blacklisting_mode: blacklisting_mode
+
+# Read ep after basic load
+# ered_products - ep
+  - kind: read_dataio
+    name: read_ep
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: l2
+      object_name: ered_products
+      schema_version: v1
+
+  - kind: select
+    name: select_initial_ep
+    context_name: read_ep
+    params:
+      columns:
+        product_name: product_name_ep
+        source_system: source_system_ep
+        country_code: country_code_ep
+        qc_name: qc_name
+        qc_address: qc_address
+
+# base join
+  - kind: join
+    name: join_base
+    context_name: join_date_system_pmh
+    params:
+      - other:
+          select_initial_spu
+        how:
+          left
+        columns:
+          sap_product_code_pmh: sap_product_code_spu
+          ext_country_code_pmh: country_code_spu
+      - other:
+          select_initial_epu
+        how:
+          left
+        columns:
+          ext_product_name_pmh: ext_product_name_epu
+          ext_country_code_pmh: country_code_epu
+          source_system_pmh: source_system_epu
+      # - other:
+      #     select_initial_ep
+      #   how:
+      #     left
+      #   columns:
+      #     ext_product_name_pmh: product_name_ep
+      #     ext_country_code_pmh: country_code_ep
+      #     source_system_pmh: source_system_ep
+
+  - kind: select
+    name: select_base
+    context_name: join_base
+    params:
+      columns:
+        ext_product_name_pmh: ext_product_name
+        ext_country_code_pmh: ext_country_code
+        sap_product_code_pmh: sap_product_code
+        matching_score: matching_score
+        processing_date: processing_date
+        source_system_pmh: source_system
+        sap_product_name_spu: sap_product_name
+        sap_ean_code: sap_ean_code
+        sap_brand_name: sap_brand_name
+        sap_flavour_name: sap_flavour_name
+        sap_pack_size_name: sap_pack_size_name
+        sap_pack_type_name: sap_pack_type_name
+        sap_sales_unit_name: sap_sales_unit_name
+        ext_brand_name: ext_brand_name
+        ext_flavour_name: ext_flavour_name
+        ext_pack_size_name: ext_pack_size_name
+        ext_pack_type_name: ext_pack_type_name
+        ext_sales_unit_name: ext_sales_unit_name
+        # qc_name: qc_name
+        # qc_address: qc_address
+        blacklisting_mode: blacklisting_mode
+        is_abp: is_abp
+        is_in_use: is_in_use
+        is_actively_used: is_actively_used
+
+####################### MRA #############################
+  - kind: read_dataio
+    name: read_mra
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: golden
+      object_name: results_summary
+      schema_version: v1
+
+  - kind: add
+    name: add_read_mra
+    params:
+      - column: source_system
+        expression: '''ered'''
+
+  - kind: filter
+    name: filter_mra
+    context_name: add_read_mra
+    params:
+      - condition:
+          matching_status <> '0'
+
+  - kind: filter
+    name: filter_mra_0
+    context_name: add_read_mra
+    params:
+      - condition:
+          matching_status = '0'
+
+#########################################################
+# DETAILED
+#########################################################
+########## MIN_MAX_AVG_SCORE_PMM 
+# MIN
+  - kind: group
+    name: group_min_product_PMM
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: min
+        by:
+        - ext_product_name
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: select
+    name: select_min_product_PMM
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        processing_date: processing_date
+        source_system: source_system
+        min_matching_score: MIN_SCORE_PMM
+        # scenario_id: scenario_id
+
+# MAX
+  - kind: group
+    name: group_max_product_PMM
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: max
+        by:
+        - ext_product_name
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: select
+    name: select_max_product_PMM
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        processing_date: processing_date
+        source_system: source_system
+        max_matching_score: MAX_SCORE_PMM
+        # scenario_id: scenario_id
+
+# AVG
+  - kind: group
+    name: group_avg_product_PMM
+    context_name: select_base
+    params:
+      - aggs:
+          matching_score: avg
+        by:
+        - ext_product_name
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: select
+    name: select_avg_product_PMM
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        processing_date: processing_date
+        source_system: source_system
+        avg_matching_score: AVG_SCORE_PMM
+        # scenario_id: scenario_id
+
+  - kind: join
+    name: join_min_max_avg_product_PMM
+    context_name: select_min_product_PMM
+    params:
+      - other:
+          select_max_product_PMM
+        how:
+          left
+        columns:
+          ext_product_name: ext_product_name
+          processing_date: processing_date
+          source_system: source_system
+          # scenario_id: scenario_id
+      - other:
+          select_avg_product_PMM
+        how:
+          left
+        columns:
+          ext_product_name: ext_product_name
+          processing_date: processing_date
+          source_system: source_system
+          # scenario_id: scenario_id
+
+  - kind: cast
+    name: cast_to_double_PMM
+    params:
+      - column: MIN_SCORE_PMM
+        to: decimal(13,3)
+      - column: MAX_SCORE_PMM
+        to: decimal(13,3)
+      - column: AVG_SCORE_PMM
+        to: decimal(13,3)
+
+  - kind: unpivot
+    name: unpivot_min_max_avg_PMM
+    context_name: cast_to_double_PMM
+    params:
+      by:
+       - ext_product_name
+       - source_system
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: add_min_max_avg_product_PMM
+    params:
+      - column: kpi_value
+        expression: 100 * kpi_value
+        overwrite: true
+
+########## MIN_MAX_AVG_SCORE_MRA
+# MIN
+  - kind: group
+    name: group_min_product_MRA
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: min
+        by:
+        - ext_product_name
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: select
+    name: select_min_product_MRA
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        processing_date: processing_date
+        source_system: source_system
+        min_matching_score: MIN_SCORE_MRA
+        # scenario_id: scenario_id
+
+# MAX
+  - kind: group
+    name: group_max_product_MRA
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: max
+        by:
+        - ext_product_name
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: select
+    name: select_max_product_MRA
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        processing_date: processing_date
+        source_system: source_system
+        max_matching_score: MAX_SCORE_MRA
+        # scenario_id: scenario_id
+
+# AVG
+  - kind: group
+    name: group_avg_product_MRA
+    context_name: filter_mra
+    params:
+      - aggs:
+          matching_score: avg
+        by:
+        - ext_product_name
+        - processing_date
+        - source_system
+        # - scenaro_id
+
+  - kind: select
+    name: select_avg_product_MRA
+    params:
+      columns:
+        ext_product_name: ext_product_name
+        processing_date: processing_date
+        source_system: source_system
+        avg_matching_score: AVG_SCORE_MRA
+        # scenario_id: scenario_id
+
+  - kind: join
+    name: join_min_max_avg_product_MRA
+    context_name: select_min_product_MRA
+    params:
+      - other:
+          select_max_product_MRA
+        how:
+          left
+        columns:
+          ext_product_name: ext_product_name
+          processing_date: processing_date
+          source_system: source_system
+          # scenario_id: scenario_id
+      - other:
+          select_avg_product_MRA
+        how:
+          left
+        columns:
+          ext_product_name: ext_product_name
+          processing_date: processing_date
+          source_system: source_system
+          # scenario_id: scenario_id
+
+  - kind: cast
+    name: cast_to_double
+    params:
+      - column: MIN_SCORE_MRA
+        to: decimal(13,3)
+      - column: MAX_SCORE_MRA
+        to: decimal(13,3)
+      - column: AVG_SCORE_MRA
+        to: decimal(13,3)
+
+  - kind: unpivot
+    name: unpivot_min_max_avg_MRA
+    params:
+      by:
+       - ext_product_name
+       - source_system
+       - processing_date
+      #  - scenario_id
+      to:
+       - kpi_code
+       - kpi_value
+
+  - kind: add
+    name: add_min_max_avg_product_MRA
+    params:
+      - column: kpi_value
+        expression: 100 * kpi_value
+        overwrite: true
+
+  - kind: union
+    name: union_detailed_PMM_MRA
+    context_name: add_min_max_avg_product_MRA
+    params:
+      allow_missing: false
+      by_name: true
+      other: add_min_max_avg_product_PMM
+
+  - kind: cast
+    name: cast_to_double
+    params:
+      - column: kpi_value
+        to: decimal(13,3)
+
+  - kind: write_dataio
+    name: write_matching_statistics_summary
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: product_mapping_ered
+      namespace: golden
+      object_name: matching_statistics_summary_detailed
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

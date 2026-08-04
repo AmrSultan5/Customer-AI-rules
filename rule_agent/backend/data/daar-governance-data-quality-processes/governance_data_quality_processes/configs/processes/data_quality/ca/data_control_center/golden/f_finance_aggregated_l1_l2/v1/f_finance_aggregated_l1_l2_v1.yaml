@@ -1,0 +1,665 @@
+transform:
+  name: f_finance_aggregated_l1_l2
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+# Read dm_finance_controlling_area
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_controlling_area
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_controlling_area
+
+  - kind: select
+    name: select_dm_finance_controlling_area
+    context_name: read_dm_finance_controlling_area
+    params:
+      columns:
+        chart_of_accounts: chart_of_accounts_ca
+        controlling_area_code: controlling_area_code_ca
+        company_code: company_code_ca
+        sap_cluster: sap_cluster_ca
+        country_code: country_code_ca
+      distinct: true
+
+# Read dm_finance_general_ledger
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_general_ledger
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_general_ledger
+
+  - kind: select
+    name: select_dm_finance_general_ledger
+    context_name: read_dm_finance_general_ledger
+    params:
+      columns:
+        g_l_account_number: g_l_account_number_gl
+        chart_of_accounts: chart_of_accounts_gl
+        company_code: company_code_gl
+        g_l_account_number_description: g_l_account_number_description_gl
+        sap_cluster: sap_cluster_gl
+      distinct: true
+
+
+# Read dm_finance_internal_order
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_internal_order
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_internal_order
+
+  - kind: select
+    name: select_dm_finance_internal_order
+    context_name: read_dm_finance_internal_order
+    params:
+      columns:
+        order_number: order_number_io
+        controlling_area_code: controlling_area_code_io
+        company_code: company_code_io
+        order_number_description: order_number_description_io
+        sap_cluster: sap_cluster_io
+      distinct: true
+
+# Read dm_finance_asset
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_asset
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_asset
+
+  - kind: select
+    name: select_dm_finance_asset
+    context_name: read_dm_finance_asset
+    params:
+      columns:
+        asset_number: asset_number_fa
+        controlling_area_code: controlling_area_code_fa
+        company_code: company_code_fa
+        asset_number_description: asset_number_description_fa
+        sap_cluster: sap_cluster_fa
+      distinct: true
+
+# Read dm_finance_cost_center
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_cost_center
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_cost_center
+
+  - kind: select
+    name: select_dm_finance_cost_center
+    context_name: read_dm_finance_cost_center
+    params:
+      columns:
+        cost_center_number: cost_center_number_cc
+        controlling_area_code: controlling_area_code_cc
+        company_code: company_code_cc
+        cost_center_number_description: cost_center_number_description_cc
+        functional_area: functional_area_cc
+        standard_hierarchy_area: standard_hierarchy_area_cc
+        sap_cluster: sap_cluster_cc
+      distinct: true
+
+# Read dim_finance_classification
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_finance_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dim_finance_classification
+
+  - kind: select
+    name: select_dim_finance_classification
+    context_name: read_dim_finance_classification
+    params:
+      columns:
+        controlling_area_code : controlling_area_code_fc
+        object_type : object_type_fc
+        company_code: company_code_fc
+        chart_of_accounts: chart_of_accounts_fc     
+        chart_of_accounts_code: chart_of_accounts_code_fc
+        finance_class_id: finance_class_id_fc
+        cost_center_number: cost_center_number_fc
+        functional_area_code: functional_area_code_fc
+        cost_center_hierarchy: cost_center_hierarchy_fc
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_finance_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_check_results
+
+  - kind: filter
+    name: filter_dm_finance_check_results
+    context_name: read_dm_finance_check_results
+    params:
+      - condition:
+          check_status in ('0','1')
+
+  - kind: select
+    name: select_dm_finance_check_results
+    context_name: filter_dm_finance_check_results
+    params:
+      columns:
+        finance_value: finance_value_qc
+        attribute_name: attribute_name_qc
+        value_checked: value_checked_qc
+        check_status: check_status_qc
+        check_date: check_date
+        country_code: country_code_qc
+        rule_code: rule_code_qc
+        sap_cluster: sap_cluster_qc
+        country_code: country_code_qc
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dim_rules_inventory
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dim_rules_inventory
+
+  - kind: filter
+    name: filter_dim_rules_inventory
+    context_name: read_dim_rules_inventory
+    params:
+      - condition:
+          domain= 'Finance' AND is_active = '1'
+
+  - kind: select
+    name: select_dim_rules_inventory
+    context_name: filter_dim_rules_inventory
+    params:
+      columns:
+        rule_code: rule_code_ri
+      distinct: true
+
+  - kind: join
+    name: join_gl
+    context_name: select_dm_finance_check_results
+    params:
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code_qc: rule_code_ri    
+      - other:
+          select_dm_finance_general_ledger
+        how:
+          inner
+        columns:
+          finance_value_qc: g_l_account_number_gl
+          sap_cluster_qc: sap_cluster_gl
+      - other:
+          select_dm_finance_controlling_area
+        how:
+          inner
+        columns:
+          chart_of_accounts_gl: chart_of_accounts_ca
+          company_code_gl: company_code_ca
+          sap_cluster_gl: sap_cluster_ca
+          country_code_qc: country_code_ca
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          chart_of_accounts_gl: chart_of_accounts_code_fc
+          company_code_gl: company_code_fc
+          attribute_name_qc: object_type_fc
+
+  - kind: select
+    name: select_gl
+    params:
+      columns:
+        value_checked_qc: value_checked
+        check_status_qc: check_status
+        country_code_qc: country_code
+        finance_class_id_fc: finance_class_id
+        finance_value_qc: finance_value
+        g_l_account_number_description_gl: finance_value_name
+        rule_code_qc: rule_code
+        check_date: check_date
+        attribute_name_qc: attribute_name
+        sap_cluster_qc: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_io
+    context_name: select_dm_finance_check_results
+    params:
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code_qc: rule_code_ri    
+      - other:
+          select_dm_finance_internal_order
+        how:
+          inner
+        columns:
+          finance_value_qc: order_number_io
+          sap_cluster_qc: sap_cluster_io
+      - other:
+          select_dm_finance_controlling_area
+        how:
+          inner
+        columns:
+          controlling_area_code_io: controlling_area_code_ca
+          company_code_io: company_code_ca
+          sap_cluster_io: sap_cluster_ca
+          country_code_qc: country_code_ca
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code_io: controlling_area_code_fc
+          company_code_io: company_code_fc
+          attribute_name_qc: object_type_fc
+
+  - kind: select
+    name: select_io
+    params:
+      columns:
+        value_checked_qc: value_checked
+        check_status_qc: check_status
+        country_code_qc: country_code
+        finance_class_id_fc: finance_class_id
+        finance_value_qc: finance_value
+        order_number_description_io: finance_value_name
+        rule_code_qc: rule_code
+        check_date: check_date
+        attribute_name_qc: attribute_name
+        sap_cluster_qc: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_fa
+    context_name: select_dm_finance_check_results
+    params:
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code_qc: rule_code_ri    
+      - other:
+          select_dm_finance_asset
+        how:
+          inner
+        columns:
+          finance_value_qc: asset_number_fa
+          sap_cluster_qc: sap_cluster_fa
+      - other:
+          select_dm_finance_controlling_area
+        how:
+          inner
+        columns:
+          controlling_area_code_fa: controlling_area_code_ca
+          company_code_fa: company_code_ca
+          sap_cluster_fa: sap_cluster_ca
+          country_code_qc: country_code_ca
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code_fa: controlling_area_code_fc
+          company_code_fa: company_code_fc
+          attribute_name_qc: object_type_fc
+
+  - kind: select
+    name: select_fa
+    params:
+      columns:
+        value_checked_qc: value_checked
+        check_status_qc: check_status
+        country_code_qc: country_code
+        finance_class_id_fc: finance_class_id
+        finance_value_qc: finance_value
+        asset_number_description_fa: finance_value_name
+        rule_code_qc: rule_code
+        check_date: check_date
+        attribute_name_qc: attribute_name
+        sap_cluster_qc: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_cc
+    context_name: select_dm_finance_check_results
+    params:
+      - other:
+          select_dim_rules_inventory
+        how:
+          inner
+        columns:
+          rule_code_qc: rule_code_ri    
+      - other:
+          select_dm_finance_cost_center
+        how:
+          inner
+        columns:
+          finance_value_qc: cost_center_number_cc
+          sap_cluster_qc: sap_cluster_cc
+      - other:
+          select_dm_finance_controlling_area
+        how:
+          inner
+        columns:
+          controlling_area_code_cc: controlling_area_code_ca
+          company_code_cc: company_code_ca
+          sap_cluster_cc: sap_cluster_ca
+          country_code_qc: country_code_ca
+      - other:
+          select_dim_finance_classification
+        how:
+          left
+        columns:
+          controlling_area_code_cc: controlling_area_code_fc
+          company_code_cc: company_code_fc
+          attribute_name_qc: object_type_fc
+          cost_center_number_cc: cost_center_number_fc
+          functional_area_cc: functional_area_code_fc
+          standard_hierarchy_area_cc: cost_center_hierarchy_fc
+
+  - kind: select
+    name: select_cc
+    params:
+      columns:
+        value_checked_qc: value_checked
+        check_status_qc: check_status
+        country_code_qc: country_code
+        finance_class_id_fc: finance_class_id
+        finance_value_qc: finance_value
+        cost_center_number_description_cc: finance_value_name
+        rule_code_qc: rule_code
+        check_date: check_date
+        attribute_name_qc: attribute_name
+        sap_cluster_qc: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_gl
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_io
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_fa
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_cc     
+
+  - kind: add
+    name: add_columns
+    params:
+      - column: loading_date
+        expression: "to_date(current_date(),'YYYY-MM-DD')"
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        value_checked: value_checked
+        check_status: check_status
+        country_code: country_code
+        finance_class_id: finance_class_id
+        finance_value: finance_value
+        finance_value_name: finance_value_name
+        rule_code: rule_code
+        check_date: check_date
+        attribute_name: attribute_name
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_check_status_expression
+    params:
+      - column: check_status_expression
+        expression: IF(check_status = '', '2', check_status)
+      - column: finance_key
+        expression: concat(attribute_name,'-',finance_value)      
+
+
+  - kind: select
+    name: select_check_status_pre_group
+    params:
+      columns:
+        finance_class_id: finance_class_id
+        finance_key: finance_key
+        rule_code: rule_code
+        check_status_expression: check_status_expression
+        check_date: check_date
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          check_status_expression: min
+        by:
+        - finance_key
+        - finance_class_id
+        - country_code
+        - rule_code
+        - check_date
+        - sap_cluster
+
+  - kind: add
+    name: add_checks_expressions
+    params:
+      - column: failed_checks
+        expression: IF(min_check_status_expression = '0', 1, 0)
+      - column: passed_checks
+        expression: IF(min_check_status_expression = '1', 1, 0)
+      - column: skipped_checks
+        expression: IF(min_check_status_expression = '2', 1, 0)
+
+  - kind: select
+    name: select_counts_pre_group
+    params:
+      columns:
+        finance_class_id: finance_class_id
+        country_code: country_code
+        finance_key: finance_key
+        rule_code: rule_code
+        failed_checks: failed_checks
+        passed_checks: passed_checks
+        skipped_checks: skipped_checks
+        check_date: check_date
+        sap_cluster: sap_cluster
+
+  - kind: group
+    name: group_max_check_status
+    params:
+      - aggs:
+          failed_checks: sum
+          passed_checks: sum
+          skipped_checks: sum
+        by:
+        - finance_key
+        - country_code
+        - rule_code
+        - check_date
+        - sap_cluster
+        - finance_class_id
+
+
+  - kind: group
+    name: group_f_overview_aggregated
+    params:
+      - aggs:
+          sum_failed_checks: sum
+          sum_passed_checks: sum
+          sum_skipped_checks: sum
+        by:
+        - country_code
+        - finance_class_id
+        - rule_code
+        - sap_cluster
+ 
+
+  - kind: add
+    name: add_loading_date
+    context_name: group_f_overview_aggregated
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: select
+    name: select_f_finance_overview_aggregated
+    params:
+      columns:
+        country_code: country_code
+        finance_class_id: finance_class_id
+        rule_code: rule_code
+        sum_sum_failed_checks: sum_sum_failed_checks
+        sum_sum_passed_checks: sum_sum_passed_checks
+        sum_sum_skipped_checks: sum_sum_skipped_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_calculations
+    params:
+      - column: total_checks
+        expression: sum_sum_failed_checks + sum_sum_passed_checks
+      - column: total_records
+        expression: sum_sum_failed_checks + sum_sum_passed_checks + sum_sum_skipped_checks
+      - column: domain
+        expression: '''finance'''
+
+
+  - kind: cast
+    name: cast_integers
+    params:
+      - column: sum_sum_failed_checks
+        to: integer
+      - column: sum_sum_passed_checks
+        to: integer
+      - column: sum_sum_skipped_checks
+        to: integer
+      - column: total_checks
+        to: integer
+      - column: total_records
+        to: integer
+
+  - kind: select
+    name: select_f_finance_aggregated_l1_l2
+    params:
+      columns:
+        country_code: country_code
+        finance_class_id: finance_class_id
+        rule_code: rule_code
+        loading_date: loading_date
+        sum_sum_failed_checks: failed_checks
+        sum_sum_passed_checks: passed_checks
+        sum_sum_skipped_checks: skipped_checks
+        total_checks: total_checks
+        total_records: total_records
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_f_finance_aggregated_l1_l2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: f_finance_aggregated_l1_l2
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

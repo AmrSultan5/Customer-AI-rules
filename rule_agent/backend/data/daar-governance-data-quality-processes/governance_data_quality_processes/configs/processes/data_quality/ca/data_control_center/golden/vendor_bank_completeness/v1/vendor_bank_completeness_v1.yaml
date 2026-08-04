@@ -1,0 +1,273 @@
+transform:
+  name: vendor_bank_completeness
+  operations:
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_bank
+
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_account_group_code: vendor_account_group_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        terms_of_payment_code: terms_of_payment_code_vc
+        payment_methods_list: payment_methods_list
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_bank
+    context_name: read_dm_vendor_bank
+    params:
+      columns:
+        vendor_code: vendor_code
+        iban: iban
+        bank_details_id: bank_details_id
+        bank_country_code: bank_country_code
+        bank_code: bank_code
+        bank_account_number: bank_account_number
+        bank_control_key: bank_control_key
+      distinct: true
+
+
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_bank
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_181_1
+        expression: if(vendor_account_group_code = '4000', 
+                    if(isnull(iban) or iban = '', '0', '1'), '')
+      - column: rcvomp_59_1
+        expression: if(isnull(bank_details_id) or bank_details_id = '', '0', '1')
+      - column: rcvomp_93_1
+        expression: if(vendor_account_group_code = '4000', 
+                    if(isnull(bank_country_code) or bank_country_code = '', '0', '1'), '')
+      - column: rcvomp_94_1
+        expression: if(vendor_account_group_code = '4000', 
+                    if(isnull(bank_code) or bank_code = '', '0', '1'), '')
+      - column: rcvomp_95_1
+        expression: if(vendor_account_group_code = '4000', 
+                    if(isnull(bank_account_number) or bank_account_number = '', '0', '1'), '')
+      - column: rcvomp_96_4
+        expression: if(vendor_account_group_code = '4000' and country_code in('BR','FR','ES','PT','IT'), 
+                    if(isnull(bank_control_key) or bank_control_key = '', '0', '1'), '')
+      - column: rule_code_rcvomp_181_1
+        expression: '''RVCOMP_181.1'''
+      - column: rule_code_rcvomp_59_1
+        expression: '''RVCOMP_59.1'''
+      - column: rule_code_rcvomp_93_1
+        expression: '''RVCOMP_93.1'''
+      - column: rule_code_rcvomp_94_1
+        expression: '''RVCOMP_94.1'''
+      - column: rule_code_rcvomp_95_1
+        expression: '''RVCOMP_95.1'''
+      - column: rule_code_rcvomp_96_4
+        expression: '''RVCOMP_96.4'''
+      - column: subdomain
+        expression: '''bank_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcvomp_181_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_181_1: rule_code
+        rcvomp_181_1: check_status
+        vendor_code: vendor_code
+        iban: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_59_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_59_1: rule_code
+        rcvomp_59_1: check_status
+        vendor_code: vendor_code
+        bank_details_id: value_checked
+        country_code: country_code
+        subdomain: subdomain
+        check_date: check_date
+        
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_93_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_93_1: rule_code
+        rcvomp_93_1: check_status
+        vendor_code: vendor_code
+        bank_country_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_94_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_94_1: rule_code
+        rcvomp_94_1: check_status
+        vendor_code: vendor_code
+        bank_code: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_95_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_95_1: rule_code
+        rcvomp_95_1: check_status
+        vendor_code: vendor_code
+        bank_account_number: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_96_4
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_96_4: rule_code
+        rcvomp_96_4: check_status
+        vendor_code: vendor_code
+        bank_control_key: value_checked
+        check_date: check_date
+        country_code: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_181_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_59_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_93_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_94_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_95_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_96_4
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

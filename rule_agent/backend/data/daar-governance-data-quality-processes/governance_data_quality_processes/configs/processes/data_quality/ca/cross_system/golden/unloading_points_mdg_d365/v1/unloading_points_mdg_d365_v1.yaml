@@ -1,0 +1,2631 @@
+transform:
+  name: Unloading_points_mdg_d365
+  operations:
+
+    - kind: read_dataio
+      name: read_mdg_knva
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knva
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_knva
+      context_name: read_mdg_knva
+      params:
+        columns:
+          KUNNR: KUNNR_mdg_knva
+          ablad: ablad_mdg_knva
+          KNFAK: KNFAK_mdg_knva
+          MOAB1: MOAB1_mdg_knva
+          MOAB2: MOAB2_mdg_knva
+          DIAB1: DIAB1_mdg_knva
+          DIAB2: DIAB2_mdg_knva
+          MIAB1: MIAB1_mdg_knva
+          MIAB2: MIAB2_mdg_knva
+          DOAB1: DOAB1_mdg_knva
+          DOAB2: DOAB2_mdg_knva
+          FRAB1: FRAB1_mdg_knva
+          FRAB2: FRAB2_mdg_knva
+          SAAB1: SAAB1_mdg_knva
+          SAAB2: SAAB2_mdg_knva
+          SOAB1: SOAB1_mdg_knva
+          SOAB2: SOAB2_mdg_knva
+          MOBI1: MOBI1_mdg_knva
+          MOBI2: MOBI2_mdg_knva
+          DIBI1: DIBI1_mdg_knva
+          DIBI2: DIBI2_mdg_knva
+          MIBI1: MIBI1_mdg_knva
+          MIBI2: MIBI2_mdg_knva
+          DOBI1: DOBI1_mdg_knva
+          DOBI2: DOBI2_mdg_knva
+          FRBI1: FRBI1_mdg_knva
+          FRBI2: FRBI2_mdg_knva
+          SABI1: SABI1_mdg_knva
+          SABI2: SABI2_mdg_knva
+          SOBI1: SOBI1_mdg_knva
+          SOBI2: SOBI2_mdg_knva
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_but000
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: business_partner
+        object_name: but000
+        schema_version: v1
+
+    - kind: select
+      name: select_mdg_but000
+      context_name: read_mdg_but000
+      params:
+        columns:
+          partner: partner_mdg_but000
+          xpcpt: xpcpt_mdg_but000
+        distinct: true
+
+    - kind: read_dataio
+      name: read_mdg_knvv
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: knvv
+        schema_version: v1
+    
+    - kind: filter
+      name: filter_knvv
+      context_name: read_mdg_knvv
+      params:
+        - condition: vtweg = '01' AND spart = '01' and vkorg in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+    
+    - kind: select
+      name: select_mdg_knvv_checkpoint
+      context_name: filter_knvv
+      params:
+        columns:
+          kunnr: kunnr_knvv
+          kvgr4: kvgr4_knvv
+          vkorg: vkorg_knvv
+          vtweg: vtweg_knvv
+          spart: spart_knvv
+        distinct: true
+    
+    - kind: checkpoint
+      name: select_mdg_knvv
+      context_name: select_mdg_knvv_checkpoint
+
+    - kind: join
+      name: join_mdg
+      context_name: select_mdg_knva
+      params:
+        - other:
+            select_mdg_but000
+          how:
+            inner
+          columns:
+            KUNNR_mdg_knva: partner_mdg_but000
+        - other:
+            select_mdg_knvv
+          how:
+            inner
+          columns:
+            partner_mdg_but000: kunnr_knvv  
+            
+            
+
+    - kind: filter
+      name: filter_join_mdg
+      context_name: join_mdg
+      params:
+        - condition:
+            xpcpt_mdg_but000 <>'X' AND ablad_mdg_knva <> '' AND KUNNR_mdg_knva like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%','96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%')
+ 
+    - kind: add
+      name: add_mdg_HASH
+      context_name: filter_join_mdg
+      params:
+      - column: openmonday1_mdg
+        expression: concat(substr(MOAB1_mdg_knva,0,2),':', substr(MOAB1_mdg_knva,3,2),':', substr(MOAB1_mdg_knva,5,2))
+      - column: openmonday2_mdg
+        expression: concat(substr(MOAB2_mdg_knva,0,2),':', substr(MOAB2_mdg_knva,3,2),':', substr(MOAB2_mdg_knva,5,2))
+      - column: opentuesday1_mdg
+        expression: concat(substr(DIAB1_mdg_knva,0,2),':', substr(DIAB1_mdg_knva,3,2),':', substr(DIAB1_mdg_knva,5,2))
+      - column: opentuesday2_mdg
+        expression: concat(substr(DIAB2_mdg_knva,0,2),':', substr(DIAB2_mdg_knva,3,2),':', substr(DIAB2_mdg_knva,5,2))
+      - column: openwednesday1_mdg
+        expression: concat(substr(MIAB1_mdg_knva,0,2),':', substr(MIAB1_mdg_knva,3,2),':', substr(MIAB1_mdg_knva,5,2))
+      - column: openwednesday2_mdg
+        expression: concat(substr(MIAB2_mdg_knva,0,2),':', substr(MIAB2_mdg_knva,3,2),':', substr(MIAB2_mdg_knva,5,2))
+      - column: openthursday1_mdg
+        expression: concat(substr(DOAB1_mdg_knva,0,2),':', substr(DOAB1_mdg_knva,3,2),':', substr(DOAB1_mdg_knva,5,2))
+      - column: openthursday2_mdg
+        expression: concat(substr(DOAB2_mdg_knva,0,2),':', substr(DOAB2_mdg_knva,3,2),':', substr(DOAB2_mdg_knva,5,2))
+      - column: openfriday1_mdg
+        expression: concat(substr(FRAB1_mdg_knva,0,2),':', substr(FRAB1_mdg_knva,3,2),':', substr(FRAB1_mdg_knva,5,2))
+      - column: openfriday2_mdg
+        expression: concat(substr(FRAB2_mdg_knva,0,2),':', substr(FRAB2_mdg_knva,3,2),':', substr(FRAB2_mdg_knva,5,2))
+      - column: opensaturday1_mdg
+        expression: concat(substr(SAAB1_mdg_knva,0,2),':', substr(SAAB1_mdg_knva,3,2),':', substr(SAAB1_mdg_knva,5,2))
+      - column: opensaturday2_mdg
+        expression: concat(substr(SAAB2_mdg_knva,0,2),':', substr(SAAB2_mdg_knva,3,2),':', substr(SAAB2_mdg_knva,5,2))
+      - column: opensunday1_mdg
+        expression: concat(substr(SOAB1_mdg_knva,0,2),':', substr(SOAB1_mdg_knva,3,2),':', substr(SOAB1_mdg_knva,5,2))
+      - column: opensunday2_mdg
+        expression: concat(substr(SOAB2_mdg_knva,0,2),':', substr(SOAB2_mdg_knva,3,2),':', substr(SOAB2_mdg_knva,5,2))
+      - column: closemonday1_mdg
+        expression: concat(substr(MOBI1_mdg_knva,0,2),':', substr(MOBI1_mdg_knva,3,2),':', substr(MOBI1_mdg_knva,5,2))
+      - column: closemonday2_mdg
+        expression: concat(substr(MOBI2_mdg_knva,0,2),':', substr(MOBI2_mdg_knva,3,2),':', substr(MOBI2_mdg_knva,5,2))
+      - column: closetuesday1_mdg
+        expression: concat(substr(DIBI1_mdg_knva,0,2),':', substr(DIBI1_mdg_knva,3,2),':', substr(DIBI1_mdg_knva,5,2))
+      - column: closetuesday2_mdg
+        expression: concat(substr(DIBI2_mdg_knva,0,2),':', substr(DIBI2_mdg_knva,3,2),':', substr(DIBI2_mdg_knva,5,2))
+      - column: closewednesday1_mdg
+        expression: concat(substr(MIBI1_mdg_knva,0,2),':', substr(MIBI1_mdg_knva,3,2),':', substr(MIBI1_mdg_knva,5,2))
+      - column: closewednesday2_mdg
+        expression: concat(substr(MIBI2_mdg_knva,0,2),':', substr(MIBI2_mdg_knva,3,2),':', substr(MIBI2_mdg_knva,5,2))
+      - column: closethursday1_mdg
+        expression: concat(substr(DOBI1_mdg_knva,0,2),':', substr(DOBI1_mdg_knva,3,2),':', substr(DOBI1_mdg_knva,5,2))
+      - column: closethursday2_mdg
+        expression: concat(substr(DOBI2_mdg_knva,0,2),':', substr(DOBI2_mdg_knva,3,2),':', substr(DOBI2_mdg_knva,5,2))
+      - column: closefriday1_mdg
+        expression: concat(substr(FRBI1_mdg_knva,0,2),':', substr(FRBI1_mdg_knva,3,2),':', substr(FRBI1_mdg_knva,5,2))
+      - column: closefriday2_mdg
+        expression: concat(substr(FRBI2_mdg_knva,0,2),':', substr(FRBI2_mdg_knva,3,2),':', substr(FRBI2_mdg_knva,5,2))
+      - column: closesaturday1_mdg
+        expression: concat(substr(SABI1_mdg_knva,0,2),':', substr(SABI1_mdg_knva,3,2),':', substr(SABI1_mdg_knva,5,2))
+      - column: closesaturday2_mdg
+        expression: concat(substr(SABI2_mdg_knva,0,2),':', substr(SABI2_mdg_knva,3,2),':', substr(SABI2_mdg_knva,5,2))
+      - column: closesunday1_mdg
+        expression: concat(substr(SOBI1_mdg_knva,0,2),':', substr(SOBI1_mdg_knva,3,2),':', substr(SOBI1_mdg_knva,5,2))
+      - column: closesunday2_mdg
+        expression: concat(substr(SOBI2_mdg_knva,0,2),':', substr(SOBI2_mdg_knva,3,2),':', substr(SOBI2_mdg_knva,5,2))
+
+
+    - kind: add
+      name: add_mdg_HASH
+      context_name: add_mdg_HASH
+      params:
+      - column: HASH_mdg
+        expression:
+          MD5(CONCAT(KUNNR_mdg_knva, ablad_mdg_knva, knfak_mdg_knva, openmonday1_mdg, openmonday2_mdg, opentuesday1_mdg, opentuesday2_mdg, openwednesday1_mdg, openwednesday2_mdg, openthursday1_mdg, openthursday2_mdg, openfriday1_mdg, openfriday2_mdg, opensaturday1_mdg, opensaturday2_mdg, opensunday1_mdg, opensunday2_mdg, closemonday1_mdg, closemonday2_mdg, closetuesday1_mdg, closetuesday2_mdg, closewednesday1_mdg, closewednesday2_mdg, closethursday1_mdg, closethursday2_mdg, closefriday1_mdg, closefriday2_mdg, closesaturday1_mdg, closesaturday2_mdg, closesunday1_mdg, closesunday2_mdg))
+
+    - kind: select
+      name: mdg_checkpoint
+      context_name: add_mdg_HASH
+      params:
+        columns:
+          KUNNR_mdg_knva: partner_mdg
+          ablad_mdg_knva: unloading_points_mdg
+          knfak_mdg_knva: factory_calendar_mdg
+          openmonday1_mdg: openmonday1_mdg
+          openmonday2_mdg: openmonday2_mdg
+          opentuesday1_mdg: opentuesday1_mdg
+          opentuesday2_mdg: opentuesday2_mdg
+          openwednesday1_mdg: openwednesday1_mdg
+          openwednesday2_mdg: openwednesday2_mdg
+          openthursday1_mdg: openthursday1_mdg
+          openthursday2_mdg: openthursday2_mdg
+          openfriday1_mdg: openfriday1_mdg
+          openfriday2_mdg: openfriday2_mdg
+          opensaturday1_mdg: opensaturday1_mdg
+          opensaturday2_mdg: opensaturday2_mdg
+          opensunday1_mdg: opensunday1_mdg
+          opensunday2_mdg: opensunday2_mdg
+          closemonday1_mdg: closemonday1_mdg
+          closemonday2_mdg: closemonday2_mdg
+          closetuesday1_mdg: closetuesday1_mdg
+          closetuesday2_mdg: closetuesday2_mdg
+          closewednesday1_mdg: closewednesday1_mdg
+          closewednesday2_mdg: closewednesday2_mdg
+          closethursday1_mdg: closethursday1_mdg
+          closethursday2_mdg: closethursday2_mdg
+          closefriday1_mdg: closefriday1_mdg
+          closefriday2_mdg: closefriday2_mdg
+          closesaturday1_mdg: closesaturday1_mdg
+          closesaturday2_mdg: closesaturday2_mdg
+          closesunday1_mdg: closesunday1_mdg
+          closesunday2_mdg: closesunday2_mdg
+          HASH_mdg: HASH_mdg
+        distinct: true
+
+    - kind: checkpoint
+      name: mdg
+      context_name: mdg_checkpoint
+
+    #d365
+    - kind: read_dataio
+      name: read_d365_cchunloadp  
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_unloadingpoints
+        schema_version: v1
+
+    - kind: select
+      name: select_d365_cchunloadp
+      context_name: read_d365_cchunloadp
+      params:
+        columns:
+          cch_factorycalendarid: cch_factorycalendaridname
+          cch_name: cch_name
+          cch_openmonday1: cch_openmonday1
+          cch_openmonday2: cch_openmonday2
+          cch_opentuesday1: cch_opentuesday1
+          cch_opentuesday2: cch_opentuesday2
+          cch_openwednesday1: cch_openwednesday1
+          cch_openwednesday2: cch_openwednesday2
+          cch_openthursday1: cch_openthursday1
+          cch_openthursday2: cch_openthursday2
+          cch_openfriday1: cch_openfriday1
+          cch_openfriday2: cch_openfriday2
+          cch_opensaturday1: cch_opensaturday1
+          cch_opensaturday2: cch_opensaturday2
+          cch_opensunday1: cch_opensunday1
+          cch_opensunday2: cch_opensunday2
+          cch_closemonday1: cch_closemonday1
+          cch_closemonday2: cch_closemonday2
+          cch_closetuesday1: cch_closetuesday1
+          cch_closetuesday2: cch_closetuesday2
+          cch_closewednesday1: cch_closewednesday1
+          cch_closewednesday2: cch_closewednesday2
+          cch_closethursday1: cch_closethursday1
+          cch_closethursday2: cch_closethursday2
+          cch_closefriday1: cch_closefriday1
+          cch_closefriday2: cch_closefriday2
+          cch_closesaturday1: cch_closesaturday1
+          cch_closesaturday2: cch_closesaturday2
+          cch_closesunday1: cch_closesunday1
+          cch_closesunday2: cch_closesunday2
+          statuscode: statuscode
+          statecode: statecode
+          cch_accountid: cch_accountid
+        distinct: true
+    
+    - kind: add
+      name: add_d365_cchunloadp
+      context_name: select_d365_cchunloadp
+      params:
+        - column: unloading_points_d365
+          expression: TRIM(cch_name)
+        - column: openmonday1_d365
+          expression: concat(cch_openmonday1, ':00')
+        - column: openmonday2_d365
+          expression: concat(cch_openmonday2, ':00')
+        - column: opentuesday1_d365
+          expression: concat(cch_opentuesday1, ':00')
+        - column: opentuesday2_d365
+          expression: concat(cch_opentuesday2, ':00')
+        - column: openwednesday1_d365
+          expression: concat(cch_openwednesday1, ':00')
+        - column: openwednesday2_d365
+          expression: concat(cch_openwednesday2, ':00')
+        - column: openthursday1_d365
+          expression: concat(cch_openthursday1, ':00')
+        - column: openthursday2_d365
+          expression: concat(cch_openthursday2, ':00')
+        - column: openfriday1_d365
+          expression: concat(cch_openfriday1, ':00')
+        - column: openfriday2_d365
+          expression: concat(cch_openfriday2, ':00')
+        - column: opensaturday1_d365
+          expression: concat(cch_opensaturday1, ':00')
+        - column: opensaturday2_d365
+          expression: concat(cch_opensaturday2, ':00')
+        - column: opensunday1_d365
+          expression: concat(cch_opensunday1, ':00')
+        - column: opensunday2_d365
+          expression: concat(cch_opensunday2, ':00')
+        - column: closemonday1_d365
+          expression: concat(cch_closemonday1, ':00')
+        - column: closemonday2_d365
+          expression: concat(cch_closemonday2, ':00')
+        - column: closetuesday1_d365
+          expression: concat(cch_closetuesday1, ':00')
+        - column: closetuesday2_d365
+          expression: concat(cch_closetuesday2, ':00')
+        - column: closewednesday1_d365
+          expression: concat(cch_closewednesday1, ':00')
+        - column: closewednesday2_d365
+          expression: concat(cch_closewednesday2, ':00')
+        - column: closethursday1_d365
+          expression: concat(cch_closethursday1, ':00')
+        - column: closethursday2_d365
+          expression: concat(cch_closethursday2, ':00')
+        - column: closefriday1_d365
+          expression: concat(cch_closefriday1, ':00')
+        - column: closefriday2_d365
+          expression: concat(cch_closefriday2, ':00')
+        - column: closesaturday1_d365
+          expression: concat(cch_closesaturday1, ':00')
+        - column: closesaturday2_d365
+          expression: concat(cch_closesaturday2, ':00')
+        - column: closesunday1_d365
+          expression: concat(cch_closesunday1, ':00')
+        - column: closesunday2_d365
+          expression: concat(cch_closesunday2, ':00')
+    
+    - kind: filter
+      name: filter_d365_cchunloadp
+      context_name: add_d365_cchunloadp
+      params:
+        - condition: statecode = 0
+
+    - kind: read_dataio
+      name: read_d365_acc
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: account
+        schema_version: v1    
+
+    - kind: select
+      name: select_d365_acc
+      context_name: read_d365_acc
+      params:
+        columns:
+          id: id
+          cch_sapid: cch_sapid
+          cch_distributionchannel: cch_distributionchannel
+          cch_division: cch_division
+          cch_salesorganizationid: cch_salesorganizationid
+        distinct: true
+
+    - kind: filter
+      name: filter_d365_acc
+      context_name: select_d365_acc
+      params:
+        - condition: "cch_sapid like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%')"
+
+##########################################################################################
+############################################################
+
+    - kind: read_dataio
+      name: read_d365_cch_optionsetmapping
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_optionsetmapping
+        schema_version: v1
+      
+    - kind: filter
+      name: filter_cch_optionsetmapping_cd
+      context_name: read_d365_cch_optionsetmapping
+      params:
+        - condition: cch_entityname = 'account' and cch_attributename = 'cch_division' 
+    
+    - kind: select
+      name: union_cte_division
+      context_name: filter_cch_optionsetmapping_cd
+      params:
+        columns:
+          cch_optionsetvalue: cd_cch_optionsetvalue
+          cch_externalvalue: cd_cch_externalvalue
+        distinct: true
+    
+#   ###################################################
+#    distributionchannel
+    - kind: filter
+      name: filter_cch_optionsetmapping_dc
+      context_name: read_d365_cch_optionsetmapping
+      params:
+        - condition: cch_entityname = 'account' and cch_attributename = 'cch_distributionchannel'
+    
+    - kind: select
+      name: union_cte_distributionchannel
+      context_name: filter_cch_optionsetmapping_dc
+      params:
+        columns:
+          cch_optionsetvalue: dc_cch_optionsetvalue
+          cch_externalvalue: dc_cch_externalvalue
+        distinct: true
+
+
+    - kind: read_dataio
+      name: read_d365_cch_country
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_country
+        schema_version: v1    
+
+    - kind: select
+      name: filter_country
+      context_name: read_d365_cch_country
+      params:
+        columns:
+          id: cd_id
+          cch_code: cd_cch_code
+        distinct: true
+
+    - kind: read_dataio
+      name: read_d365_territory
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: territory
+        schema_version: v1
+    
+    - kind: filter
+      name: filter_territory
+      context_name: read_d365_territory
+      params:
+        - condition: 1 = 1
+    
+    - kind: select
+      name: select_d365_territory
+      context_name: filter_territory
+      params:
+        columns:
+          cch_sapid: territory_cch_sapid
+          id: territory_id
+        distinct: true
+
+    - kind: join
+      name: join_d365
+      context_name: filter_d365_cchunloadp
+      params:
+        - other:
+            filter_d365_acc
+          how:
+            inner
+          columns:
+            cch_accountid: id
+        - other:
+            union_cte_distributionchannel
+          how:
+            inner
+          columns:
+            cch_distributionchannel: dc_cch_optionsetvalue
+        - other:
+            union_cte_division
+          how:
+            inner
+          columns:
+            cch_division: cd_cch_optionsetvalue
+        - other:
+            filter_country
+          how:
+            inner
+          columns:
+            cch_factorycalendaridname: cd_id
+        - other:
+            select_d365_territory
+          how:
+            left
+          columns:
+            cch_salesorganizationid: territory_id
+
+    - kind: filter
+      name: filter_d365
+      context_name: join_d365
+      params:
+        - condition: dc_cch_externalvalue = '01' and cd_cch_externalvalue = '01' and territory_cch_sapid in (1100,1200,2000,2500,2800,3100,3200,3300,4090,4500,4890,5100,5500,6100,6300,7200,7800,7900,8090,8200,8500,8600,9100,9200,9400,9500,9600)
+
+    - kind: add
+      name: add_join_d365
+      context_name: filter_d365
+      params:
+        - column: hash_d365
+          expression: >
+            md5(concat(
+              cch_sapid,
+              coalesce(Unloading_Points_d365, ''),
+              coalesce(cd_cch_code, ''),
+              coalesce(openmonday1_d365, ''),
+              coalesce(openmonday2_d365, ''),
+              coalesce(opentuesday1_d365, ''),
+              coalesce(opentuesday2_d365, ''),
+              coalesce(openwednesday1_d365, ''),
+              coalesce(openwednesday2_d365, ''),
+              coalesce(openthursday1_d365, ''),
+              coalesce(openthursday2_d365, ''),
+              coalesce(openfriday1_d365, ''),
+              coalesce(openfriday2_d365, ''),
+              coalesce(opensaturday1_d365, ''),
+              coalesce(opensaturday2_d365, ''),
+              coalesce(opensunday1_d365, ''),
+              coalesce(opensunday2_d365, ''),
+              coalesce(closemonday1_d365, ''),
+              coalesce(closemonday2_d365, ''),
+              coalesce(closetuesday1_d365, ''),
+              coalesce(closetuesday2_d365, ''),
+              coalesce(closewednesday1_d365, ''),
+              coalesce(closewednesday2_d365, ''),
+              coalesce(closethursday1_d365, ''),
+              coalesce(closethursday2_d365, ''),
+              coalesce(closefriday1_d365, ''),
+              coalesce(closefriday2_d365, ''),
+              coalesce(closesaturday1_d365, ''),
+              coalesce(closesaturday2_d365, ''),
+              coalesce(closesunday1_d365, ''),
+              coalesce(closesunday2_d365, '')
+            ))
+
+    - kind: select
+      name: d365_checkpoint
+      context_name: add_join_d365
+      params:
+        columns:
+          cch_sapid: partner_d365
+          unloading_points_d365: unloading_points_d365
+          cd_cch_code: factory_calendar_d365
+          openmonday1_d365: openmonday1_d365
+          openmonday2_d365: openmonday2_d365
+          opentuesday1_d365: opentuesday1_d365
+          opentuesday2_d365: opentuesday2_d365
+          openwednesday1_d365: openwednesday1_d365
+          openwednesday2_d365: openwednesday2_d365
+          openthursday1_d365: openthursday1_d365
+          openthursday2_d365: openthursday2_d365
+          openfriday1_d365: openfriday1_d365
+          openfriday2_d365: openfriday2_d365
+          opensaturday1_d365: opensaturday1_d365
+          opensaturday2_d365: opensaturday2_d365
+          opensunday1_d365: opensunday1_d365
+          opensunday2_d365: opensunday2_d365
+          closemonday1_d365: closemonday1_d365
+          closemonday2_d365: closemonday2_d365
+          closetuesday1_d365: closetuesday1_d365
+          closetuesday2_d365: closetuesday2_d365
+          closewednesday1_d365: closewednesday1_d365
+          closewednesday2_d365: closewednesday2_d365
+          closethursday1_d365: closethursday1_d365
+          closethursday2_d365: closethursday2_d365
+          closefriday1_d365: closefriday1_d365
+          closefriday2_d365: closefriday2_d365
+          closesaturday1_d365: closesaturday1_d365
+          closesaturday2_d365: closesaturday2_d365
+          closesunday1_d365: closesunday1_d365
+          closesunday2_d365: closesunday2_d365
+          hash_d365: hash_d365
+        distinct: true
+
+    - kind: checkpoint
+      name: d365
+      context_name: d365_checkpoint
+
+
+    - kind: join
+      name: join_non_matching_mdg
+      context_name: mdg
+      params:
+        - other:
+            d365
+          how:
+            full
+          columns:
+            hash_mdg: hash_d365
+
+    - kind: filter
+      name: non_matching_mdg
+      context_name: join_non_matching_mdg
+      params:
+        - condition: hash_d365 is null or hash_d365 = ''
+
+    - kind: select
+      name: non_matching_mdg_select
+      context_name: non_matching_mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          unloading_points_mdg: unloading_points_mdg
+          factory_calendar_mdg: factory_calendar_mdg
+          openmonday1_mdg: openmonday1_mdg
+          openmonday2_mdg: openmonday2_mdg
+          opentuesday1_mdg: opentuesday1_mdg
+          opentuesday2_mdg: opentuesday2_mdg
+          openwednesday1_mdg: openwednesday1_mdg
+          openwednesday2_mdg: openwednesday2_mdg
+          openthursday1_mdg: openthursday1_mdg
+          openthursday2_mdg: openthursday2_mdg
+          openfriday1_mdg: openfriday1_mdg
+          openfriday2_mdg: openfriday2_mdg
+          opensaturday1_mdg: opensaturday1_mdg
+          opensaturday2_mdg: opensaturday2_mdg
+          opensunday1_mdg: opensunday1_mdg
+          opensunday2_mdg: opensunday2_mdg
+          closemonday1_mdg: closemonday1_mdg
+          closemonday2_mdg: closemonday2_mdg
+          closetuesday1_mdg: closetuesday1_mdg
+          closetuesday2_mdg: closetuesday2_mdg
+          closewednesday1_mdg: closewednesday1_mdg
+          closewednesday2_mdg: closewednesday2_mdg
+          closethursday1_mdg: closethursday1_mdg
+          closethursday2_mdg: closethursday2_mdg
+          closefriday1_mdg: closefriday1_mdg
+          closefriday2_mdg: closefriday2_mdg
+          closesaturday1_mdg: closesaturday1_mdg
+          closesaturday2_mdg: closesaturday2_mdg
+          closesunday1_mdg: closesunday1_mdg
+          closesunday2_mdg: closesunday2_mdg
+          HASH_mdg: HASH_mdg
+
+    - kind: filter
+      name: non_matching_d365
+      context_name: join_non_matching_mdg
+      params:
+        - condition: hash_mdg is null or hash_mdg = ''
+
+    - kind: select
+      name: non_matching_d365_select
+      context_name: non_matching_d365
+      params:
+        columns:
+          partner_d365: partner_d365
+          unloading_points_d365: unloading_points_d365
+          factory_calendar_d365: factory_calendar_d365
+          openmonday1_d365: openmonday1_d365
+          openmonday2_d365: openmonday2_d365
+          opentuesday1_d365: opentuesday1_d365
+          opentuesday2_d365: opentuesday2_d365
+          openwednesday1_d365: openwednesday1_d365
+          openwednesday2_d365: openwednesday2_d365
+          openthursday1_d365: openthursday1_d365
+          openthursday2_d365: openthursday2_d365
+          openfriday1_d365: openfriday1_d365
+          openfriday2_d365: openfriday2_d365
+          opensaturday1_d365: opensaturday1_d365
+          opensaturday2_d365: opensaturday2_d365
+          opensunday1_d365: opensunday1_d365
+          opensunday2_d365: opensunday2_d365
+          closemonday1_d365: closemonday1_d365
+          closemonday2_d365: closemonday2_d365
+          closetuesday1_d365: closetuesday1_d365
+          closetuesday2_d365: closetuesday2_d365
+          closewednesday1_d365: closewednesday1_d365
+          closewednesday2_d365: closewednesday2_d365
+          closethursday1_d365: closethursday1_d365
+          closethursday2_d365: closethursday2_d365
+          closefriday1_d365: closefriday1_d365
+          closefriday2_d365: closefriday2_d365
+          closesaturday1_d365: closesaturday1_d365
+          closesaturday2_d365: closesaturday2_d365
+          closesunday1_d365: closesunday1_d365
+          closesunday2_d365: closesunday2_d365
+          hash_d365: hash_d365
+
+    - kind: join
+      name: join_data_missing_from_mdg
+      context_name: non_matching_mdg_select
+      params:
+        - other:
+            non_matching_d365_select
+          how:
+            full
+          columns:
+            partner_mdg: partner_d365
+            unloading_points_mdg: unloading_points_d365
+
+    - kind: add
+      name: data_missing_from_mdg_add_columns
+      context_name: join_data_missing_from_mdg
+      params:
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: msg_mdg
+          expression: CASE WHEN partner_mdg IS NULL THEN 'data missing from mdg' end
+        - column: msg_d365
+          expression: CASE WHEN partner_d365 IS NULL THEN 'data missing from d365' end
+        - column: attr_name
+          expression: cast(NULL as string)
+        - column: tgt_attr
+          expression: cast(NULL as string)
+        - column: src_attr
+          expression: cast(NULL as string) 
+          
+
+
+####################################################################
+
+    - kind: filter
+      name: join_data_missing_from_mdg_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg is null
+
+    - kind: select
+      name: final_data_missing_from_mdg_checkpoint
+      context_name: join_data_missing_from_mdg_filter
+      params:
+        columns:
+          partner_d365: partner
+          unloading_points_d365: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mdg: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+    - kind: checkpoint
+      name: final_data_missing_from_mdg
+      context_name: final_data_missing_from_mdg_checkpoint
+
+####################################################################
+
+    - kind: filter
+      name: join_data_missing_from_d365_filter
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_d365 is null
+
+
+    - kind: select
+      name: final_data_missing_from_d365_checkpoint
+      context_name: join_data_missing_from_d365_filter
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_d365: msg
+          attr_name: attr_name
+          tgt_attr: tgt_attr
+          src_attr: src_attr
+
+    - kind: checkpoint
+      name: final_data_missing_from_d365
+      context_name: final_data_missing_from_d365_checkpoint
+
+
+###############################################################################################
+
+    - kind: filter
+      name: filter_mismatched
+      context_name: data_missing_from_mdg_add_columns
+      params:
+        - condition: partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 and ( factory_calendar_d365 <> factory_calendar_mdg or openmonday1_d365 <> openmonday1_mdg or openmonday2_d365 <> openmonday2_mdg or opentuesday1_d365 <> opentuesday1_mdg or opentuesday2_d365 <> opentuesday2_mdg or openwednesday1_d365 <> openwednesday1_mdg or openwednesday2_d365 <> openwednesday2_mdg or openthursday1_d365 <> openthursday1_mdg or openthursday2_d365 <> openthursday2_mdg or openfriday1_d365 <> openfriday1_mdg or openfriday2_d365 <> openfriday2_mdg or opensaturday1_d365 <> opensaturday1_mdg or opensaturday2_d365 <> opensaturday2_mdg or opensunday1_d365 <> opensunday1_mdg or opensunday2_d365 <> opensunday2_mdg or closemonday1_d365 <> closemonday1_mdg or closemonday2_d365 <> closemonday2_mdg or closetuesday1_d365 <> closetuesday1_mdg or closetuesday2_d365 <> closetuesday2_mdg or closewednesday1_d365 <> closewednesday1_mdg or closewednesday2_d365 <> closewednesday2_mdg or closethursday1_d365 <> closethursday1_mdg or closethursday2_d365 <> closethursday2_mdg or closefriday1_d365 <> closefriday1_mdg or closefriday2_d365 <> closefriday2_mdg or closesaturday1_d365 <> closesaturday1_mdg or closesaturday2_d365 <> closesaturday2_mdg or closesunday1_d365 <> closesunday1_mdg or closesunday2_d365 <> closesunday2_mdg)
+        
+        
+        
+    - kind: add
+      name: add_mismatched_temp
+      context_name: filter_mismatched
+      params:
+          - column: msg_factory_cal
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND factory_calendar_d365 <> factory_calendar_mdg , 'attributes are mismatching','-')
+          - column: msg_mon1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openmonday1_d365 <> openmonday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_mon2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openmonday2_d365 <> openmonday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_tue1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opentuesday1_d365 <> opentuesday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_tue2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opentuesday2_d365 <> opentuesday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_wed1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openwednesday1_d365 <> openwednesday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_wed2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openwednesday2_d365 <> openwednesday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_thu1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openthursday1_d365 <> openthursday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_thu2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openthursday2_d365 <> openthursday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_fri1
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openfriday1_d365 <> openfriday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_fri2
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openfriday2_d365 <> openfriday2_mdg ,'attributes are mismatching' ,'-')
+          - column: msg_sat1
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensaturday1_d365 <> opensaturday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_sat2
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensaturday2_d365 <> opensaturday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_sun1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensunday1_d365 <> opensunday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_sun2  
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensunday2_d365 <> opensunday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_mon3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closemonday1_d365 <> closemonday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_mon4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closemonday2_d365 <> closemonday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_tue3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closetuesday1_d365 <> closetuesday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_tue4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closetuesday2_d365 <> closetuesday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_wed3
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closewednesday1_d365 <> closewednesday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_wed4
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closewednesday2_d365 <> closewednesday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_thu3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closethursday1_d365 <> closethursday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_thu4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closethursday2_d365 <> closethursday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_fri3
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closefriday1_d365 <> closefriday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_fri4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closefriday2_d365 <> closefriday2_mdg , 'attributes are mismatching','-')
+          - column: msg_sat3
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesaturday1_d365 <> closesaturday1_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_sat4
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesaturday2_d365 <> closesaturday2_mdg , 'attributes are mismatching' ,'-')
+          - column: msg_sun3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesunday1_d365 <> closesunday1_mdg , 'attributes are mismatching','-')
+          - column: msg_sun4
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesunday2_d365 <> closesunday2_mdg , 'attributes are mismatching' ,'-')         
+          - column: attr_name_factory_cal
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND factory_calendar_d365 <> factory_calendar_mdg , concat('UNLOADING POINTS:',' FACTORY CALENDAR'),'-')
+          - column: attr_name_mon1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openmonday1_d365 <> openmonday1_mdg , concat('UNLOADING POINTS:',' OPEN MONDAY 1') ,'-')
+          - column: attr_name_mon2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openmonday2_d365 <> openmonday2_mdg , concat('UNLOADING POINTS:',' OPEN MONDAY 2') ,'-')
+          - column: attr_name_tue1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opentuesday1_d365 <> opentuesday1_mdg , concat('UNLOADING POINTS:',' OPEN TUESDAY 1') ,'-')
+          - column: attr_name_tue2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opentuesday2_d365 <> opentuesday2_mdg , concat('UNLOADING POINTS:',' OPEN TUESDAY 2') ,'-')
+          - column: attr_name_wed1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openwednesday1_d365 <> openwednesday1_mdg , concat('UNLOADING POINTS:',' OPEN WEDNESDAY 1') ,'-')
+          - column: attr_name_wed2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openwednesday2_d365 <> openwednesday2_mdg , concat('UNLOADING POINTS:',' OPEN WEDNESDAY 2') ,'-')
+          - column: attr_name_thu1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openthursday1_d365 <> openthursday1_mdg , concat('UNLOADING POINTS:',' OPEN THURSDAY 1') ,'-')
+          - column: attr_name_thu2
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openthursday2_d365 <> openthursday2_mdg , concat('UNLOADING POINTS:',' OPEN THURSDAY 2') ,'-')
+          - column: attr_name_fri1
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openfriday1_d365 <> openfriday1_mdg , concat('UNLOADING POINTS:',' OPEN FRIDAY 1') ,'-')
+          - column: attr_name_fri2
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND openfriday2_d365 <> openfriday2_mdg , concat('UNLOADING POINTS:',' OPEN FRIDAY 2') ,'-')
+          - column: attr_name_sat1
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensaturday1_d365 <> opensaturday1_mdg , concat('UNLOADING POINTS:',' OPEN SATURDAY 1') ,'-')
+          - column: attr_name_sat2
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensaturday2_d365 <> opensaturday2_mdg , concat('UNLOADING POINTS:',' OPEN SATURDAY 2') ,'-')
+          - column: attr_name_sun1
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensunday1_d365 <> opensunday1_mdg , concat('UNLOADING POINTS:',' OPEN SUNDAY 1') ,'-')
+          - column: attr_name_sun2  
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND opensunday2_d365 <> opensunday2_mdg , concat('UNLOADING POINTS:',' OPEN SUNDAY 2') ,'-')
+          - column: attr_name_mon3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closemonday1_d365 <> closemonday1_mdg , concat('UNLOADING POINTS:',' CLOSE MONDAY 1') ,'-')
+          - column: attr_name_mon4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closemonday2_d365 <> closemonday2_mdg , concat('UNLOADING POINTS:',' CLOSE MONDAY 2') ,'-')
+          - column: attr_name_tue3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closetuesday1_d365 <> closetuesday1_mdg , concat('UNLOADING POINTS:',' CLOSE TUESDAY 1') ,'-')
+          - column: attr_name_tue4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closetuesday2_d365 <> closetuesday2_mdg , concat('UNLOADING POINTS:',' CLOSE TUESDAY 2') ,'-')
+          - column: attr_name_wed3
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closewednesday1_d365 <> closewednesday1_mdg , concat('UNLOADING POINTS:',' CLOSE WEDNESDAY 1') ,'-')
+          - column: attr_name_wed4
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closewednesday2_d365 <> closewednesday2_mdg , concat('UNLOADING POINTS:',' CLOSE WEDNESDAY 2') ,'-')
+          - column: attr_name_thu3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closethursday1_d365 <> closethursday1_mdg , concat('UNLOADING POINTS:',' CLOSE THURSDAY 1') ,'-')
+          - column: attr_name_thu4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closethursday2_d365 <> closethursday2_mdg , concat('UNLOADING POINTS:',' CLOSE THURSDAY 2') ,'-')
+          - column: attr_name_fri3
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closefriday1_d365 <> closefriday1_mdg , concat('UNLOADING POINTS:',' CLOSE FRIDAY 1') ,'-')
+          - column: attr_name_fri4
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closefriday2_d365 <> closefriday2_mdg , concat('UNLOADING POINTS:',' CLOSE FRIDAY 2') ,'-')
+          - column: attr_name_sat3
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesaturday1_d365 <> closesaturday1_mdg , concat('UNLOADING POINTS:',' CLOSE SATURDAY 1') ,'-')
+          - column: attr_name_sat4
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesaturday2_d365 <> closesaturday2_mdg , concat('UNLOADING POINTS:',' CLOSE SATURDAY 2') ,'-')
+          - column: attr_name_sun3
+            expression:  if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesunday1_d365 <> closesunday1_mdg , concat('UNLOADING POINTS:',' CLOSE SUNDAY 1') ,'-')
+          - column: attr_name_sun4
+            expression: if( partner_mdg = partner_d365 AND unloading_points_mdg = unloading_points_d365 AND closesunday2_d365 <> closesunday2_mdg , concat('UNLOADING POINTS:',' CLOSE SUNDAY 2') ,'-')      
+          - column: country
+            expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+          - column: domain
+            expression: '''CUSTOMER'''
+          - column: table_name
+            expression: '''UNLOADING POINTS'''
+          - column: src_system
+            expression: '''mdg'''
+          - column: tgt_system
+            expression: '''d365'''
+          - column: loading_date
+            expression: current_date()      
+      
+###############################################################      
+    - kind: filter
+      name: filter_mismatched_factory_cal
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_factory_cal <> '-' 
+        
+    - kind: select
+      name: final_unload_points_factory_calendar
+      context_name: filter_mismatched_factory_cal
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_factory_cal: msg
+          attr_name_factory_cal: attr_name
+          factory_calendar_d365: tgt_attr
+          factory_calendar_mdg: src_attr   
+                    
+            
+    - kind: filter
+      name: filter_mismatched_mon1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_mon1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openmonday1
+      context_name: filter_mismatched_mon1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mon1: msg
+          attr_name_mon1: attr_name
+          openmonday1_d365: tgt_attr
+          openmonday1_mdg: src_attr    
+                      
+            
+    - kind: filter
+      name: filter_mismatched_mon2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_mon2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openmonday2
+      context_name: filter_mismatched_mon2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mon2: msg
+          attr_name_mon2: attr_name
+          openmonday2_d365: tgt_attr
+          openmonday2_mdg: src_attr 
+            
+    - kind: filter
+      name: filter_mismatched_tue1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_tue1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_opentuesday1
+      context_name: filter_mismatched_tue1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_tue1: msg
+          attr_name_tue1: attr_name
+          opentuesday1_d365: tgt_attr
+          opentuesday1_mdg: src_attr   
+            
+    - kind: filter
+      name: filter_mismatched_tue2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_tue2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_opentuesday2
+      context_name: filter_mismatched_tue2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_tue2: msg
+          attr_name_tue2: attr_name
+          opentuesday2_d365: tgt_attr
+          opentuesday2_mdg: src_attr   
+    
+    - kind: filter
+      name: filter_mismatched_wed1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_wed1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openwednesday1
+      context_name: filter_mismatched_wed1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_wed1: msg
+          attr_name_wed1: attr_name
+          openwednesday1_d365: tgt_attr
+          openwednesday1_mdg: src_attr    
+            
+    - kind: filter
+      name: filter_mismatched_wed2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_wed2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openwednesday2
+      context_name: filter_mismatched_wed2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_wed2: msg
+          attr_name_wed2: attr_name
+          openwednesday2_d365: tgt_attr
+          openwednesday2_mdg: src_attr  
+            
+    - kind: filter
+      name: filter_mismatched_thu1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_thu1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openthursday1
+      context_name: filter_mismatched_thu1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_thu1: msg
+          attr_name_thu1: attr_name
+          openthursday1_d365: tgt_attr
+          openthursday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_thu2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_thu2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openthursday2
+      context_name: filter_mismatched_thu2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_thu2: msg
+          attr_name_thu2: attr_name
+          openthursday2_d365: tgt_attr
+          openthursday2_mdg: src_attr  
+            
+    - kind: filter
+      name: filter_mismatched_fri1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_fri1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openfriday1
+      context_name: filter_mismatched_fri1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_fri1: msg
+          attr_name_fri1: attr_name
+          openfriday1_d365: tgt_attr
+          openfriday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_fri2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_fri2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_openfriday2
+      context_name: filter_mismatched_fri2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_fri2: msg
+          attr_name_fri2: attr_name
+          openfriday2_d365: tgt_attr
+          openfriday2_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_sat1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sat1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_opensaturday1
+      context_name: filter_mismatched_sat1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sat1: msg
+          attr_name_sat1: attr_name
+          opensaturday1_d365: tgt_attr
+          opensaturday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_sat2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sat2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_opensaturday2
+      context_name: filter_mismatched_sat2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sat2: msg
+          attr_name_sat2: attr_name
+          opensaturday2_d365: tgt_attr
+          opensaturday2_mdg: src_attr  
+            
+    - kind: filter
+      name: filter_mismatched_sun1_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sun1 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_opensunday1
+      context_name: filter_mismatched_sun1_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sun1: msg
+          attr_name_sun1: attr_name
+          opensunday1_d365: tgt_attr
+          opensunday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_sun2_open
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sun2 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_opensunday2
+      context_name: filter_mismatched_sun2_open
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sun2: msg
+          attr_name_sun2: attr_name
+          opensunday2_d365: tgt_attr
+          opensunday2_mdg: src_attr
+            
+##  ############################################################################################
+    
+    
+    - kind: filter
+      name: filter_mismatched_mon3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_mon3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closemonday1
+      context_name: filter_mismatched_mon3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mon3: msg
+          attr_name_mon3: attr_name
+          closemonday1_d365: tgt_attr
+          closemonday1_mdg: src_attr                       
+            
+    - kind: filter
+      name: filter_mismatched_mon4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_mon4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closemonday2
+      context_name: filter_mismatched_mon4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_mon4: msg
+          attr_name_mon4: attr_name
+          closemonday2_d365: tgt_attr
+          closemonday2_mdg: src_attr  
+            
+    - kind: filter
+      name: filter_mismatched_tue3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_tue3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closetuesday1
+      context_name: filter_mismatched_tue3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_tue3: msg
+          attr_name_tue3: attr_name
+          closetuesday1_d365: tgt_attr
+          closetuesday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_tue4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_tue4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closetuesday2
+      context_name: filter_mismatched_tue4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_tue4: msg
+          attr_name_tue4: attr_name
+          closetuesday2_d365: tgt_attr
+          closetuesday2_mdg: src_attr   
+            
+    - kind: filter
+      name: filter_mismatched_wed3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_wed3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closewednesday1
+      context_name: filter_mismatched_wed3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_wed3: msg
+          attr_name_wed3: attr_name
+          closewednesday1_d365: tgt_attr
+          closewednesday1_mdg: src_attr    
+            
+    - kind: filter
+      name: filter_mismatched_wed4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_wed4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closewednesday2
+      context_name: filter_mismatched_wed4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_wed4: msg
+          attr_name_wed4: attr_name
+          closewednesday2_d365: tgt_attr
+          closewednesday2_mdg: src_attr  
+           
+    - kind: filter
+      name: filter_mismatched_thu3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_thu3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closethursday1
+      context_name: filter_mismatched_thu3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_thu3: msg
+          attr_name_thu3: attr_name
+          closethursday1_d365: tgt_attr
+          closethursday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_thu4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_thu4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closethursday2
+      context_name: filter_mismatched_thu4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_thu4: msg
+          attr_name_thu4: attr_name
+          closethursday2_d365: tgt_attr
+          closethursday2_mdg: src_attr   
+    
+    - kind: filter
+      name: filter_mismatched_fri3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_fri3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closefriday1
+      context_name: filter_mismatched_fri3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_fri3: msg
+          attr_name_fri3: attr_name
+          closefriday1_d365: tgt_attr
+          closefriday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_fri4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_fri4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closefriday2
+      context_name: filter_mismatched_fri4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_fri4: msg
+          attr_name_fri4: attr_name
+          closefriday2_d365: tgt_attr
+          closefriday2_mdg: src_attr   
+            
+    - kind: filter
+      name: filter_mismatched_sat3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sat3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closesaturday1
+      context_name: filter_mismatched_sat3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sat3: msg
+          attr_name_sat3: attr_name
+          closesaturday1_d365: tgt_attr
+          closesaturday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_sat4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sat4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closesaturday2
+      context_name: filter_mismatched_sat4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sat4: msg
+          attr_name_sat4: attr_name
+          closesaturday2_d365: tgt_attr
+          closesaturday2_mdg: src_attr   
+            
+    - kind: filter
+      name: filter_mismatched_sun3_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sun3 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closesunday1
+      context_name: filter_mismatched_sun3_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sun3: msg
+          attr_name_sun3: attr_name
+          closesunday1_d365: tgt_attr
+          closesunday1_mdg: src_attr
+            
+    - kind: filter
+      name: filter_mismatched_sun4_close
+      context_name: add_mismatched_temp
+      params:
+        - condition:
+            msg_sun4 <> '-' 
+        
+    - kind: select
+      name: final_unload_points_closesunday2
+      context_name: filter_mismatched_sun4_close
+      params:
+        columns:
+          partner_mdg: partner
+          unloading_points_mdg: unloading_points
+          src_system: src_system
+          tgt_system: tgt_system
+          msg_sun4: msg
+          attr_name_sun4: attr_name
+          closesunday2_d365: tgt_attr
+          closesunday2_mdg: src_attr
+    
+    
+
+###############################################################################################
+
+    - kind: union
+      name: union_comparison_mismatch
+      context_name: final_unload_points_openmonday1      
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openmonday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closemonday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closemonday2
+
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_opentuesday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_opentuesday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closetuesday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closetuesday2
+
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openwednesday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openwednesday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closewednesday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closewednesday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openthursday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openthursday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closethursday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closethursday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openfriday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_openfriday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closefriday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closefriday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_opensaturday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_opensaturday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closesaturday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closesaturday2
+
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_opensunday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_opensunday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closesunday1
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_closesunday2
+
+    - kind: union
+      name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_unload_points_factory_calendar
+
+
+################################################################################
+    - kind: union
+      name: union_comparison
+      context_name: union_comparison_mismatch
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_mdg
+
+    - kind: union
+      name: union_comparison
+      params:
+        allow_missing: true
+        by_name: true
+        other: final_data_missing_from_d365
+
+
+    - kind: read_dataio
+      name: read_mdg_kna1
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_mdg
+        namespace: customer
+        object_name: kna1
+        schema_version: v1
+
+    - kind: select
+      name: select_kna1
+      context_name: read_mdg_kna1
+      params:
+        columns:
+          kunnr: kunnr_kna1
+          ktokd: ktokd_kna1
+          aufsd: aufsd_kna1
+
+    - kind: read_dataio
+      name: read_t077x
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: t077x
+        schema_version: v1
+
+    - kind: filter
+      name: filter_t077x
+      params:
+        - condition: spras = 'E' and sap_cluster = 'CL1'
+
+    - kind: select
+      name: select_t077x
+      params:
+        columns:
+          ktokd: ktokd_t077x
+          txt30: txt30_t077x
+        distinct: true
+
+    - kind: read_dataio
+      name: read_tvv4t
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: sap_s4hana
+        namespace: reference_data
+        object_name: tvv4t
+        schema_version: v1
+
+    - kind: filter
+      name: filter_tvv4t
+      params:
+        - condition: sap_cluster = 'CL1' and spras = 'E'
+
+    - kind: select
+      name: select_tvv4t
+      params:
+        columns:
+          kvgr4: kvgr4_tvv4t
+          bezei: bezei_tvv4t
+        distinct: true
+
+    - kind: join
+      name: join_final
+      context_name: union_comparison
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+        - other:
+            select_t077x
+          how:
+            left
+          columns:
+            ktokd_kna1: ktokd_t077x
+        - other:
+            select_mdg_knvv
+          how:
+            left
+          columns:
+            kunnr_kna1: kunnr_knvv
+        - other:
+            select_tvv4t
+          how:
+            left
+          columns:
+            kvgr4_knvv: kvgr4_tvv4t
+
+    - kind: filter
+      name: filter_mdg_kna1
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+        
+    - kind: add
+      name: add_missing_columns
+      params:
+        - column: COMPARISON_LOADING_DATE
+          expression: CURRENT_DATE
+        - column: NULL_Value
+          expression: cast(NULL as string)
+        - column: DOMAIN
+          expression: cast('CUSTOMER' as string)
+        - column: TABLE_NAME
+          expression: cast('UNLOADING POINTS' as string)
+        - column: ATTRIBUTE5
+          expression: CONCAT(kvgr4_knvv,' - ',bezei_tvv4t)
+        - column: ATTRIBUTE10
+          expression: CONCAT(ktokd_kna1,' - ',txt30_t077x)
+        - column: COUNTRY
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+
+    - kind: select
+      name: select_final
+      params:
+        columns:
+          DOMAIN: domain
+          TABLE_NAME: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          msg: dimension
+          partner: primary_key_l1
+          NULL_Value: primary_key_src_l2
+          NULL_Value: primary_key_tgt_l2
+          NULL_Value: primary_key_src_l3
+          NULL_Value: primary_key_tgt_l3
+          NULL_Value: attribute1
+          NULL_Value: attribute2
+          Unloading_Points: attribute3
+          aufsd_kna1: attribute4
+          ATTRIBUTE5: attribute5
+          vkorg_knvv: attribute6
+          vtweg_knvv: attribute7
+          spart_knvv: attribute8
+          NULL_Value: attribute9
+          ATTRIBUTE10: attribute10
+          COUNTRY: country
+          attr_name: compared_attribute
+          src_attr: compared_src_attr_value
+          tgt_attr: compared_tgt_attr_value
+          COMPARISON_LOADING_DATE: loading_date
+
+    - kind: write_dataio
+      name: write_bank_details
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True
+
+################################ agg ############################
+
+# ### mdg ###
+    - kind: select
+      name: select_mdg_agg
+      context_name: mdg
+      params:
+        columns:
+          partner_mdg: partner_mdg
+          hash_mdg: hash_mdg
+        distinct: true
+
+    - kind: join
+      name: join_kna1_select_mdg_agg
+      context_name: select_mdg_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_mdg: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_mdg_agg
+      context_name: join_kna1_select_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns_mdg_agg
+      context_name: filter_aufSD_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(PARTNER_mdg, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(PARTNER_mdg, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_mdg_agg
+      context_name: add_missing_columns_mdg_agg
+      params:
+        - aggs:
+            hash_mdg: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_mdg_agg_final_cnt
+      context_name: group_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_hash_mdg: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+    - kind: cast
+      name: cast_cnt
+      context_name: select_mdg_agg_final_cnt
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+
+### d365 ###
+    - kind: select
+      name: select_d365_agg
+      context_name: d365
+      params:
+        columns:
+          partner_d365: partner_d365
+          hash_d365: hash_d365
+        distinct: true
+
+    - kind: join
+      name: join_kna1_select_d365_agg
+      context_name: select_d365_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner_d365: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_d365_agg
+      context_name: join_kna1_select_d365_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns_d365_agg
+      context_name: filter_aufSD_d365_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner_d365, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner_d365, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner_d365, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner_d365, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner_d365, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner_d365, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner_d365, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner_d365, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner_d365, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner_d365, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner_d365, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner_d365, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner_d365, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner_d365, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner_d365, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner_d365, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner_d365, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner_d365, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner_d365, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner_d365, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner_d365, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner_d365, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner_d365, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner_d365, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner_d365, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner_d365, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner_d365, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner_d365, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner_d365, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('d365' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('TOTAL COUNT' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_d365_agg
+      context_name: add_missing_columns_d365_agg
+      params:
+        - aggs:
+            hash_d365: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_d365_agg_final_cnt
+      context_name: group_d365_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_hash_d365: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+    - kind: cast
+      name: cast_cnt
+      context_name: select_d365_agg_final_cnt
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+
+### data_missing_from_mdg ###
+    - kind: select
+      name: select_data_missing_from_mdg_agg
+      context_name: final_data_missing_from_mdg
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: join
+      name: join_kna1_missing_mdg_agg
+      context_name: select_data_missing_from_mdg_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_missing_mdg_agg
+      context_name: join_kna1_missing_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_mdg_agg
+      context_name: filter_aufSD_missing_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('d365' as string)
+        - column: tgt_system
+          expression: cast('mdg' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM MDG' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_mdg_agg
+      context_name: add_missing_columns_data_missing_from_mdg_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_mdg_agg_final_cnt
+      context_name: group_data_missing_from_mdg_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+    - kind: cast
+      name: cast_cnt
+      context_name: select_data_missing_from_mdg_agg_final_cnt
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+
+### data_missing_from_d365 ###
+    - kind: select
+      name: select_data_missing_from_d365_agg
+      context_name: final_data_missing_from_d365
+      params:
+        columns:
+          partner: partner
+        distinct: true
+
+    - kind: join
+      name: join_kna1_missing_d365_agg
+      context_name: select_data_missing_from_d365_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_missing_d365_agg
+      context_name: join_kna1_missing_d365_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+    - kind: add
+      name: add_missing_columns_data_missing_from_d365_agg
+      context_name: filter_aufSD_missing_d365_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('DATA MISSING FROM D365' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_missing_from_d365_agg
+      context_name: add_missing_columns_data_missing_from_d365_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_missing_from_d365_final_cnt
+      context_name: group_data_missing_from_d365_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+    - kind: cast
+      name: cast_cnt
+      context_name: select_data_missing_from_d365_final_cnt
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+
+# ### mismatch ###
+    - kind: select
+      name: select_data_mismatch_agg
+      context_name: union_comparison_mismatch
+      params:
+        columns:
+          partner: partner
+        distinct: true
+        
+    - kind: join
+      name: join_kna1_mismatch_mdg_agg
+      context_name: select_data_mismatch_agg
+      params:
+        - other:
+            select_kna1
+          how:
+            left
+          columns:
+            partner: kunnr_kna1
+
+    - kind: filter
+      name: filter_aufSD_mismatch_mdg_agg
+      context_name: join_kna1_mismatch_mdg_agg
+      params:
+        - condition: aufsd_kna1 in ('C','CW','I','M','S1','TS','VF','WH','')
+
+
+    - kind: add
+      name: add_missing_columns_data_mismatch_agg
+      context_name: filter_aufSD_mismatch_mdg_agg
+      params:
+        - column: country
+          expression: CASE WHEN Substr(partner, 0, 2) = 96 THEN 'AM'
+            WHEN Substr(partner, 0, 2) = 12 THEN 'AT'
+            WHEN Substr(partner, 0, 2) = 28 THEN 'BA'
+            WHEN Substr(partner, 0, 2) = 13 THEN 'BG'
+            WHEN Substr(partner, 0, 2) = 23 THEN 'BY'
+            WHEN Substr(partner, 0, 2) = 27 THEN 'CH'
+            WHEN Substr(partner, 0, 2) = 40 THEN 'CY'
+            WHEN Substr(partner, 0, 2) = 18 THEN 'CZ'
+            WHEN Substr(partner, 0, 2) = 32 THEN 'EE'
+            WHEN Substr(partner, 0, 2) = 47 THEN 'EG'
+            WHEN Substr(partner, 0, 2) = 35 THEN 'GB'
+            WHEN Substr(partner, 0, 2) = 30 THEN 'GR'
+            WHEN Substr(partner, 0, 2) = 25 THEN 'HR'
+            WHEN Substr(partner, 0, 2) = 16 THEN 'HU'
+            WHEN Substr(partner, 0, 2) = 34 THEN 'IE'
+            WHEN Substr(partner, 0, 2) = 29 THEN 'IT'
+            WHEN Substr(partner, 0, 2) = 42 THEN 'KV'
+            WHEN Substr(partner, 0, 2) = 33 THEN 'LT'
+            WHEN Substr(partner, 0, 2) = 31 THEN 'LV'
+            WHEN Substr(partner, 0, 2) = 17 THEN 'MD'
+            WHEN Substr(partner, 0, 2) = 15 THEN 'ME'
+            WHEN Substr(partner, 0, 2) = 95 THEN 'MK'
+            WHEN Substr(partner, 0, 2) = 94 THEN 'NG'
+            WHEN Substr(partner, 0, 2) = 24 THEN 'PL'
+            WHEN Substr(partner, 0, 2) = 26 THEN 'RO'
+            WHEN Substr(partner, 0, 2) = 14 THEN 'RS'
+            WHEN Substr(partner, 0, 2) = 21 THEN 'SI'
+            WHEN Substr(partner, 0, 2) = 19 THEN 'SK'
+            WHEN Substr(partner, 0, 2) = 22 THEN 'UA' END
+        - column: table_name
+          expression: cast('UNLOADING POINTS' as string)
+        - column: src_system
+          expression: cast('mdg' as string)
+        - column: tgt_system
+          expression: cast('d365' as string)
+        - column: dimension
+          expression: cast('ATTRIBUTES ARE MISMATCHING' as string)
+        - column: loading_date
+          expression: CURRENT_DATE
+
+    - kind: group
+      name: group_data_mismatch_agg
+      context_name: add_missing_columns_data_mismatch_agg
+      params:
+        - aggs:
+            partner: count
+          by:
+          - country
+          - table_name
+          - src_system
+          - tgt_system
+          - dimension
+          - loading_date
+
+    - kind: select
+      name: select_data_mismatch_final_CNT
+      context_name: group_data_mismatch_agg
+      params:
+        columns:
+          table_name: table_name
+          src_system: src_system
+          tgt_system: tgt_system
+          dimension: dimension
+          count_partner: cnt
+          country: country
+          loading_date: loading_date
+        distinct: true
+
+    - kind: cast
+      name: cast_cnt
+      context_name: select_data_mismatch_final_CNT
+      params:
+      - column: cnt
+        to: integer
+
+    - kind: write_dataio
+      name: write_aggregated
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: recon_aggregated_prod
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition

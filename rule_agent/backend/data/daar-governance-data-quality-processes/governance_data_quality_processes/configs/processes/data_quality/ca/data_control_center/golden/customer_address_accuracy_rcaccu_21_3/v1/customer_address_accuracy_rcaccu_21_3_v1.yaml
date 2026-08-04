@@ -1,0 +1,245 @@
+transform:
+  name: postal_geonames_accuracy
+  operations:
+
+  - kind: nested_process
+    name: customer_segmentation_conformity_rcaccu_225_2
+    params:
+      config_path: "processes/data_quality/ca/data_control_center/golden/customer_segmentation_accuracy_rcaccu_225_2/v1/customer_segmentation_accuracy_rcaccu_225_2_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+
+  - kind: select
+    name: select_rcaccu_225_2
+    params:
+      columns:
+        check_status: check_status_rcaccu_225_2
+        customer_code: customer_code
+      distinct: true
+
+  - kind: nested_process
+    name: customer_address_conformity_rcaccu_22_5
+    params:
+      config_path: "processes/data_quality/ca/data_control_center/golden/customer_address_conformity_rcaccu_22_5/v1/customer_address_conformity_rcaccu_22_5_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+
+  - kind: select
+    name: select_rcaccu_22_5
+    params:
+      columns:
+        check_status: check_status_rcaccu_22_5
+        customer_code: customer_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        address_number: address_number
+        longitude: longitude
+        latitude: latitude
+        city: city
+        city_translit: city_translit
+        country_code: country_code
+        post_code: post_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dcc_geocoords_extractor_dic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dcc_geocoords_extractor_dic
+      schema_version: v1
+
+  - kind: select
+    context_name: read_dcc_geocoords_extractor_dic
+    name: select_dcc_geocoords_extractor_dic
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        longitude: longitude
+        geocoords_extractor: geocoords_extractor
+      distinct: false
+
+  - kind: read_dataio
+    name: read_dcc_geocoords_extractor_geonames_postdic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dcc_geocoords_extractor_geonames_postdic
+      schema_version: v1
+
+  - kind: select
+    context_name: read_dcc_geocoords_extractor_geonames_postdic
+    name: select_dcc_geocoords_extractor_geonames_postdic
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: latitude
+        longitude: longitude
+        geocoords_extractor: geocoords_extractor2
+      distinct: false
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dcc_geocoords_extractor_dic
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          latitude: latitude
+          longitude: longitude
+      - other:
+          select_dcc_geocoords_extractor_geonames_postdic
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          latitude: latitude
+          longitude: longitude
+      - other:
+          select_rcaccu_225_2
+        how:
+          left
+        columns:
+          customer_code: customer_code
+      - other:
+          select_rcaccu_22_5
+        how:
+          left
+        columns:
+          customer_code: customer_code
+
+  - kind: add
+    name: add_dependencies
+    context_name: join_data_marts
+    params:
+    params:
+      - column: country_validation
+        expression: check_status_rcaccu_225_2
+      - column: city_validation
+        expression: check_status_rcaccu_22_5
+
+  - kind: select
+    name: select_fields
+    context_name: add_dependencies
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        latitude: latitude
+        longitude: longitude
+        post_code: postal_code
+        country_validation: country_validation
+        city_validation: city_validation
+        geocoords_extractor: geocoords_extractor
+        geocoords_extractor2: geocoords_extractor2
+      distinct: false
+
+  - kind: governance_data_quality_processes.custom_operations.city_standarization.geocoords_postal_conformity.GeocoordsPostalConformityOperation
+    name: geocoords_postal_conformity
+    config_kind: governance_data_quality_processes.custom_operation_configs.city_standarization.geocoords_postal_conformity_config.GeocoordsPostalConformityOperationConfig
+    context_name: select_fields
+    params:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        latitude: latitude
+        longitude: longitude
+        postal_code: postal_code
+        country_validation: country_validation
+        city_validation: city_validation
+        geocoords_extractor: geocoords_extractor
+        geocoords_extractor2: geocoords_extractor2
+
+  - kind: add
+    name: add_check
+    context_name: geocoords_postal_conformity
+    params:
+      - column: rule_code
+        expression: "'RCACCU_21.3'"
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        checked_value: value_checked
+        advanced_check: check_details_message
+        check_date: check_date
+      distinct: true

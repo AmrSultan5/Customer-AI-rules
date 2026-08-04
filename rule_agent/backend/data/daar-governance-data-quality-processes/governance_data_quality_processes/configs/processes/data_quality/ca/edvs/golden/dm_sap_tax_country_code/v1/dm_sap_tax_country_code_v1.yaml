@@ -1,0 +1,277 @@
+transform:
+  name: edvs_tax_validation
+  operations:
+
+   - kind: read_dataio
+     name: read_dfkkbptaxnum
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: business_partner
+       object_name: dfkkbptaxnum
+       schema_version: v1
+
+   - kind: read_dataio
+     name: read_kna1
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: customer
+       object_name: kna1
+       schema_version: v1
+
+   - kind: read_dataio
+     name: read_knvv
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: sap_s4hana
+       namespace: customer
+       object_name: knvv
+       schema_version: v1
+
+   - kind: read_dataio
+     name: read_cluster_config
+     params:
+       dataio:
+         ad_id: '{{dataio.ad_id}}'
+         layer: curated
+         storage_id: '{{dataio.storage_id}}'
+       source: data_quality
+       namespace: data_control_center
+       object_name: cluster_config
+       schema_version: v2
+
+   - kind: select
+     name: select_dfkk
+     context_name: read_dfkkbptaxnum
+     params:
+       columns:
+         partner: partner_dfkk
+         taxtype: taxtype_dfkk
+         taxnum: taxnum_dfkk
+         sap_cluster: sap_cluster_dfkk
+       distinct: true
+
+   - kind: select
+     name: select_kna1
+     context_name: read_kna1
+     params:
+       columns:
+         kunnr: kunnr_kna1
+         land1: land1_kna1
+         ktokd: ktokd_kna1
+         adrnr: adrnr_kna1
+         aufsd: aufsd_kna1
+         loevm: loevm_kna1
+         sap_cluster: sap_cluster_kna1
+       distinct: true
+
+   - kind: filter
+     name: filter_kna1
+     context_name: select_kna1
+     params:
+       - condition:
+           NOT (loevm = 'X'
+           OR aufsd_kna1 IN ('S', 'NH', 'S3', 'S4', 'SY','S1')) AND
+           (ktokd_kna1 LIKE '7%' OR KTOKD LIKE '9%') 
+
+   - kind: select
+     name: select_knvv
+     context_name: read_knvv
+     params:
+       columns:
+         kunnr: kunnr_knvv
+         kvgr4: kvgr4_knvv
+         sap_cluster: sap_cluster_knvv
+       distinct: true
+
+   - kind: select
+     name: select_cc
+     context_name: read_cluster_config
+     params:
+       columns:
+         country_code: country_code_cc
+         cluster: cluster_cc
+       distinct: true
+
+#JOIN sap_data
+   - kind: join
+     name: join_kna1_cluster
+     context_name: filter_kna1
+     params:
+       - other:
+           select_cc
+         how:
+           left
+         columns:
+           land1_kna1: country_code_cc
+           sap_cluster_kna1: cluster_cc
+
+   - kind: add
+     name: add_sap_cluster
+     context_name: join_kna1_cluster
+     params:
+       - column: sap_cluster_kna1
+         expression: if(sap_cluster_kna1 IS NULL OR sap_cluster_kna1 = '', 'CL1', sap_cluster_kna1)
+         overwrite: true
+
+#JOIN sap_data
+
+   - kind: join
+     name: join_sap_data
+     context_name: add_sap_cluster
+     params:
+       - other:
+           select_knvv
+         how:
+           left
+         columns:
+           kunnr_kna1: kunnr_knvv
+           sap_cluster_kna1: sap_cluster_knvv
+       - other:
+           select_dfkk
+         how:
+           left
+         columns:
+           kunnr_kna1: partner_dfkk
+           sap_cluster_kna1: sap_cluster_dfkk
+
+   - kind: select
+     name: select_sap_data
+     context_name: join_sap_data
+     params:
+       columns:
+         kunnr_kna1: kunnr
+         land1_kna1: land1
+         ktokd_kna1: ktokd
+         taxtype_dfkk: taxtype
+         taxnum_dfkk: taxnum
+         sap_cluster_kna1: sap_cluster
+         aufsd_kna1: aufsd
+         kvgr4_knvv: kvgr4
+       distinct: true
+
+   - kind: add
+     name: add_tax_levels
+     context_name: select_sap_data
+     params:
+       - column: tax_category_0
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '0', taxtype, null)
+       - column: tax_0
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '0', taxnum, null)
+       - column: tax_category_1
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '1', taxtype, null)
+       - column: tax_1
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '1', taxnum, null)
+       - column: tax_category_2
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '2', taxtype, null)
+       - column: tax_2
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '2', taxnum, null)
+       - column: tax_category_3
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '3', taxtype, null)
+       - column: tax_3
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '3', taxnum, null)
+       - column: tax_category_4
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '4', taxtype, null)
+       - column: tax_4
+         expression: DECODE(TRUE, SUBSTR(taxtype, 3, 1) = '4', taxnum, null)
+       - column: last_update
+         expression: current_timestamp()
+
+   - kind: select
+     name: select_sap_agg_data
+     context_name: add_tax_levels
+     params:
+       columns:
+         kunnr: kunnr
+         land1: land1
+         ktokd: ktokd
+         taxnum: taxnum
+         tax_0: tax_0
+         tax_category_0: tax_category_0
+         tax_1: tax_1
+         tax_category_1: tax_category_1
+         tax_2: tax_2
+         tax_category_2: tax_category_2
+         tax_3: tax_3
+         tax_category_3: tax_category_3
+         tax_4: tax_4
+         tax_category_4: tax_category_4
+         aufsd: aufsd
+         kvgr4: kvgr4
+         last_update: last_update
+         sap_cluster: sap_cluster
+       distinct: true
+
+   - kind: group
+     name: group_tax_data
+     params:
+       - aggs:
+           tax_0: max
+           tax_category_0: max
+           tax_1: max
+           tax_category_1: max
+           tax_2: max
+           tax_category_2: max
+           tax_3: max
+           tax_category_3: max
+           tax_4: max
+           tax_category_4: max
+         by:
+         - kunnr
+         - land1
+         - ktokd
+        #  - taxnum
+         - aufsd
+         - kvgr4
+         - last_update
+         - sap_cluster
+
+   - kind: select
+     name: select_final_sap_data
+     context_name: group_tax_data
+     params:
+       columns:
+         kunnr: kunnr
+         land1: land1
+         ktokd: ktokd
+         max_tax_0: tax_0
+         max_tax_category_0: tax_category_0
+         max_tax_1: tax_1
+         max_tax_category_1: tax_category_1
+         max_tax_2: tax_2
+         max_tax_category_2: tax_category_2
+         max_tax_3: tax_3
+         max_tax_category_3: tax_category_3
+         max_tax_4: tax_4
+         max_tax_category_4: tax_category_4
+         aufsd: aufsd
+         kvgr4: kvgr4
+         last_update: last_update
+         sap_cluster: sap_cluster
+       distinct: true
+
+   - kind: write_dataio
+     name: write_dm_sap_tax_country_code
+     params:
+       dataio:
+         ad_id: "{{dataio.ad_id}}"
+         layer: application
+         storage_id: "{{dataio.storage_id}}"
+       application_name: data_quality
+       country: ca
+       module: edvs
+       namespace: golden
+       object_name: dm_sap_tax_country_code
+       process_run_id: "{{process_run_id}}"
+       schema_version: v1
+       refresh_mode: full

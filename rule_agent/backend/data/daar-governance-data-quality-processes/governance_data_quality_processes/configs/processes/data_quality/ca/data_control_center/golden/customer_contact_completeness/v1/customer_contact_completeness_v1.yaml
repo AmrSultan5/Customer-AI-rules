@@ -1,0 +1,950 @@
+transform:
+  name: customer_contact_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_contact
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_contact
+
+  - kind: select
+    name: select_dm_customer_general
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        customer_1_name: customer_1_name
+        country_code: country_code_cg
+        central_order_block_code: central_order_block_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_contact
+    context_name: read_dm_customer_contact
+    params:
+      columns:
+        customer_code: customer_code
+        customer_partner_code: customer_partner_code
+        function_of_partner: function_of_partner
+        last_name: last_name
+        first_name: first_name
+        source: source
+        email_address: email_address
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dcc
+    context_name: read_dm_customer_contact
+    params:
+      columns:
+        customer_code: customer_code_cc
+        function_of_partner: function_of_partner_cc
+        source: source_cc
+        sap_cluster: sap_cluster_cc
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_address_contact
+    context_name: read_dm_customer_address_contact
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        source: source
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_customer_contact
+    context_name: select_dm_customer_contact
+    params:
+      - condition:
+          source = 's4'
+
+  - kind: filter
+    name: filter_mobile_tel_number
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'mobile_tel_number' and source = 's4'
+
+  - kind: filter
+    name: filter_fax_number
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'fax_number' and source = 's4'
+
+  - kind: filter
+    name: filter_email_address
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'email_address' and source = 's4'
+
+  - kind: filter
+    name: filter_fixed_tel_number
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'fixed_tel_number' and source = 's4'
+
+  - kind: filter
+    name: filter_dm_customer_contact
+    context_name: select_dm_customer_contact
+    params:
+      - condition:
+          source = 's4'
+
+  - kind: select
+    name: select_mobile_tel_number
+    context_name: filter_mobile_tel_number
+    params:
+      columns:
+        customer_code: customer_code
+        source: source_mobile
+        contact_medium_value: contact_medium_value_mobile_tel_number
+        country_code: country_code_mobile_tel_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_fax_number
+    context_name: filter_fax_number
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_value: contact_medium_value_fax_number
+        country_code: country_code_fax_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_email_address
+    context_name: filter_email_address
+    params:
+      columns:
+        customer_code: customer_code
+        source: source_email
+        contact_medium_type: contact_medium_type_email
+        contact_medium_value: contact_medium_value_email_address
+        country_code: country_code_email_address
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_fixed_tel_number
+    context_name: filter_fixed_tel_number
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_value: contact_medium_value_fixed_tel_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          filter_dm_customer_contact
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_mobile_tel_number
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_fax_number
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_email_address
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_fixed_tel_number
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: group
+    name: group_contact_medium_value
+    context_name: join_data_marts
+    params:
+      - aggs:
+          contact_medium_value_email_address: max
+          contact_medium_value_mobile_tel_number: max
+          contact_medium_value_fixed_tel_number: max
+        by:
+        - customer_code
+
+  - kind: join
+    name: join_data_marts_gropu_group_contact_medium_value
+    context_name: join_data_marts
+    params:
+      - other:
+          group_contact_medium_value
+        how:
+          left
+        columns:
+          customer_code: customer_code
+
+#------------375_1---------------
+
+  - kind: filter
+    name: filter_mobile
+    context_name: read_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'mobile_tel_number'
+
+  - kind: select
+    name: select_dcac
+    context_name: filter_mobile
+    params:
+      columns:
+        customer_code: customer_code_cac
+        contact_medium_value: contact_medium_value_cac
+        source: source_cac
+        sap_cluster: sap_cluster_cac
+      distinct: true
+
+  - kind: group
+    name: group_375_1
+    context_name: select_dcac
+    params:
+      - aggs:
+          contact_medium_value_cac: max
+        by:
+        - customer_code_cac
+        - sap_cluster_cac
+
+  - kind: join
+    name: join_dcg_dcac_dcc
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dcac
+        how:
+          left
+        columns:
+          customer_code: customer_code_cac
+          sap_cluster: sap_cluster_cac
+      - other:
+          group_375_1
+        how:
+          left
+        columns:
+          customer_code_cac: customer_code_cac
+          sap_cluster_cac: sap_cluster_cac
+
+#RULE 375_1
+  - kind: add
+    name: add_rcconf_375_1
+    context_name: join_dcg_dcac_dcc
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_375.1'"
+      - column: check_status
+        expression: if(max_contact_medium_value_cac IS NOT NULL AND max_contact_medium_value_cac != '' and source_cac = 's4', '1', '0')
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: group
+    name: group_max_status_375
+    context_name: add_rcconf_375_1
+    params:
+      - aggs:
+          check_status: max
+        by:
+        - customer_code 
+        - central_order_block_code
+        - check_date
+        - max_contact_medium_value_cac
+        - rule_code
+
+  - kind: add
+    name: add_checks_375
+    context_name: group_max_status_375
+    params:
+      - column: max_check_status
+        expression: if(central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '', max_check_status)
+        overwrite: true
+
+  - kind: select
+    name: select_rccomp_375_1
+    context_name: add_checks_375
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        max_contact_medium_value_cac: value_checked
+        check_date: check_date
+      distinct: true
+
+# --------------------------------------------------Rules_378_1/2--------------------------------------------------
+
+  - kind: filter
+    name: filter_email_address_all_sources
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'email_address'
+
+  - kind: select
+    name: select_email_address_all_sources
+    context_name: filter_email_address_all_sources
+    params:
+      columns:
+        customer_code: customer_code
+        source: source_email
+        contact_medium_type: contact_medium_type_email_address
+        contact_medium_value: contact_medium_value_email_address
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_mobile_tel_number_all_sources
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'mobile_tel_number'
+
+  - kind: select
+    name: select_mobile_tel_number_all_sources
+    context_name: filter_mobile_tel_number_all_sources
+    params:
+      columns:
+        customer_code: customer_code
+        source: source_mobile
+        contact_medium_type: contact_medium_type_mobile_tel_number
+        contact_medium_value: contact_medium_value_mobile_tel_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_fixed_tel_number_all_sources
+    context_name: select_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'fixed_tel_number'
+
+  - kind: select
+    name: select_fixed_tel_number_all_sources
+    context_name: filter_fixed_tel_number_all_sources
+    params:
+      columns:
+        customer_code: customer_code
+        source: source_fixed
+        contact_medium_type: contact_medium_type_fixed_tel_number
+        contact_medium_value: contact_medium_value_fixed_tel_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_dcg_dcac_378
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_email_address_all_sources
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_mobile_tel_number_all_sources
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_fixed_tel_number_all_sources
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_contact
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dcg_dcac_378
+    context_name: join_dcg_dcac_378
+    params:
+      - column: function_of_partner
+        expression: "''"
+      - column: source_table
+        expression: "'cac'"
+
+  - kind: select
+    name: select_dcg_dcac_378
+    context_name: add_dcg_dcac_378
+    params:
+      columns:
+        customer_code: customer_code
+        source_email: source_email
+        contact_medium_type_email_address: contact_medium_type_email_address
+        contact_medium_value_email_address: contact_medium_value_email_address
+        source_mobile: source_mobile
+        contact_medium_type_mobile_tel_number: contact_medium_type_mobile_tel_number
+        contact_medium_value_mobile_tel_number: contact_medium_value_mobile_tel_number
+        source_fixed: source_fixed
+        contact_medium_type_fixed_tel_number: contact_medium_type_fixed_tel_number
+        contact_medium_value_fixed_tel_number: contact_medium_value_fixed_tel_number
+        central_order_block_code: central_order_block_code
+        function_of_partner: function_of_partner
+        source_table: source_table
+      distinct: true
+
+  - kind: join
+    name: join_dcg_dcc_378
+    context_name: select_dm_customer_general
+    params:
+      - other:
+          select_dm_customer_contact
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dcg_dcc_378
+    context_name: join_dcg_dcc_378
+    params:
+      - column: contact_medium_type_email_address
+        expression: "'email_address'"
+      - column: source_table
+        expression: "'cc'"
+      - column: contact_medium_type_mobile_tel_number
+        expression: "''"
+      - column: contact_medium_value_mobile_tel_number
+        expression: "''"
+      - column: source_mobile
+        expression: "''"
+      - column: contact_medium_type_fixed_tel_number
+        expression: "''"
+      - column: contact_medium_value_fixed_tel_number
+        expression: "''"
+      - column: source_fixed
+        expression: "''"
+
+
+  - kind: select
+    name: select_dcg_dcc_378
+    context_name: add_dcg_dcc_378
+    params:
+      columns:
+        customer_code: customer_code
+        source: source_email
+        contact_medium_type_email_address: contact_medium_type_email_address
+        email_address: contact_medium_value_email_address
+        source_mobile: source_mobile
+        contact_medium_type_mobile_tel_number: contact_medium_type_mobile_tel_number
+        contact_medium_value_mobile_tel_number: contact_medium_value_mobile_tel_number
+        source_fixed: source_fixed
+        contact_medium_type_fixed_tel_number: contact_medium_type_fixed_tel_number
+        contact_medium_value_fixed_tel_number: contact_medium_value_fixed_tel_number
+        central_order_block_code: central_order_block_code
+        function_of_partner: function_of_partner
+        source_table: source_table
+      distinct: true
+
+  - kind: union
+    name: union_dcg_dca_dcc_378
+    context_name: select_dcg_dcc_378
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_dcg_dcac_378
+
+  - kind: group
+    name: group_378
+    context_name: union_dcg_dca_dcc_378
+    params:
+      - aggs:
+          contact_medium_value_email_address: max
+          contact_medium_value_mobile_tel_number: max
+          contact_medium_value_fixed_tel_number: max
+        by:
+        - customer_code 
+    
+  - kind: join
+    name: join_378_final
+    context_name: union_dcg_dca_dcc_378
+    params:
+      - other:
+          group_378
+        how:
+          left
+        columns:
+          customer_code: customer_code
+
+  - kind: add
+    name: add_checks_378
+    context_name: join_378_final
+    params:
+      - column: rccomp_378_1
+        expression: if(max_contact_medium_value_email_address is not null AND max_contact_medium_value_email_address != ''
+                    and ((source_email='s4' or source_mobile = 's4') or (function_of_partner = 'Z3' and source_email = 'crm')), '1', '0')
+      - column: rccomp_378_2
+        expression: if((max_contact_medium_value_email_address is not null AND max_contact_medium_value_email_address != '' 
+                    AND ((contact_medium_type_email_address = 'email_address' AND source_table = 'cac' AND source_email = 's4') 
+                    OR (source_table = 'cc' AND (function_of_partner = 'Z3' AND source_email = 'crm')))) 
+                    OR ((max_contact_medium_value_mobile_tel_number is not null and max_contact_medium_value_mobile_tel_number != '') 
+                    AND ((contact_medium_type_mobile_tel_number = 'mobile_tel_number' AND source_table = 'cac' AND source_mobile = 's4') 
+                    OR (source_table = 'cc' AND (function_of_partner = 'Z3' AND source_mobile = 'crm'))))
+                    OR ((max_contact_medium_value_fixed_tel_number is not null and max_contact_medium_value_fixed_tel_number != '') 
+                    AND ((contact_medium_type_fixed_tel_number = 'fixed_tel_number' AND source_table = 'cac' AND source_fixed = 's4') 
+                    OR (source_table = 'cc' AND (function_of_partner = 'Z3' AND source_fixed = 'crm')))), '1', '0')
+      - column: rule_code_rccomp_378_1
+        expression: '''RCCOMP_378.1'''
+      - column: rule_code_rccomp_378_2
+        expression: '''RCCOMP_378.2'''
+      - column: rccomp_378_2_check_value
+        expression: concat_ws('_', max_contact_medium_value_email_address, 
+                    max_contact_medium_value_mobile_tel_number,
+                    max_contact_medium_value_fixed_tel_number)
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: group
+    name: group_max_status_378
+    context_name: add_checks_378
+    params:
+      - aggs:
+          rccomp_378_1: max
+          rccomp_378_2: max
+        by:
+        - customer_code 
+        - central_order_block_code
+        - rccomp_378_2_check_value
+        - check_date
+        - max_contact_medium_value_email_address
+        - rule_code_rccomp_378_1
+        - rule_code_rccomp_378_2
+
+  - kind: add
+    name: add_checks_378
+    context_name: group_max_status_378
+    params:
+      - column: max_rccomp_378_1
+        expression: if(central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '', max_rccomp_378_1)
+        overwrite: true
+      - column: max_rccomp_378_2
+        expression: if(central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '', max_rccomp_378_2)
+        overwrite: true
+
+# --------------------------------------------------Rules_378_1/2_END--------------------------------------------------
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts_gropu_group_contact_medium_value
+    params:
+      - column: rccomp_369_1
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '', if(isnull(customer_partner_code) or customer_partner_code = '', '0', '1'))
+      - column: rccomp_371_1
+        expression: if(isnull(customer_partner_code) or customer_partner_code = '', '', 
+                    if(isnull(function_of_partner) or function_of_partner = '', '0', '1'))
+      - column: rccomp_370_1
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '', if(isnull(last_name) or last_name = '', '0', '1'))
+      - column: rccomp_370_2
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '', if(isnull(first_name) or first_name = '', '0', '1'))
+      - column: rccomp_374_1
+        expression: if(isnull(country_code_mobile_tel_number) or country_code_mobile_tel_number = '', '0', '1')
+      - column: rccomp_375_2
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '', 
+                    if(isnull(coalesce(nullif(contact_medium_value_mobile_tel_number, ''), 
+                    nullif(contact_medium_value_fixed_tel_number, ''))), '0', '1'))
+      - column: rccomp_376_1
+        expression: if(isnull(country_code_fax_number) or country_code_fax_number = '', '0', '1')
+      - column: rccomp_377_1
+        expression: if(isnull(contact_medium_value_fax_number) or contact_medium_value_fax_number = '', '0', '1')
+      - column: rccomp_38_1
+        expression: if(isnull(contact_medium_value_fixed_tel_number) or contact_medium_value_fixed_tel_number = '', '0', '1')
+      - column: rule_code_rccomp_369_1
+        expression: '''RCCOMP_369.1'''
+      - column: rule_code_rccomp_371_1
+        expression: '''RCCOMP_371.1'''
+      - column: rule_code_rccomp_370_1
+        expression: '''RCCOMP_370.1'''
+      - column: rule_code_rccomp_370_2
+        expression: '''RCCOMP_370.2'''
+      - column: rule_code_rccomp_374_1
+        expression: '''RCCOMP_374.1'''
+      - column: rule_code_rccomp_375_2
+        expression: '''RCCOMP_375.2'''
+      - column: rule_code_rccomp_376_1
+        expression: '''RCCOMP_376.1'''
+      - column: rule_code_rccomp_377_1
+        expression: '''RCCOMP_377.1'''
+      - column: rule_code_rccomp_38_1
+        expression: '''RCCOMP_38.1'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rccomp_369_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_369_1: rule_code
+        rccomp_369_1: check_status
+        customer_code: customer_code
+        customer_partner_code: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_371_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_371_1: rule_code
+        rccomp_371_1: check_status
+        customer_code: customer_code
+        function_of_partner: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_370_1_in
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_370_1: rule_code
+        rccomp_370_1: check_status
+        customer_code: customer_code
+        last_name: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: group
+    name: group_max_status_370_1
+    context_name: select_rccomp_370_1_in
+    params:
+      - aggs:
+          check_status: max
+        by:
+        - rule_code 
+        - customer_code
+        - check_date
+
+  - kind: join
+    name: join_rccomp_370_1
+    context_name: select_rccomp_370_1_in
+    params:
+      - other:
+          group_max_status_370_1
+        how:
+          left
+        columns:
+          rule_code: rule_code 
+          customer_code: customer_code
+          check_date: check_date
+
+  - kind: select
+    name: select_rccomp_370_1
+    context_name: join_rccomp_370_1
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_370_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_370_2: rule_code
+        rccomp_370_2: check_status
+        customer_code: customer_code
+        first_name: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_374_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_374_1: rule_code
+        rccomp_374_1: check_status
+        customer_code: customer_code
+        country_code_mobile_tel_number: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_375_2_in
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_375_2: rule_code
+        rccomp_375_2: check_status
+        customer_code: customer_code
+        contact_medium_value_mobile_tel_number: contact_medium_value_mobile_tel_number
+        contact_medium_value_fixed_tel_number: contact_medium_value_fixed_tel_number
+        check_date: check_date
+      distinct: true
+
+  - kind: group
+    name: group_rcconf_375_2
+    context_name: select_rccomp_375_2_in
+    params:
+      - aggs:
+          check_status: max
+          contact_medium_value_mobile_tel_number: collect_set
+          contact_medium_value_fixed_tel_number: collect_set
+        by:
+        - customer_code
+        - rule_code
+        - check_date
+
+  - kind: add
+    name: add_rcconf_375_2
+    context_name: group_rcconf_375_2
+    params:
+      - column: contact_medium_value_union
+        expression: array_union(collect_set_contact_medium_value_mobile_tel_number, collect_set_contact_medium_value_fixed_tel_number)
+      - column: value_checked
+        expression: array_join(contact_medium_value_union, '_')
+
+  - kind: select
+    name: select_rccomp_375_2
+    context_name: add_rcconf_375_2
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_376_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_376_1: rule_code
+        rccomp_376_1: check_status
+        customer_code: customer_code
+        country_code_fax_number: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_377_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_377_1: rule_code
+        rccomp_377_1: check_status
+        customer_code: customer_code
+        contact_medium_value_fax_number: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_378_1
+    context_name: add_checks_378
+    params:
+      columns:
+        rule_code_rccomp_378_1: rule_code
+        max_rccomp_378_1: check_status
+        customer_code: customer_code
+        max_contact_medium_value_email_address: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_378_2
+    context_name: add_checks_378
+    params:
+      columns:
+        rule_code_rccomp_378_2: rule_code
+        max_rccomp_378_2: check_status
+        customer_code: customer_code
+        rccomp_378_2_check_value: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: select
+    name: select_rccomp_38_1
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rccomp_38_1: rule_code
+        rccomp_38_1: check_status
+        customer_code: customer_code
+        contact_medium_value_fixed_tel_number: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rccomp_369_1
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_371_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_370_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_370_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_374_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_375_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_375_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_376_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_377_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_378_1
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_378_2
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_38_1
+
+  - kind: write_dataio
+    name: write_customer_contact_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_contact_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

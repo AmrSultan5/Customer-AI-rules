@@ -1,0 +1,326 @@
+transform:
+  name: vendor_tax_completeness
+  operations:
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_vendor_tax
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_tax
+
+  - kind: read_dataio
+    name: read_conf_tax_standard_vendor
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_tax_standard_vendor
+      schema_version: v1
+
+  - kind: select
+    name: select_dm_vendor_general
+    context_name: read_dm_vendor_general
+    params:
+      columns:
+        vendor_code: vendor_code
+        vendor_natural_person_flag: vendor_natural_person_flag
+        country_of_origin: country_of_origin        
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_company
+    context_name: read_dm_vendor_company
+    params:
+      columns:
+        vendor_code: vendor_code
+        terms_of_payment_code: terms_of_payment_code
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_dm_vendor_tax
+    context_name: read_dm_vendor_tax
+    params:
+      columns:
+        vendor_code: vendor_code
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        tax_4_value: tax_4_value
+        tax_5_value: tax_5_value
+        tax_6_value: tax_6_value
+      distinct: true
+
+  - kind: select
+    name: select_conf_tax_standard_vendor
+    context_name: read_conf_tax_standard_vendor
+    params:
+      columns:
+        country_of_origin: country_of_origin_conf
+        tax_0_value: conf_tax_0_value
+        tax_1_value: conf_tax_1_value
+        tax_2_value: conf_tax_2_value
+        tax_3_value: conf_tax_3_value
+        tax_4_value: conf_tax_4_value
+        tax_5_value: conf_tax_5_value
+        tax_6_value: conf_tax_6_value
+      distinct: true
+
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dm_vendor_general
+    params:
+      - other:
+          select_dm_vendor_company
+        how:
+          inner
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_dm_vendor_tax
+        how:
+          left
+        columns:
+          vendor_code: vendor_code
+      - other:
+          select_conf_tax_standard_vendor
+        how:
+          left
+        columns:
+          country_of_origin: country_of_origin_conf
+
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: rcvomp_171_1
+        expression: if(isnull(country_of_origin_conf), '', 
+                    if(conf_tax_0_value = 0 and conf_tax_1_value = 0 and conf_tax_2_value = 0  
+                    and conf_tax_3_value = 0  and conf_tax_4_value = 0 
+                    and conf_tax_5_value = 0 and conf_tax_6_value = 0 , '', 
+                    if(country_code = 'IT' and (isnull(vendor_natural_person_flag) or vendor_natural_person_flag = '') 
+                    and tax_1_value = tax_2_value and tax_1_value = tax_3_value and tax_2_value = tax_3_value, '1', 
+                    if((conf_tax_0_value = 1 and (isnull(tax_0_value) or tax_0_value = '')) or 
+                    (conf_tax_1_value = 1 and (isnull(tax_1_value) or tax_0_value = '')) or 
+                    (conf_tax_2_value = 1 and (isnull(tax_2_value) or tax_0_value = '')) or 
+                    (conf_tax_3_value = 1 and (isnull(tax_3_value) or tax_0_value = '')) or 
+                    (conf_tax_4_value = 1 and (isnull(tax_4_value) or tax_0_value = '')) or 
+                    (conf_tax_5_value = 1 and (isnull(tax_5_value) or tax_0_value = '')) or 
+                    (conf_tax_6_value = 1 and (isnull(tax_6_value) or tax_0_value = '')), '0', '1'))))
+      - column: rcvomp_15_2
+        expression: if(isnull(terms_of_payment_code) or terms_of_payment_code='', '0', '1')
+      - column: rule_code_rcvomp_171_1
+        expression: '''RVCOMP_171.1'''
+      - column: rule_code_rcvomp_15_2
+        expression: '''RVCOMP_15.2'''
+      - column: value_checked_171_1
+        expression: if(rcvomp_171_1 = '1', 
+                    concat_ws('_', 
+                    if(conf_tax_0_value = 1, tax_0_value, ' '), 
+                    if(conf_tax_1_value = 1, tax_1_value, ' '), 
+                    if(conf_tax_2_value = 1, tax_2_value, ' '), 
+                    if(conf_tax_3_value = 1, tax_3_value, ' '), 
+                    if(conf_tax_4_value = 1, tax_4_value, ' '), 
+                    if(conf_tax_5_value = 1, tax_5_value, ' '), 
+                    if(conf_tax_6_value = 1, tax_6_value, ' ')),
+                    concat_ws('_', 
+                    if(conf_tax_0_value = 1, conf_tax_0_value, ' '), 
+                    if(conf_tax_1_value = 1, conf_tax_1_value, ' '), 
+                    if(conf_tax_2_value = 1, conf_tax_2_value, ' '), 
+                    if(conf_tax_3_value = 1, conf_tax_3_value, ' '), 
+                    if(conf_tax_4_value = 1, conf_tax_4_value, ' '), 
+                    if(conf_tax_5_value = 1, conf_tax_5_value, ' '), 
+                    if(conf_tax_6_value = 1, conf_tax_6_value, ' ')))
+      - column: concat_tax
+        expression: concat_ws('_', tax_0_value, tax_1_value, tax_2_value, tax_3_value, tax_4_value, tax_5_value, tax_6_value) 
+      - column: subdomain
+        expression: '''tax_completeness'''
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: group
+    name: group_rcvomp_171_1
+    context_name: add_checks
+    params:
+      - aggs:
+          value_checked_171_1: max
+        by:
+        - rule_code_rcvomp_171_1
+        - rcvomp_171_1
+        - vendor_code
+        - concat_tax
+        - check_date
+        - country_of_origin
+        - subdomain
+
+  - kind: filter
+    name: filter_rcvomp_171_1_passed
+    context_name: group_rcvomp_171_1
+    params:
+      - condition:
+          rcvomp_171_1 = '1'
+
+  - kind: filter
+    name: filter_rcvomp_171_1_failed
+    context_name: group_rcvomp_171_1
+    params:
+      - condition:
+          rcvomp_171_1 <> '1'
+
+  - kind: group
+    name: group_rcvomp_171_1_failed
+    context_name: filter_rcvomp_171_1_failed
+    params:
+      - aggs:
+          rcvomp_171_1: max
+          max_value_checked_171_1: max
+        by:
+        - rule_code_rcvomp_171_1
+        - vendor_code
+        - concat_tax
+        - check_date
+        - country_of_origin
+        - subdomain
+
+  - kind: select
+    name: select_rcvomp_171_1_passed_anti
+    context_name: filter_rcvomp_171_1_passed
+    params:
+      columns:
+        rule_code_rcvomp_171_1: rule_code_rcvomp_171_1
+        vendor_code: vendor_code
+        concat_tax: concat_tax
+        country_of_origin: country_of_origin
+        subdomain: subdomain
+      distinct: true
+
+
+  - kind: join
+    name: join_rcvomp_171_1_failed
+    context_name: group_rcvomp_171_1_failed
+    params:
+      - other:
+          select_rcvomp_171_1_passed_anti
+        how:
+          anti
+        columns:
+          rule_code_rcvomp_171_1: rule_code_rcvomp_171_1
+          vendor_code: vendor_code
+          concat_tax: concat_tax
+          country_of_origin: country_of_origin
+          subdomain: subdomain
+
+
+  - kind: select
+    name: select_rcvomp_171_1_passed
+    context_name: filter_rcvomp_171_1_passed
+    params:
+      columns:
+        rule_code_rcvomp_171_1: rule_code
+        rcvomp_171_1: check_status
+        vendor_code: vendor_code
+        max_value_checked_171_1: value_checked
+        check_date: check_date
+        country_of_origin: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_171_1_failed
+    context_name: join_rcvomp_171_1_failed
+    params:
+      columns:
+        rule_code_rcvomp_171_1: rule_code
+        max_rcvomp_171_1: check_status
+        vendor_code: vendor_code
+        max_max_value_checked_171_1: value_checked
+        check_date: check_date
+        country_of_origin: country_code
+        subdomain: subdomain
+      distinct: true
+
+  - kind: select
+    name: select_rcvomp_15_2
+    context_name: add_checks
+    params:
+      columns:
+        rule_code_rcvomp_15_2: rule_code
+        rcvomp_15_2: check_status
+        vendor_code: vendor_code
+        terms_of_payment_code : value_checked
+        country_code: country_code
+        subdomain: subdomain
+        check_date: check_date        
+      distinct: true
+
+  - kind: union
+    name: union_all
+    context_name: select_rcvomp_171_1_passed
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_171_1_failed
+
+  - kind: union
+    name: union_all
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcvomp_15_2
+
+  - kind: write_dataio
+    name: write_dm_vendor_check_results
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_check_results
+      process_run_id: '{{process_run_id}}'
+      schema_version: v4
+      refresh_mode: full

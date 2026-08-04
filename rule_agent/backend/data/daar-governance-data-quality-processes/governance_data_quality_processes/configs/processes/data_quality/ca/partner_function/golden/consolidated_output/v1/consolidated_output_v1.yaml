@@ -1,0 +1,416 @@
+transform:
+  name: partner_function
+  operations:
+
+#du
+  - kind: read_dataio
+    name: read_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer_partner
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v4
+
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: filter
+    name: filter_dm_customer_partner_cp42
+    context_name: read_dm_customer_partner
+    params:
+      - condition:
+          partner_function_code_converted in ('SP', 'BP', 'PY', 'SH', 'ZY') and division_code = '04' and distribution_channel_code = '02'
+
+  - kind: filter
+    name: filter_dm_customer_partner_cp11
+    context_name: read_dm_customer_partner
+    params:
+      - condition:
+          partner_function_code_converted in ('SP', 'BP', 'PY', 'SH', 'ZY') and division_code = '01' and distribution_channel_code = '01'
+
+  - kind: select
+    name: select_dm_customer_partner_cp42
+    context_name: filter_dm_customer_partner_cp42
+    params:
+      columns:
+        customer_code: customer_code_cp42
+        partner_function_code: partner_function_code_cp42
+        partner_function_code_converted: partner_function_code_converted_cp42
+        partner_code: partner_code_cp42
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_partner_cp11
+    context_name: filter_dm_customer_partner_cp11
+    params:
+      columns:
+        customer_code: customer_code_cp11
+        partner_function_code: partner_function_code_cp11
+        partner_function_code_converted: partner_function_code_converted_cp11
+        partner_function_name: partner_function_name_cp11
+        partner_code: partner_code_cp11
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_c1
+    context_name: read_dm_customer
+    params:
+      - condition:
+          division_code = '01' and distribution_channel_code = '01' and account_group_code like '90%'
+          and order_block_code NOT IN('S', 'SP', 'E', 'G', 'S2', 'S3', 'S4', 'S5', 'S9', 'R', 'U', 'S1','SY',' IA','IB','RN') 
+          and is_l7_customer_in_scope = '1'
+
+  - kind: filter
+    name: filter_dm_customer_c3
+    context_name: read_dm_customer
+    params:
+      - condition:
+          is_l7_customer_in_scope = '1'
+
+  - kind: filter
+    name: filter_dm_customer_c4
+    context_name: read_dm_customer
+    params:
+      - condition:
+          is_l7_customer_in_scope = '1'
+
+  - kind: select
+    name: select_dm_customer_c1
+    context_name: filter_dm_customer_c1
+    params:
+      columns:
+        customer_code: customer_code_c1
+        customer_name: customer_name_c1
+        customer_group_4_code: customer_group_4_code_c1
+        customer_group_4_name: customer_group_4_name_c1
+        sales_org_code: sales_org_code_c1
+        order_block_code: order_block_code_c1
+        order_block_name: order_block_name_c1
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c2
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c2
+        customer_name: customer_name_c2
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c3
+    context_name: filter_dm_customer_c3
+    params:
+      columns:
+        customer_code: customer_code_c3
+        customer_name: customer_name_c3
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_customer_c4
+    context_name: filter_dm_customer_c4
+    params:
+      columns:
+        customer_code: customer_code_c4
+        customer_name: customer_name_c4
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_cust_hierarchy
+    context_name: read_dm_cust_hierarchy
+    params:
+      - condition:
+          l7_division_code = '01' and l7_distribution_channel_code = '01'
+
+  - kind: select
+    name: select_dm_cust_hierarchy_ch
+    context_name: filter_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code_ch
+        l3_customer_code: l3_customer_code_ch
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    name: select_dm_org_hierarchy_oh
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        sales_org_code: sales_org_code_oh
+        country_code: country_code_oh
+      distinct: true
+
+  - kind: join
+    name: join_du_partner_function
+    context_name: select_dm_customer_c1
+    params:
+      - other:
+          select_dm_org_hierarchy_oh
+        how:
+          inner
+        columns:
+          sales_org_code_c1: sales_org_code_oh
+      - other:
+          select_dm_cust_hierarchy_ch
+        how:
+          left
+        columns:
+          customer_code_c1: l7_customer_code_ch
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c2
+        how:
+          left
+        columns:
+          l3_customer_code_ch: customer_code_c2
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_partner_cp11
+        how:
+          inner
+        columns:
+          customer_code_c1: customer_code_cp11
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_partner_cp42
+        how:
+          inner
+        columns:
+          customer_code_cp11: customer_code_cp42
+          partner_function_code_cp11: partner_function_code_cp42
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c3
+        how:
+          left
+        columns:
+          customer_code_cp42: customer_code_c3
+          sap_cluster: sap_cluster
+      - other:
+          select_dm_customer_c4
+        how:
+          left
+        columns:
+          customer_code_cp11: customer_code_c4
+          sap_cluster: sap_cluster
+
+
+  - kind: add
+    name: add_join_du_partner_function
+    context_name: join_du_partner_function
+    params:
+      - column: bp_completeness_check_flag
+        expression: if(isnotnull(partner_code_cp42) and partner_code_cp42 <> '', '1', '0')
+      - column: bp_consistency_check_flag
+        expression: if(isnull(partner_code_cp42) or partner_code_cp42 = '', '',
+                    if(isnotnull(partner_code_cp42) and partner_code_cp42 <> '' and partner_code_cp42 = partner_code_cp11, '1',
+                    if(isnotnull(partner_code_cp42) and partner_code_cp42 <> '' and partner_code_cp42 <> partner_code_cp11, '0', '0')))
+      - column: bp_completeness_check_output
+        expression: if(bp_completeness_check_flag = '0', 'Function code is missing', 'OK')
+      - column: bp_consistency_check_output
+        expression: if(bp_completeness_check_flag = '0', 'N/A', 
+                    if(bp_completeness_check_flag = '1' and bp_consistency_check_flag = '0', 'PF inconsistency', 'OK'))
+
+  - kind: select
+    name: select_du_partner_function
+    context_name: add_join_du_partner_function
+    params:
+      columns:
+        customer_code_c1: customer_code
+        customer_name_c1: customer_name
+        order_block_code_c1: order_block_code
+        order_block_name_c1: order_block_name
+        customer_code_c2: customer_hier_3_code
+        customer_name_c2: customer_hier_3_name
+        customer_group_4_code_c1: customer_group_4_code
+        customer_group_4_name_c1: customer_group_4_name
+        country_code_oh: country_code
+        sales_org_code_c1: sales_org_code
+        partner_function_code_converted_cp11: partner_function_code
+        partner_function_name_cp11: partner_function_name
+        partner_code_cp11: assigned_bp_code_11
+        customer_name_c4: assigned_bp_name_11
+        partner_code_cp42: assigned_bp_code_42
+        customer_name_c3: assigned_bp_name_42
+        bp_completeness_check_flag: bp_completeness_check_flag
+        bp_consistency_check_flag: bp_consistency_check_flag
+        bp_completeness_check_output: bp_completeness_check_output
+        bp_consistency_check_output: bp_consistency_check_output
+        sap_cluster: sap_cluster
+      distinct: true
+
+#detailed
+  - kind: select
+    name: select_detailed
+    context_name: select_du_partner_function
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_code: country_code
+        sales_org_code: sales_org_code
+        partner_function_code: partner_function_code
+        partner_function_name: partner_function_name
+        assigned_bp_code_11: assigned_bp_code_11
+        assigned_bp_name_11: assigned_bp_name_11
+        assigned_bp_code_42: assigned_bp_code_42
+        assigned_bp_name_42: assigned_bp_name_42
+        bp_completeness_check_output: bp_completeness_check_output
+        bp_consistency_check_output: bp_consistency_check_output
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: partner_function
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+## AGGREGATED LAYER
+
+  - kind: add
+    name: add_replace_null_with_empty
+    context_name: select_du_partner_function
+    params:
+      - column: customer_group_4_name
+        expression: if(customer_group_4_name is null, '', customer_group_4_name)
+        overwrite: true
+      - column: customer_group_4_code
+        expression: if(customer_group_4_code is null, '', customer_group_4_code)
+        overwrite: true
+
+  - kind: add
+    name: add_customer_loading_date
+    params:
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, '-', customer_group_4_name)
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: IF(bp_consistency_check_flag = '0' OR bp_completeness_check_flag = '0', 1, NULL)
+      - column: total_checks
+        expression: CAST(1 AS INT)
+      - column: quality_category
+        expression: '''consistency'''
+
+  - kind: group
+    name: group_total_invalid_checks
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - country_code
+        - customer_group_4_code
+        - customer_group_4_name
+        - customer_group_4
+        - loading_date
+        - quality_category
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_checks
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+
+
+  - kind: select
+    name: select_finall
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4: customer_group_4
+        quality_category: quality_category
+        loading_date: loading_date
+        invalid_checks: invalid_checks
+        total_checks: total_checks
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: partner_function
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

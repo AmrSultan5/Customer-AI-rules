@@ -1,0 +1,533 @@
+transform:
+  name: customer_segmentation_completeness
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        customer_activity_cluster_code: customer_activity_cluster_code
+        distribution_type_code: distribution_type_code
+        trade_channel_code: trade_channel_code
+        sub_trade_channel_code: sub_trade_channel_code
+        business_partner_guid: business_partner_guid
+        ccaf_code: ccaf_code
+        central_order_block_code: central_order_block_code
+        natural_person_flag: natural_person_flag
+        channel_priority_code: channel_priority_code
+        actual_warm_space_code: actual_warm_space_code
+        red_outlet_flag: red_outlet_flag
+        local_segmentation_code: local_segmentation_code
+        customer_classification_code: customer_classification_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+  - kind: select
+    context_name: read_dm_customer_hierarchy
+    name: select_dch
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l4_customer_name: l4_customer_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+#SELECT rccomp_103_1
+  - kind: select
+    name: select_rccomp_103_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_activity_cluster_code: customer_activity_cluster_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_103_1
+    context_name: select_rccomp_103_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_103.1'"
+      - column: check_status
+        expression: "CASE WHEN customer_activity_cluster_code is null OR customer_activity_cluster_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_103_1_final
+    context_name: add_rccomp_103_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        customer_activity_cluster_code: value_checked
+      distinct: true
+
+#SELECT rccomp_106_1
+  - kind: select
+    name: select_rccomp_106_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        distribution_type_code: distribution_type_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_106_1
+    context_name: select_rccomp_106_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_106.1'"
+      - column: check_status
+        expression: "CASE WHEN distribution_type_code is null OR distribution_type_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_106_1_final
+    context_name: add_rccomp_106_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        distribution_type_code: value_checked
+      distinct: true
+
+#SELECT rccomp_108_1
+  - kind: select
+    name: select_rccomp_108_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        trade_channel_code: trade_channel_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_108_1
+    context_name: select_rccomp_108_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_108.1'"
+      - column: check_status
+        expression: "CASE WHEN trade_channel_code is null OR trade_channel_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_108_1_final
+    context_name: add_rccomp_108_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        trade_channel_code: value_checked
+      distinct: true
+
+#SELECT rccomp_109_1
+  - kind: select
+    name: select_rccomp_109_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sub_trade_channel_code: sub_trade_channel_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_109_1
+    context_name: select_rccomp_109_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_109.1'"
+      - column: check_status
+        expression: "CASE WHEN sub_trade_channel_code is null OR sub_trade_channel_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_109_1_final
+    context_name: add_rccomp_109_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        sub_trade_channel_code: value_checked
+      distinct: true
+
+#SELECT rccomp_216_1
+  - kind: select
+    name: select_rccomp_216_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        business_partner_guid: business_partner_guid
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_216_1
+    context_name: select_rccomp_216_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_216.1'"
+      - column: check_status
+        expression: "CASE WHEN business_partner_guid is null OR business_partner_guid ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_216_1_final
+    context_name: add_rccomp_216_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        business_partner_guid: value_checked
+      distinct: true
+
+#SELECT rccomp_248_1
+  - kind: join
+    name: join_dcg_dch
+    context_name: select_dcg
+    params:
+      - other:
+          select_dch
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster
+
+
+  - kind: select
+    name: select_rccomp_248_1
+    context_name: join_dcg_dch
+    params:
+      columns:
+        customer_code: customer_code
+        country_code: country_code
+        ccaf_code: ccaf_code
+        central_order_block_code: central_order_block_code
+        l4_customer_name: l4_customer_name
+        natural_person_flag: natural_person_flag
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_248_1
+    context_name: select_rccomp_248_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_248.1'"
+      - column: ccaf_code_value_checked
+        expression: if(lower(country_code) = 'eg', l4_customer_name, ccaf_code)
+      - column: check_status
+        expression: if(central_order_block_code in('S', 'SP', 'E', 'G', 'S2', 'S3', 'S4', 'S5', 'S9', 'R', 'U', 'M', 'NR') 
+                    or natural_person_flag = 'X', '',
+                    if((lower(country_code) != 'eg' and isnotnull(ccaf_code))
+                    or (lower(country_code) = 'eg' and l4_customer_name like any('[FT IC]%','[FT FC]%','[KA IC]%','[KA FC]%','[Wholesalers]%')), '1', '0'))     
+
+  - kind: select
+    name: select_rccomp_248_1_final
+    context_name: add_rccomp_248_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        ccaf_code_value_checked: value_checked
+      distinct: true
+
+#SELECT rccomp_250_1
+  - kind: select
+    name: select_rccomp_250_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        channel_priority_code: channel_priority_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_250_1
+    context_name: select_rccomp_250_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_250.1'"
+      - column: check_status
+        expression: "CASE WHEN channel_priority_code is null OR channel_priority_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_250_1_final
+    context_name: add_rccomp_250_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        channel_priority_code: value_checked
+      distinct: true
+
+#SELECT rccomp_266_1
+  - kind: select
+    name: select_rccomp_266_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        actual_warm_space_code: actual_warm_space_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_266_1
+    context_name: select_rccomp_266_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_266.1'"
+      - column: check_status
+        expression: "CASE WHEN actual_warm_space_code is null OR actual_warm_space_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_266_1_final
+    context_name: add_rccomp_266_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        actual_warm_space_code: value_checked
+      distinct: true
+
+#SELECT rccomp_282_1
+  - kind: select
+    name: select_rccomp_282_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        red_outlet_flag: red_outlet_flag
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_282_1
+    context_name: select_rccomp_282_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_282.1'"
+      - column: check_status
+        expression: "CASE WHEN central_order_block_code NOT IN('I','CW','NR','F','') THEN '' WHEN red_outlet_flag is null OR red_outlet_flag ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_282_1_final
+    context_name: add_rccomp_282_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        red_outlet_flag: value_checked
+      distinct: true
+
+#SELECT rccomp_286_1
+  - kind: select
+    name: select_rccomp_286_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        local_segmentation_code: local_segmentation_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_286_1
+    context_name: select_rccomp_286_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_286.1'"
+      - column: check_status
+        expression: "CASE WHEN local_segmentation_code is null OR local_segmentation_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_286_1_final
+    context_name: add_rccomp_286_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        local_segmentation_code: value_checked
+      distinct: true
+
+#SELECT rccomp_68_1
+  - kind: select
+    name: select_rccomp_68_1
+    context_name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_classification_code: customer_classification_code
+      distinct: true
+
+  - kind: add
+    name: add_rccomp_68_1
+    context_name: select_rccomp_68_1
+    params:
+      - column: rule_code
+        expression: "'RCCOMP_68.1'"
+      - column: check_status
+        expression: "CASE WHEN customer_classification_code is null OR customer_classification_code ='' THEN '0' ELSE '1' END"      
+
+  - kind: select
+    name: select_rccomp_68_1_final
+    context_name: add_rccomp_68_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        customer_classification_code: value_checked
+      distinct: true
+
+#Union all
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_103_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_106_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_108_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_109_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_216_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_248_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_250_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_266_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_282_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_286_1_final
+
+  - kind: union
+    name: union_customer_segmentation_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rccomp_68_1_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_segmentation_completeness
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_segmentation_completeness
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

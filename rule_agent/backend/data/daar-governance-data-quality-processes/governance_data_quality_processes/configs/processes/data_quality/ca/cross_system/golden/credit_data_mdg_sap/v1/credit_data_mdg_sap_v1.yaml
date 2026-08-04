@@ -1,0 +1,1338 @@
+transform:
+  name: credit_data_mdg_sap
+  operations:
+
+  - kind: read_dataio
+    name: read_mdg_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_but000
+    context_name: read_mdg_but000
+    params:
+      - condition:
+          partner not like '000%' and xpcpt <> 'X' and partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%', 
+          '96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%')
+
+  - kind: select
+    name: select_mdg_but000
+    context_name: filter_mdg_but000
+    params:
+      columns:
+        partner: partner_mdg
+        partner_guid: partner_guid_mdg
+        name_last: name_last_mdg_but000
+        name_first: name_first_mdg_but000
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_ukmbp_cms
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: ukmbp_cms
+      schema_version: v1
+
+  - kind: select
+    name: select_mdg_ukmbp_cms
+    context_name: read_mdg_ukmbp_cms
+    params:
+      columns:
+        partner: partner_mdg
+        risk_class: risk_class_mdg_ukmbp_cms
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_ukmbp_cms_sgm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: ukmbp_cms_sgm
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_ukmbp_cms_sgm
+    context_name: read_mdg_ukmbp_cms_sgm
+    params:
+      - condition:
+          to_date(limit_valid_date, 'yyyyMMdd') > getdate()
+
+  - kind: select
+    name: select_mdg_ukmbp_cms_sgm
+    context_name: filter_mdg_ukmbp_cms_sgm
+    params:
+      columns:
+        partner: partner_mdg
+        credit_sgmnt: credit_sgmnt_mdg_ukmbp_cms_sgm
+        credit_limit: credit_limit_mdg_ukmbp_cms_sgm
+      distinct: true
+
+  - kind: read_dataio
+    name: read_mdg_knvv
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_mdg_knvv
+    context_name: read_mdg_knvv
+    params:
+      - condition:
+          vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+  
+  - kind: select
+    name: select_knvv_pre_checkpoint
+    context_name: filter_mdg_knvv
+    params:          
+      columns:
+        kunnr: kunnr
+        kvgr4: kvgr4
+        vkorg: vkorg
+        vtweg: vtweg
+        spart: spart
+      distinct: true
+
+  - kind: checkpoint
+    name: select_knvv
+    context_name: select_knvv_pre_checkpoint
+
+  - kind: join
+    name: join_mdg
+    context_name:  select_mdg_ukmbp_cms_sgm
+    params:
+      - other:
+          select_mdg_ukmbp_cms
+        how:
+          full
+        columns:
+          partner_mdg: partner_mdg
+      - other:
+          select_mdg_but000
+        how:
+          inner
+        columns:
+          partner_mdg: partner_mdg
+      - other:
+          select_knvv
+        how:
+          inner
+        columns:
+          partner_mdg: kunnr
+
+  - kind: read_dataio
+    name: read_sap_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: but000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_sap_but000
+    context_name: read_sap_but000
+    params:
+      - condition:
+          partner not like '000%' and xpcpt <> 'X' and if(sap_cluster = 'CL1', partner like any('12%', '13%', '40%', '18%', '30%', '16%', '29%', '17%', '24%', '26%', '21%', '19%'),
+          partner like any('96%', '28%', '27%', '32%', '35%', '25%', '34%', '42%', '33%', '31%', '15%', '95%', '94%', '14%', '22%','47%'))
+
+  - kind: select
+    name: select_sap_but000
+    context_name: filter_sap_but000
+    params:
+      columns:
+        partner: partner_sap
+        partner_guid: partner_guid_sap
+        name_last: name_last_sap_but000
+        name_first: name_first_sap_but000
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_sap_ukmbp_cms
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: ukmbp_cms
+      schema_version: v1
+
+  - kind: select
+    name: select_sap_ukmbp_cms
+    context_name: read_sap_ukmbp_cms
+    params:
+      columns:
+        partner: partner_sap
+        risk_class: risk_class_sap_ukmbp_cms
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_sap_ukmbp_cms_sgm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: business_partner
+      object_name: ukmbp_cms_sgm
+      schema_version: v1
+
+  - kind: filter
+    name: filter_sap_ukmbp_cms_sgm
+    context_name: read_sap_ukmbp_cms_sgm
+    params:
+      - condition:
+          to_date(limit_valid_date, 'yyyyMMdd') > getdate()
+
+  - kind: select
+    name: select_sap_ukmbp_cms_sgm
+    context_name: filter_sap_ukmbp_cms_sgm
+    params:
+      columns:
+        partner: partner_sap
+        credit_sgmnt: credit_sgmnt_sap_ukmbp_cms_sgm
+        credit_limit: credit_limit_sap_ukmbp_cms_sgm
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_knvv_sap
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvv
+      schema_version: v1
+  
+  - kind: filter
+    name: filter_knvv_sap
+    context_name: read_knvv_sap
+    params:
+      - condition:
+          vtweg = '01' and spart = '01' and vkorg in (9600,8200,5500,8500,3100,9400,2000,1200,3300,4890,8090,5100,7800,3200,6100,4090,2800,7200,9100,6300,2500,8600,4500,9500,7900,9200,1100,4700)
+  
+  - kind: select
+    name: select_knvv_sap
+    context_name: filter_knvv_sap
+    params:          
+      columns:
+        kunnr: kunnr_knvv
+        kvgr4: kvgr4_knvv
+        vkorg: vkorg_knvv
+        vtweg: vtweg_knvv
+        spart: spart_knvv
+        sap_cluster: sap_cluster_knvv
+      distinct: true
+
+  - kind: join
+    name: join_sap
+    context_name: select_sap_ukmbp_cms_sgm
+    params:
+      - other:
+          select_sap_ukmbp_cms
+        how:
+          full
+        columns:
+          partner_sap: partner_sap
+          sap_cluster: sap_cluster
+      - other:
+          select_sap_but000
+        how:
+          inner
+        columns:
+          partner_sap: partner_sap
+          sap_cluster: sap_cluster
+      - other:
+          select_knvv_sap
+        how:
+          inner
+        columns:
+          partner_sap: kunnr_knvv
+          sap_cluster: sap_cluster_knvv
+
+  - kind: add
+    name: add_mdg
+    context_name: join_mdg
+    params:
+      - column: hash_mdg
+        expression: md5(concat_ws('',
+                    partner_mdg, 
+                    credit_sgmnt_mdg_ukmbp_cms_sgm, 
+                    credit_limit_mdg_ukmbp_cms_sgm,
+                    risk_class_mdg_ukmbp_cms))
+
+  - kind: checkpoint
+    name: checkpoint_mdg
+    context_name: add_mdg
+
+  - kind: add
+    name: add_sap
+    context_name: join_sap
+    params:
+      - column: hash_sap
+        expression: md5(concat_ws('',
+                    partner_sap, 
+                    credit_sgmnt_sap_ukmbp_cms_sgm, 
+                    credit_limit_sap_ukmbp_cms_sgm,
+                    risk_class_sap_ukmbp_cms))           
+
+  - kind: checkpoint
+    name: checkpoint_sap
+    context_name: add_sap
+
+  - kind: join
+    name: join_non_matching_mdg
+    context_name: checkpoint_mdg
+    params:
+      - other:
+          checkpoint_sap
+        how:
+          full
+        columns:
+          hash_mdg: hash_sap
+
+  - kind: filter
+    name: filter_non_matching_mdg
+    context_name: join_non_matching_mdg
+    params:
+      - condition:
+          isnull(hash_sap) or hash_sap = ''
+
+  - kind: join
+    name: join_non_matching_sap
+    context_name: checkpoint_sap
+    params:
+      - other:
+          checkpoint_mdg
+        how:
+          full
+        columns:
+          hash_sap: hash_mdg
+
+  - kind: filter
+    name: filter_non_matching_sap
+    context_name: join_non_matching_sap
+    params:
+      - condition:
+          isnull(hash_mdg) or hash_mdg = ''
+
+  - kind: select
+    name: select_non_matching_mdg
+    context_name: filter_non_matching_mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        name_last_mdg_but000: name_last_mdg
+        name_first_mdg_but000: name_first_mdg
+        credit_sgmnt_mdg_ukmbp_cms_sgm: credit_sgmnt_mdg
+        credit_limit_mdg_ukmbp_cms_sgm: credit_limit_mdg
+        risk_class_mdg_ukmbp_cms: risk_class_mdg
+        partner_guid_mdg: partner_guid_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: select
+    name: select_non_matching_sap
+    context_name: filter_non_matching_sap
+    params:
+      columns:
+        partner_sap: partner_sap
+        name_last_sap_but000: name_last_sap
+        name_first_sap_but000: name_first_sap
+        credit_sgmnt_sap_ukmbp_cms_sgm: credit_sgmnt_sap
+        credit_limit_sap_ukmbp_cms_sgm: credit_limit_sap
+        risk_class_sap_ukmbp_cms: risk_class_sap
+        partner_guid_sap: partner_guid_sap
+        hash_sap: hash_sap
+      distinct: true
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_mdg
+    context_name: select_non_matching_mdg
+
+  - kind: checkpoint
+    name: checkpoint_non_matching_sap
+    context_name: select_non_matching_sap
+
+  - kind: read_dataio
+    name: read_mdg_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: customer
+      object_name: kna1
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mdg_kna1
+    context_name: read_mdg_kna1
+    params:
+      - condition:
+          aufsd in ('C','CW','I','M','S1','TS','VF','WH','')
+
+  - kind: select
+    name: select_kna1
+    context_name: filter_mdg_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        ktokd: ktokd
+        aufsd: aufsd
+
+  - kind: read_dataio
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+      schema_version: v1
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E' and sap_cluster = 'CL1'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_tvv4t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvv4t
+      schema_version: v1
+
+  - kind: filter
+    name: filter_tvv4t
+    params:
+      - condition:
+         sap_cluster = 'CL1' and spras = 'E'
+
+  - kind: select
+    name: select_tvv4t
+    params:
+      columns:
+        kvgr4: kvgr4
+        bezei: bezei
+      distinct: true
+
+  - kind: join
+    name: join_non_matching
+    context_name: checkpoint_non_matching_mdg
+    params:
+      - other:
+          checkpoint_non_matching_sap
+        how:
+          full
+        columns:
+          partner_mdg: partner_sap
+          partner_guid_mdg: partner_guid_sap
+          credit_sgmnt_mdg: credit_sgmnt_sap
+
+
+  - kind: join
+    name: join_missing_from_mdg
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          inner
+        columns:
+          partner_sap: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+
+  - kind: join
+    name: join_missing_from_sap
+    context_name: join_non_matching
+    params:
+      - other:
+          select_kna1
+        how:
+          inner
+        columns:
+          partner_mdg: kunnr
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+      - other:
+          select_knvv
+        how:
+          left
+        columns:
+          kunnr: kunnr
+      - other:
+          select_tvv4t
+        how:
+          left
+        columns:
+          kvgr4: kvgr4
+
+
+## data missing from mdg
+
+  - kind: filter
+    name: filter_missing_from_mdg
+    context_name: join_missing_from_mdg
+    params:
+      - condition:
+          isnull(partner_mdg)
+
+  - kind: add
+    name: add_missing_from_mdg
+    context_name: filter_missing_from_mdg
+    params:
+      - column: msg
+        expression: if(isnull(partner_mdg), 'data missing from mdg', '-')
+      - column: attribute10
+        expression: concat_ws(' - ', ktokd, txt30)
+      - column: attribute5
+        expression: concat_ws(' - ', kvgr4, bezei)
+      - column: country
+        expression: CASE substr(partner_sap, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CREDIT DATA'''
+      - column: src_system
+        expression: '''sap'''
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: loading_date
+        expression: current_date()
+
+## data missing from sap
+
+  - kind: filter
+    name: filter_missing_from_sap
+    context_name: join_missing_from_sap
+    params:
+      - condition:
+          isnull(partner_sap)
+
+  - kind: add
+    name: add_missing_from_sap
+    context_name: filter_missing_from_sap
+    params:
+      - column: msg
+        expression: if(isnull(partner_sap), 'data missing from sap', '-')
+      - column: attribute10
+        expression: concat_ws(' - ', ktokd, txt30)
+      - column: attribute5
+        expression: concat_ws(' - ', kvgr4, bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CREDIT DATA'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''sap'''
+      - column: loading_date
+        expression: current_date()
+
+# attributes are mismatching
+
+  - kind: filter
+    name: filter_mismatched
+    context_name: join_missing_from_sap
+    params:
+      - condition:
+          partner_sap = partner_mdg
+          and partner_guid_sap = partner_guid_mdg
+          and credit_sgmnt_sap = credit_sgmnt_mdg
+          and (risk_class_sap <> risk_class_mdg
+          or credit_limit_sap <> credit_limit_mdg)
+
+  - kind: add
+    name: add_mismatched
+    context_name: filter_mismatched
+    params:
+      - column: msg_risk_class
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and credit_sgmnt_sap = credit_sgmnt_mdg
+                    and risk_class_sap <> risk_class_mdg, 'attributes are mismatching', '-')
+      - column: msg_credit_limit
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and credit_sgmnt_sap = credit_sgmnt_mdg
+                    and credit_limit_sap <> credit_limit_mdg, 'attributes are mismatching', '-')
+      - column: attr_name_risk_class
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and credit_sgmnt_sap = credit_sgmnt_mdg
+                    and risk_class_sap <> risk_class_mdg, concat('CREDIT DATA:', ' ', ' RISK CLASS'), '-')
+      - column: attr_name_credit_limit
+        expression: if(partner_sap = partner_mdg 
+                    and partner_guid_sap = partner_guid_mdg
+                    and credit_sgmnt_sap = credit_sgmnt_mdg
+                    and credit_limit_sap <> credit_limit_mdg, concat('CREDIT DATA:', ' ', ' CREDIT LIMIT'), '-')
+      - column: attribute10
+        expression: concat(ktokd, ' - ', txt30)
+      - column: attribute5
+        expression: concat(kvgr4, ' - ', bezei)
+      - column: country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+      - column: domain
+        expression: '''CUSTOMER'''
+      - column: table_name
+        expression: '''CREDIT DATA'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: tgt_system
+        expression: '''sap'''
+      - column: loading_date
+        expression: current_date()
+
+
+  - kind: select
+    name: select_missing_from_mdg
+    context_name: add_missing_from_mdg
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_sap: primary_key_l1
+        name_first_sap: attribute1
+        name_last_sap: attribute2
+        credit_sgmnt_sap: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: select
+    name: select_missing_from_sap
+    context_name: add_missing_from_sap
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        credit_sgmnt_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_risk_class
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_risk_class <> '-'
+
+  - kind: select
+    name: select_mismatched_risk_class
+    context_name: filter_mismatched_risk_class
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_risk_class: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        credit_sgmnt_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_risk_class: compared_attribute
+        risk_class_mdg: compared_src_attr_value
+        risk_class_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: filter
+    name: filter_mismatched_credit_limit
+    context_name: add_mismatched
+    params:
+      - condition:
+          msg_credit_limit <> '-'
+
+  - kind: select
+    name: select_mismatched_credit_limit
+    context_name: filter_mismatched_credit_limit
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        msg_credit_limit: dimension
+        partner_mdg: primary_key_l1
+        name_first_mdg: attribute1
+        name_last_mdg: attribute2
+        credit_sgmnt_mdg: attribute3
+        aufsd: attribute4
+        attribute5: attribute5
+        vkorg: attribute6
+        vtweg: attribute7
+        spart: attribute8
+        attribute10: attribute10
+        country: country
+        attr_name_credit_limit: compared_attribute
+        credit_limit_mdg: compared_src_attr_value
+        credit_limit_sap: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+  - kind: union
+    name: union_credit_data_mismatched
+    context_name: select_mismatched_risk_class
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched_credit_limit
+
+  - kind: select
+    name: select_mismatched
+    context_name: union_credit_data_mismatched
+    params:
+      columns:
+        domain: domain
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        primary_key_l1: primary_key_l1
+        attribute1: attribute1
+        attribute2: attribute2
+        attribute3: attribute3
+        attribute4: attribute4
+        attribute5: attribute5
+        attribute6: attribute6
+        attribute7: attribute7
+        attribute8: attribute8
+        attribute10: attribute10
+        country: country
+        compared_attribute: compared_attribute
+        compared_src_attr_value: compared_src_attr_value
+        compared_tgt_attr_value: compared_tgt_attr_value
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: union
+    name: union_credit_data
+    context_name: select_missing_from_mdg
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_missing_from_sap
+
+  - kind: union
+    name: union_credit_data
+    params:
+      allow_missing: true
+      by_name: true
+      other: select_mismatched
+
+  - kind: write_dataio
+    name: write_credit_data
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: reconciliation_results
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+      convert_to_target_schema: True
+
+##agg
+
+  - kind: select
+    name: select_mdg
+    context_name: checkpoint_mdg
+    params:
+      columns:
+        partner_mdg: partner_mdg
+        hash_mdg: hash_mdg
+      distinct: true
+
+  - kind: add
+    name: add_mdg_agg
+    context_name: select_mdg
+    params:
+      - column: table_name
+        expression: '''CREDIT DATA'''
+      - column: src_system
+        expression: '''mdg'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: mdg
+        expression: hash_mdg
+      - column: mdg_country
+        expression: CASE substr(partner_mdg, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_mdg_agg
+    context_name: add_mdg_agg
+    params:
+      - aggs:
+          mdg: count
+        by:
+        - mdg_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_mdg_agg_loading_date
+    context_name: group_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_mdg AS INT)
+
+  - kind: select
+    name: select_mdg_agg
+    context_name: add_mdg_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        mdg_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##total sap
+  - kind: select
+    name: select_sap
+    context_name: checkpoint_sap
+    params:
+      columns:
+        partner_sap: partner_sap
+        hash_sap: hash_sap
+      distinct: true
+
+  - kind: add
+    name: add_sap_agg
+    context_name: select_sap
+    params:
+      - column: table_name
+        expression: '''CREDIT DATA'''
+      - column: src_system
+        expression: '''sap'''
+      - column: dimension
+        expression: '''TOTAL COUNT'''
+      - column: sap
+        expression: hash_sap
+      - column: sap_country
+        expression: CASE substr(partner_sap, 0, 2)
+                      WHEN '96' THEN 'AM'
+                      WHEN '12' THEN 'AT'
+                      WHEN '28' THEN 'BA'
+                      WHEN '13' THEN 'BG'
+                      WHEN '23' THEN 'BY'
+                      WHEN '27' THEN 'CH'
+                      WHEN '18' THEN 'CZ'
+                      WHEN '32' THEN 'EE'
+                      WHEN '35' THEN 'GB'
+                      WHEN '30' THEN 'GR'
+                      WHEN '25' THEN 'HR'
+                      WHEN '16' THEN 'HU'
+                      WHEN '34' THEN 'IE'
+                      WHEN '29' THEN 'IT'
+                      WHEN '42' THEN 'KV'
+                      WHEN '33' THEN 'LT'
+                      WHEN '31' THEN 'LV'
+                      WHEN '17' THEN 'MD'
+                      WHEN '15' THEN 'ME'
+                      WHEN '95' THEN 'MK'
+                      WHEN '94' THEN 'NG'
+                      WHEN '24' THEN 'PL'
+                      WHEN '26' THEN 'RO'
+                      WHEN '38' THEN 'RU'
+                      WHEN '21' THEN 'SI'
+                      WHEN '19' THEN 'SK'
+                      WHEN '14' THEN 'RS'
+                      WHEN '22' THEN 'UA'
+                      WHEN '40' THEN 'CY'
+                      WHEN '47' THEN 'EG'
+                      ELSE NULL
+                    END
+
+  - kind: group
+    name: group_sap_agg
+    context_name: add_sap_agg
+    params:
+      - aggs:
+          sap: count
+        by:
+        - sap_country
+        - table_name
+        - src_system
+        - dimension
+
+  - kind: add
+    name: add_sap_agg_loading_date
+    context_name: group_sap_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_sap AS INT)
+
+  - kind: select
+    name: select_sap_agg
+    context_name: add_sap_agg_loading_date
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        sap_country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from mdg
+
+  - kind: group
+    name: group_missing_from_mdg_agg
+    context_name: select_missing_from_mdg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_mdg_agg
+    context_name: group_missing_from_mdg_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''mdg'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM MDG'''
+
+  - kind: select
+    name: select_missing_from_mdg_agg
+    context_name: add_missing_from_mdg_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##data missing from sap
+
+  - kind: group
+    name: group_missing_from_sap_agg
+    context_name: select_missing_from_sap
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_missing_from_sap_agg
+    context_name: group_missing_from_sap_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''DATA MISSING FROM SAP'''
+
+  - kind: select
+    name: select_missing_from_sap_agg
+    context_name: add_missing_from_sap_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+##mismatched
+
+  - kind: filter
+    name: filter_mismatched_agg
+    context_name: union_credit_data
+    params:
+      - condition:
+          dimension = 'attributes are mismatching'
+
+  - kind: group
+    name: group_mismatched_agg
+    context_name: filter_mismatched_agg
+    params:
+      - aggs:
+          primary_key_l1: count
+        by:
+        - country
+        - table_name
+        - src_system
+
+  - kind: add
+    name: add_mismatched_agg
+    context_name: group_mismatched_agg
+    params:
+      - column: loading_date
+        expression: current_date()
+      - column: tgt_system
+        expression: '''sap'''
+      - column: cnt
+        expression: CAST(count_primary_key_l1 AS INT)
+      - column: dimension
+        expression: '''ATTRIBUTES ARE MISMATCHING'''
+
+  - kind: select
+    name: select_mismatched_agg
+    context_name: add_mismatched_agg
+    params:
+      columns:
+        table_name: table_name
+        src_system: src_system
+        tgt_system: tgt_system
+        dimension: dimension
+        cnt: cnt
+        country: country
+        loading_date: loading_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: cross_system
+      namespace: golden
+      object_name: recon_aggregated_prod
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

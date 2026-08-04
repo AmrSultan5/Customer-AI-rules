@@ -1,0 +1,223 @@
+transform:
+  name: customer_address_conformity_rcaccu_21_4
+  operations:
+
+   #READ read_dm_customer_address
+  - kind: read_dataio
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: add
+    name: add_address
+    context_name: read_dm_customer_address
+    params:
+      - column: street_house_number
+        expression: concat_ws(' ', street_1_name, house_number)
+
+  - kind: select
+    context_name: add_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+        street_house_number: street_house_number
+        post_code: post_code
+        city: city
+        country_code: country_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+#JOIN dcg and dca
+  - kind: join
+    name: join_dca_dcg
+    context_name: select_dca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: select
+    context_name: join_dca_dcg
+    name: select_dca_dcg
+    params:
+      columns:
+        street_house_number: street_house_number
+        city: city
+        country_code: country_code
+        post_code: post_code
+        customer_code: customer_code
+      distinct: true
+
+  #READ dm_dcc_address_extractor_dic
+  - kind: read_dataio
+    name: read_dcc_address_extractor_dic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dcc_address_extractor_dic
+      schema_version: v1
+
+  - kind: select
+    context_name: read_dcc_address_extractor_dic
+    name: select_ext
+    params:
+      columns:
+        country_code: country_code
+        city: city
+        street_house_number: street_house_number
+        address_extractor: address_extractor
+
+  #JOIN dm_customer_address with extractor dictionary
+  - kind: join
+    name: join_dca_dcg_ext
+    context_name: select_dca_dcg
+    params:
+      - other:
+          select_ext
+        how:
+          left
+        columns:
+          country_code: country_code
+          city: city
+          street_house_number: street_house_number
+  
+  - kind: add
+    name: add_ext_ad_and_postcode
+    context_name: join_dca_dcg_ext
+    params:
+      - column: ext_post_code
+        expression: address_extractor.postal_code
+      - column: ext_ad
+        expression: concat_ws(' ',
+            address_extractor.street_name,
+            address_extractor.street_number,
+            address_extractor.village,
+            address_extractor.town,
+            address_extractor.address_full.residential,
+            address_extractor.address_full.hamlet,
+            address_extractor.address_full.suburb,
+            address_extractor.address_full.city_district,
+            address_extractor.address_full.city
+          )
+
+  - kind: select
+    name: select_after_extractor_flatten
+    context_name: add_ext_ad_and_postcode
+    params:
+      columns:
+        street_house_number: street_house_number
+        city: city
+        country_code: country_code
+        post_code: post_code
+        customer_code: customer_code
+        ext_ad: ext_ad
+        ext_post_code: ext_post_code
+      distinct: true
+
+  - kind: governance_data_quality_processes.custom_operations.text_normalization.text_normalization.TextNormalizationOperation
+    name: text_normalization
+    context_name: select_after_extractor_flatten
+  
+  - kind: governance_data_quality_processes.custom_operations.address_fuzzy_matching.address_fuzzy_matching.AddressFuzzyMatchingOperation
+    name: address_fuzzy_matching
+    context_name: text_normalization
+  
+  - kind: governance_data_quality_processes.custom_operations.postal_code.postal_code_enricher.PostalCodeEnrichOperation
+    name: post_code_enriched
+    context_name: address_fuzzy_matching
+
+  - kind: add
+    name: add_value_checked
+    context_name: post_code_enriched
+    params:
+      - column: value_checked
+        expression: concat_ws(', ', post_code, ext_post_code)
+
+  - kind: select
+    name: select_results
+    context_name: add_value_checked
+    params:
+      columns:
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true 
+
+  - kind: join
+    name: join_final
+    context_name: select_after_extractor_flatten
+    params:
+      - other:
+          select_results
+        how:
+          left
+        columns:
+          customer_code: customer_code
+
+  - kind: add
+    name: add_check_date
+    context_name: join_final
+    params:
+      - column: check_status
+        overwrite: true
+        expression: if(check_status is NULL, '', check_status)
+      - column: check_date
+        expression: current_timestamp()
+      - column: check_details_message
+        expression: ''''''
+      - column: rule_code
+        expression: '''RCACCU_21.4'''
+  
+  - kind: select
+    name: select_final
+    context_name: add_check_date
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_details_message: check_details_message
+        check_date: check_date
+      distinct: true 

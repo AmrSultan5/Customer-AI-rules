@@ -1,0 +1,753 @@
+transform:
+  name: dm_leaflet_xtel
+  operations:
+
+###################################################### INITIAL XTEL CH6 CH7 - LDO XTEL 1 #########################################################################
+
+  - kind: read_dataio
+    name: read_xtel
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: xtel
+      schema_version: v3
+
+  - kind: filter
+    name: filter_xtel_category_and_period
+    context_name: read_xtel
+    params:
+      - condition:
+          category NOT IN('Water Regular', 'Premium Water', 'Water Flavoured', 'Spirits', 'Juices / Nectars') AND start_sell_out >= TO_DATE(CONCAT(YEAR(current_date()) - 3, '-12-01'), 'yyyy-MM-dd')
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: select
+    name: select_dm_customer
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code_dc
+        customer_1_name: customer_name_dc
+        sap_cluster: sap_cluster_dc
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+      schema_version: v3
+
+  - kind: select
+    name: select_dm_cust_hierarchy
+    context_name: read_dm_customer_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l6_customer_code: l6_customer_code
+        sap_cluster: sap_cluster_l7
+      distinct: true
+
+  - kind: join
+    name: join_xtel_customer_code
+    context_name: filter_xtel_category_and_period
+    params:
+      - other:
+          select_dm_cust_hierarchy
+        how:
+          left
+        columns:
+          customer_number: l7_customer_code
+      - other:
+          select_dm_customer
+        how:
+          left
+        columns:
+          l6_customer_code: customer_code_dc
+          sap_cluster_l7: sap_cluster_dc
+
+  - kind: add
+    name: add_customer_code_to_ch6
+    context_name: join_xtel_customer_code
+    params:
+      - column: customer_number
+        expression: if(l7_customer_code IS NOT NULL AND l7_customer_code != '' AND l6_customer_code IS NOT NULL AND l6_customer_code != '', SUBSTR(l6_customer_code, 3), customer_number)
+        overwrite: true
+      - column: customer_name
+        expression: if(l7_customer_code IS NOT NULL AND l7_customer_code != '' AND l6_customer_code IS NOT NULL AND l6_customer_code != '', customer_name_dc, customer_name)
+        overwrite: true
+      - column: cpl_name
+        expression: LTRIM(SUBSTR(Customer_Planning_Level, INSTR(Customer_Planning_Level, '-') + 1))
+      - column: concat_pack_size_xtel
+        expression: SUBSTR(TRIM(pack_size), 1, INSTR(TRIM(pack_size), ' ') - 1)
+
+  - kind: group
+    name: group_data
+    context_name: add_customer_code_to_ch6
+    params:
+      - aggs:
+          a_volume_uc: sum
+          a_country_gross_revenues: sum
+          a_promo_disc_on_invoice: sum
+          a_promo_disc_off_in_rb_vv020_vv022: sum
+          a_promo_disc_off_invoice: sum
+          a_total_promo_investment: sum
+          start_sell_in: min
+          end_sell_in: max
+          start_sell_out: min
+          end_sell_out: max
+        by:
+        - tpm_code
+        - promo_desc
+        - customer_planning_level
+        - cpl_code
+        - cpl_name
+        - customer_number
+        - customer_name
+        - status
+        - category
+        - brand
+        - pack_size
+        - concat_pack_size_xtel
+        - sales_unit
+        - sku_code
+        - sku_desc
+        - promo_mechanic
+        - country
+        - channel
+        - notes_for_bd
+        - general_notes
+        - l6_customer_code
+        - customer_name_dc
+        - l7_customer_code
+
+  - kind: add
+    name: add_calculate_discounts
+    context_name: group_data
+    params:
+      - column: actual_discount_in_invoice_1
+        expression: if(sum_a_country_gross_revenues = '0', '0', ROUND((sum_a_promo_disc_on_invoice/sum_a_country_gross_revenues)*100))
+      - column: actual_discount_in_invoice
+        expression: if(actual_discount_in_invoice_1 IS NULL OR actual_discount_in_invoice_1 = '', '0', actual_discount_in_invoice_1)
+      - column: actual_discount_off_invoice
+        expression: if(sum_a_country_gross_revenues = '0', '0', ROUND(((sum_a_promo_disc_off_in_rb_vv020_vv022 + sum_a_promo_disc_off_invoice)/sum_a_country_gross_revenues)*100))
+      - column: actual_discount_total
+        expression: if(sum_a_country_gross_revenues = '0', '0', ROUND((sum_a_total_promo_investment/sum_a_country_gross_revenues)*100))
+      - column: pure_pna_check
+        expression: if(actual_discount_off_invoice = actual_discount_total AND actual_discount_off_invoice = '5' AND actual_discount_in_invoice_1 = '0' AND INSTR(UPPER(promo_desc), 'PNA') > 0, '1', '0')
+
+###################################################### PRODUCT SKU - LDO XTEL 4 #########################################################################
+
+  - kind: read_dataio
+    name: read_md_product_sku
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_product_sku
+      schema_version: v3
+
+  - kind: select
+    name: select_product_sku
+    context_name: read_md_product_sku
+    params:
+      columns:
+        material: material_ps
+        material_description: material_description_ps
+        nielsen_scorecard_product: nielsen_scorecard_product_ps
+        notes_nielsen_scorecard: notes_nielsen_scorecard_ps
+        scope_rgm_scorecards: scope_rgm_scorecards_ps
+        flavor: flavor_ps
+        ssd_still: ssd_still_ps
+        item_category: item_category_ps
+        brand: brand_ps
+        package_size: package_size_ps
+        package_type: package_type_ps
+        sales_unit: sales_unit_ps
+        mp: mp_ps
+        pcs_per_phc: pcs_per_phc_ps
+        country: country_ps
+      distinct: true
+
+  - kind: read_dataio
+    name: read_md_product_brand
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_product_brand
+      schema_version: v1
+
+  - kind: select
+    name: select_br
+    context_name: read_md_product_brand
+    params:
+      columns:
+        cch: cch_br
+        foldernet: foldernet_br
+        country: country_br
+      distinct: true
+
+  - kind: join
+    name: join_xtel_material_and_brand
+    context_name: add_calculate_discounts
+    params:
+      - other:
+          select_product_sku
+        how:
+          left
+        columns:
+          sku_code: material_ps
+      - other:
+          select_br
+        how:
+          left
+        columns:
+          brand: cch_br
+
+  - kind: filter
+    name: filter_products_out_of_scope
+    context_name: join_xtel_material_and_brand
+    params:
+      - condition:
+          scope_rgm_scorecards_ps != 'Out of scope'
+
+  - kind: add
+    name: add_zero_light_flag
+    context_name: filter_products_out_of_scope
+    params:
+      - column: zero_light_flag_ps
+        expression: if(foldernet_br = 'COCA COLA' AND (nielsen_scorecard_product_ps LIKE '%ZERO%' OR nielsen_scorecard_product_ps LIKE '%SENZA ZUCCHERO%' OR nielsen_scorecard_product_ps LIKE '%LEMON%'), 'ZERO',
+                    if(foldernet_br = 'COCA COLA' AND (nielsen_scorecard_product_ps LIKE '%LIGHT%'), 'LIGHT',
+                    if(foldernet_br = 'COCA COLA' AND (nielsen_scorecard_product_ps LIKE '%LIFE%' OR nielsen_scorecard_product_ps LIKE '%STEVIA%' OR nielsen_scorecard_product_ps LIKE '%ZERO STEVIA%'), 'REDUCED',
+                    if(foldernet_br = 'FANTA' AND (nielsen_scorecard_product_ps LIKE '%LIGHT%' OR nielsen_scorecard_product_ps LIKE '%SENZA ZUCCHERI%' OR nielsen_scorecard_product_ps LIKE '%ZERO%' OR nielsen_scorecard_product_ps LIKE '%IGP%'), 'ZERO',
+                    if(foldernet_br = 'SPRITE' AND (nielsen_scorecard_product_ps LIKE '%LIGHT%' OR nielsen_scorecard_product_ps LIKE '%SENZA ZUCCHERI%' OR nielsen_scorecard_product_ps LIKE '%ZERO%'), 'ZERO', null)))))
+
+###################################################### SELECT PROMO/LEADING MONTH AND YEAR #########################################################################
+
+  - kind: add
+    name: add_leading_date
+    context_name: add_zero_light_flag
+    params:
+      - column: start_sell_out_year
+        expression: TO_CHAR(min_start_sell_out, 'yyyy')
+      - column: start_sell_out_month
+        expression: TO_CHAR(min_start_sell_out, 'MM')
+      - column: start_sell_out_days
+        expression: (TO_CHAR(last_day(min_start_sell_out), 'dd') - TO_CHAR(min_start_sell_out, 'dd'))+ 1
+      - column: end_sell_out_year
+        expression: TO_CHAR(max_end_sell_out, 'yyyy')
+      - column: end_sell_out_month
+        expression: TO_CHAR(max_end_sell_out, 'MM')
+      - column: end_sell_out_days
+        expression: TO_CHAR(max_end_sell_out, 'dd')
+      - column: sell_out_leading_month
+        expression: if(start_sell_out_month != end_sell_out_month AND start_sell_out_days <= end_sell_out_days, end_sell_out_month, start_sell_out_month)
+      - column: sell_out_leading_year
+        expression: if(start_sell_out_year != end_sell_out_year AND start_sell_out_days <= end_sell_out_days, end_sell_out_year, start_sell_out_year)
+
+  - kind: cast
+    name: cast_date_to_string
+    context_name: add_leading_date
+    params:
+      - column: start_sell_out_days
+        to: string
+
+###################################################### MECHANICS #########################################################################
+
+  - kind: read_dataio
+    name: read_md_mechanics_xtel
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_mechanics_xtel
+      schema_version: v1
+
+  - kind: select
+    name: select_mx
+    context_name: read_md_mechanics_xtel
+    params:
+      columns:
+        mechanics_declared_by_kam: mechanics_declared_by_kam_mx
+        promo_mechanic_no_ed: promo_mechanic_no_ed_mx
+        promo_mechanic_ed: promo_mechanic_ed_mx
+        logic_flag: logic_flag_mx
+        mechanic_tier_2: mechanic_tier_2_mx
+      distinct: true
+        
+  - kind: join
+    name: join_mechanics_xtel
+    context_name: cast_date_to_string
+    params:
+      - other:
+          select_mx
+        how:
+          left
+        columns:
+          promo_mechanic: mechanics_declared_by_kam_mx
+
+  - kind: add
+    name: add_promo_mechanic_flag
+    context_name: join_mechanics_xtel
+    params:
+      - column: promo_mechanic_flag
+        expression: if(logic_flag_mx = 'Y', '1', '0')
+
+###################################################### BAN_CODE #########################################################################
+
+  - kind: read_dataio
+    name: read_ca_0_mat03_material
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: cch_bw
+      namespace: md
+      object_name: ca_0_mat03_material
+      schema_version: v1
+
+  - kind: select
+    name: select_pg
+    context_name: read_ca_0_mat03_material
+    params:
+      columns:
+        material: material_pg
+        bic_cpbartno: ban_code_pg
+        cpbartno_desc: ban_desc_pg
+      distinct: true
+
+  - kind: cast
+    name: cast_material_to_integer
+    context_name: select_pg
+    params:
+      - column: material_pg
+        to: integer
+      - column: ban_code_pg
+        to: integer
+      - column: ban_code_pg
+        to: string
+
+  - kind: join
+    name: join_ban_code
+    context_name: add_promo_mechanic_flag
+    params:
+      - other:
+          cast_material_to_integer
+        how:
+          left
+        columns:
+          sku_code: material_pg
+
+###################################################### PRODUCT_SIZE #########################################################################
+
+  - kind: read_dataio
+    name: read_md_product_size
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_product_size
+      schema_version: v3
+
+  - kind: add
+    name: add_concat_product_size
+    context_name: read_md_product_size
+    params:
+      - column: concat_product_size_psi
+        expression: SUBSTR(TRIM(cch), 1, INSTR(TRIM(cch), ' ') - 1)
+      - column: ext_pack_type
+        expression: "'NULL'" 
+
+  - kind: select
+    name: select_psi
+    context_name: add_concat_product_size
+    params:
+      columns:
+        cch: cch_psi
+        foldernet: ext_pack_size
+        ext_pack_type: ext_pack_type
+        concat_product_size_psi: concat_product_size_psi
+      distinct: true
+
+  - kind: join
+    name: join_product_size
+    context_name: join_ban_code
+    params:
+      - other:
+          select_psi
+        how:
+          left
+        columns:
+          concat_pack_size_xtel: concat_product_size_psi
+
+###################################################### PRODUCT_SIZE_RANK #########################################################################
+
+  - kind: read_dataio
+    name: read_md_product_size_rank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_product_size_rank
+      schema_version: v2
+
+  - kind: select
+    name: select_psr
+    context_name: read_md_product_size_rank
+    params:
+      columns:
+        cpl_code: cpl_code_psr
+        foldernet_marca: foldernet_marca_psr
+        most_significant_foldernet_formato: ext_pack_size_default
+      distinct: true
+
+  - kind: join
+    name: join_product_size_rank
+    context_name: join_product_size
+    params:
+      - other:
+          select_psr
+        how:
+          left
+        columns:
+          cpl_code: cpl_code_psr
+          foldernet_br: foldernet_marca_psr
+
+###################################################### PROMO GUIDILINES #########################################################################
+
+  - kind: read_dataio
+    name: read_promo_guidlines
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: promo_guidlines
+      schema_version: v1
+
+  - kind: select
+    name: select_pgu
+    context_name: read_promo_guidlines
+    params:
+      columns:
+        base_article_number: base_article_number_pgu
+        sell_in_disc: sell_in_discount
+      distinct: true
+
+  - kind: join
+    name: join_promo_guidlines
+    context_name: join_product_size_rank
+    params:
+      - other:
+          select_pgu
+        how:
+          left
+        columns:
+          ban_code_pg: base_article_number_pgu
+
+###################################################### SELL IN DISCOUNT GENERAL NOTES #########################################################################
+
+  - kind: read_dataio
+    name: read_sell_in_discount_general_notes
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: sell_in_discount_general_notes
+      schema_version: v1
+
+  - kind: select
+    name: select_sign
+    context_name: read_sell_in_discount_general_notes
+    params:
+      columns:
+        cpl: cpl_sign
+        general_notes: sell_in_discount_general_notes
+      distinct: true
+
+  - kind: join
+    name: join_general_notes
+    context_name: join_promo_guidlines
+    params:
+      - other:
+          select_sign
+        how:
+          left
+        columns:
+          customer_planning_level: cpl_sign
+
+###################################################### SELL IN DISCOUNT NOTES FOR BD #########################################################################
+
+  - kind: read_dataio
+    name: read_sell_in_discount_notes_for_bd
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: sell_in_discount_notes_for_bd
+      schema_version: v1
+
+  - kind: select
+    name: select_sibd
+    context_name: read_sell_in_discount_notes_for_bd
+    params:
+      columns:
+        cpl: cpl_sibd
+        notes_for_bd: sell_in_discount_notes_for_bd
+      distinct: true
+
+  - kind: join
+    name: join_notes_for_bd
+    context_name: join_general_notes
+    params:
+      - other:
+          select_sibd
+        how:
+          left
+        columns:
+          customer_planning_level: cpl_sibd
+
+###################################################### SELL IN DISCOUNT PROMO DESC #########################################################################
+
+  - kind: read_dataio
+    name: read_sell_in_discount_promo_desc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: sell_in_discount_promo_desc
+      schema_version: v1
+
+  - kind: select
+    name: select_sipr
+    context_name: read_sell_in_discount_promo_desc
+    params:
+      columns:
+        cpl: cpl_sipr
+        promo_desc: sell_in_promo_description
+      distinct: true
+
+  - kind: join
+    name: join_promo_desc
+    context_name: join_notes_for_bd
+    params:
+      - other:
+          select_sipr
+        how:
+          left
+        columns:
+          customer_planning_level: cpl_sipr
+
+###################################################### DOD CASE #########################################################################
+
+  - kind: add
+    name: add_dod_case
+    context_name: join_promo_desc
+    params:
+      - column: dod_case
+        expression: if(INSTR(Promo_Desc, sell_in_promo_description) > 0 OR INSTR(general_notes, sell_in_discount_general_notes) > 0 OR INSTR(notes_for_bd, sell_in_discount_notes_for_bd) > 0, '0.18', NULL)
+      - column: sell_in_dod
+        expression: if(sell_in_discount > 0 AND sum_a_volume_uc > 0 AND sum_a_total_promo_investment > 0 AND actual_discount_total > 0, sell_in_discount,
+                    if(dod_case > 0 AND (actual_discount_total IS NULL OR actual_discount_total = 0), dod_case, actual_discount_total))
+
+###################################################### CUSTOMER BANNER CONVENTION #########################################################################
+
+  - kind: read_dataio
+    name: read_md_customer_banner_convention
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: ppaa_web_input
+      namespace: it
+      object_name: md_customer_banner_convention
+      schema_version: v3
+
+  - kind: cast
+    name: cast_to_int
+    context_name: read_md_customer_banner_convention
+    params:
+      - column: banner_ranking
+        to: integer
+
+  - kind: group
+    name: group_banner_ranking
+    context_name: cast_to_int
+    params:
+      - aggs:
+          banner_ranking: min
+        by:
+        - cpl_code
+        - cpl_description
+        - cpl_xtel_value
+        - ranking_banner
+
+  - kind: add
+    name: concat_banners_ranking
+    context_name: group_banner_ranking
+    params:
+      - column: concat_banner_ranking
+        expression: concat_ws(', ', transform(sort_array(collect_list(struct(min_banner_ranking, ranking_banner)) OVER (PARTITION BY cpl_code, cpl_description, cpl_xtel_value)), x -> x.ranking_banner))
+
+  - kind: select
+    name: select_cbc
+    context_name: concat_banners_ranking
+    params:
+      columns:
+        cpl_code: cpl_code_cbc
+        cpl_description: cpl_description_cbc
+        cpl_xtel_value: cpl_xtel_value_cbc
+        concat_banner_ranking: banner_ranking
+      distinct: true
+
+  - kind: join
+    name: join_banners_ranking
+    context_name: add_dod_case
+    params:
+      - other:
+          select_cbc
+        how:
+          left
+        columns:
+          customer_planning_level: cpl_xtel_value_cbc
+
+  - kind: select
+    name: select_xtel_final
+    context_name: join_banners_ranking
+    params:
+      columns:
+        tpm_code: tpm_code
+        promo_desc: promo_desc
+        customer_planning_level: customer_planning_level
+        cpl_code: cpl_code
+        cpl_name: cpl_name
+        customer_number: customer_number
+        customer_name: customer_name
+        min_start_sell_in: start_sell_in
+        max_end_sell_in: end_sell_in
+        min_start_sell_out: start_sell_out
+        max_end_sell_out: end_sell_out
+        status: status
+        category: category
+        brand: brand
+        pack_size: pack_size
+        sales_unit: sales_unit
+        sku_code: sku_code
+        sku_desc: sku_desc
+        promo_mechanic: promo_mechanic
+        sum_a_volume_uc: a_volume_uc
+        sum_a_country_gross_revenues: a_country_gross_revenues
+        sum_a_promo_disc_on_invoice: a_promo_disc_on_invoice
+        sum_a_promo_disc_off_in_rb_vv020_vv022: a_promo_disc_off_in_rb_vv020_vv022
+        sum_a_promo_disc_off_invoice: a_promo_disc_off_invoice
+        sum_a_total_promo_investment: a_total_promo_investment
+        channel: channel
+        notes_for_bd: notes_for_bd
+        general_notes: general_notes
+        country: country
+        actual_discount_in_invoice: actual_discount_in_invoice
+        actual_discount_off_invoice: actual_discount_off_invoice
+        actual_discount_total: actual_discount_total
+        pure_pna_check: pure_pna_check
+        l6_customer_code: l6_customer_code
+        l7_customer_code: l7_customer_code
+        customer_name_dc: l6_customer_name
+        nielsen_scorecard_product_ps: ext_sku_desc
+        foldernet_br: ext_brand
+        ext_pack_size: ext_pack_size
+        package_type_ps: pack_type
+        mp_ps: units
+        ext_pack_type: ext_pack_type
+        ext_pack_size_default: ext_pack_size_default
+        promo_mechanic_no_ed_mx: promo_mechanic_no_ed
+        promo_mechanic_ed_mx: promo_mechanic_ed
+        promo_mechanic_flag: promo_mechanic_flag
+        mechanic_tier_2_mx: promo_mechanic_tier_2
+        ban_code_pg: ban_code
+        ban_desc_pg: ban_desc
+        start_sell_out_year: start_sell_out_year
+        start_sell_out_month: start_sell_out_month
+        start_sell_out_days: start_sell_out_days
+        end_sell_out_year: end_sell_out_year
+        end_sell_out_month: end_sell_out_month
+        end_sell_out_days: end_sell_out_days
+        sell_out_leading_month: sell_out_leading_month
+        sell_out_leading_year: sell_out_leading_year
+        sell_in_discount: sell_in_discount
+        sell_in_discount_general_notes: sell_in_discount_general_notes
+        sell_in_discount_notes_for_bd: sell_in_discount_notes_for_bd
+        sell_in_promo_description: sell_in_promo_description
+        sell_in_dod: sell_in_dod
+        dod_case: dod_case
+        pcs_per_phc_ps: pcs_per_phc
+        zero_light_flag_ps: zero_light_flag
+        banner_ranking: banner_ranking
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_leaflet_xtel
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: it
+      module: leaflets
+      namespace: golden
+      object_name: dm_leaflet_xtel
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

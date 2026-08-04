@@ -1,0 +1,188 @@
+transform:
+  name: dm_customer_bank
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but0bk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: bank_data
+      object_name: but0bk
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tiban
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: bank_data
+      object_name: tiban
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_bnka
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: bank_data
+      object_name: bnka
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t005
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana      
+      namespace: reference_data
+      object_name: t005
+
+  - kind: select
+    name: select_but0bk
+    context_name: read_but0bk
+    params:
+      columns:
+        partner: partner
+        bankl: bankl
+        bankn: bankn
+        banks: banks
+        bkont: bkont
+        bkvid: bkvid
+        sap_cluster: sap_cluster
+        bk_valid_to: bk_valid_to
+      distinct: true
+    skip_next: false
+
+  - kind: cast
+    name: cast_bk_valid_to
+    params:
+      - column: bk_valid_to
+        to: string
+
+  - kind: filter
+    name: filter_but0bk
+    params:
+      - condition:
+          (to_date(left(bk_valid_to,8), "yyyyMMdd") > current_date())
+
+  - kind: select
+    name: select_tiban
+    context_name: read_tiban
+    params:
+      columns:
+        iban: iban_ti
+        bankl: bankl_ti
+        bankn: bankn_ti
+        banks: banks_ti
+        bkont: bkont_ti
+        sap_cluster: sap_cluster_ti
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_bnka
+    context_name: read_bnka
+    params:
+      columns:
+        banka: banka_ba
+        banks: banks_ba
+        bankl: bankl_ba
+        sap_cluster: sap_cluster_ba
+      distinct: true
+    skip_next: false
+
+  - kind: select
+    name: select_t005
+    context_name: read_t005
+    params:
+      columns:
+        land1: land1
+        sap_cluster: sap_cluster_t5
+      distinct: true
+    skip_next: false    
+
+  - kind: join
+    name: join_but_ti_ba_t5
+    context_name: filter_but0bk
+    params:
+      - other:
+          select_tiban
+        how:
+          left
+        columns:
+          bankl: bankl_ti
+          bankn: bankn_ti
+          banks: banks_ti
+          bkont: bkont_ti
+          sap_cluster: sap_cluster_ti
+      - other:
+          select_bnka
+        how:
+          left
+        columns:
+          banks: banks_ba
+          bankl: bankl_ba
+          sap_cluster: sap_cluster_ba
+      - other:
+          select_t005
+        how:
+          left
+        columns:
+          banks: land1
+          sap_cluster: sap_cluster_t5
+
+  - kind: add
+    name: add_is_bank_country_code_valid
+    params:
+      - column: is_bank_country_code_valid
+        expression: "CASE WHEN land1 IS NOT NULL THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_dm_customer_bank
+    params:
+      columns:
+        partner: customer_code
+        bankl: bank_key
+        bankn: bank_account_number
+        banks: bank_country_code
+        bkont: bank_control_key
+        bkvid: bank_details_id
+        iban_ti: iban
+        banka_ba: bank_name
+        is_bank_country_code_valid: is_bank_country_code_valid
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_customer_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_bank
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

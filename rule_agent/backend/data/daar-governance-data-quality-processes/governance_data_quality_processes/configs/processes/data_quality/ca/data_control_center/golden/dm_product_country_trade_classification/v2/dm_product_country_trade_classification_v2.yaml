@@ -1,0 +1,96 @@
+transform:
+  name: dm_product_country_trade_classification
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_sapsll_maritc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: sapsll_maritc
+
+  - kind: cast
+    name: cast_datbi
+    params:
+    - column: datbi
+      to: date
+      to_format: yyyyMMdd
+
+  - kind: filter
+    name: filter_sapsll_maritc_1
+    params:
+      - condition:
+          datbi > current_timestamp()
+
+  - kind: add
+    name: add_sapsll_maritc
+    params:
+      - column: country_code
+        expression: substr(stcts, 0, 2)
+
+  - kind: filter
+    name: filter_sapsll_maritc_2
+    params:
+      - condition:
+          country_code NOT IN ('RU', 'BY')
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_country_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: country_mapping
+
+  - kind: join
+    name: join_ck13
+    context_name: filter_sapsll_maritc_2
+    params:
+      - other:
+          read_country_mapping
+        how:
+          left
+        columns:
+          country_code: country_code
+
+  - kind: select
+    name: select_sapsll_maritc
+    params:
+      columns:
+        matnr: material_code
+        country_code: country_code
+        stcts: trade_classification
+        ccngn: commodity_code
+        sap_cluster: sap_cluster
+        eu_flag: eu_flag
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_product_country_trade_classification
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_country_trade_classification
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

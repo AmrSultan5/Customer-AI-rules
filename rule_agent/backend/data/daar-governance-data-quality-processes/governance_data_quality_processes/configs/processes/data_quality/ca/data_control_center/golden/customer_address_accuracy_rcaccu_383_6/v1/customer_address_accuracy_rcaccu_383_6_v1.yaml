@@ -1,0 +1,208 @@
+transform:
+  name: address_geocoords_conformity
+  operations:
+
+  - kind: nested_process
+    name: customer_address_accuracy_rcaccu_21_3
+    params:
+      config_path: "processes/data_quality/ca/data_control_center/golden/customer_address_accuracy_rcaccu_21_3/v1/customer_address_accuracy_rcaccu_21_3_v1.yaml"
+      module: "governance_data_quality_processes.configs"
+      jinja_params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+        process_run_id: "{{process_run_id}}"
+
+  - kind: filter
+    name: filter_rcaccu_21_3
+    params:
+      - condition:
+          check_status <> '0'
+
+  - kind: select
+    name: select_rcaccu_21_3
+    params:
+      columns:
+        check_status: check_status_rcaccu_21_3
+        value_checked: value_checked_rcaccu_21_3
+        customer_code: customer_code
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+      schema_version: v4
+
+  - kind: add
+    name: add_dca
+    context_name: read_dm_customer_address
+    params:
+      - column: geocoords_dca
+        expression: concat_ws(', ', latitude, longitude)
+
+  - kind: select
+    context_name: add_dca
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        city: city
+        longitude: longitude
+        latitude: latitude
+        geocoords_dca: geocoords_dca
+        post_code: post_code
+        city: city
+        street_1_name: street_1_name
+        house_number: house_number
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+      schema_version: v11
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: read_dataio
+    name: read_dcc_geocoords_extractor_dic
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: dcc_geocoords_extractor_dic
+      schema_version: v1
+
+  - kind: select
+    context_name: read_dcc_geocoords_extractor_dic
+    name: select_dcc_geocoords_extractor_dic
+    params:
+      columns:
+        customer_code: customer_code
+        latitude: ext_latitude
+        longitude: ext_longitude
+        country_code: country_code
+        geocoords_extractor: geocoords_extractor
+      distinct: false
+
+  - kind: join
+    name: join_data_marts
+    context_name: select_dca
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dcc_geocoords_extractor_dic
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          country_code: country_code
+          latitude: ext_latitude
+          longitude: ext_longitude
+      - other:
+          select_rcaccu_21_3
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          geocoords_dca: value_checked_rcaccu_21_3
+
+  - kind: add
+    name: add_checks
+    context_name: join_data_marts
+    params:
+      - column: postal_check_status
+        expression: check_status_rcaccu_21_3
+      - column: street_house_number
+        expression: trim(concat_ws(' ', nullif(street_1_name, ''), nullif(house_number, '')))
+
+  - kind: select
+    name: select_checks
+    context_name: add_checks
+    params:
+      columns:
+        customer_code: customer_code
+        longitude: longitude
+        latitude: latitude
+        post_code: post_code
+        street_house_number: street_house_number
+        country_code: country_code
+        city: city
+        geocoords_extractor: geocoords_extractor
+        postal_check_status: postal_check_status
+      distinct: false
+
+  - kind: governance_data_quality_processes.custom_operations.city_standarization.address_coords_conformity.AddressCoordsConformityOperation
+    name: address_coords_conformity
+    config_kind: governance_data_quality_processes.custom_operation_configs.city_standarization.address_coords_conformity_config.AddressCoordsConformityOperationConfig
+    context_name: select_checks
+    params:
+        customer_code: customer_code
+        longitude: longitude
+        latitude: latitude
+        post_code: post_code
+        street_house_number: street_house_number
+        country_code: country_code
+        city: city
+        geocoords_extractor: geocoords_extractor
+        postal_check_status: postal_check_status
+
+  - kind: add
+    name: add_loading_date
+    context_name: address_coords_conformity
+    params:
+      - column: check_date
+        expression: current_timestamp()
+      - column: rule_code
+        expression: "'RCACCU_383.6'"
+      - column: checked_value
+        expression: concat_ws(', ', latitude, longitude)
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        checked_value: value_checked
+        advanced_message: check_details_message
+        check_date: check_date
+      distinct: true

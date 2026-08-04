@@ -1,0 +1,310 @@
+transform:
+  name: dm_finance_internal_order
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read AUFK
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_aufk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: aufk
+
+
+  - kind: select
+    name: select_aufk
+    params:
+      columns:
+        kokrs: kokrs
+        func_area: func_area
+        bukrs: bukrs
+        autyp: autyp
+        loekz: loekz
+        werks: werks
+        auart: auart
+        aufnr: aufnr
+        ktext: ktext
+        scope: scope
+        kostv: kostv
+        saknr: saknr
+        aufex: aufex
+        astkz: astkz
+        user0: user0
+        user2: user2
+        user1: user1
+        cycle: cycle
+        zzntt_key: zzntt_key
+        zzntt: zzntt
+        sap_cluster: sap_cluster
+      distinct: true
+
+
+# Read TKA01
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tka01
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tka01
+
+  - kind: select
+    name: select_tka01
+    params:
+      columns:
+        kokrs: kokrs
+        bezei: bezei
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read TFKB
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tfkb
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tfkb
+
+  - kind: select
+    name: select_tfkb
+    params:
+      columns:
+        fkber: fkber_tf
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read TFKBT
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tfkbt
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tfkbt
+
+
+  - kind: filter
+    name: filter_tfkbt
+    params:
+      - condition:
+          (spras = 'E')
+
+  - kind: select
+    name: select_tfkbt
+    params:
+      columns:
+        fkber: fkber
+        fkbtx: fkbtx
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read T001
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t001
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t001
+
+
+  - kind: filter
+    name: filter_t001
+    params:
+      - condition:
+          (spras = 'E')
+
+  - kind: select
+    name: select_t001
+    params:
+      columns:
+        bukrs: bukrs_t1
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read T001W
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t001w
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t001w
+
+
+  - kind: filter
+    name: filter_t001w
+    params:
+      - condition:
+          (spras = 'E')
+
+  - kind: select
+    name: select_t001w
+    params:
+      columns:
+        werks: werks
+        name1: name1
+        sap_cluster: sap_cluster
+      distinct: true
+
+# Read T003O
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t003o
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t003o
+
+
+  - kind: select
+    name: select_t003o
+    params:
+      columns:
+        auart: auart_t3
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_afk_tk1_tf_tfk_t1_t1w_t3
+    context_name: select_aufk
+    params:
+      - other:
+          select_tka01
+        how:
+          left
+        columns:
+          kokrs: kokrs
+          sap_cluster: sap_cluster
+      - other:
+          select_tfkb
+        how:
+          left
+        columns:
+          func_area: fkber_tf
+          sap_cluster: sap_cluster
+      - other:
+          select_tfkbt
+        how:
+          left
+        columns:
+          func_area: fkber
+          sap_cluster: sap_cluster
+      - other:
+          select_t001
+        how:
+          left
+        columns:
+          bukrs: bukrs_t1
+          sap_cluster: sap_cluster
+      - other:
+          select_t001w
+        how:
+          left
+        columns:
+          werks: werks
+          sap_cluster: sap_cluster
+      - other:
+          select_t003o
+        how:
+          left
+        columns:
+          auart: auart_t3
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_flags
+    params:
+      - column: is_order_type_allowed
+        expression: if(auart_t3 is not null,'1', '0')
+      - column: is_company_code_allowed
+        expression: if(bukrs_t1 is not null,'1', '0')
+      - column: is_functional_area_allowed
+        expression: if(fkber_tf is not null,'1', '0')
+
+  - kind: select
+    name: select_dm_finance_internal_order
+    params:
+      columns:
+        auart: order_type
+        is_order_type_allowed: is_order_type_allowed
+        aufnr: order_number
+        autyp: order_category
+        ktext: order_number_description
+        kokrs: controlling_area_code
+        bukrs: company_code
+        is_company_code_allowed: is_company_code_allowed
+        werks: plant
+        name1: plant_name
+        func_area: functional_area
+        is_functional_area_allowed: is_functional_area_allowed
+        scope: object_class
+        kostv: cost_center
+        aufex: external_order_number
+        astkz: statistical_order_identifier
+        user0: applicant
+        user2: person_responsible
+        loekz: deletion_flag
+        cycle: actual_posted_cost_center
+        zzntt_key: nature_of_transaction_type_code
+        zzntt: nature_of_transaction_type_description
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_finance_internal_order
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_finance_internal_order
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

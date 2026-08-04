@@ -1,0 +1,1229 @@
+transform:
+  name: incident_nonapproval
+  operations:
+    - kind: read_dataio
+      name: read_incident
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          storage_id: "{{dataio.storage_id}}"
+          layer: curated
+        source: dataverse
+        namespace: d365
+        object_name: incident
+        schema_version: v1
+
+    - kind: filter
+      name: filter_incident_nonapproval
+      context_name: read_incident
+      params:
+        - condition: len(cch_nonapprovaljson) > 40
+
+    - kind: filter
+      name: filter_incident_approval
+      context_name: read_incident
+      params:
+        - condition: len(cch_approvaljson) > 40
+
+    - kind: add
+      name: add_related_table_nonapproval
+      context_name: filter_incident_nonapproval
+      params:
+        - column: related_table
+          expression: "explode_outer(from_json(cch_nonapprovaljson:relatedtables, 'array<struct<AdditionalAttributes:array<struct<NewValue:struct<Id:string,RefEntity:string,Value:string>,OldValue:struct<Id:string,RefEntity:string,Value:string>>>,Attributes:array<struct<LogicalName:string,NewValue:struct<Id:string,RefEntity:string,Value:string>,OldValue:struct<Id:string,RefEntity:string,Value:string>>>,ChangeStatus:int,IsCreated:boolean,LogicalName:string>>'))"
+        - column: table
+          expression: related_table.logicalname
+        - column: changestatus
+          expression: related_table.changestatus
+        - column: iscreated
+          expression: related_table.iscreated
+        - column: related_table_attribute
+          expression: explode_outer(related_table.attributes)
+        - column: attribute
+          expression: related_table_attribute.logicalname
+        - column: newvalue
+          expression: related_table_attribute.newvalue.value
+        - column: oldvalue
+          expression: related_table_attribute.oldvalue.value
+        - column: related_table_additional_attribute
+          expression: explode_outer(related_table.additionalattributes)
+        - column: guid
+          expression: coalesce(related_table_additional_attribute.newvalue.value,related_table_additional_attribute.oldvalue.value)
+
+    - kind: select
+      name: select_related_table_nonapproval
+      context_name: add_related_table_nonapproval
+      params:
+        columns:
+          id: id
+          ticketnumber: ticketnumber
+          activitiescomplete: activitiescomplete
+          cch_changerequestsenttomdg: changerequestsenttomdg
+          cch_dateofprocessingcompletion: dateofprocessingcompletion
+          cch_reasoncodename: reasoncodename
+          table: table
+          changestatus: changestatus
+          iscreated: iscreated
+          attribute: attribute
+          newvalue: newvalue
+          oldvalue: oldvalue
+          guid: guid
+          related_table: related_table
+          related_table_attribute: related_table_attribute
+          related_table_additional_attribute: related_table_additional_attribute
+
+    - kind: filter
+      name: filter_related_table_nonapproval
+      context_name: select_related_table_nonapproval
+      params:
+        - condition: newvalue is not null and attribute in('cch_telephone','cch_telephone2','cch_telephone3','cch_telephone4','cch_telephone5','cch_emailaddress','cch_emailaddress2','cch_emailaddress3','cch_emailaddress4','cch_emailaddress5','cch_mobilephone','cch_mobilephone2','cch_mobilephone3','cch_mobilephone4','cch_mobilephone5','cch_mobilephone_number_default','cch_mobilephone2_number_default','cch_mobilephone3_number_default','cch_mobilephone4_number_default','cch_mobile5_number_default','cch_telephone_number_default','cch_telephone2_number_default','cch_telephone3_number_default','cch_telephone4_number_default','cch_telephone5_number_default','firstname','lastname')
+
+    - kind: select
+      name: select_incident_nonapproval_1
+      context_name: filter_related_table_nonapproval
+      params:
+        columns:
+          id: id
+          ticketnumber: ticketnumber
+          activitiescomplete: activitiescomplete
+          changerequestsenttomdg: changerequestsenttomdg
+          dateofprocessingcompletion: dateofprocessingcompletion
+          reasoncodename: reasoncodename
+          table: table
+          changestatus: changestatus
+          iscreated: iscreated
+          attribute: attribute
+          newvalue: newvalue
+          oldvalue: oldvalue
+          guid: guid
+
+    - kind: checkpoint
+      name: select_incident_nonapproval
+      context_name: select_incident_nonapproval_1
+
+    - kind: add
+      name: add_related_table_approval
+      context_name: filter_incident_approval
+      params:
+        - column: related_table
+          expression: "explode_outer(from_json(cch_approvaljson:relatedtables, 'array<struct<AdditionalAttributes:array<struct<NewValue:struct<Id:string,RefEntity:string,Value:string>,OldValue:struct<Id:string,RefEntity:string,Value:string>>>,Attributes:array<struct<LogicalName:string,NewValue:struct<Id:string,RefEntity:string,Value:string>,OldValue:struct<Id:string,RefEntity:string,Value:string>>>,ChangeStatus:int,IsCreated:boolean,LogicalName:string>>'))"
+        - column: table
+          expression: related_table.logicalname
+        - column: changestatus
+          expression: related_table.changestatus
+        - column: iscreated
+          expression: related_table.iscreated
+        - column: related_table_attribute
+          expression: explode_outer(related_table.attributes)
+        - column: attribute
+          expression: related_table_attribute.logicalname
+        - column: newvalue
+          expression: related_table_attribute.newvalue.value
+        - column: oldvalue
+          expression: related_table_attribute.oldvalue.value
+        - column: related_table_additional_attribute
+          expression: explode_outer(related_table.additionalattributes)
+        - column: guid
+          expression: coalesce(related_table_additional_attribute.newvalue.value,related_table_additional_attribute.oldvalue.value)
+
+    - kind: select
+      name: select_related_table_approval
+      context_name: add_related_table_approval
+      params:
+        columns:
+          id: id
+          ticketnumber: ticketnumber
+          activitiescomplete: activitiescomplete
+          cch_changerequestsenttomdg: changerequestsenttomdg
+          cch_dateofprocessingcompletion: dateofprocessingcompletion
+          cch_reasoncodename: reasoncodename
+          table: table
+          changestatus: changestatus
+          iscreated: iscreated
+          attribute: attribute
+          newvalue: newvalue
+          oldvalue: oldvalue
+          guid: guid
+          related_table: related_table
+          related_table_attribute: related_table_attribute
+          related_table_additional_attribute: related_table_additional_attribute
+
+    - kind: filter
+      name: filter_related_table_approval
+      context_name: select_related_table_approval
+      params:
+        - condition: newvalue is not null and attribute in('cch_telephone','cch_telephone2','cch_telephone3','cch_telephone4','cch_telephone5','cch_emailaddress','cch_emailaddress2','cch_emailaddress3','cch_emailaddress4','cch_emailaddress5','cch_mobilephone','cch_mobilephone2','cch_mobilephone3','cch_mobilephone4','cch_mobilephone5','cch_mobilephone_number_default','cch_mobilephone2_number_default','cch_mobilephone3_number_default','cch_mobilephone4_number_default','cch_mobile5_number_default','cch_telephone_number_default','cch_telephone2_number_default','cch_telephone3_number_default','cch_telephone4_number_default','cch_telephone5_number_default','firstname','lastname')
+
+    - kind: select
+      name: select_incident_approval_1
+      context_name: filter_related_table_approval
+      params:
+        columns:
+          id: id
+          ticketnumber: ticketnumber
+          activitiescomplete: activitiescomplete
+          changerequestsenttomdg: changerequestsenttomdg
+          dateofprocessingcompletion: dateofprocessingcompletion
+          reasoncodename: reasoncodename
+          table: table
+          changestatus: changestatus
+          iscreated: iscreated
+          attribute: attribute
+          newvalue: newvalue
+          oldvalue: oldvalue
+          guid: guid
+
+    - kind: checkpoint
+      name: select_incident_approval
+      context_name: select_incident_approval_1
+
+    - kind: union
+      name: union_d365_incident
+      context_name: select_incident_nonapproval
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_incident_approval
+
+    - kind: read_dataio
+      name: read_cch_mdrequest
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: cch_mdrequest
+        schema_version: v1
+
+    - kind: filter
+      name: filter_cch_mdrequest
+      context_name: read_cch_mdrequest
+      params:
+        - condition: 1 = 1
+
+    - kind: select
+      name: select_cch_mdrequest
+      context_name: filter_cch_mdrequest
+      params:
+        columns:
+          cch_winshuttleticketnumber: cch_winshuttleticketnumber
+          cch_casereferencename: cch_casereferencename
+          cch_mdrequestdate: cch_mdrequestdate
+          cch_account: cch_account
+          cch_accountname: cch_accountname
+          cch_sladate: cch_sladate
+          cch_casereference: cch_casereference
+          cch_senttowinshuttle: cch_senttowinshuttle
+
+    - kind: join
+      name: join_incident_mdrequest
+      context_name: union_d365_incident
+      params:
+        - other:
+            select_cch_mdrequest
+          how:
+            inner
+          columns:
+            id: cch_casereference
+
+    - kind: add
+      name: add_incident_mdrequest_1
+      context_name: join_incident_mdrequest
+      params:
+        - column: mdrequeststatus
+          expression: case when cch_senttowinshuttle='311220000' then 'Not Sent' 
+                      when cch_senttowinshuttle='344240000' then 'In queue' 
+                      when cch_senttowinshuttle='311220001' then 'In Progress' 
+                      when cch_senttowinshuttle='311220002' then 'Sent Successfully' 
+                      when cch_senttowinshuttle='311220003' then 'Send Failed' 
+                      when cch_senttowinshuttle='311220004' then 'Resend In Progress' 
+                      when cch_senttowinshuttle='311220005' then 'Resent Successfully' 
+                      when cch_senttowinshuttle='311220006' then 'Resend Failed' 
+                      when cch_senttowinshuttle='311220007' then 'Request Rejected' 
+                      when cch_senttowinshuttle='399080000' then 'Rejected - Technical Reason' 
+                      when cch_senttowinshuttle='399080001' then 'Rejected-Customer Already Exists' 
+                      when cch_senttowinshuttle='399080002' then 'Rejected-Not Allowed Legal Entity' 
+                      when cch_senttowinshuttle='399080003' then 'Completed' end
+
+    - kind: checkpoint
+      name: add_incident_mdrequest
+      context_name: add_incident_mdrequest_1
+
+    - kind: select
+      name: select_incident_info
+      context_name: add_incident_mdrequest
+      params:
+        columns:
+          cch_winshuttleticketnumber: d365ticket
+          mdrequeststatus: d365status
+          ticketnumber: casenumber
+          cch_casereferencename: casedescription
+          cch_mdrequestdate: createdon
+          cch_account: accountid
+          cch_accountname: accountname
+          cch_sladate: tocompletebefore
+          dateofprocessingcompletion: processingcompletionon
+          reasoncodename: changesource
+          table: entitychanged
+          attribute: fieldlogicalname
+          oldvalue: oldvalue
+          newvalue: newvalue
+          guid: cch_sapcrmguid
+
+    - kind: select
+      name: select_incident_attr
+      context_name: add_incident_mdrequest
+      params:
+        columns:
+          cch_winshuttleticketnumber: d365ticket
+          mdrequeststatus: d365status
+          ticketnumber: casenumber
+          cch_casereferencename: casedescription
+          cch_mdrequestdate: createdon
+          cch_account: accountid
+          cch_accountname: accountname
+          cch_sladate: tocompletebefore
+          dateofprocessingcompletion: processingcompletionon
+          reasoncodename: changesource
+          guid: cch_sapcrmguid
+        distinct: true
+
+    - kind: filter
+      name: mobile
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone'
+
+    - kind: select
+      name: select_mobile
+      context_name: mobile
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+          
+    - kind: filter
+      name: mobile_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone_number_default'
+        
+    - kind: select
+      name: select_mobile_default
+      context_name: mobile_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+        
+    - kind: join
+      name: join_mobile
+      context_name: select_mobile
+      params:
+        - other:
+            select_mobile_default
+          how:
+            inner
+          columns:
+            guid: guid                
+
+    - kind: filter
+      name: mobile2
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone2'
+
+    - kind: select
+      name: select_mobile2
+      context_name: mobile2
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: mobile2_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone2_number_default'
+
+    - kind: select
+      name: select_mobile2_default
+      context_name: mobile2_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_mobile2
+      context_name: select_mobile2
+      params:
+        - other:
+            select_mobile2_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+    - kind: filter
+      name: mobile3
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone3'
+
+    - kind: select
+      name: select_mobile3
+      context_name: mobile3
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: mobile3_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone3_number_default'
+
+    - kind: select
+      name: select_mobile3_default
+      context_name: mobile3_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_mobile3
+      context_name: select_mobile3
+      params:
+        - other:
+            select_mobile3_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+
+    - kind: filter
+      name: mobile4
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone4'
+
+    - kind: select
+      name: select_mobile4
+      context_name: mobile4
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: mobile4_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone4_number_default'
+
+    - kind: select
+      name: select_mobile4_default
+      context_name: mobile4_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_mobile4
+      context_name: select_mobile4
+      params:
+        - other:
+            select_mobile4_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+
+    - kind: filter
+      name: mobile5
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobilephone5'
+
+    - kind: select
+      name: select_mobile5
+      context_name: mobile5
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: mobile5_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_mobile5_number_default'
+
+    - kind: select
+      name: select_mobile5_default
+      context_name: mobile5_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_mobile5
+      context_name: select_mobile5
+      params:
+        - other:
+            select_mobile5_default
+          how:
+            inner
+          columns:
+            guid: guid 
+ 
+ 
+
+    - kind: union
+      name: union_d365_mobilephone
+      context_name: join_mobile
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_mobile2
+    
+    - kind: union
+      name: union_d365_mobilephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_mobile3
+
+    - kind: union
+      name: union_d365_mobilephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_mobile4
+
+    - kind: union
+      name: union_d365_mobilephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_mobile5                
+
+
+    - kind: add
+      name: add_mobile
+      context_name: union_d365_mobilephone
+      params:
+        - column: attribute
+          expression: '''mobile'''      
+
+
+    - kind: filter
+      name: tele
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone'
+
+    - kind: select
+      name: select_tele
+      context_name: tele
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+          
+    - kind: filter
+      name: tele_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone_number_default'
+        
+    - kind: select
+      name: select_tele_default
+      context_name: tele_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+        
+    - kind: join
+      name: join_tele
+      context_name: select_tele
+      params:
+        - other:
+            select_tele_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+    - kind: filter
+      name: tele2
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone2'
+
+    - kind: select
+      name: select_tele2
+      context_name: tele2
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: tele2_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone2_number_default'
+
+    - kind: select
+      name: select_tele2_default
+      context_name: tele2_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_tele2
+      context_name: select_tele2
+      params:
+        - other:
+            select_tele2_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+    - kind: filter
+      name: tele3
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone3'
+
+    - kind: select
+      name: select_tele3
+      context_name: tele3
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: tele3_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone3_number_default'
+
+    - kind: select
+      name: select_tele3_default
+      context_name: tele3_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_tele3
+      context_name: select_tele3
+      params:
+        - other:
+            select_tele3_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+    - kind: filter
+      name: tele4
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone4'
+
+    - kind: select
+      name: select_tele4
+      context_name: tele4
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: tele4_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone4_number_default'
+
+    - kind: select
+      name: select_tele4_default
+      context_name: tele4_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_tele4
+      context_name: select_tele4
+      params:
+        - other:
+            select_tele4_default
+          how:
+            inner
+          columns:
+            guid: guid  
+
+    - kind: filter
+      name: tele5
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone5'
+
+    - kind: select
+      name: select_tele5
+      context_name: tele5
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: tele5_default
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_telephone5_number_default'
+
+    - kind: select
+      name: select_tele5_default
+      context_name: tele5_default
+      params:
+        columns:
+          newvalue: default
+          cch_sapcrmguid: guid
+
+    - kind: join
+      name: join_tele5
+      context_name: select_tele5
+      params:
+        - other:
+            select_tele5_default
+          how:
+            inner
+          columns:
+            guid: guid 
+
+    - kind: union
+      name: union_d365_telephone
+      context_name: join_tele
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_tele2
+    
+    - kind: union
+      name: union_d365_telephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_tele3
+
+    - kind: union
+      name: union_d365_telephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_tele4
+
+    - kind: union
+      name: union_d365_telephone
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_tele5      
+
+    - kind: add
+      name: add_telephone
+      context_name: union_d365_telephone
+      params:
+        - column: attribute
+          expression: '''telephone'''
+
+    - kind: filter
+      name: email
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_emailaddress'
+
+    - kind: select
+      name: select_email
+      context_name: email
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid            
+
+    - kind: filter
+      name: email2
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_emailaddress2'
+
+    - kind: select
+      name: select_email2
+      context_name: email2
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: email3
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_emailaddress3'
+
+    - kind: select
+      name: select_email3
+      context_name: email3
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: email4
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_emailaddress4'
+
+    - kind: select
+      name: select_email4
+      context_name: email4
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid
+
+    - kind: filter
+      name: email5
+      context_name: select_incident_info
+      params:
+        - condition: attribute = 'cch_emailaddress5'
+
+    - kind: select
+      name: select_email5
+      context_name: email5
+      params:
+        columns:
+          newvalue: newvalue
+          cch_sapcrmguid: guid 
+
+    - kind: union
+      name: union_d365_email
+      context_name: select_email
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_email2
+    
+    - kind: union
+      name: union_d365_email
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_email3
+
+    - kind: union
+      name: union_d365_email
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_email4
+
+    - kind: union
+      name: union_d365_email
+      params:
+        allow_missing: true
+        by_name: true
+        other: select_email5 
+
+    - kind: add
+      name: add_email
+      context_name: union_d365_email
+      params:
+        - column: attribute
+          expression: '''email'''
+
+    - kind: join
+      name: join_mobile_attr
+      context_name: select_incident_attr
+      params:
+        - other:
+            add_mobile
+          how:
+            inner
+          columns:
+            cch_sapcrmguid: guid 
+            
+    - kind: join
+      name: join_telephone_attr
+      context_name: select_incident_attr
+      params:
+        - other:
+            add_telephone
+          how:
+            inner
+          columns:
+            cch_sapcrmguid: guid
+
+            
+    - kind: join
+      name: join_email_attr
+      context_name: select_incident_attr
+      params:
+        - other:
+            add_email
+          how:
+            inner
+          columns:
+            cch_sapcrmguid: guid
+
+ 
+    - kind: union
+      name: union_d365
+      context_name: join_mobile_attr
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_telephone_attr
+    
+    - kind: union
+      name: union_d365
+      params:
+        allow_missing: true
+        by_name: true
+        other: join_email_attr 
+        
+
+    - kind: select
+      name: select_firstname
+      context_name: select_incident_info
+      params:
+        columns:
+          fieldlogicalname: fieldlogicalname
+          newvalue: newvalue_firstname
+          cch_sapcrmguid: guid
+        distinct: true
+
+    - kind: filter
+      name: filter_firstname
+      context_name: select_firstname
+      params:
+        - condition: attribute = 'firstname'
+        
+        
+
+    - kind: select
+      name: select_lastname
+      context_name: select_incident_info
+      params:
+        columns:
+          fieldlogicalname: fieldlogicalname
+          newvalue: newvalue_lastname
+          cch_sapcrmguid: guid
+        distinct: true
+
+    - kind: filter
+      name: filter_lastname
+      context_name: select_lastname
+      params:
+        - condition: attribute = 'lastname'
+        
+
+    - kind: join
+      name: join_name
+      context_name: filter_firstname
+      params:
+        - other:
+            filter_lastname
+          how:
+            inner
+          columns:
+            guid: guid
+
+
+    - kind: join
+      name: join_attr
+      context_name: union_d365
+      params:
+        - other:
+            join_name
+          how:
+            inner
+          columns:
+            guid: guid 
+            
+    - kind: select
+      name: select_d365_final
+      context_name: join_attr
+      params:
+        columns:
+          d365ticket: d365ticket
+          d365status: d365status
+          casenumber: casenumber
+          casedescription: casedescription
+          createdon: createdon
+          accountid: accountid
+          accountname: accountname
+          tocompletebefore: tocompletebefore
+          processingcompletionon: processingcompletionon
+          changesource: changesource
+          cch_sapcrmguid: cch_sapcrmguid
+          newvalue_firstname: newvalue_firstname
+          newvalue_lastname: newvalue_lastname
+          attribute: attribute
+          newvalue: value
+          default: default
+        distinct: true
+        
+
+
+    - kind: read_dataio
+      name: read_account
+      params:
+        dataio:
+          ad_id: '{{dataio.ad_id}}'
+          layer: curated
+          storage_id: '{{dataio.storage_id}}'
+        source: dataverse
+        namespace: d365
+        object_name: account
+        schema_version: v1
+        
+    - kind: filter
+      name: filter_account
+      context_name: read_account
+      params:
+        - condition: 1 = 1
+
+    - kind: select
+      name: select_account
+      context_name: filter_account
+      params:
+        columns:
+          accountid: accountid
+          cch_sapid: partner
+          
+    - kind: join
+      name: join_account_d365_final
+      context_name: select_account
+      params:
+        - other:
+            select_d365_final
+          how:
+            inner
+          columns:
+            accountid: accountid 
+            
+    - kind: select
+      name: select_join
+      context_name: join_account_d365_final
+      params:
+        columns:
+          d365ticket: primary_key_src_l3
+          d365status: attribute1
+          casenumber: attribute2
+          createdon: attribute3
+          newvalue_lastname: attribute5
+          newvalue_firstname: attribute6
+          changesource: attribute7
+          value: attribute8
+          default: attribute9
+          processingcompletionon: attribute10
+          accountid: primary_key_src_l2
+          tocompletebefore: attribute4
+          attribute: dimension
+          partner: partner
+          cch_sapcrmguid: cch_sapcrmguid
+        distinct: true
+
+    - kind: add
+      name: add_join
+      context_name: select_join
+      params:
+        - column: domain
+          expression: '''customer'''
+        - column: table_name
+          expression: '''CONTACT RELATIONSHIP'''
+        - column: src_system
+          expression: '''d365_mdrequest_ticket'''
+        - column: tgt_system
+          expression: '''dummy'''
+        - column: primary_key_l1
+          expression: concat(partner,'_',lower(replace(cch_sapcrmguid, '-', '')))
+        - column: loading_date
+          expression: current_date()
+        - column: initials
+          expression: if(substr(partner, 1, 1) = 'P',3 ,
+                    if(substr(partner, 1, 3) = '000', 5, 2))        
+        - column: country
+          expression: CASE 
+                      WHEN initials = 2 THEN 
+                        CASE SUBSTRING(partner, 1, 2)
+                          WHEN '96' THEN 'AM'
+                          WHEN '12' THEN 'AT'
+                          WHEN '28' THEN 'BA'
+                          WHEN '13' THEN 'BG'
+                          WHEN '23' THEN 'BY'
+                          WHEN '27' THEN 'CH'
+                          WHEN '18' THEN 'CZ'
+                          WHEN '32' THEN 'EE'
+                          WHEN '35' THEN 'GB'
+                          WHEN '30' THEN 'GR'
+                          WHEN '25' THEN 'HR'
+                          WHEN '16' THEN 'HU'
+                          WHEN '34' THEN 'IE'
+                          WHEN '29' THEN 'IT'
+                          WHEN '42' THEN 'KV'
+                          WHEN '33' THEN 'LT'
+                          WHEN '31' THEN 'LV'
+                          WHEN '17' THEN 'MD'
+                          WHEN '15' THEN 'ME'
+                          WHEN '95' THEN 'MK'
+                          WHEN '94' THEN 'NG'
+                          WHEN '24' THEN 'PL'
+                          WHEN '26' THEN 'RO'
+                          WHEN '38' THEN 'RU'
+                          WHEN '21' THEN 'SI'
+                          WHEN '19' THEN 'SK'
+                          WHEN '14' THEN 'RS'
+                          WHEN '22' THEN 'UA'
+                          WHEN '40' THEN 'CY'
+                          WHEN '47' THEN 'EG'
+                          ELSE NULL
+                        END
+                      WHEN initials = 3 THEN 
+                        CASE SUBSTRING(partner, 1, 3)
+                          WHEN 'P96' THEN 'AM'
+                          WHEN 'P11' THEN 'AT'
+                          WHEN 'P86' THEN 'BA'
+                          WHEN 'P49' THEN 'BG'
+                          WHEN 'P23' THEN 'BY'
+                          WHEN 'P55' THEN 'CH'
+                          WHEN 'P51' THEN 'CY'
+                          WHEN 'P45' THEN 'CZ'
+                          WHEN 'P32' THEN 'EE'
+                          WHEN 'P79' THEN 'GB'
+                          WHEN 'P12' THEN 'GR'
+                          WHEN 'P80' THEN 'HR'
+                          WHEN 'P28' THEN 'HU'
+                          WHEN 'P78' THEN 'IE'
+                          WHEN 'P63' THEN 'IT'
+                          WHEN 'P92' THEN 'KV'
+                          WHEN 'P33' THEN 'LT'
+                          WHEN 'P31' THEN 'LV'
+                          WHEN 'P20' THEN 'MD'
+                          WHEN 'P82' THEN 'ME'
+                          WHEN 'P95' THEN 'MK'
+                          WHEN 'P94' THEN 'NG'
+                          WHEN 'P61' THEN 'PL'
+                          WHEN 'P91' THEN 'RO'
+                          WHEN 'P25' THEN 'RS'
+                          WHEN 'P85' THEN 'SI'
+                          WHEN 'P41' THEN 'SK'
+                          WHEN 'P72' THEN 'UA'
+                          WHEN 'P47' THEN 'EG'
+                          WHEN 'E96' THEN 'AM'
+                          WHEN 'E12' THEN 'AT'
+                          WHEN 'E28' THEN 'BA'
+                          WHEN 'E13' THEN 'BG'
+                          WHEN 'E23' THEN 'BY'
+                          WHEN 'E27' THEN 'CH'
+                          WHEN 'E40' THEN 'CY'
+                          WHEN 'E18' THEN 'CZ'
+                          WHEN 'E32' THEN 'EE'
+                          WHEN 'E47' THEN 'EG'
+                          WHEN 'E35' THEN 'GB'
+                          WHEN 'E30' THEN 'GR'
+                          WHEN 'E25' THEN 'HR'
+                          WHEN 'E16' THEN 'HU'
+                          WHEN 'E34' THEN 'IE'
+                          WHEN 'E29' THEN 'IT'
+                          WHEN 'E42' THEN 'KV'
+                          WHEN 'E33' THEN 'LT'
+                          WHEN 'E31' THEN 'LV'
+                          WHEN 'E17' THEN 'MD'
+                          WHEN 'E15' THEN 'ME'
+                          WHEN 'E95' THEN 'MK'
+                          WHEN 'E94' THEN 'NG'
+                          WHEN 'E24' THEN 'PL'
+                          WHEN 'E26' THEN 'RO'
+                          WHEN 'E14' THEN 'RS'
+                          WHEN 'E21' THEN 'SI'
+                          WHEN 'E19' THEN 'SK'
+                          WHEN 'E22' THEN 'UA'
+                          ELSE NULL
+                        END
+                        WHEN initials = 5 THEN 
+                          CASE SUBSTRING(partner, 1, 5)
+                            WHEN '00096' THEN 'AM'
+                            WHEN '00012' THEN 'AT'
+                            WHEN '00028' THEN 'BA'
+                            WHEN '00013' THEN 'BG'
+                            WHEN '00023' THEN 'BY'
+                            WHEN '00027' THEN 'CH'
+                            WHEN '00018' THEN 'CZ'
+                            WHEN '00032' THEN 'EE'
+                            WHEN '00035' THEN 'GB'
+                            WHEN '00030' THEN 'GR'
+                            WHEN '00025' THEN 'HR'
+                            WHEN '00016' THEN 'HU'
+                            WHEN '00034' THEN 'IE'
+                            WHEN '00029' THEN 'IT'
+                            WHEN '00042' THEN 'KV'
+                            WHEN '00033' THEN 'LT'
+                            WHEN '00031' THEN 'LV'
+                            WHEN '00017' THEN 'MD'
+                            WHEN '00015' THEN 'ME'
+                            WHEN '00095' THEN 'MK'
+                            WHEN '00094' THEN 'NG'
+                            WHEN '00024' THEN 'PL'
+                            WHEN '00026' THEN 'RO'
+                            WHEN '00038' THEN 'RU'
+                            WHEN '00021' THEN 'SI'
+                            WHEN '00019' THEN 'SK'
+                            WHEN '00014' THEN 'RS'
+                            WHEN '00022' THEN 'UA'
+                            WHEN '00040' THEN 'CY'
+                            WHEN '00047' THEN 'EG'
+                            ELSE NULL
+                          END
+                    END
+
+    - kind: write_dataio
+      name: write_final
+      context_name: add_join
+      params:
+        dataio:
+          ad_id: "{{dataio.ad_id}}"
+          layer: application
+          storage_id: "{{dataio.storage_id}}"
+        application_name: data_quality
+        country: ca
+        module: cross_system
+        namespace: golden
+        object_name: reconciliation_results
+        process_run_id: "{{process_run_id}}"
+        schema_version: v1
+        refresh_mode: partition
+        convert_to_target_schema: True

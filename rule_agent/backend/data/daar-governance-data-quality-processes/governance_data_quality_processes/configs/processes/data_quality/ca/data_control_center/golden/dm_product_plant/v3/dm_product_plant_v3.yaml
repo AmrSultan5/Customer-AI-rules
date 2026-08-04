@@ -1,0 +1,1501 @@
+transform:
+  name: dm_product_plant
+  operations:
+
+# Read MARC
+
+  - kind: read_dataio
+    name: read_marc
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: marc
+      schema_version: v1
+
+
+  # - kind: filter
+  #   name: filter_mmsta
+  #   params:
+  #     - condition:
+  #         mmsta <> '99' 
+
+  # - kind: group
+  #   name: group_mmsta
+  #   params:
+  #     - aggs:
+  #         werks: count
+  #       by:
+  #       -  matnr
+  #       -  sap_cluster
+
+  # - kind: join
+  #   name: join_marc_mmsta_count
+  #   context_name: read_marc
+  #   params:
+  #     - other:
+  #         group_mmsta
+  #       how:
+  #         left
+  #       columns:
+  #         matnr: matnr
+  #         sap_cluster: sap_cluster
+
+  # - kind: filter
+  #   name: filter_m
+  #   params:
+  #     - condition:
+  #         count_werks >= 1 and lvorm <> 'X' and mmsta <> '99'
+
+  - kind: add
+    name: add_concat
+    params:
+        - column: key_concat
+          expression: concat(matnr, werks)
+        - column: werks_substr
+          expression: substring(werks,0,2)
+
+  - kind: select
+    name: select_m
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        werks_substr: werks_substr
+        key_concat: key_concat
+        ausdt: ausdt
+        ausme: ausme
+        beskz: beskz
+        dismm: dismm
+        kzaus: kzaus
+        lvorm: lvorm
+        maabc: maabc
+        minbe: minbe
+        mmsta: mmsta
+        mmstd: mmstd
+        mtvfp: mtvfp
+        stawn: stawn
+        qmatv: qmatv
+        trame: trame
+        umlmc: umlmc
+        sap_cluster: sap_cluster_m
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_lpad
+    context_name: select_m
+    params:
+      - column: lpad_key
+        expression: "CASE WHEN(length(key_concat) < 24) THEN concat('4', lpad(key_concat, 24, '0')) ELSE key_concat END"
+
+  - kind: select
+    name: select_marc
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        werks_substr: werks_substr
+        key_concat: key_concat
+        lpad_key: lpad_key
+        ausdt: ausdt
+        ausme: ausme
+        beskz: beskz
+        dismm: dismm
+        kzaus: kzaus
+        lvorm: lvorm
+        maabc: maabc
+        minbe: minbe
+        mmsta: mmsta
+        mmstd: mmstd
+        mtvfp: mtvfp
+        stawn: stawn
+        qmatv: qmatv
+        trame: trame
+        umlmc: umlmc
+        sap_cluster_m: sap_cluster_m
+      distinct: true
+    skip_next: false
+
+# Read T141T
+
+  - kind: read_dataio
+    name: read_t141t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t141t
+      schema_version: v1
+
+
+  - kind: filter
+    name: filter_a1
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a1
+    params:
+      columns:
+        mtstb: mtstb
+        mmsta: mmsta
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+
+# Read T006A
+
+  - kind: read_dataio
+    name: read_t006a
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t006a
+      schema_version: v1
+
+  - kind: filter
+    name: filter_a2
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_a2
+    params:
+      columns:
+        msehi: msehi
+        msehl: msehl
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+
+# Read T001W
+
+  - kind: read_dataio
+    name: read_t001w
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t001w
+      schema_version: v1
+
+#  - kind: filter
+#    name: filter_a3
+#    params:
+#      - condition:
+#          spras = 'E'
+
+  - kind: select
+    name: select_a3
+    params:
+      columns:
+#        spras: spras
+        werks: werks
+        name1: name1
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+
+# Read plant_code_mapping
+
+  - kind: read_dataio
+    name: read_plant_code_mapping
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_mapping
+      schema_version: v2
+
+  - kind: select
+    name: select_pcm
+    params:
+      columns:
+        plant_code_short: plant_code_short
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+# Read plant_code_not_active
+
+  - kind: read_dataio
+    name: read_plant_code_not_active
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: plant_code_not_active
+      schema_version: v1
+
+  - kind: filter
+    name: filter_pcn
+    params:
+      - condition:
+          is_active = '1' OR is_active IS NULL
+
+  - kind: select
+    name: select_pcna
+    params:
+      columns:
+        plant_code: plant_code
+        plant_name: plant_name
+        is_active: is_active
+      distinct: true
+    skip_next: false
+
+
+
+# Read CE41000
+
+  - kind: read_dataio
+    name: read_c4
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ce41000
+      schema_version: v1
+
+  - kind: select
+    name: select_c4
+    params:
+      columns:
+        artnr: artnr
+        werks: werks_c4
+        paobjnr: paobjnr_c4
+        sap_cluster: sap_cluster_c4
+      distinct: false
+    skip_next: false
+
+# Read CE31000
+
+  - kind: read_dataio
+    name: read_c3
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: ce31000
+      schema_version: v1
+
+  - kind: filter
+    name: filter_c3
+    context_name: read_c3
+    params:
+      - condition:
+          gjahr >= (date_format(add_months(current_date(), -24),"yyyy"))
+      - condition:
+          paledger = '01'
+
+  - kind: select
+    name: select_c3
+    context_name: filter_c3
+    params:
+      columns:
+        paobjnr: paobjnr_c3
+        gjahr: gjahr
+        absmg001: absmg001
+        sap_cluster: sap_cluster_c3
+      distinct: false
+    skip_next: false
+
+
+
+# Read MARD
+
+  - kind: read_dataio
+    name: read_mar
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mard
+      schema_version: v1
+
+  - kind: group
+    name: group_mar
+    params:
+      - aggs:
+          labst: sum
+          speme: sum
+          insme: sum
+        by:
+        -  matnr
+        -  werks
+        -  sap_cluster  
+
+  - kind: add
+    name: add_casts
+    context_name: group_mar
+    params:
+       - column: sum_labst_cast
+         expression: CAST(sum_labst AS DECIMAL(33, 3))
+       - column: sum_speme_cast
+         expression: CAST(sum_speme AS DECIMAL(33, 3))
+       - column: sum_insme_cast
+         expression: CAST(sum_insme AS DECIMAL(33, 3))
+
+
+
+
+  - kind: select
+    name: select_group_sum
+    context_name: add_casts
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        sum_labst_cast: sum_labst
+        sum_speme_cast: sum_speme
+        sum_insme_cast: sum_insme
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false     
+
+###change 02/06/2024####
+  - kind: add
+    name: add_stock
+    context_name: read_mar
+    params:
+      - column: labst_cy
+        expression: IF(lfgja = extract(YEAR from now()), labst, 0)
+      - column: labst_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, labst, 0)
+      - column: labst_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, labst, 0)
+      - column: speme_cy
+        expression: IF(lfgja = extract(YEAR from now()), speme, 0)
+      - column: speme_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, speme, 0)
+      - column: speme_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, speme, 0)
+      - column: insme_cy
+        expression: IF(lfgja = extract(YEAR from now()), insme, 0)
+      - column: insme_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, insme, 0)
+      - column: insme_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, insme, 0)
+
+
+  - kind: group
+    name: group_stock
+    params:
+      - aggs:
+          labst_cy: sum
+          labst_py: sum
+          labst_ppy: sum
+          speme_cy: sum
+          speme_py: sum
+          speme_ppy: sum
+          insme_cy: sum
+          insme_py: sum
+          insme_ppy: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster
+
+
+  - kind: select
+    name: select_group_mar_stock
+    context_name: group_stock
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        sum_labst_cy: sum_labst_cy
+        sum_labst_py: sum_labst_py
+        sum_labst_ppy: sum_labst_ppy
+        sum_speme_cy: sum_speme_cy
+        sum_speme_py: sum_speme_py
+        sum_speme_ppy: sum_speme_ppy
+        sum_insme_cy: sum_insme_cy
+        sum_insme_py: sum_insme_py
+        sum_insme_ppy: sum_insme_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false     
+
+
+  - kind: join
+    name: join_group_mar_stock
+    context_name: select_group_sum
+    params:
+      - other:
+          select_group_mar_stock
+        how:
+          left
+        columns:
+          matnr: matnr
+          werks: werks
+          sap_cluster: sap_cluster
+
+
+  - kind: select
+    name: select_group_mar
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        sum_labst: sum_labst
+        sum_speme: sum_speme
+        sum_insme: sum_insme
+        sum_labst_cy: sum_labst_cy
+        sum_labst_py: sum_labst_py
+        sum_labst_ppy: sum_labst_ppy
+        sum_speme_cy: sum_speme_cy
+        sum_speme_py: sum_speme_py
+        sum_speme_ppy: sum_speme_ppy
+        sum_insme_cy: sum_insme_cy
+        sum_insme_py: sum_insme_py
+        sum_insme_ppy: sum_insme_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false  
+########
+
+
+# Read MSLB
+
+  - kind: read_dataio
+    name: read_msl
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: mslb
+      schema_version: v1
+
+  - kind: filter
+    name: filter_msl
+    params:
+      - condition:
+          sobkz IN('O', 'W')
+
+  - kind: add
+    name: add_stock_vendor_flag
+    params:
+        - column: stock_vendor_flag
+          expression: "CASE WHEN(werks IS NOT NULL AND matnr IS NOT NULL) THEN 'X' ELSE '' END"
+
+
+  - kind: group
+    name: group_msl
+    params:
+      - aggs:
+          lblab: sum
+          lbins: sum
+          lbvla: sum
+          lbvin: sum
+          lbein: sum
+          lbvei: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster
+
+
+  - kind: join
+    name: join_msl
+    context_name: add_stock_vendor_flag
+    params:
+      - other:
+          group_msl
+        how:
+          left
+        columns:
+          matnr: matnr
+          werks: werks
+          sap_cluster: sap_cluster
+
+
+  - kind: add
+    name: add_sales_vendor_quantity
+    params:
+      - column: stock_vendor_quantity
+        expression: sum_lblab+sum_lbins+sum_lbvla+sum_lbvin+sum_lbein+sum_lbvei
+
+
+  - kind: select
+    name: select_msl_grp
+    params:
+      columns:
+        sobkz: sobkz
+        lfgja: lfgja
+        werks: werks
+        matnr: matnr
+        lblab: lblab
+        lbins: lbins
+        lbvla: lbvla
+        lbvin: lbvin
+        lbein: lbein
+        lbvei: lbvei
+        sum_lblab: sum_lblab
+        sum_lbins: sum_lbins
+        sum_lbvla: sum_lbvla
+        sum_lbvin: sum_lbvin
+        sum_lbein: sum_lbein
+        sum_lbvei: sum_lbvei
+        stock_vendor_flag: stock_vendor_flag
+        stock_vendor_quantity: stock_vendor_quantity
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+###change 02/06/2024####
+  - kind: add
+    name: add_stock
+    context_name: filter_msl
+    params:
+      - column: lblab_cy
+        expression: IF(lfgja = extract(YEAR from now()), lblab, 0)
+      - column: lblab_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, lblab, 0)
+      - column: lblab_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, lblab, 0)
+      - column: lbins_cy
+        expression: IF(lfgja = extract(YEAR from now()), lbins, 0)
+      - column: lbins_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, lbins, 0)
+      - column: lbins_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, lbins, 0)
+      - column: lbvla_cy
+        expression: IF(lfgja = extract(YEAR from now()), lbvla, 0)
+      - column: lbvla_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, lbvla, 0)
+      - column: lbvla_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, lbvla, 0)
+      - column: lbvin_cy
+        expression: IF(lfgja = extract(YEAR from now()), lbvin, 0)
+      - column: lbvin_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, lbvin, 0)
+      - column: lbvin_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, lbvin, 0)
+      - column: lbein_cy
+        expression: IF(lfgja = extract(YEAR from now()), lbein, 0)
+      - column: lbein_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, lbein, 0)
+      - column: lbein_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, lbein, 0)
+      - column: lbvei_cy
+        expression: IF(lfgja = extract(YEAR from now()), lbvei, 0)
+      - column: lbvei_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, lbvei, 0)
+      - column: lbvei_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, lbvei, 0)
+
+  - kind: group
+    name: group_msl_stock
+    params:
+      - aggs:
+          lblab_cy: sum
+          lblab_py: sum
+          lblab_ppy: sum
+          lbins_cy: sum
+          lbins_py: sum
+          lbins_ppy: sum
+          lbvla_cy: sum
+          lbvla_py: sum
+          lbvla_ppy: sum
+          lbvin_cy: sum
+          lbvin_py: sum
+          lbvin_ppy: sum
+          lbein_cy: sum
+          lbein_py: sum
+          lbein_ppy: sum
+          lbvei_cy: sum
+          lbvei_py: sum
+          lbvei_ppy: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster
+
+  - kind: add
+    name: add_sales_vendor_quantity
+    params:
+      - column: stock_vendor_quantity_cy
+        expression: sum_lblab_cy+sum_lbins_cy+sum_lbvla_cy+sum_lbvin_cy+sum_lbein_cy+sum_lbvei_cy
+      - column: stock_vendor_quantity_py
+        expression: sum_lblab_py+sum_lbins_py+sum_lbvla_py+sum_lbvin_py+sum_lbein_py+sum_lbvei_py
+      - column: stock_vendor_quantity_ppy
+        expression: sum_lblab_ppy+sum_lbins_ppy+sum_lbvla_ppy+sum_lbvin_ppy+sum_lbein_ppy+sum_lbvei_ppy
+
+  - kind: select
+    name: select_group_msl_stock
+    context_name: add_sales_vendor_quantity
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        stock_vendor_quantity_cy: stock_vendor_quantity_cy
+        stock_vendor_quantity_py: stock_vendor_quantity_py
+        stock_vendor_quantity_ppy: stock_vendor_quantity_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false  
+
+  - kind: join
+    name: join_msl_stock
+    context_name: select_msl_grp
+    params:
+      - other:
+          select_group_msl_stock
+        how:
+          left
+        columns:
+          matnr: matnr
+          werks: werks
+          sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_msl
+    params:
+      columns:
+        sobkz: sobkz
+        lfgja: lfgja
+        werks: werks
+        matnr: matnr
+        lblab: lblab
+        lbins: lbins
+        lbvla: lbvla
+        lbvin: lbvin
+        lbein: lbein
+        lbvei: lbvei
+        sum_lblab: sum_lblab
+        sum_lbins: sum_lbins
+        sum_lbvla: sum_lbvla
+        sum_lbvin: sum_lbvin
+        sum_lbein: sum_lbein
+        sum_lbvei: sum_lbvei
+        stock_vendor_quantity_cy: stock_vendor_quantity_cy
+        stock_vendor_quantity_py: stock_vendor_quantity_py
+        stock_vendor_quantity_ppy: stock_vendor_quantity_ppy
+        stock_vendor_flag: stock_vendor_flag
+        stock_vendor_quantity: stock_vendor_quantity
+        sap_cluster: sap_cluster_msl
+      distinct: true
+    skip_next: false
+####
+
+
+
+# Read MSKU
+
+  - kind: read_dataio
+    name: read_msk
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: msku
+      schema_version: v1
+
+  - kind: filter
+    name: filter_msk
+    context_name: read_msk
+    params:
+      - condition:
+          sobkz IN('V', 'W')
+
+  - kind: group
+    name: group_msk
+    context_name: filter_msk
+    params:
+      - aggs:
+          kulab: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster
+
+  - kind: select
+    name: select_msk_grp
+    context_name: group_msk
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        sum_kulab: sum_kulab
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+###change 02/06/2024####
+
+  - kind: add
+    name: add_stock_msk
+    context_name: filter_msk
+    params:
+      - column: kulab_cy
+        expression: IF(lfgja = extract(YEAR from now()), kulab, 0)
+      - column: kulab_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, kulab, 0)
+      - column: kulab_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, kulab, 0)
+
+  - kind: group
+    name: group_stock_msk
+    params:
+      - aggs:
+          kulab_cy: sum
+          kulab_py: sum
+          kulab_ppy: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster
+
+
+  - kind: select
+    name: select_group_msk_stock
+    context_name: group_stock_msk
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        sum_kulab_cy: stock_customer_unrestricted_use_quantity_cy
+        sum_kulab_py: stock_customer_unrestricted_use_quantity_py
+        sum_kulab_ppy: stock_customer_unrestricted_use_quantity_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false  
+
+
+
+  - kind: join
+    name: join_group_msk_stock
+    context_name: select_msk_grp
+    params:
+      - other:
+          select_group_msk_stock
+        how:
+          left
+        columns:
+          matnr: matnr
+          werks: werks
+          sap_cluster: sap_cluster
+
+
+  - kind: select
+    name: select_msk
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        sum_kulab: sum_kulab
+        stock_customer_unrestricted_use_quantity_cy: stock_customer_unrestricted_use_quantity_cy
+        stock_customer_unrestricted_use_quantity_py: stock_customer_unrestricted_use_quantity_py
+        stock_customer_unrestricted_use_quantity_ppy: stock_customer_unrestricted_use_quantity_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+#####
+
+# Read MCHB
+
+  - kind: read_dataio
+    name: read_mch
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: material_master
+      object_name: mchb
+      schema_version: v1
+
+  - kind: filter
+    name: filter_mch
+    context_name: read_mch
+    params:
+      - condition:
+          clabs != 0 OR cspem != 0
+
+  - kind: group
+    name: group_mch
+    context_name: filter_mch
+    params:
+      - aggs:
+          charg: collect_list
+        by:
+        -  matnr
+        -  werks
+        -  sap_cluster
+
+
+  - kind: add
+    name: add_sales_charg_array
+    context_name: group_mch
+    params:
+      - column: charg_array
+        expression: sort_array(collect_list_charg)
+
+
+  - kind: add
+    name: add_stock_batch
+    context_name: add_sales_charg_array
+    params:
+      - column: charg_concat_ws
+        expression: concat_ws(',', charg_array)
+
+  - kind: select
+    name: select_mch_grp
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        charg_concat_ws: charg_concat_ws
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+###change 02/06/2024####
+  - kind: add
+    name: add_stock_mch
+    context_name: filter_mch
+    params:
+      - column: clabs_cy
+        expression: IF(lfgja = extract(YEAR from now()), clabs, 0)
+      - column: clabs_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, clabs, 0)
+      - column: clabs_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, clabs, 0)
+      - column: cspem_cy
+        expression: IF(lfgja = extract(YEAR from now()), cspem, 0)
+      - column: cspem_py
+        expression: IF(lfgja = extract(YEAR from now()) - 1, cspem, 0)
+      - column: cspem_ppy
+        expression: IF(lfgja = extract(YEAR from now()) - 2, cspem, 0)
+
+  - kind: group
+    name: group_stock_mch
+    params:
+      - aggs:
+          clabs_cy: sum
+          clabs_py: sum
+          clabs_ppy: sum
+          cspem_cy: sum
+          cspem_py: sum
+          cspem_ppy: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster
+
+  - kind: add
+    name: add_sales_vendor_quantity_mch
+    params:
+      - column: stock_batch_cy
+        expression: sum_clabs_cy+sum_cspem_cy
+      - column: stock_batch_py
+        expression: sum_clabs_py+sum_cspem_py
+      - column: stock_batch_ppy
+        expression: sum_clabs_ppy+sum_cspem_ppy
+
+
+  - kind: select
+    name: select_group_mch_stock
+    context_name: add_sales_vendor_quantity_mch
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        stock_batch_cy: stock_batch_cy
+        stock_batch_py: stock_batch_py
+        stock_batch_ppy: stock_batch_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false  
+
+
+
+  - kind: join
+    name: join_group_msk_stock
+    context_name: select_mch_grp
+    params:
+      - other:
+          select_group_mch_stock
+        how:
+          left
+        columns:
+          matnr: matnr
+          werks: werks
+          sap_cluster: sap_cluster
+
+
+  - kind: select
+    name: select_mch
+    params:
+      columns:
+        werks: werks
+        matnr: matnr
+        charg_concat_ws: charg_concat_ws
+        stock_batch_cy: stock_batch_cy
+        stock_batch_py: stock_batch_py
+        stock_batch_ppy: stock_batch_ppy
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+#####
+
+
+# Read CDHDR
+
+  - kind: read_dataio
+    name: read_ch
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdhdr
+      schema_version: v1
+
+  - kind: filter
+    name: filter_ch
+    context_name: read_ch
+    params:
+      - condition: objectclas = 'MATERIAL'
+
+  - kind: group
+    name: group_ch
+    context_name: filter_ch
+    params:
+      - aggs:
+          udate: max
+        by:
+        - changenr
+        - sap_cluster
+
+  - kind: select
+    name: select_ch
+    context_name: group_ch
+    params:
+      columns:
+        changenr: changenr
+        max_udate: max_udate
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+
+
+
+# Read CDPOS
+
+  - kind: read_dataio
+    name: read_cp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: transactional_data
+      object_name: cdpos
+      schema_version: v1
+
+  - kind: select
+    name: select_cp_1
+    params:
+      columns:
+        objectclas: objectclas
+        objectid: objectid
+        chngind: chngind
+        tabname: tabname
+        tabkey: tabkey
+        changenr: changenr
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: filter
+    name: filter_cp
+    params:
+      - condition: objectclas = 'MATERIAL' AND chngind = 'I' AND tabname = 'MARC'
+
+  - kind: add
+    name: add_tabkey
+    params:
+      - column: trim_tabkey
+        expression: 'replace(tabkey, " ", "") as str'
+
+  - kind: select
+    name: select_cp
+    params:
+      columns:
+        objectclas: objectclas
+        objectid: objectid
+        chngind: chngind
+        tabname: tabname
+        tabkey: tabkey
+        changenr: changenr
+        trim_tabkey: trim_tabkey
+        sap_cluster: sap_cluster
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_c3_c4
+    context_name: select_c3
+    params:
+      - other:
+          select_c4
+        how:
+          inner
+        columns:
+          paobjnr_c3: paobjnr_c4
+          sap_cluster_c3: sap_cluster_c4
+
+
+  - kind: join
+    name: join_m_a1_a2_pcm_a3_pcna
+    context_name: select_marc
+    params:
+      - other:
+          select_a1
+        how:
+          left
+        columns:
+          mmsta: mmsta
+          sap_cluster_m: sap_cluster
+      - other:
+          select_a2
+        how:
+          left
+        columns:
+          ausme: msehi
+          sap_cluster_m: sap_cluster
+      - other:
+          select_pcm
+        how:
+          inner
+        columns:
+          werks_substr: plant_code_short
+          sap_cluster_m: sap_cluster
+      - other:
+          select_a3
+        how:
+          left
+        columns:
+          werks: werks
+          sap_cluster_m: sap_cluster
+      - other:
+          select_pcna
+        how:
+          left
+        columns:
+          werks: plant_code
+      - other:
+          join_c3_c4
+        how:
+          left
+        columns:
+          werks: werks_c4
+          matnr: artnr
+          sap_cluster_m: sap_cluster_c4
+      - other:
+          select_group_mar
+        how:
+          left
+        columns:
+          werks: werks
+          matnr: matnr
+          sap_cluster_m: sap_cluster
+      - other:
+          select_msl
+        how:
+          left
+        columns:
+          werks: werks
+          matnr: matnr
+          sap_cluster_m: sap_cluster_msl
+      - other:
+          select_msk
+        how:
+          left
+        columns:
+          werks: werks
+          matnr: matnr
+          sap_cluster_m: sap_cluster
+      - other:
+          select_mch
+        how:
+          left
+        columns:
+          werks: werks
+          matnr: matnr
+          sap_cluster_m: sap_cluster
+      - other:
+          select_cp
+        how:
+          left
+        columns:
+          matnr: objectid
+          lpad_key: trim_tabkey
+          sap_cluster_m: sap_cluster
+      - other:
+          select_ch
+        how:
+          left
+        columns:
+          changenr: changenr
+          sap_cluster_m: sap_cluster
+
+  - kind: select
+    name: select_group
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        absmg001: absmg001
+        gjahr: gjahr
+        sap_cluster_m: sap_cluster_m
+      distinct: false
+    skip_next: false
+
+  - kind: add
+    name: add_sales_quantity
+    params:
+      - column: absmg001_cy_if
+        expression: IF(gjahr = extract(YEAR from now()), absmg001, 0)
+      - column: absmg001_py_if
+        expression: IF(gjahr = extract(YEAR from now()) - 1, absmg001, 0)
+      - column: absmg001_ppy_if
+        expression: IF(gjahr = extract(YEAR from now()) - 2, absmg001, 0)
+
+  - kind: group
+    name: group_c3_c4
+    params:
+      - aggs:
+          absmg001_cy_if: sum
+          absmg001_py_if: sum
+          absmg001_ppy_if: sum
+        by:
+        - matnr
+        - werks
+        - sap_cluster_m
+
+  - kind: select
+    name: select_c3_c4_group
+    context_name: group_c3_c4
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        sum_absmg001_cy_if: sum_absmg001_cy_if
+        sum_absmg001_py_if: sum_absmg001_py_if
+        sum_absmg001_ppy_if: sum_absmg001_ppy_if
+        sap_cluster_m: sap_cluster_m
+      distinct: true
+    skip_next: false
+
+  - kind: join
+    name: join_final
+    context_name: join_m_a1_a2_pcm_a3_pcna
+    params:
+      - other:
+          select_c3_c4_group
+        how:
+          left
+        columns:
+          matnr: matnr
+          werks: werks
+          sap_cluster_m: sap_cluster_m
+
+
+  - kind: select
+    name: select_final
+    context_name: join_final
+    params:
+      columns:
+        matnr: matnr
+        werks: werks
+        name1: name1
+        country_code: country_code
+        ausdt: ausdt
+        ausme: ausme
+        msehl: msehl
+        beskz: beskz
+        dismm: dismm
+        kzaus: kzaus
+        lvorm: lvorm
+        maabc: maabc
+        minbe: minbe
+        mmsta: mmsta
+        mtstb: mtstb
+        mmstd: mmstd
+        mtvfp: mtvfp
+        stawn: stawn
+        qmatv: qmatv
+        sum_absmg001_cy_if: sum_absmg001_cy_if
+        sum_absmg001_py_if: sum_absmg001_py_if
+        sum_absmg001_ppy_if: sum_absmg001_ppy_if
+        trame: trame
+        umlmc: umlmc
+        sum_labst: sum_labst
+        sum_speme: sum_speme
+        sum_insme: sum_insme
+        sum_labst_cy: sum_labst_cy
+        sum_labst_py: sum_labst_py
+        sum_labst_ppy: sum_labst_ppy
+        sum_speme_cy: sum_speme_cy
+        sum_speme_py: sum_speme_py
+        sum_speme_ppy: sum_speme_ppy
+        sum_insme_cy: sum_insme_cy
+        sum_insme_py: sum_insme_py
+        sum_insme_ppy: sum_insme_ppy
+        stock_vendor_quantity_cy: stock_vendor_quantity_cy
+        stock_vendor_quantity_py: stock_vendor_quantity_py
+        stock_vendor_quantity_ppy: stock_vendor_quantity_ppy
+        stock_vendor_flag: stock_vendor_flag
+        stock_vendor_quantity: stock_vendor_quantity
+        sum_kulab: sum_kulab
+        stock_customer_unrestricted_use_quantity_cy: stock_customer_unrestricted_use_quantity_cy
+        stock_customer_unrestricted_use_quantity_py: stock_customer_unrestricted_use_quantity_py
+        stock_customer_unrestricted_use_quantity_ppy: stock_customer_unrestricted_use_quantity_ppy
+        charg_concat_ws: charg_concat_ws
+        stock_batch_cy: stock_batch_cy
+        stock_batch_py: stock_batch_py
+        stock_batch_ppy: stock_batch_ppy
+        max_udate: max_udate
+        sap_cluster_m: sap_cluster_m
+      distinct: true
+    skip_next: false
+
+  - kind: add
+    name: add_is_basic_scope
+    params:
+      - column: is_basic_scope
+        expression: IF(lvorm <> 'X' and mmsta<>'99', '1', '0')
+      - column: sum_labst_cy
+        expression: IF(sum_labst_cy is null, 0, sum_labst_cy)
+        overwrite: true
+      - column: sum_labst_py
+        expression: IF(sum_labst_py is null, 0, sum_labst_py)
+        overwrite: true
+      - column: sum_labst_ppy
+        expression: IF(sum_labst_ppy is null, 0, sum_labst_ppy)
+        overwrite: true
+      - column: sum_speme_cy
+        expression: IF(sum_speme_cy is null, 0, sum_speme_cy)
+        overwrite: true
+      - column: sum_speme_py
+        expression: IF(sum_speme_py is null, 0, sum_speme_py)
+        overwrite: true
+      - column: sum_speme_ppy
+        expression: IF(sum_speme_ppy is null, 0, sum_speme_ppy)
+        overwrite: true
+      - column: sum_insme_cy
+        expression: IF(sum_insme_cy is null, 0, sum_insme_cy)
+        overwrite: true
+      - column: sum_insme_py
+        expression: IF(sum_insme_py is null, 0, sum_insme_py)
+        overwrite: true
+      - column: sum_insme_ppy
+        expression: IF(sum_insme_ppy is null, 0, sum_insme_ppy)
+        overwrite: true
+      - column: stock_vendor_quantity_cy
+        expression: IF(stock_vendor_quantity_cy is null, 0, stock_vendor_quantity_cy)
+        overwrite: true
+      - column: stock_vendor_quantity_py
+        expression: IF(stock_vendor_quantity_py is null, 0, stock_vendor_quantity_py)
+        overwrite: true
+      - column: stock_vendor_quantity_ppy
+        expression: IF(stock_vendor_quantity_ppy is null, 0, stock_vendor_quantity_ppy)
+        overwrite: true
+      - column: stock_customer_unrestricted_use_quantity_cy
+        expression: IF(stock_customer_unrestricted_use_quantity_cy is null, 0, stock_customer_unrestricted_use_quantity_cy)
+        overwrite: true
+      - column: stock_customer_unrestricted_use_quantity_py
+        expression: IF(stock_customer_unrestricted_use_quantity_py is null, 0, stock_customer_unrestricted_use_quantity_py)
+        overwrite: true
+      - column: stock_customer_unrestricted_use_quantity_ppy
+        expression: IF(stock_customer_unrestricted_use_quantity_ppy is null, 0, stock_customer_unrestricted_use_quantity_ppy)
+        overwrite: true
+      - column: stock_batch_cy
+        expression: IF(stock_batch_cy is null, 0, stock_batch_cy)
+        overwrite: true
+      - column: stock_batch_py
+        expression: IF(stock_batch_py is null, 0, stock_batch_py)
+        overwrite: true
+      - column: stock_batch_ppy
+        expression: IF(stock_batch_ppy is null, 0, stock_batch_ppy)
+        overwrite: true
+      - column: sum_labst
+        expression: IF(sum_labst is null, 0, sum_labst)
+        overwrite: true
+      - column: sum_speme
+        expression: IF(sum_speme is null, 0, sum_speme)
+        overwrite: true
+      - column: sum_insme
+        expression: IF(sum_insme is null, 0, sum_insme)
+        overwrite: true
+      - column: stock_vendor_quantity
+        expression: IF(stock_vendor_quantity is null, 0, stock_vendor_quantity)
+        overwrite: true
+      - column: sum_kulab
+        expression: IF(sum_kulab is null, 0, sum_kulab)
+        overwrite: true
+
+  - kind: cast
+    name: cast_decimal
+    params:
+      - column: stock_vendor_quantity
+        to: decimal(33,3)
+      - column: sum_labst_cy
+        to: decimal(33,3)
+      - column: sum_labst_py
+        to: decimal(33,3)
+      - column: sum_labst_ppy
+        to: decimal(33,3)
+      - column: sum_speme_cy
+        to: decimal(33,3)
+      - column: sum_speme_py
+        to: decimal(33,3)
+      - column: sum_speme_ppy
+        to: decimal(33,3)
+      - column: sum_insme_cy
+        to: decimal(33,3)
+      - column: sum_insme_py
+        to: decimal(33,3)
+      - column: sum_insme_ppy
+        to: decimal(33,3)
+      - column: stock_vendor_quantity_cy
+        to: decimal(33,3)
+      - column: stock_vendor_quantity_py
+        to: decimal(33,3)
+      - column: stock_vendor_quantity_ppy
+        to: decimal(33,3)
+      - column: stock_batch_cy
+        to: decimal(33,3)
+      - column: stock_batch_py
+        to: decimal(33,3)
+      - column: stock_batch_ppy
+        to: decimal(33,3)
+
+
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        matnr: material_code
+        werks: plant_code
+        name1: plant_name
+        country_code: country_code
+        ausdt: discontinuation_date
+        ausme: unit_of_issue_code
+        msehl: unit_of_issue_name
+        beskz: procurement_type
+        dismm: mrp_type
+        kzaus: discontinuation_indicator
+        lvorm: deletion_flag
+        maabc: abc_indicator
+        minbe: reorder_point
+        mmsta: material_status_code
+        mtstb: material_status_name
+        mmstd: start_date
+        mtvfp: availability_checking_group
+        stawn: commodity_code
+        qmatv: inspection_setup_flag
+        sum_absmg001_cy_if: sales_quantity_cy
+        sum_absmg001_py_if: sales_quantity_py
+        sum_absmg001_ppy_if: sales_quantity_ppy
+        trame: stock_in_transit_quantity
+        umlmc: stock_in_transfer_quantity
+        sum_labst: stock_unrestricted_quantity
+        sum_labst_cy: stock_unrestricted_quantity_cy
+        sum_labst_py: stock_unrestricted_quantity_py
+        sum_labst_ppy: stock_unrestricted_quantity_ppy
+        sum_speme: stock_blocked_quantity
+        sum_speme_cy: stock_blocked_quantity_cy
+        sum_speme_py: stock_blocked_quantity_py
+        sum_speme_ppy: stock_blocked_quantity_ppy
+        sum_insme: stock_quality_inspection_quantity
+        sum_insme_cy: stock_quality_inspection_quantity_cy
+        sum_insme_py: stock_quality_inspection_quantity_py
+        sum_insme_ppy: stock_quality_inspection_quantity_ppy
+        stock_vendor_flag: stock_vendor_flag
+        stock_vendor_quantity: stock_vendor_quantity
+        stock_vendor_quantity_cy: stock_vendor_quantity_cy
+        stock_vendor_quantity_py: stock_vendor_quantity_py
+        stock_vendor_quantity_ppy: stock_vendor_quantity_ppy
+        sum_kulab: stock_customer_unrestricted_use_quantity
+        stock_customer_unrestricted_use_quantity_cy: stock_customer_unrestricted_use_quantity_cy
+        stock_customer_unrestricted_use_quantity_py: stock_customer_unrestricted_use_quantity_py
+        stock_customer_unrestricted_use_quantity_ppy: stock_customer_unrestricted_use_quantity_ppy
+        charg_concat_ws: stock_batch
+        stock_batch_cy: stock_batch_cy
+        stock_batch_py: stock_batch_py
+        stock_batch_ppy: stock_batch_ppy
+        max_udate: plant_extenstion_date
+        sap_cluster_m: sap_cluster
+        is_basic_scope: is_basic_scope
+      distinct: true
+    skip_next: false
+
+  - kind: write_dataio
+    name: write_dm_product_plant
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_product_plant
+      process_run_id: "{{process_run_id}}"
+      schema_version: v3
+      refresh_mode: full

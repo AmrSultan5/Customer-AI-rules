@@ -1,0 +1,1166 @@
+transform:
+  name: customer_contact_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_general_v3
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    name: select_dcg
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        central_order_block_code: central_order_block_code
+        account_group_code: account_group_code
+        country_code: country_code
+        legal_name: general_legal_name
+        customer_1_name: customer_1_name
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        sap_cluster: sap_cluster
+      distinct: true
+
+#READ dm_customer_contact_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_contact
+
+  - kind: select
+    context_name: read_dm_customer_contact
+    name: select_dcc
+    params:
+      columns:
+        customer_code: customer_code
+        customer_partner_code: customer_partner_code
+        function_of_partner: function_of_partner
+        email_address: email_address
+        last_name: last_name
+        first_name: first_name
+        source: source
+        sap_cluster: sap_cluster
+      distinct: true
+  - kind: select
+    name: select_dcc_374
+    context_name: read_dm_customer_contact
+    params:
+      columns:
+        customer_code: customer_code_cc
+        function_of_partner: function_of_partner_cc
+        source: source_cc
+        sap_cluster: sap_cluster_cc
+      distinct: true
+
+  - kind: filter
+    name: filter_dm_customer_contact
+    context_name: select_dcc
+    params:
+      - condition:
+          email_address is not null and email_address != ''
+
+#READ dm_customer_address_contact_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address_contact
+
+  - kind: select
+    context_name: read_dm_customer_address_contact
+    name: select_dcac
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        source: source
+        is_mobile_phone: is_mobile_phone
+        country_code: country_code_cac
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: select
+    context_name: read_dm_customer_address_contact
+    name: select_dcac_alias
+    params:
+      columns:
+        customer_code: customer_code_cac
+        contact_medium_type: contact_medium_type_cac
+        contact_medium_value: contact_medium_value_cac
+        source: source_cac
+        country_code: country_code_cac
+        sap_cluster: sap_cluster_cac
+      distinct: true
+
+#ADDRESS
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        legal_name: address_legal_name
+        name_above_door: address_name_above_door
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_mobile_phone
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_mobile_phone
+
+  - kind: select
+    context_name: read_conf_mobile_phone
+    name: select_cmp
+    params:
+      columns:
+        country_code: country_code_cmp
+        country_prefix: country_prefix
+        min_number_of_digits: min_number_of_digits
+        max_number_of_digits: max_number_of_digits
+        prefix_number_of_digits: prefix_number_of_digits
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_special_characters
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_special_characters
+
+  - kind: filter
+    context_name: read_conf_special_characters
+    name: filter_conf_special_characters
+    params:
+      - condition:
+          value <> '0'
+
+#JOIN dcg and dcc
+  - kind: join
+    name: join_dcc_dcg
+    context_name: select_dcc
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#JOIN dcg and dcac
+  - kind: join
+    name: join_dcac_dcg
+    context_name: select_dcac
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: join
+    name: join_dcc_dcg_41
+    context_name: filter_dm_customer_contact
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dcg_dcc_41
+    context_name: join_dcc_dcg_41
+    params:
+      - column: contact_medium_type
+        expression: "'email_address'"
+      - column: source_table
+        expression: "'cc'"
+
+  - kind: select
+    name: select_dcg_dcc_41
+    context_name: add_dcg_dcc_41
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        email_address: contact_medium_value
+        central_order_block_code: central_order_block_code
+        function_of_partner: function_of_partner
+        country_code: country_code
+        source: source
+        source_table: source_table
+      distinct: true
+
+#JOIN dcg and dcac
+  - kind: join
+    name: join_dcac_dcg_41
+    context_name: select_dcac
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dcg_dcac_41
+    context_name: join_dcac_dcg_41
+    params:
+      - column: function_of_partner
+        expression: "''"
+      - column: source_table
+        expression: "'cac'"
+
+  - kind: select
+    name: select_dcg_dcac_41
+    context_name: add_dcg_dcac_41
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        central_order_block_code: central_order_block_code
+        function_of_partner: function_of_partner
+        country_code: country_code
+        source: source
+        source_table: source_table
+      distinct: true
+
+  - kind: union
+    name: union_dcg_dca_dcc_41
+    context_name: select_dcg_dcc_41
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_dcg_dcac_41
+  - kind: select
+    name: select_rcconf_369_1
+    context_name: join_dcc_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        customer_partner_code: customer_partner_code
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_369_1
+    context_name: select_rcconf_369_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_369.1'"
+      - column: check_status
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '', 
+                    if((customer_partner_code is null OR customer_partner_code = '') AND SUBSTR(account_group_code, 1,1)= '9', '0',
+                    if((customer_partner_code is not null AND customer_partner_code != '') AND SUBSTR(account_group_code, 1,1)= '9', '1', '')))
+
+  - kind: select
+    name: select_rcconf_369_1_final
+    context_name: add_rcconf_369_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        customer_partner_code: value_checked
+      distinct: true
+
+#RULE 370_1
+
+  - kind: filter
+    name: filter_rcconf_370_1
+    context_name: join_dcc_dcg
+    params:
+      - condition:
+          source = 's4'
+
+  - kind: select
+    name: select_rcconf_370_1
+    context_name: filter_rcconf_370_1
+    params:
+      columns:
+        customer_code: customer_code
+        last_name: check_val
+        country_code: country_code
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: governance_data_quality_processes.custom_operations.text.validate_special_characters.ValidateSpecialCharactersOperation
+    name: validate_legal_name
+    context_name: select_rcconf_370_1
+    config_kind: governance_data_quality_processes.custom_operation_configs.text.validate_special_characters_config.ValidateSpecialCharactersOperationConfig
+    params:
+      value: check_val
+      country_code: country_code
+
+  - kind: add
+    name: add_rcconf_370_1
+    context_name: validate_legal_name
+    params:
+      - column: r_code
+        expression: "'RCCONF_370.1'"
+      - column: check_val_regexp
+        expression: rlike(check_val, '[^A-Za-z0-9\'()\-\./*@{}\[%\]<>, \^ـ\u200B\uFEFF\u00A0\n\rء-يآأإئة-ۿًا-ي-ْ؟؛،ـﺀ-ﻼ]')
+      # SYNC DEPENDENCY: chars in check_val_regexp_pl must always match Rule_14
+      # in validate_special_characters.py — update both together if chars change
+      - column: check_val_regexp_pl
+        expression: rlike(check_val, '[^A-Za-z0-9ąĄćĆęĘłŁńŃóÓśŚźŹżŻŞşŽžÄäÑñÖöÇçÁáČčŠšųĞğÜü\'()\-\./*@{}\[%\]<>, \^&\":;!+_–=>‚˝´¨""„~]')
+      - column: check_status
+        expression: if(central_order_block_code in('E', 'G', 'SP', 'R', 'U'), '',
+                    if(validation_result = 0 and country_code = 'EG' and check_val_regexp = false, '1',
+                    if(validation_result = 0 and country_code = 'PL' and check_val_regexp_pl = false, '1',
+                    if(isnull(check_val) or check_val = '-1', '',
+                    if(validation_result = 0, '0', '1')))))
+
+  - kind: group
+    name: aggregation_rcconf_370_1
+    context_name: add_rcconf_370_1
+    params:
+      - aggs:
+          check_status: min
+        by:
+        - customer_code
+        - r_code
+        - check_val
+
+  - kind: select
+    name: select_rcconf_370_1_final
+    context_name: aggregation_rcconf_370_1
+    params:
+      columns:
+        r_code: rule_code
+        min_check_status: check_status
+        customer_code: customer_code
+        check_val: value_checked
+      distinct: true
+
+#RULE 370_2
+  - kind: filter
+    name: filter_rcconf_370_2
+    context_name: join_dcc_dcg
+    params:
+      - condition:
+          source = 's4'
+
+  - kind: select
+    name: select_rcconf_370_2
+    context_name: filter_rcconf_370_2
+    params:
+      columns:
+        customer_code: customer_code
+        last_name: last_name
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_370_2_cust_name_split
+    context_name: select_rcconf_370_2
+    params:
+      - column: last_name_split_explode
+        expression: "explode(split(last_name, ' '))"
+
+  - kind: filter
+    name: filter_rcconf_370_2
+    context_name: add_rcconf_370_2_cust_name_split
+    params:
+      - condition:
+          length(last_name_split_explode) >= 3
+
+  - kind: select
+    name: select_rcconf_370_2_cust_name_split
+    context_name: filter_rcconf_370_2
+    params:
+      columns:
+        customer_code: customer_code_split
+        last_name: last_name_split
+      distinct: true
+
+  - kind: join
+    name: join_rcconf_370_2_cust_name_split
+    context_name: select_rcconf_370_2
+    params:
+      - other:
+          select_rcconf_370_2_cust_name_split
+        how:
+          leftouter
+        columns:
+          customer_code: customer_code_split
+          last_name: last_name_split
+
+  - kind: add
+    name: add_rcconf_370_2
+    context_name: join_rcconf_370_2_cust_name_split
+    params:
+      - column: rule_code
+        expression: "'RCCONF_370.2'"
+      - column: check_status
+        expression: "CASE WHEN last_name is null OR last_name = '' THEN '' WHEN customer_code_split is null AND last_name_split is null THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_370_2_final
+    context_name: add_rcconf_370_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        last_name: value_checked
+      distinct: true
+
+#RULE 370_3
+
+  - kind: filter
+    name: filter_rcconf_370_3
+    context_name: join_dcc_dcg
+    params:
+      - condition:
+          source = 's4'
+
+  - kind: select
+    name: select_rcconf_370_3
+    context_name: filter_rcconf_370_3
+    params:
+      columns:
+        customer_code: customer_code
+        first_name: first_name
+      distinct: true
+
+  - kind: add
+    name: add_rcconf_370_3_rule_code
+    context_name: select_rcconf_370_3
+    params:
+      - column: rule_code
+        expression: "'RCCONF_370.3'"
+
+  - kind: join
+    name: join_rcconf_370_3_conf_special_characters
+    context_name: add_rcconf_370_3_rule_code
+    params:
+      - other:
+          filter_conf_special_characters
+        how:
+          left
+        columns:
+          rule_code: rule_code
+
+  - kind: add
+    name: add_rcconf_370_3
+    context_name: join_rcconf_370_3_conf_special_characters
+    params:
+      - column: check_status
+        expression: if(isnull(first_name) or first_name = '', '',
+                    if(first_name like any('%  %', ' %', '% ', '%..%', '%--%') or instr(first_name, character) <> 0, '0', '1'))
+
+  - kind: group
+    name: group_rcconf_370_3
+    context_name: add_rcconf_370_3
+    params:
+      - aggs:
+          check_status: min
+        by:
+        - customer_code
+        - first_name
+        - rule_code
+
+  - kind: select
+    name: select_rcconf_370_3_final
+    context_name: group_rcconf_370_3
+    params:
+      columns:
+        rule_code: rule_code
+        min_check_status: check_status
+        customer_code: customer_code
+        first_name: value_checked
+      distinct: true
+  - kind: filter
+    name: filter_dcac_mobile
+    context_name: select_dcac
+    params:
+      - condition:
+          contact_medium_type = 'mobile_tel_number'
+
+  - kind: select
+    name: select_dcac_2
+    context_name: filter_dcac_mobile
+    params:
+      columns:
+        customer_code: customer_code_cac2
+        contact_medium_type: contact_medium_type_cac2
+        contact_medium_value: contact_medium_value_cac2
+        country_code_cac: country_code_cac2
+        source: source_cac2
+        sap_cluster: sap_cluster_cac2
+      distinct: true
+
+  - kind: filter
+    name: filter_dcac_fixed
+    context_name: select_dcac
+    params:
+      - condition:
+          contact_medium_type = 'fixed_tel_number'
+
+  - kind: select
+    name: select_dcac_3
+    context_name: filter_dcac_fixed
+    params:
+      columns:
+        customer_code: customer_code_cac3
+        contact_medium_type: contact_medium_type_cac3
+        contact_medium_value: contact_medium_value_cac3
+        country_code_cac: country_code_cac3
+        sap_cluster: sap_cluster_cac3
+      distinct: true
+
+  - kind: join
+    name: join_dcac_39_7
+    context_name: select_dcac_2
+    params:
+      - other:
+          select_dcac_3
+        how:
+          left
+        columns:
+          customer_code_cac2: customer_code_cac3
+          sap_cluster_cac2: sap_cluster_cac3
+
+  - kind: add
+    name: add_leading_zero_39_7
+    context_name: join_dcac_39_7
+    params:
+      - column: cmv_length2
+        expression: length(contact_medium_value_cac2)
+      - column: cmv_length3
+        expression: length(contact_medium_value_cac3)
+      - column: contact_medium_value_cac22
+        expression: if(substr(contact_medium_value_cac2, 1, 1) = '0', substr(contact_medium_value_cac2, 2, cmv_length2), contact_medium_value_cac2)
+      - column: contact_medium_value_cac33
+        expression: if(substr(contact_medium_value_cac3, 1, 1) = '0', substr(contact_medium_value_cac3, 2, cmv_length3), contact_medium_value_cac3)
+
+  - kind: join
+    name: join_dcac_dcg_39_7
+    context_name: select_dcg
+    params:
+      - other:
+          add_leading_zero_39_7
+        how:
+          left
+        columns:
+          customer_code: customer_code_cac2
+          country_code: country_code_cac2
+          sap_cluster: sap_cluster_cac2
+
+
+  - kind: add
+    name: add_rcconf_39_7
+    context_name: join_dcac_dcg_39_7
+    params:
+      - column: rule_code
+        expression: "'RCCONF_39.7'"
+      - column: check_status
+        expression: if(source_cac2 != 's4' OR contact_medium_value_cac2 IS NULL OR contact_medium_value_cac2 = '' OR contact_medium_value_cac3 IS NULL OR contact_medium_value_cac3 = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '',
+                    if(contact_medium_value_cac22 = contact_medium_value_cac33, '0', '1'))
+      - column: value_checked
+        expression: contact_medium_value_cac2 || '_' || contact_medium_value_cac3
+
+  - kind: select
+    name: select_rcconf_39_7_final
+    context_name: add_rcconf_39_7
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 371_2
+  - kind: select
+    name: select_rcconf_371_2
+    context_name: join_dcc_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        function_of_partner: function_of_partner
+        source: source
+        central_order_block_code: central_order_block_code
+      distinct: true
+
+  - kind: filter
+    name: filter_rcconf_371_2
+    context_name: select_rcconf_371_2
+    params:
+      - condition:
+          source = 's4'
+
+  - kind: add
+    name: add_rcconf_371_2
+    context_name: filter_rcconf_371_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_371.2'"
+      - column: check_status
+        expression: "CASE WHEN function_of_partner is null OR function_of_partner = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U') THEN '' WHEN function_of_partner IN ('0001','0002','0003','0004','0005','0006','0007','0008','0009','0010','DF','F1','F2','F3','F4','F5','FX','Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8') THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_371_2_final
+    context_name: add_rcconf_371_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        function_of_partner: value_checked
+      distinct: true
+
+
+#------------374_2---------------
+
+  - kind: filter
+    name: filter_mobile
+    context_name: read_dm_customer_address_contact
+    params:
+      - condition:
+          contact_medium_type = 'mobile_tel_number'
+
+  - kind: select
+    name: select_dcac
+    context_name: filter_mobile
+    params:
+      columns:
+        customer_code: customer_code_cac
+        contact_medium_value: contact_medium_value_cac
+        source: source_cac
+        sap_cluster: sap_cluster_cac
+      distinct: true
+
+  - kind: join
+    name: join_dcg_dcac_dcc
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcc_374
+        how:
+          left
+        columns:
+          customer_code: customer_code_cc
+          sap_cluster: sap_cluster_cc
+      - other:
+          select_dcac
+        how:
+          left
+        columns:
+          customer_code: customer_code_cac
+          sap_cluster: sap_cluster_cac
+
+#RULE 374_2
+  - kind: add
+    name: add_rcconf_374_2
+    context_name: join_dcg_dcac_dcc
+    params:
+      - column: rule_code
+        expression: "'RCCONF_374.2'"
+      - column: check_status
+        expression: if(source_cac != 's4' AND (function_of_partner_cc != 'Z3' OR source_cc != 'crm'), '',
+                    if(contact_medium_value_cac is null OR contact_medium_value_cac = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '',
+                    if((country_code is null or country_code = '') and contact_medium_value_cac is not null and contact_medium_value_cac != '', '0', '1')))
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_rcconf_374_2_final
+    context_name: add_rcconf_374_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        country_code: value_checked
+      distinct: true
+
+# RULE 39_4
+
+  - kind: filter
+    name: filter_rcconf_39_4
+    context_name: join_dcg_dcac_dcc
+    params:
+      - condition:
+          source_cac = 's4'
+
+  - kind: add
+    name: add_rcconf_39_4_length
+    context_name: filter_rcconf_39_4
+    params:
+      - column: country_code_in
+        expression: explode(split(
+                    if(country_code = 'CH', 'CH,DE,FR,IT,AT,LI', 
+                    if(country_code = 'AM', 'AM,GE,AZ,IR,TR', 
+                    if(country_code = 'AT', 'AT,DE,CZ,SK,HU,SI,IT,CH,LI',
+                    if(country_code = 'BA', 'HR,HR,ME,RS',
+                    if(country_code = 'BG', 'BG,RO,RS,MK,GR,TR',
+                    if(country_code = 'BY', 'BY,LT,LV,PL,RU,UA',
+                    if(country_code = 'CY', country_code,
+                    if(country_code = 'CZ', 'CZ,DE,PL,SK,AT',
+                    if(country_code = 'EE', 'EE,RU,LV',
+                    if(country_code = 'EG', 'EG,LY,SD,IL,PS',
+                    if(country_code = 'FI', 'FI,NO,SE,RU',
+                    if(country_code = 'GB', 'GB,IE',
+                    if(country_code = 'GR', 'GR,AL,MK,BG,TR',
+                    if(country_code = 'HR', 'HR,SI,HU,RS,BA,ME',
+                    if(country_code = 'HU', 'HU,AT,SK,UA,RO,RS,HR,SI',
+                    if(country_code = 'IE', 'IE,GB',
+                    if(country_code = 'IT', 'IT,FR,CH,AT,SI,SM,VA',
+                    if(country_code = 'KV', 'KV,XK,RS,AL,MK,ME',
+                    if(country_code = 'LT', 'LT,LV,BY,PL,RU',
+                    if(country_code = 'LV', 'LV,EE,LT,BY,RU',
+                    if(country_code = 'MD', 'MD,RO,UA',
+                    if(country_code = 'ME', 'ME,HR,BA,RS,AL,KV',
+                    if(country_code = 'MK', 'MK,RS,AL,BG,GR,KV',
+                    if(country_code = 'NG', 'NG,BJ,CM,TD,NE',
+                    if(country_code = 'NL', 'NL,DE,BE',
+                    if(country_code = 'PL', 'PL,DE,CZ,SK,UA,BY,LT,RU',
+                    if(country_code = 'RO', 'RO,HU,RS,BG,MD,UA',
+                    if(country_code = 'RS', 'RS,HU,HR,BA,ME,MK,BG,RO,KV',
+                    if(country_code = 'SI', 'SI,AT,HU,HR,IT',
+                    if(country_code = 'UA', 'UA,BY,PL,SK,HU,RO,MD,RU',
+                    country_code)))))))))))))))))))))))))))))), ','))
+
+  - kind: governance_data_quality_processes.custom_operations.phonenumber_validator.PhonenumberValidatorOperation
+    context_name: add_rcconf_39_4_length
+    name: validate_phone_number
+    config_kind: governance_data_quality_processes.custom_operation_configs.phonenumber_validator_config.PhonenumberValidatorOperationConfig
+    params:
+      column_number: "contact_medium_value_cac"
+      column_region: "country_code_in"
+
+  - kind: join
+    name: join_rcconf_39_4
+    context_name: validate_phone_number
+    params:
+      - other:
+          select_cmp
+        how:
+          left
+        columns:
+          country_code: country_code_cmp
+
+  - kind: add
+    name: add_rcconf_39_4
+    context_name: join_rcconf_39_4
+    params:
+      - column: rule_code
+        expression: "'RCCONF_39.4'"
+      - column: check_status_pn
+        expression: CAST(contact_medium_value_cac_IsValid as string)
+      - column: check_status_lenght
+        expression: if(length(trim(contact_medium_value_cac)) < 4 or not rlike(contact_medium_value_cac, '^(?!\\+?\\s*(.)\\1+$)(?!\\+?\\s*([0-9])\\2+$)\\+?(?:[ \\-/()]*[0-9]+)+$'), 'invalid',
+                    if(length(contact_medium_value_cac)>=min_number_of_digits and substr(contact_medium_value_cac,0,2) <> '00', 'valid', 'invalid'))
+      - column: check_status
+        expression: if(contact_medium_value_cac is null OR contact_medium_value_cac = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '',
+                    if(check_status_lenght = 'invalid' OR check_status_pn = 'false', '0', '1'))
+
+  - kind: group
+    name: group_rcconf_39_4
+    context_name: add_rcconf_39_4
+    params:
+      - aggs:
+          check_status: max
+          contact_medium_value_cac: collect_set
+        by:
+        - customer_code
+        - rule_code
+
+
+  - kind: add
+    name: add_rcconf_39_4_final
+    context_name: group_rcconf_39_4
+    params:
+      - column: value_checked
+        expression: array_join(collect_set_contact_medium_value_cac, ', ')
+
+  - kind: select
+    name: select_rcconf_39_4_final
+    context_name: add_rcconf_39_4_final
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+  - kind: select
+    name: select_rcconf_41_1
+    context_name: join_dcac_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        country_code: country_code
+        source: source
+      distinct: true
+
+  - kind: filter
+    name: filter_rcconf_41_1
+    context_name: select_rcconf_41_1
+    params:
+      - condition:
+          source = 's4' AND contact_medium_type = 'email_address'
+
+  - kind: add
+    name: add_rcconf_41_1
+    context_name: filter_rcconf_41_1
+    params:
+      - column: rule_code
+        expression: "'RCCONF_41.1'"
+      - column: check_status
+        expression: "CASE WHEN lower(country_code) in('eg', 'ng') THEN '' WHEN contact_medium_value is null OR contact_medium_value = '' THEN '' WHEN contact_medium_value is not null AND contact_medium_value != '' AND INSTR(contact_medium_value, ' ') > 0 THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_41_1_final
+    context_name: add_rcconf_41_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        contact_medium_value: value_checked
+      distinct: true
+
+#RULE 41_2
+  - kind: filter
+    name: filter_rcconf_41_2
+    context_name: union_dcg_dca_dcc_41
+    params:
+      - condition:
+          contact_medium_type = 'email_address'
+
+  - kind: add
+    name: add_rcconf_41_2
+    context_name: filter_rcconf_41_2
+    params:
+      - column: rule_code
+        expression: "'RCCONF_41.2'"
+      - column: check_status
+        expression: if(((source_table = 'cac' AND source != 's4') OR (source_table = 'cc' AND (function_of_partner != 'Z3' OR source != 'crm'))), '',
+                    if(contact_medium_value is null OR contact_medium_value = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '', 
+                    if((contact_medium_value is not null AND contact_medium_value != '' AND rlike(contact_medium_value, '^[a-zA-Z0-9-_.]+[@][a-zA-Z0-9-_.]+[.][a-zA-Z0-9]+[.]*[a-zA-Z]*$') = 'true'), '1','0')))
+
+  - kind: group
+    name: group_rcconf_41_2
+    context_name: add_rcconf_41_2
+    params:
+      - aggs:
+          check_status: max
+          contact_medium_value: collect_set
+        by:
+        - rule_code
+        - customer_code
+
+  - kind: add
+    name: add_rcconf_41_2_final
+    context_name: group_rcconf_41_2
+    params:
+      - column: value_checked
+        expression: array_join(collect_set_contact_medium_value, ', ')
+
+  - kind: select
+    name: select_rcconf_41_2_final
+    context_name: add_rcconf_41_2_final
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 41_3
+  - kind: select
+    name: select_rcconf_41_3
+    context_name: join_dcac_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        contact_medium_type: contact_medium_type
+        contact_medium_value: contact_medium_value
+        country_code: country_code
+        source: source
+      distinct: true
+
+  - kind: filter
+    name: filter_rcconf_41_3_email
+    context_name: select_rcconf_41_3
+    params:
+      - condition:
+          source = 's4' AND contact_medium_type = 'email_address'
+
+  - kind: select
+    name: select_rcconf_41_3_email
+    context_name: filter_rcconf_41_3_email
+    params:
+      columns:
+        customer_code: customer_code_email
+        contact_medium_type: contact_medium_type_email
+        contact_medium_value: contact_medium_value_email
+        country_code: country_code_email
+        source: source_email
+      distinct: true
+
+  - kind: filter
+    name: filter_rcconf_41_3_mobile
+    context_name: select_rcconf_41_3
+    params:
+      - condition:
+          source = 's4' AND contact_medium_type = 'mobile_tel_number'
+
+  - kind: select
+    name: select_rcconf_41_3_mobile
+    context_name: filter_rcconf_41_3_mobile
+    params:
+      columns:
+        customer_code: customer_code_mobile
+        contact_medium_type: contact_medium_type_mobile
+        contact_medium_value: contact_medium_value_mobile
+        country_code: country_code_mobile
+        source: source_mobile
+      distinct: true
+
+  - kind: join
+    name: join_rcconf_41_3_email_mobile
+    context_name: select_rcconf_41_3_email
+    params:
+      - other:
+          select_rcconf_41_3_mobile
+        how:
+          inner
+        columns:
+          customer_code_email: customer_code_mobile
+
+  - kind: add
+    name: add_rcconf_41_3
+    context_name: join_rcconf_41_3_email_mobile
+    params:
+      - column: rule_code
+        expression: "'RCCONF_41.3'"
+      - column: check_status
+        expression: "CASE WHEN lower(country_code_email) in('eg', 'ng') THEN '' WHEN (contact_medium_value_email is null OR contact_medium_value_email = '') AND (contact_medium_value_mobile is null OR contact_medium_value_mobile = '') THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CASE WHEN (contact_medium_value_email is not null AND contact_medium_value_email != '') AND (contact_medium_value_mobile is null OR contact_medium_value_mobile = '') THEN contact_medium_value_email WHEN (contact_medium_value_email is null OR contact_medium_value_email = '') AND (contact_medium_value_mobile is not null AND contact_medium_value_mobile != '') THEN contact_medium_value_mobile WHEN (contact_medium_value_email is not null AND contact_medium_value_email != '') AND (contact_medium_value_mobile is not null AND contact_medium_value_mobile != '') THEN concat(contact_medium_value_email, ' / ', contact_medium_value_mobile) ELSE coalesce(contact_medium_value_email, contact_medium_value_mobile) END"
+
+  - kind: select
+    name: select_rcconf_41_3_final
+    context_name: add_rcconf_41_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code_email: customer_code
+        value_checked: value_checked
+      distinct: true
+
+# RULE 41_6
+  - kind: filter
+    name: filter_rcconf_41_6
+    context_name: join_dcc_dcg
+    params:
+      - condition:
+          (function_of_partner = 'Z3' AND source = 'crm') OR (function_of_partner != 'Z4' AND source = 's4')
+
+  - kind: add
+    name: add_rcconf_41_6
+    context_name: filter_rcconf_41_6
+    params:
+      - column: rule_code
+        expression: "'RCCONF_41.6'"
+      - column: check_status
+        expression: if(email_address is null OR email_address = '' OR central_order_block_code IN ('E', 'G', 'SP', 'R', 'U'), '',  
+                    if(email_address like '%cchellenic.com%', '0', '1'))
+
+  - kind: select
+    name: select_rcconf_41_6_final
+    context_name: add_rcconf_41_6
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        email_address: value_checked
+      distinct: true
+
+#Union all
+  - kind: union
+    name: union_customer_contact_conformity
+    context_name: select_rcconf_369_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_370_1_final
+
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_370_2_final
+
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_370_3_final
+
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_371_2_final
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_374_2_final
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_39_4_final
+
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_39_7_final
+
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_41_1_final
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_41_2_final
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_41_3_final
+  - kind: union
+    name: union_customer_contact_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_41_6_final
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_contact_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_contact_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

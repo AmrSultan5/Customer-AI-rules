@@ -1,0 +1,107 @@
+transform:
+  name: dim_calendar
+  operations:
+
+# Read date
+  - kind: read_dataio
+    name: read_date
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: udm
+        storage_id: '{{dataio.storage_id}}'
+      domain: cchbc
+      namespace: md
+      object_name: ca_faccal_calendar
+      schema_version: v1
+
+  #Select date
+
+  - kind: select
+    name: select_date
+    context_name: read_date
+    params:
+      columns:
+        calday: date_id_1
+        fiscyear: year
+        fiscper3: fiscper3
+        cccweek: cccweek
+      distinct: true
+
+
+  - kind: add
+    name: add_date_id
+    params:
+      - column: date_id
+        expression: "to_date(date_id_1,'YYYY-MM-DD')"
+      - column: month
+        expression: "substring(fiscper3,-2)"
+      - column: week
+        expression: "substring(cccweek,-2)"        
+
+  - kind: add
+    name: add_week_sequential
+    params:
+      - column: week_sequential
+        expression: "DENSE_RANK() OVER ( ORDER BY concat(year,lpad(week,2,'0')) ASC)"
+
+  - kind: add
+    name: add_year_week
+    params:
+      - column: year_week
+        expression: concat(year,'w',lpad(week,2,'0'))
+
+
+  - kind: group
+    name: group_week
+    params:
+      - aggs:
+          date_id: min
+        by:
+        - cccweek
+
+  - kind: join
+    name: join_min_week
+    context_name: add_year_week
+    params:
+      - other:
+          group_week
+        how:
+          left
+        columns:
+          cccweek: cccweek
+
+  - kind: add
+    name: add_start_of_week
+    params:
+      - column: start_of_week
+        expression: min_date_id
+
+  - kind: select
+    name: select_date_final
+    params:
+      columns:
+        date_id: date_id
+        year: year
+        month: month
+        week: week
+        week_sequential: week_sequential
+        year_week: year_week
+        start_of_week: start_of_week
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dim_calendar
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: common
+      namespace: golden
+      object_name: dim_calendar
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

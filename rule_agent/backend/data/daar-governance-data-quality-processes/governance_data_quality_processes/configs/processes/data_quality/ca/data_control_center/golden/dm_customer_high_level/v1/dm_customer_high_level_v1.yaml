@@ -1,0 +1,618 @@
+transform:
+  name: dm_customer_high_level
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_kna1
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: kna1
+
+  - kind: filter
+    name: filter_kna1
+    params:
+      - condition:
+          ( nodel <> 'X' and loevm <> 'X' and ktokd in('1220', '1210', '1200', '1100', '1110') and aufsd not in ('S', 'NH', 'S3', 'S4', 'SY', 'U', 'R'))
+
+  - kind: select
+    name: select_kna1
+    params:
+      columns:
+        kunnr: kunnr
+        aufsd: aufsd
+        land1: land1
+        name1: name1
+        name2: name2
+        ktokd: ktokd
+        katr1: katr1
+        katr6: katr6
+        hzuor: hzuor
+        lifnr: lifnr
+        nodel: nodel
+        stkzu: stkzu
+        ort01: ort01
+        ort02: ort02
+        pstlz: pstlz
+        sortl: sortl
+        loevm: loevm
+        erdat: erdat
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but000
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: business_partner
+      object_name: but000
+
+  - kind: select
+    name: select_but000
+    params:
+      columns:
+        partner: partner
+        partner_guid: partner_guid
+        name_org1: name_org1
+        name_org2: name_org2
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvast
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvast
+
+  - kind: filter
+    name: filter_tvast
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvast
+    params:
+      columns:
+        aufsp: aufsp
+        vtext: tvast_vtext
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_t077x
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: t077x
+
+  - kind: filter
+    name: filter_t077x
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_t077x
+    params:
+      columns:
+        ktokd: ktokd
+        txt30: txt30
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvk1t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvk1t
+
+  - kind: filter
+    name: filter_tvk1t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvk1t
+    params:
+      columns:
+        katr1: katr1
+        vtext: tvk1t_vtext
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tvk6t
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tvk6t
+
+  - kind: filter
+    name: filter_tvk6t
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tvk6t
+    params:
+      columns:
+        katr6: katr6
+        vtext: tvk6t_vtext
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cvi_cust_link
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: cvi_cust_link
+
+  - kind: select
+    name: select_cvi_cust_link
+    params:
+      columns:
+        partner_guid: cvi_cust_link_partner_guid
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ausp_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: customer
+      object_name: ausp
+
+  - kind: filter
+    name: filter_ausp_crm
+    params:
+      - condition:
+          atinn IN('148','151')
+
+  - kind: select
+    name: select_ausp_crm
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_ausp_crm_for_grouping
+    context_name: filter_ausp_crm
+    params:
+      columns:
+        partner_guid: partner_guid
+        atinn: atinn
+        changed_at: changed_at
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: group_ausp_crm
+    params:
+      - aggs:
+          changed_at: max
+        by:
+        - partner_guid
+        - atinn
+        - sap_cluster
+
+  - kind: join
+    name: join_group_ausp_crm
+    context_name: filter_ausp_crm
+    params:
+      - other:
+          group_ausp_crm
+        how:
+          inner
+        columns:
+          partner_guid: partner_guid
+          atinn: atinn
+          changed_at: max_changed_at
+          sap_cluster: sap_cluster
+
+  - kind: filter
+    name: filter_ausp_crm_148
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '148'
+
+  - kind: select
+    name: select_ausp_crm_148
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_148
+        atinn: ausp_atinn_148
+        atwrt: ausp_atwrt_148
+        sap_cluster: sap_cluster_148
+      distinct: true
+
+  - kind: filter
+    name: filter_ausp_crm_151
+    context_name: join_group_ausp_crm
+    params:
+      - condition:
+          atinn = '151'
+
+  - kind: select
+    name: select_ausp_crm_151
+    params:
+      columns:
+        partner_guid: ausp_crm_partner_guid_151
+        atinn: ausp_atinn_151
+        atwrt: ausp_atwrt_151
+        sap_cluster: sap_cluster_151
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cawn_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: cawn
+
+  - kind: filter
+    name: filter_cawn_crm
+    params:
+      - condition:
+          atinn IN('148','151')
+
+  - kind: select
+    name: select_cawn_crm_148
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_148
+        atwrt: cawn_atwrt_148
+        atzhl: cawn_atzhl_148
+        sap_cluster: sap_cluster_148
+
+  - kind: select
+    name: select_cawn_crm_151
+    context_name: filter_cawn_crm
+    params:
+      columns:
+        atinn: cawn_atinn_151
+        atwrt: cawn_atwrt_151
+        atzhl: cawn_atzhl_151
+        sap_cluster: sap_cluster_151
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cawnt_crm
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: cawnt
+
+  - kind: filter
+    name: filter_cawnt_crm
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_cawnt_crm_148
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_148
+        atwtb: cawnt_atwtb_148
+        atzhl: cawnt_atzhl_148
+        sap_cluster: sap_cluster_148
+
+  - kind: select
+    name: select_cawnt_crm_151
+    context_name: filter_cawnt_crm
+    params:
+      columns:
+        atinn: cawnt_atinn_151
+        atwtb: cawnt_atwtb_151
+        atzhl: cawnt_atzhl_151
+        sap_cluster: sap_cluster_151
+
+
+
+  - kind: join
+    name: join_ausp_crm_148_151
+    context_name: select_ausp_crm
+    params:
+      - other:
+          select_ausp_crm_148
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_148
+          sap_cluster: sap_cluster_148
+      - other:
+          select_ausp_crm_151
+        how:
+          left
+        columns:
+          ausp_crm_partner_guid: ausp_crm_partner_guid_151
+          sap_cluster: sap_cluster_151
+      - other:
+          select_cawn_crm_148
+        how:
+          left
+        columns:
+          ausp_atinn_148: cawn_atinn_148
+          ausp_atwrt_148: cawn_atwrt_148
+          sap_cluster_148: sap_cluster_148
+      - other:
+          select_cawn_crm_151
+        how:
+          left
+        columns:
+          ausp_atinn_151: cawn_atinn_151
+          ausp_atwrt_151: cawn_atwrt_151
+          sap_cluster_151: sap_cluster_151
+      - other:
+          select_cawnt_crm_148
+        how:
+          left
+        columns:
+          cawn_atinn_148: cawnt_atinn_148
+          cawn_atzhl_148: cawnt_atzhl_148
+          sap_cluster_148: sap_cluster_148
+      - other:
+          select_cawnt_crm_151
+        how:
+          left
+        columns:
+          cawn_atinn_151: cawnt_atinn_151
+          cawn_atzhl_151: cawnt_atzhl_151
+          sap_cluster_151: sap_cluster_151
+
+  - kind: select
+    name: select_ausp_crm_all
+    params:
+      columns:
+        ausp_crm_partner_guid: partner_guid
+        ausp_atwrt_148: ausp_atwrt_148
+        cawn_atwrt_148: cawn_atwrt_148
+        cawnt_atwtb_148: cawnt_atwtb_148
+        ausp_atwrt_151: ausp_atwrt_151
+        cawn_atwrt_151: cawn_atwrt_151
+        cawnt_atwtb_151: cawnt_atwtb_151
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_zglobal_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: zglobal_customer
+
+  - kind: select
+    name: select_zglobal_customer
+    params:
+      columns:
+        customer_id: zc_customer_id
+        customer_name: customer_name
+        sap_cluster: sap_cluster
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_ztrade_name
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_crm
+      namespace: reference_data
+      object_name: ztrade_name
+
+  - kind: select
+    name: select_ztrade_name
+    params:
+      columns:
+        customer_id: zct_customer_id
+        trade_id: trade_id
+        trade_id_name: trade_id_name
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_ztrade_name_zct2
+    params:
+      columns:
+        trade_id: zct2_trade_id
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: join
+    name: join_kna1_but000
+    context_name: select_kna1
+    params:
+      - other:
+          select_but000
+        how:
+          inner
+        columns:
+          kunnr: partner
+          sap_cluster: sap_cluster
+      - other:
+          select_tvast
+        how:
+          left
+        columns:
+          aufsd: aufsp
+          sap_cluster: sap_cluster
+      - other:
+          select_t077x
+        how:
+          left
+        columns:
+          ktokd: ktokd
+          sap_cluster: sap_cluster
+      - other:
+          select_tvk1t
+        how:
+          left
+        columns:
+          katr1: katr1
+          sap_cluster: sap_cluster
+      - other:
+          select_tvk6t
+        how:
+          left
+        columns:
+          katr6: katr6
+          sap_cluster: sap_cluster
+      - other:
+          select_cvi_cust_link
+        how:
+          left
+        columns:
+          partner_guid: cvi_cust_link_partner_guid
+          sap_cluster: sap_cluster
+      - other:
+          select_ausp_crm_all
+        how:
+          left
+        columns:
+          partner_guid: partner_guid
+          sap_cluster: sap_cluster
+      - other:
+          select_zglobal_customer
+        how:
+          left
+        columns:
+          ausp_atwrt_148: zc_customer_id
+          sap_cluster: sap_cluster
+      - other:
+          select_ztrade_name
+        how:
+          left
+        columns:
+          ausp_atwrt_148: zct_customer_id
+          ausp_atwrt_151: trade_id
+          sap_cluster: sap_cluster
+      - other:
+          select_ztrade_name_zct2
+        how:
+          left
+        columns:
+          ausp_atwrt_151: zct2_trade_id
+          sap_cluster: sap_cluster
+
+  - kind: add
+    name: add_dm_customer_high_level
+    params:
+      - column: is_allowed_trading_group_code
+        expression: IF(isnull(zct2_trade_id), '0', '1')
+
+  - kind: select
+    name: select_dm_customer_high_level
+    params:
+      columns:
+        kunnr: customer_code
+        land1: country_code
+        name_org1: organization_1_name
+        name_org2: organization_2_name
+        name1: customer_1_name
+        name2: customer_2_name
+        ktokd: account_group_code
+        txt30: account_group_name
+        katr1: customer_activity_cluster_code
+        tvk1t_vtext: customer_activity_cluster_name
+        katr6: trade_channel_code
+        tvk6t_vtext: trade_channel_name
+        aufsd: central_order_block_code
+        tvast_vtext: central_order_block_name
+        hzuor: assignment_hierarchy_level
+        lifnr: vendor_code
+        nodel: deletion_block_flag
+        ort01: city
+        ort02: district
+        pstlz: postal_code
+        sortl: sort_field
+        loevm: deletion_central_flag
+        ausp_atwrt_151: trading_group_code
+        cawnt_atwtb_151: trading_group_name
+        is_allowed_trading_group_code: is_allowed_trading_group_code
+        trade_id_name: trading_standard_name
+        ausp_atwrt_148: global_customer_code
+        cawnt_atwtb_148: global_customer_name
+        customer_name: global_customer_standard_name
+        sap_cluster: sap_cluster
+        erdat: creation_date
+        cvi_cust_link_partner_guid: business_partner_guid
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_high_level
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_high_level
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

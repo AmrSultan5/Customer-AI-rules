@@ -1,0 +1,443 @@
+transform:
+  name: ccaf_standard_compliance
+  operations:
+
+  - kind: read_dataio
+    name: read_dm_customer
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_customer
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_org_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_org_hierarchy
+      schema_version: v1
+
+  - kind: read_dataio
+    name: read_dm_cust_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: master_data_quality
+      namespace: l2
+      object_name: dm_cust_hierarchy
+      schema_version: v1
+
+  - kind: select
+    name: select_c1
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sap_cluster: sap_cluster
+        sales_org_code: sales_org_code
+        division_code: division_code
+        distribution_channel_code: distribution_channel_code
+        account_group_code: account_group_code
+        is_l7_customer_in_scope: is_l7_customer_in_scope
+        natural_person_flag: natural_person_flag
+      distinct: true
+
+  - kind: select
+    name: select_c2
+    context_name: read_dm_customer
+    params:
+      columns:
+        customer_code: customer_code_c2
+        customer_name: customer_name_c2
+        sap_cluster: sap_cluster_c2
+      distinct: true
+
+  - kind: select
+    name: select_oh
+    context_name: read_dm_org_hierarchy
+    params:
+      columns:
+        sales_org_code: sales_org_code_oh
+        country_name: country_name
+        country_code: country_code
+      distinct: true
+
+  - kind: select
+    name: select_ch
+    context_name: read_dm_cust_hierarchy
+    params:
+      columns:
+        l7_customer_code: l7_customer_code
+        l3_customer_code: l3_customer_code
+        sap_cluster: sap_cluster_ch
+      distinct: true
+
+
+  - kind: join
+    name: join_all
+    context_name: select_c1
+    params:
+      - other:
+          select_oh
+        how:
+          inner
+        columns:
+          sales_org_code: sales_org_code_oh
+
+      - other:
+          select_ch
+        how:
+          left
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster_ch
+
+      - other:
+          select_c2
+        how:
+          left
+        columns:
+          l3_customer_code: customer_code_c2
+          sap_cluster_ch: sap_cluster_c2
+
+
+  - kind: filter
+    name: filter_main
+    context_name: join_all
+    params:
+      - condition: |
+          division_code = '01'
+          AND distribution_channel_code = '01'
+          AND account_group_code LIKE '90%'
+          AND order_block_code NOT IN ('E', 'G', 'R', 'S', 'SP', 'S2', 'S3', 'S4', 'S5', 'S9', 'U', 'M', 'NR')
+          AND customer_group_4_code NOT IN ('ZIN')
+          AND is_l7_customer_in_scope = '1'
+          AND natural_person_flag != 'X'
+
+  - kind: add
+    name: add_ccaf_flags
+    context_name: filter_main
+    params:
+      - column: ccaf_missing_check_flag
+        expression: if(isnull(ccaf_code) or ccaf_code = '', '0', '1')
+      - column: ccaf_consistency_check_flag
+        expression: |
+          if(
+            ccaf_missing_check_flag = '1'
+            AND substr(trim(ccaf_code), 0, 1) IN ('1','2','3','4','5')
+            AND substr(trim(ccaf_code), 1, 1) IN ('1','2','3','4','5')
+            AND substr(trim(ccaf_code), 2, 1) IN ('0','1','2','3','4','5','6','7','8','9')
+            AND (
+              substr(trim(ccaf_code), 3, 1) IN ('0','1','2','3','4','5','6','7','8','9')
+              OR substr(trim(ccaf_code), 3, 1) RLIKE '[A-Z]'
+            ),
+            '1',
+            if(ccaf_missing_check_flag = '0', '', '0')
+          )
+
+  - kind: select
+    name: select_output
+    context_name: add_ccaf_flags
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        sap_cluster: sap_cluster
+        sales_org_code: sales_org_code
+        customer_code_c2: customer_hier_3_code
+        customer_name_c2: customer_hier_3_name
+        country_name: country_name
+        country_code: country_code
+        ccaf_missing_check_flag: ccaf_missing_check_flag
+        ccaf_consistency_check_flag: ccaf_consistency_check_flag
+      distinct: true
+
+#DETAILED
+  - kind: add
+    name: add_completeness
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN ccaf_missing_check_flag = '1' THEN 'OK' WHEN ccaf_missing_check_flag = '0' THEN 'Missing CCAF' END
+      - column: quality_category
+        expression: '''Completeness'''
+
+  - kind: select
+    name: select_ccaf_standard_compliance_completeness
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_name: country_name
+        country_code: country_code
+        sap_cluster: sap_cluster
+        sales_org_code: sales_org_code
+        dq_message_output: dq_message_output
+        quality_category: quality_category
+        ccaf_missing_check_flag: quality_check_flag
+      distinct: true
+
+  - kind: add
+    name: add_accuracy
+    context_name: select_output
+    params:
+      - column: dq_message_output
+        expression: CASE WHEN ccaf_consistency_check_flag = '1' THEN 'OK' WHEN ccaf_consistency_check_flag = '0' THEN 'Wrong CCAF' WHEN ccaf_consistency_check_flag ='' THEN 'N/A' END
+      - column: quality_category
+        expression: '''Accuracy'''
+
+  - kind: select
+    name: select_ccaf_standard_compliance_accuracy
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        ccaf_code: ccaf_code
+        ccaf_name: ccaf_name
+        order_block_code: order_block_code
+        order_block_name: order_block_name
+        customer_hier_3_code: customer_hier_3_code
+        customer_hier_3_name: customer_hier_3_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4_name: customer_group_4_name
+        country_name: country_name
+        country_code: country_code
+        sap_cluster: sap_cluster
+        sales_org_code: sales_org_code
+        dq_message_output: dq_message_output
+        quality_category: quality_category
+        ccaf_consistency_check_flag: quality_check_flag
+      distinct: true
+
+  - kind: union
+    name: union_completeness_accuracy
+    context_name: select_ccaf_standard_compliance_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_ccaf_standard_compliance_accuracy
+
+  - kind: write_dataio
+    name: write_detailed_status
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ccaf_standard_compliance
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+#AGGREGATED
+#read ccaf_standard_compliance
+  - kind: add
+    name: add_replace_null_with_blank
+    context_name: select_output
+    params:
+      - column: customer_group_4_name
+        expression: if(customer_group_4_name is null, '', customer_group_4_name)
+        overwrite: true
+      - column: customer_group_4_code
+        expression: if(customer_group_4_code is null, '', customer_group_4_code)
+        overwrite: true
+
+  - kind: select
+    name: select_du_accuracy
+    context_name: add_replace_null_with_blank
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        ccaf_consistency_check_flag : ccaf_consistency_check_flag
+        sap_cluster: sap_cluster
+
+  - kind: select
+    name: select_du_completeness
+    context_name: add_replace_null_with_blank
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        ccaf_missing_check_flag: ccaf_missing_check_flag 
+        sap_cluster: sap_cluster
+
+
+  - kind: add
+    name: add_aggregated_completeness
+    params:
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, ' - ', customer_group_4_name)
+      - column: quality_category
+        expression: '"completeness"'
+      - column: total_checks
+        expression: IF(ccaf_missing_check_flag!='', 1, NULL)
+      - column: invalid_checks
+        expression: IF(ccaf_missing_check_flag= '0', 1, NULL)
+
+
+  - kind: group
+    name: group_completeness
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - customer_group_4_name
+        - customer_group_4_code
+        - customer_group_4
+        - quality_category
+        - sap_cluster
+
+  - kind: select
+    name: select_completeness
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4: customer_group_4
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: add
+    name: add_aggregated_accuracy
+    context_name: select_du_accuracy
+    params:
+      - column: customer_group_4
+        expression: CONCAT(customer_group_4_code, ' - ', customer_group_4_name)
+      - column: quality_category
+        expression: '"accuracy"'
+      - column: total_checks
+        expression: IF(ccaf_consistency_check_flag !='', 1, NULL)
+      - column: invalid_checks
+        expression: IF(ccaf_consistency_check_flag = '0', 1, NULL)
+
+
+  - kind: group
+    name: group_accuracy
+    params:
+      - aggs:
+          total_checks: count
+          invalid_checks: count
+        by:
+        - country_code
+        - customer_group_4_name
+        - customer_group_4_code
+        - customer_group_4
+        - quality_category
+        - sap_cluster
+
+  - kind: select
+    name: select_accuracy
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4: customer_group_4
+        count_total_checks: total_checks
+        quality_category: quality_category
+        count_invalid_checks: invalid_checks
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: union
+    name: union_completeness_accuracy
+    context_name: select_completeness
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_accuracy
+
+  - kind: add
+    name: add_loading_date
+    params:
+      - column: loading_date
+        expression: current_date()
+
+  - kind: cast
+    name: cast_to_integer
+    params:
+      - column: total_checks
+        to: integer
+      - column: invalid_checks
+        to: integer
+
+  - kind: select
+    name: select_aggregated
+    params:
+      columns:
+        country_code: country_code
+        customer_group_4_name: customer_group_4_name
+        customer_group_4_code: customer_group_4_code
+        customer_group_4: customer_group_4
+        total_checks: total_checks
+        quality_category: quality_category
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_aggregated_history
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: ccaf_standard_compliance
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

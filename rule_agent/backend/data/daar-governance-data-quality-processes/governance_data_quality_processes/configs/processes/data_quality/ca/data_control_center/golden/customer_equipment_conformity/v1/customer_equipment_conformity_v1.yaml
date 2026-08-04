@@ -1,0 +1,947 @@
+transform:
+  name: customer_equipment_conformity
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+#READ dm_customer_equipment_v3
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_equipment
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_equipment
+
+  - kind: select
+    context_name: read_dm_customer_equipment
+    name: select_dce
+    params:
+      columns:
+        customer_code: customer_code
+        installation_date: installation_date
+        acquisition_date: acquisition_date
+        cde_type: cde_type
+        cde_category_code: cde_category_code
+        equipment_description: equipment_description
+        equipment_model: equipment_model
+        equipment_status_code: equipment_status_code
+        number_of_doors: number_of_doors
+        material_description: material_description
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: select
+    context_name: read_dm_customer_general
+    name: select_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_order_block_cooler_status
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_order_block_cooler_status
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_cde_category_door_equivalent
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_cde_category_door_equivalent
+
+  - kind: add
+    name: add_conf_order_block_cooler_status
+    context_name: read_conf_order_block_cooler_status
+    params:
+      - column: ifnull_central_order_block_code
+        expression: ifnull(central_order_block_code, '')
+
+  - kind: select
+    context_name: add_conf_order_block_cooler_status
+    name: select_conf_order_block_cooler_status
+    params:
+      columns:
+        ifnull_central_order_block_code: central_order_block_code
+        allowed_cooler_status: allowed_cooler_status
+      distinct: true
+
+  - kind: select
+    context_name: read_conf_cde_category_door_equivalent
+    name: select_conf_cde_category_door_equivalent
+    params:
+      columns:
+        cde_category_code: cde_category_code
+        door_equivalent: door_equivalent
+      distinct: true
+
+  - kind: filter
+    context_name: add_conf_order_block_cooler_status
+    name: filter_no_cooler_allowed
+    params:
+      - condition:
+          allowed_cooler_status = 'No cooler must be linked to this customer'
+
+  - kind: select
+    context_name: filter_no_cooler_allowed
+    name: select_no_cooler_allowed
+    params:
+      columns:
+        ifnull_central_order_block_code: central_order_block_code
+        allowed_cooler_status: no_cooler_allowed
+      distinct: true
+
+#JOIN dcg and dce
+  - kind: join
+    name: join_dce_dcg
+    context_name: select_dce
+    params:
+      - other:
+          select_dcg
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_conf_order_block_cooler_status
+        how:
+          left
+        columns:
+          central_order_block_code: central_order_block_code
+          equipment_status_code: allowed_cooler_status
+      - other:
+          select_no_cooler_allowed
+        how:
+          left
+        columns:
+          central_order_block_code: central_order_block_code
+
+#RULE 278_1
+  - kind: join
+    name: join_dce_dcg_cde
+    context_name: join_dce_dcg
+    params:
+      - other:
+          select_conf_cde_category_door_equivalent
+        how:
+          inner
+        columns:
+          cde_category_code: cde_category_code
+
+  - kind: add
+    name: add_rcconf_278_1
+    context_name: join_dce_dcg_cde
+    params:
+      - column: rule_code
+        expression: "'RCCONF_278.1'"
+      - column: check_status
+        expression: if((isnull(equipment_model) or equipment_model = '') or (isnull(number_of_doors) or number_of_doors = '') 
+                    or (isnull(cde_category_code) or cde_category_code = '') or (cde_type != 'COOLER' or isnull(cde_type)) or account_group_code like '7%'
+                    or equipment_status_code not in('PLCD', 'UINV', 'FOND', 'NACT', 'LOST') or isnull(equipment_status_code), '',
+                    if(round(double(door_equivalent),1) = round(number_of_doors,1), '1', '0'))
+      - column: value_checked
+        expression: concat_ws('_', cde_category_code, round(number_of_doors,1))    
+
+  - kind: select
+    name: select_rcconf_278_1
+    context_name: add_rcconf_278_1
+    params:
+      columns:
+        rule_code: rule_code
+        cde_category_code: cde_category_code
+        number_of_doors: number_of_doors
+        door_equivalent: door_equivalent
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+  - kind: group
+    name: aggregation_rcconf_278_1
+    context_name: add_rcconf_278_1
+    params:
+      - aggs:
+          check_status: max
+        by:
+        - rule_code
+        - cde_category_code
+        - customer_code
+
+  - kind: join
+    name: join_rcconf_278_1
+    context_name: select_rcconf_278_1
+    params:
+      - other:
+          aggregation_rcconf_278_1
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          cde_category_code: cde_category_code
+          rule_code: rule_code
+
+  - kind: select
+    name: select_rcconf_278_1_final
+    context_name: join_rcconf_278_1
+    params:
+      columns:
+        rule_code: rule_code
+        max_check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 342_1
+  - kind: add
+    name: add_rcconf_342_1
+    context_name: join_dce_dcg
+    params:
+      - column: rule_code
+        expression: "'RCCONF_342.1'"
+      - column: check_status
+        expression: if((isnull(equipment_model) or equipment_model = '') or (cde_type != 'COOLER' or isnull(cde_type)) or account_group_code like '7%'
+                    or equipment_status_code not in('PLCD', 'UINV', 'FOND', 'NACT', 'LOST') or isnull(equipment_status_code) 
+                    or allowed_cooler_status = 'No cooler must be linked to this customer', '',
+                    if(allowed_cooler_status = equipment_status_code, '1', 
+                    if(isnull(equipment_status_code) or not isnull(no_cooler_allowed), '0', '')))
+      - column: value_checked
+        expression: concat_ws('_', central_order_block_code, equipment_status_code)    
+
+  - kind: select
+    name: select_rcconf_342_1_final
+    context_name: add_rcconf_342_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 342_2
+  - kind: add
+    name: add_rcconf_342_2
+    context_name: join_dce_dcg
+    params:
+      - column: rule_code
+        expression: "'RCCONF_342.2'"
+      - column: check_status
+        expression: if((isnull(equipment_model) or equipment_model = '') or (cde_type != 'COOLER' or isnull(cde_type)) or account_group_code like '7%'
+                    or equipment_status_code not in('PLCD', 'UINV', 'FOND', 'NACT', 'LOST') or isnull(equipment_status_code), '',
+                    if(no_cooler_allowed = 'No cooler must be linked to this customer', '0', '1'))
+      - column: value_checked
+        expression: central_order_block_code  
+
+  - kind: select
+    name: select_rcconf_342_2_final
+    context_name: add_rcconf_342_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rcconf_386
+  - kind: select
+    name: select_rcconf_386
+    context_name: join_dce_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        installation_date: installation_date
+      distinct: true
+
+#RULE 386_1
+  - kind: add
+    name: add_rcconf_386_1
+    context_name: select_rcconf_386
+    params:
+      - column: rule_code
+        expression: "'RCCONF_386.1'"
+      - column: check_status
+        expression: "CASE WHEN installation_date is null OR installation_date = '' OR TO_TIMESTAMP(installation_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' WHEN TO_TIMESTAMP(installation_date, 'yyyy-MM-dd') is null THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CASE WHEN TO_TIMESTAMP(installation_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' ELSE installation_date END"      
+
+  - kind: select
+    name: select_rcconf_386_1_final
+    context_name: add_rcconf_386_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 386_2
+  - kind: add
+    name: add_rcconf_386_2
+    context_name: select_rcconf_386
+    params:
+      - column: rule_code
+        expression: "'RCCONF_386.2'"
+      - column: check_status
+        expression: "CASE WHEN installation_date is null OR installation_date = '' OR TO_TIMESTAMP(installation_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' WHEN TO_TIMESTAMP(installation_date, 'yyyy-MM-dd') > current_timestamp() THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CASE WHEN TO_TIMESTAMP(installation_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' ELSE installation_date END"   
+
+  - kind: select
+    name: select_rcconf_386_2_final
+    context_name: add_rcconf_386_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rcconf_387
+  - kind: select
+    name: select_rcconf_387
+    context_name: join_dce_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        acquisition_date: acquisition_date
+      distinct: true
+
+#RULE 387_1
+  - kind: add
+    name: add_rcconf_387_1
+    context_name: select_rcconf_387
+    params:
+      - column: rule_code
+        expression: "'RCCONF_387.1'"
+      - column: check_status
+        expression: "CASE WHEN acquisition_date is null OR acquisition_date = '' OR TO_TIMESTAMP(acquisition_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' WHEN TO_TIMESTAMP(acquisition_date, 'yyyy-MM-dd') is null THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CASE WHEN TO_TIMESTAMP(acquisition_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' ELSE acquisition_date END"      
+
+  - kind: select
+    name: select_rcconf_387_1_final
+    context_name: add_rcconf_387_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 387_2
+  - kind: add
+    name: add_rcconf_387_2
+    context_name: select_rcconf_387
+    params:
+      - column: rule_code
+        expression: "'RCCONF_387.2'"
+      - column: check_status
+        expression: "CASE WHEN acquisition_date is null OR acquisition_date = '' OR TO_TIMESTAMP(acquisition_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' WHEN TO_TIMESTAMP(acquisition_date, 'yyyy-MM-dd') > current_timestamp() THEN '0' ELSE '1' END"
+      - column: value_checked
+        expression: "CASE WHEN TO_TIMESTAMP(acquisition_date, 'yyyy-MM-dd') = '1900-01-01 00:00:00' THEN '' ELSE acquisition_date END"  
+
+  - kind: select
+    name: select_rcconf_387_2_final
+    context_name: add_rcconf_387_2
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rcconf_388
+  - kind: select
+    name: select_rcconf_388
+    context_name: join_dce_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        equipment_description: equipment_description
+      distinct: true
+
+#RULE 388_1
+  - kind: add
+    name: add_rcconf_388_1
+    context_name: select_rcconf_388
+    params:
+      - column: rule_code
+        expression: "'RCCONF_388.1'"
+      - column: check_status
+        expression: "CASE WHEN equipment_description is null OR equipment_description = '' THEN '' WHEN REGEXP(equipment_description, '[a-zA-Z0-9]+') = 'true' THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_388_1_final
+    context_name: add_rcconf_388_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        equipment_description: value_checked
+      distinct: true
+
+#READ conf_special_characters_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_special_characters
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_special_characters
+
+  - kind: filter
+    context_name: read_conf_special_characters
+    name: filter_conf_special_characters
+    params:
+      - condition:
+          rule_code = 'RCCONF_388.2' AND CAST(value AS STRING) != '0'
+
+  - kind: add
+    name: add_conf_special_characters
+    context_name: filter_conf_special_characters
+    params:
+      - column: css_rule_code
+        expression: "'RCCONF_388.2'"
+      - column: rcconf_388_2
+        expression: "CAST(value AS INT)"
+
+  - kind: select
+    name: select_conf_special_characters
+    context_name: add_conf_special_characters
+    params:
+      columns:
+        css_rule_code: css_rule_code
+        character: character
+        rcconf_388_2: rcconf_388_2
+      distinct: true
+
+#RULE 388_2
+#RULE 388_2 - cs_1
+  - kind: add
+    name: add_rcconf_388_2_cs1
+    context_name: select_rcconf_388
+    params:
+      - column: rule_code
+        expression: "'RCCONF_388.2'"
+      - column: check_status_1
+        expression: "CASE WHEN equipment_description is null OR equipment_description = '' THEN '-1' ELSE 1 END"
+
+  - kind: select
+    name: select_rcconf_388_2_cs1_final
+    context_name: add_rcconf_388_2_cs1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status_1: check_status_1
+        customer_code: customer_code
+        equipment_description: value_checked
+      distinct: true
+
+#RULE 388_2 - cs_2
+  - kind: join
+    name: join_rcconf_388_special_char
+    context_name: add_rcconf_388_2_cs1
+    params:
+      - other:
+          select_conf_special_characters
+        how:
+          inner
+        columns:
+          rule_code: css_rule_code
+
+  - kind: add
+    name: add_rcconf_388_2_cs2
+    context_name: join_rcconf_388_special_char
+    params:
+      - column: check_status_2
+        expression: "CASE WHEN INSTR(equipment_description, character) > 0 AND rcconf_388_2 = 1 THEN '0' ELSE 1 END"
+
+  - kind: group
+    name: aggregation_rcconf_388_2_cs2
+    context_name: add_rcconf_388_2_cs2
+    params:
+      - aggs:
+          check_status_2: min
+        by:
+        - customer_code
+        - equipment_description
+        - rule_code
+
+  - kind: select
+    name: select_rcconf_388_2_cs2_final
+    context_name: aggregation_rcconf_388_2_cs2
+    params:
+      columns:
+        rule_code: rule_code
+        min_check_status_2: check_status_2
+        customer_code: customer_code
+        equipment_description: value_checked
+      distinct: true
+
+#RULE 388_2 - cs_3, cs_4, cs_5
+  - kind: add
+    name: add_rcconf_388_2_cs345
+    context_name: add_rcconf_388_2_cs1
+    params:
+      - column: check_status_3
+        expression: "CASE WHEN INSTR(equipment_description, '..') > 0 THEN '0' WHEN INSTR(equipment_description, ',,') > 0 THEN '0' WHEN INSTR(equipment_description, '..') > 0 THEN '0' WHEN INSTR(equipment_description, chr(47)||chr(47)) > 0 THEN '0' WHEN INSTR(equipment_description, '--') > 0 THEN '0' WHEN INSTR(equipment_description, '__') > 0 THEN '0' WHEN INSTR(equipment_description, '&&') > 0 THEN '0' WHEN INSTR(equipment_description, chr(34)||chr(34)) > 0 THEN '0' WHEN INSTR(equipment_description, '::') > 0 THEN '0' WHEN INSTR(equipment_description, chr(92)||chr(92)) > 0 THEN '0' WHEN INSTR(equipment_description, '^^') > 0 THEN '0' WHEN INSTR(equipment_description, '``') > 0 THEN '0' WHEN INSTR(equipment_description, '++') > 0 THEN '0' WHEN INSTR(equipment_description, chr(39)||chr(39)) > 0 THEN '0' ELSE '1' END"
+      - column: check_status_4
+        expression: "CASE WHEN MOD(LENGTH(equipment_description) - LENGTH(REPLACE(equipment_description, chr(34), '')), 2) = 0 THEN '1' ELSE '0' END"
+      - column: check_status_51
+        expression: "CASE WHEN MOD(LENGTH(equipment_description) - LENGTH(REGEXP_REPLACE(equipment_description, '[()]', '')), 2) = 0 THEN CASE WHEN INSTR(equipment_description, '(') <= INSTR(equipment_description, ')') THEN '1' ELSE '0' END ELSE '0' END"
+      - column: check_status_52
+        expression: "CASE WHEN MOD(LENGTH(equipment_description) - LENGTH(REGEXP_REPLACE(equipment_description, '[{}]', '')), 2) = 0 THEN CASE WHEN INSTR(equipment_description, '{') <= INSTR(equipment_description, '}') THEN '1' ELSE '0' END ELSE '0' END"
+      - column: check_status_53
+        expression: "CASE WHEN MOD(LENGTH(equipment_description) - LENGTH(REPLACE(REPLACE(equipment_description, chr(91), ''), chr(93), '')), 2) = 0 THEN CASE WHEN INSTR(equipment_description, chr(91)) <= INSTR(equipment_description, chr(93)) THEN '1' ELSE '0' END ELSE '0' END"
+      - column: check_status_5
+        expression: "CASE WHEN check_status_51 = '0' THEN '0' WHEN check_status_52 = '0' THEN '0' WHEN check_status_53 = '0' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_388_2_cs345_final
+    context_name: add_rcconf_388_2_cs345
+    params:
+      columns:
+        rule_code: rule_code
+        check_status_3: check_status_3
+        check_status_4: check_status_4
+        check_status_5: check_status_5
+        customer_code: customer_code
+        equipment_description: value_checked
+      distinct: true
+
+#RULE 388_2 - final
+  - kind: join
+    name: join_rcconf_388_2_cs1_cs2
+    context_name: select_rcconf_388_2_cs1_final
+    params:
+      - other:
+          select_rcconf_388_2_cs2_final
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+          customer_code: customer_code
+          value_checked: value_checked
+
+  - kind: join
+    name: join_rcconf_388_2_cs12_cs345
+    context_name: join_rcconf_388_2_cs1_cs2
+    params:
+      - other:
+          select_rcconf_388_2_cs345_final
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+          customer_code: customer_code
+          value_checked: value_checked
+
+  - kind: add
+    name: add_rcconf_388_2_cs_final
+    context_name: join_rcconf_388_2_cs12_cs345
+    params:
+      - column: check_status
+        expression: "CASE WHEN check_status_1 = '-1' THEN '' WHEN check_status_1 = '0' THEN '0' WHEN check_status_2 = '0' THEN '0' WHEN check_status_3 = '0' THEN '0' WHEN check_status_4 = '0' THEN '0' WHEN check_status_5 = '0' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_388_2_final
+    context_name: add_rcconf_388_2_cs_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 388_3
+  - kind: add
+    name: add_rcconf_388_3
+    context_name: join_dce_dcg
+    params:
+      - column: rule_code
+        expression: "'RCCONF_388.3'"
+      - column: check_status
+        expression: if((isnull(equipment_model) or equipment_model = '') or (cde_type != 'COOLER' or isnull(cde_type)) or account_group_code like '7%'
+                    or equipment_status_code not in('PLCD', 'UINV', 'FOND', 'NACT', 'LOST') or isnull(equipment_status_code), '',
+                    if(material_description = equipment_description, '1', '0'))
+      - column: value_checked
+        expression: equipment_description    
+
+  - kind: select
+    name: select_rcconf_388_3_final
+    context_name: add_rcconf_388_3
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#SELECT rcconf_389
+  - kind: select
+    name: select_rcconf_389
+    context_name: join_dce_dcg
+    params:
+      columns:
+        customer_code: customer_code
+        equipment_model: equipment_model
+      distinct: true
+
+#RULE 389_1
+  - kind: add
+    name: add_rcconf_389_1
+    context_name: select_rcconf_389
+    params:
+      - column: rule_code
+        expression: "'RCCONF_389.1'"
+      - column: check_status
+        expression: "CASE WHEN equipment_model is null OR equipment_model = '' THEN '' WHEN REGEXP(equipment_model, '[a-zA-Z0-9]+') = 'true' THEN '1' ELSE '0' END"
+
+  - kind: select
+    name: select_rcconf_389_1_final
+    context_name: add_rcconf_389_1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        equipment_model: value_checked
+      distinct: true
+
+#FILTER conf_special_characters_v1
+  - kind: filter
+    context_name: read_conf_special_characters
+    name: filter_conf_special_characters_389
+    params:
+      - condition:
+          rule_code = 'RCCONF_389.2' AND CAST(value AS STRING) != '0'
+
+  - kind: add
+    name: add_conf_special_characters_389
+    context_name: filter_conf_special_characters_389
+    params:
+      - column: css_rule_code
+        expression: "'RCCONF_389.2'"
+      - column: rcconf_389_2
+        expression: "CAST(value AS INT)"
+
+  - kind: select
+    name: select_conf_special_characters_389
+    context_name: add_conf_special_characters_389
+    params:
+      columns:
+        css_rule_code: css_rule_code
+        character: character
+        rcconf_389_2: rcconf_389_2
+      distinct: true
+
+#RULE 389_2
+#RULE 389_2 - cs_1
+  - kind: add
+    name: add_rcconf_389_2_cs1
+    context_name: select_rcconf_389
+    params:
+      - column: rule_code
+        expression: "'RCCONF_389.2'"
+      - column: check_status_1
+        expression: "CASE WHEN equipment_model is null OR equipment_model = '' THEN '-1' ELSE 1 END"
+
+  - kind: select
+    name: select_rcconf_389_2_cs1_final
+    context_name: add_rcconf_389_2_cs1
+    params:
+      columns:
+        rule_code: rule_code
+        check_status_1: check_status_1
+        customer_code: customer_code
+        equipment_model: value_checked
+      distinct: true
+
+#RULE 389_2 - cs_2
+  - kind: join
+    name: join_rcconf_389_special_char
+    context_name: add_rcconf_389_2_cs1
+    params:
+      - other:
+          select_conf_special_characters_389
+        how:
+          inner
+        columns:
+          rule_code: css_rule_code
+
+  - kind: add
+    name: add_rcconf_389_2_cs2
+    context_name: join_rcconf_389_special_char
+    params:
+      - column: check_status_2
+        expression: "CASE WHEN INSTR(equipment_model, character) > 0 AND rcconf_389_2 = 1 THEN '0' ELSE 1 END"
+
+  - kind: group
+    name: aggregation_rcconf_389_2_cs2
+    context_name: add_rcconf_389_2_cs2
+    params:
+      - aggs:
+          check_status_2: min
+        by:
+        - customer_code
+        - equipment_model
+        - rule_code
+
+  - kind: select
+    name: select_rcconf_389_2_cs2_final
+    context_name: aggregation_rcconf_389_2_cs2
+    params:
+      columns:
+        rule_code: rule_code
+        min_check_status_2: check_status_2
+        customer_code: customer_code
+        equipment_model: value_checked
+      distinct: true
+
+#RULE 389_2 - cs_3, cs_4, cs_5
+  - kind: add
+    name: add_rcconf_389_2_cs345
+    context_name: add_rcconf_389_2_cs1
+    params:
+      - column: check_status_3
+        expression: "CASE WHEN INSTR(equipment_model, '..') > 0 THEN '0' WHEN INSTR(equipment_model, ',,') > 0 THEN '0' WHEN INSTR(equipment_model, '..') > 0 THEN '0' WHEN INSTR(equipment_model, chr(47)||chr(47)) > 0 THEN '0' WHEN INSTR(equipment_model, '--') > 0 THEN '0' WHEN INSTR(equipment_model, '__') > 0 THEN '0' WHEN INSTR(equipment_model, '&&') > 0 THEN '0' WHEN INSTR(equipment_model, chr(34)||chr(34)) > 0 THEN '0' WHEN INSTR(equipment_model, '::') > 0 THEN '0' WHEN INSTR(equipment_model, chr(92)||chr(92)) > 0 THEN '0' WHEN INSTR(equipment_model, '^^') > 0 THEN '0' WHEN INSTR(equipment_model, '``') > 0 THEN '0' WHEN INSTR(equipment_model, '++') > 0 THEN '0' WHEN INSTR(equipment_model, chr(39)||chr(39)) > 0 THEN '0' ELSE '1' END"
+      - column: check_status_4
+        expression: "CASE WHEN MOD(LENGTH(equipment_model) - LENGTH(REPLACE(equipment_model, chr(34), '')), 2) = 0 THEN '1' ELSE '0' END"
+      - column: check_status_51
+        expression: "CASE WHEN MOD(LENGTH(equipment_model) - LENGTH(REGEXP_REPLACE(equipment_model, '[()]', '')), 2) = 0 THEN CASE WHEN INSTR(equipment_model, '(') <= INSTR(equipment_model, ')') THEN '1' ELSE '0' END ELSE '0' END"
+      - column: check_status_52
+        expression: "CASE WHEN MOD(LENGTH(equipment_model) - LENGTH(REGEXP_REPLACE(equipment_model, '[{}]', '')), 2) = 0 THEN CASE WHEN INSTR(equipment_model, '{') <= INSTR(equipment_model, '}') THEN '1' ELSE '0' END ELSE '0' END"
+      - column: check_status_53
+        expression: "CASE WHEN MOD(LENGTH(equipment_model) - LENGTH(REPLACE(REPLACE(equipment_model, chr(91), ''), chr(93), '')), 2) = 0 THEN CASE WHEN INSTR(equipment_model, chr(91)) <= INSTR(equipment_model, chr(93)) THEN '1' ELSE '0' END ELSE '0' END"
+      - column: check_status_5
+        expression: "CASE WHEN check_status_51 = '0' THEN '0' WHEN check_status_52 = '0' THEN '0' WHEN check_status_53 = '0' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_389_2_cs345_final
+    context_name: add_rcconf_389_2_cs345
+    params:
+      columns:
+        rule_code: rule_code
+        check_status_3: check_status_3
+        check_status_4: check_status_4
+        check_status_5: check_status_5
+        customer_code: customer_code
+        equipment_model: value_checked
+      distinct: true
+
+#RULE 389_2 - final
+  - kind: join
+    name: join_rcconf_389_2_cs1_cs2
+    context_name: select_rcconf_389_2_cs1_final
+    params:
+      - other:
+          select_rcconf_389_2_cs2_final
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+          customer_code: customer_code
+          value_checked: value_checked
+
+  - kind: join
+    name: join_rcconf_389_2_cs12_cs345
+    context_name: join_rcconf_389_2_cs1_cs2
+    params:
+      - other:
+          select_rcconf_389_2_cs345_final
+        how:
+          inner
+        columns:
+          rule_code: rule_code
+          customer_code: customer_code
+          value_checked: value_checked
+
+  - kind: add
+    name: add_rcconf_389_2_cs_final
+    context_name: join_rcconf_389_2_cs12_cs345
+    params:
+      - column: check_status
+        expression: "CASE WHEN check_status_1 = '-1' THEN '' WHEN check_status_1 = '0' THEN '0' WHEN check_status_2 = '0' THEN '0' WHEN check_status_3 = '0' THEN '0' WHEN check_status_4 = '0' THEN '0' WHEN check_status_5 = '0' THEN '0' ELSE '1' END"
+
+  - kind: select
+    name: select_rcconf_389_2_final
+    context_name: add_rcconf_389_2_cs_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#Union all
+  - kind: union
+    name: union_customer_equipment_conformity
+    context_name: select_rcconf_278_1_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_342_1_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_342_2_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_386_1_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_386_1_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_386_2_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_387_1_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_387_2_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_388_1_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_388_2_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_388_3_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_389_1_final
+
+  - kind: union
+    name: union_customer_equipment_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcconf_389_2_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true  
+
+  - kind: write_dataio
+    name: write_customer_equipment_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_equipment_conformity
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

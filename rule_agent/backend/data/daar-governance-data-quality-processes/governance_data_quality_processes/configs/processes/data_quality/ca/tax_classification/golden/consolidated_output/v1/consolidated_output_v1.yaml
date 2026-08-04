@@ -1,0 +1,137 @@
+transform:
+  name: detailed
+  operations:
+
+  - kind: read_dataio
+    name: read_du
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: informatica_dq
+      namespace: du
+      object_name: tax_classification
+      schema_version: v1
+
+
+  - kind: add
+    name: add_du_tax_classification
+    params:
+      - column: dq_output_message
+        expression: IF(tax_class_check_flag   != '0', 'OK',  'Missing Tax Classification')
+      - column: order_block
+        expression: concat_ws(' - ', order_block_code, order_block_name)
+      - column: customer_hier_3
+        expression: concat_ws(' - ', customer_hier_3_code, customer_hier_3_name)
+      - column: customer_group_4
+        expression: concat_ws(' - ', ifnull(customer_group_4_code, ''), ifnull(customer_group_4_name, ''))
+      - column: processing_date
+        expression: cast(current_date() as timestamp)
+
+
+        
+
+  - kind: select
+    name: select_du
+    context_name: add_du_tax_classification
+    params:
+      columns:
+        customer_code: customer_code
+        customer_name: customer_name
+        order_block: order_block
+        customer_hier_3: customer_hier_3
+        customer_group_4: customer_group_4
+        country_code: country_code
+        sales_org_code: sales_org_code
+        account_group_code: account_group_code
+        country_tax_code: country_tax_code
+        tax_classification: tax_classification
+        dq_output_message: dq_output_message
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_detailed
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tax_classification
+      namespace: golden
+      object_name: detailed_status
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full
+
+# ## AGGREGATED LAYER
+
+  - kind: add
+    name: add_customer_loading_date
+    context_name: read_du
+    params:
+      - column: quality_category
+        expression: "'completeness'"
+      - column: loading_date
+        expression: current_date()
+      - column: invalid_checks
+        expression: IF((tax_class_check_flag  <> '1'), 1, NULL)
+      - column: total_checks
+        expression: CAST(1 AS INT)
+
+  - kind: group
+    name: group_total_invalid_records
+    context_name: add_customer_loading_date
+    params:
+      - aggs:
+          invalid_checks: count
+          total_checks: count
+        by:
+        - loading_date
+        - country_code
+        - quality_category
+
+  - kind: add
+    name: add_new_columns
+    context_name: group_total_invalid_records
+    params:
+      - column: invalid_checks
+        expression: CAST(count_invalid_checks AS INT)
+      - column: total_checks
+        expression: CAST(count_total_checks AS INT)
+      - column: total_records
+        expression: CAST(count_total_checks AS INT)
+
+
+  - kind: select
+    name: select_finall
+    context_name: add_new_columns
+    params:
+      columns:
+        country_code: country_code
+        total_records: total_records
+        total_checks: total_checks
+        quality_category: quality_category
+        invalid_checks: invalid_checks
+        loading_date: loading_date
+      distinct: true
+
+
+  - kind: write_dataio
+    name: write_aggregated
+    params:
+      dataio:
+        ad_id: "{{dataio.ad_id}}"
+        layer: application
+        storage_id: "{{dataio.storage_id}}"
+      application_name: data_quality
+      country: ca
+      module: tax_classification
+      namespace: golden
+      object_name: aggregated_history
+      process_run_id: "{{process_run_id}}"
+      schema_version: v1
+      refresh_mode: full

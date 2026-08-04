@@ -1,0 +1,568 @@
+transform:
+  name: customer_company_accuracy
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read data marts
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_general
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_general
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_address
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_company
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_company
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_contact
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_contact
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_bank
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_bank
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_sales_organization
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_sales_organization
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_hierarchy
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_hierarchy
+
+#READ dm_customer_vat_ext_vies
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_dm_customer_vat_ext_vies
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_vat_ext_vies
+
+#READ conf_recon_accounts_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_recon_accounts
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_recon_accounts
+
+#READ conf_planning_group_matrix_v1
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_conf_planning_group_matrix
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: conf_planning_group_matrix
+  - kind: select
+    name: select_dcg
+    context_name: read_dm_customer_general
+    params:
+      columns:
+        customer_code: customer_code
+        legal_name: general_legal_name
+        legal_form_code: legal_form_code
+        name_above_door: general_name_above_door
+        organization_1_name: organization_1_name
+        organization_2_name: organization_2_name
+        organization_3_name: organization_3_name
+        organization_4_name: organization_4_name
+        account_group_code: account_group_code
+        central_order_block_code: central_order_block_code
+        tax_0_value: tax_0_value
+        tax_1_value: tax_1_value
+        tax_2_value: tax_2_value
+        tax_3_value: tax_3_value
+        country_code: country_code
+        name_above_door_corp_ind: name_above_door_corp_ind
+        sap_cluster: sap_cluster
+      distinct: true
+
+#ext vies
+  - kind: select
+    context_name: read_dm_customer_vat_ext_vies
+    name: select_dcve
+    params:
+      columns:
+        vat_number: vat_number
+        api_result_status: api_result_status
+        sap_country_code: sap_country_code
+      distinct: true
+
+#ADDRESS
+  - kind: select
+    context_name: read_dm_customer_address
+    name: select_dca
+    params:
+      columns:
+        customer_code: customer_code
+        legal_name: address_legal_name
+        name_above_door: address_name_above_door
+        sap_cluster: sap_cluster
+      distinct: true
+  - kind: select
+    name: select_dccont
+    context_name: read_dm_customer_contact
+    params:
+      columns:
+        customer_code: customer_code_cont
+        last_name: last_name_cont
+        first_name: first_name_cont
+        source: source_cont
+        sap_cluster: sap_cluster_cont
+      distinct: true
+  - kind: select
+    context_name: read_dm_customer_company
+    name: select_dcc
+    params:
+      columns:
+        customer_code: customer_code
+        company_code: company_code
+        dunning_procedure_code: dunning_procedure_code
+        reconciliation_account: reconciliation_account
+        planning_group_code: planning_group_code
+        planning_group_description: planning_group_description
+        terms_of_payment_code: terms_of_payment_code
+        sap_cluster: sap_cluster
+      distinct: true
+  - kind: select
+    name: select_dch
+    context_name: read_dm_customer_hierarchy
+    params:
+      columns:
+        l4_customer_code: l4_customer_code
+        l2_customer_code: l2_customer_code
+        l7_customer_code: l7_customer_code
+        sap_cluster: sap_cluster
+      distinct: true
+  - kind: select
+    name: select_cpgm
+    context_name: read_conf_planning_group_matrix
+    params:
+      columns:
+        planning_group_code: conf_planning_group_code
+        terms_of_payment_code: conf_terms_of_payment_code
+        customer_hierarchy_4_code: conf_customer_hierarchy_4_code
+      distinct: true
+  - kind: join
+    name: left_join_dcg_dca_dccont
+    context_name: select_dcg
+    params:
+      - other:
+          select_dca
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+      - other:
+          select_dccont
+        how:
+          left
+        columns:
+          customer_code: customer_code_cont
+          sap_cluster: sap_cluster_cont
+  - kind: join
+    name: join_dcg_dcc
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcc
+        how:
+          inner
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+  - kind: join
+    name: join_dcg_dcc_cpgm
+    context_name: join_dcg_dcc
+    params:
+      - other:
+          select_cpgm
+        how:
+          inner
+        columns:
+          planning_group_code: conf_planning_group_code
+
+#JOIN dcg_dcc_cpgm and dch
+  - kind: join
+    name: join_dcg_dcc_cpgm_dch
+    context_name: join_dcg_dcc_cpgm
+    params:
+      - other:
+          select_dch
+        how:
+          inner
+        columns:
+          customer_code: l7_customer_code
+          sap_cluster: sap_cluster
+  - kind: join
+    name: join_dcg_dca
+    context_name: select_dcg
+    params:
+      - other:
+          select_dca
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+  - kind: join
+    name: join_dcg_dcve
+    context_name: select_dcg
+    params:
+      - other:
+          select_dcve
+        how:
+          inner
+        columns:
+          tax_0_value: vat_number
+          country_code: sap_country_code
+  - kind: select
+    name: select_rcaccu_61_13
+    context_name: join_dcg_dcve
+    params:
+      columns:
+        customer_code: customer_code
+        api_result_status: api_result_status
+        tax_0_value: tax_0_value
+        country_code: country_code
+      distinct: true
+
+  - kind: add
+    name: add_rcaccu_61_13
+    context_name: select_rcaccu_61_13
+    params:
+      - column: rule_code
+        expression: "'RCACCU_61.13'"
+      - column: check_status
+        expression: if(lower(country_code) = 'it', '',
+                    if(api_result_status = 'verified', '1', 
+                    if(api_result_status in('VAT not found', 'unsupported country code'), '0', '')))
+
+  - kind: select
+    name: select_rcaccu_61_13_final
+    context_name: add_rcaccu_61_13
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        tax_0_value: value_checked
+      distinct: true
+
+#SELECT rcaccu_12_5
+  - kind: select
+    name: select_rcaccu_12_5
+    context_name: join_dcg_dca
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: address_legal_name
+        general_legal_name: general_legal_name
+        address_name_above_door: address_name_above_door
+        general_name_above_door: general_name_above_door
+        country_code: country_code
+      distinct: true
+
+#RULE 12_5
+ 
+  - kind: add
+    name: add_rcaccu_12_5
+    context_name: select_rcaccu_12_5
+    params:
+      - column: rule_code
+        expression: "'RCACCU_12.5'"
+      - column: nvl_legal_name
+        expression: "'RCACCU_12.5'"
+      - column: check_status
+        expression: if(nvl(nullif(nullif(address_legal_name, '-1'), '0'), general_legal_name) is null 
+                    or nvl(nullif(nullif(address_name_above_door, '-1'), '0'), general_name_above_door) is null, '', 
+                    if(upper(regexp_replace(nvl(nullif(nullif(address_legal_name, '-1'), '0'), general_legal_name), '\\s+', '')) = upper(regexp_replace(nvl(nullif(nullif(address_name_above_door, '-1'), '0'), general_name_above_door), '\\s+', '')), 
+                    '0', 
+                    '1'))
+      - column: check_val
+        expression: nvl(nullif(nullif(address_legal_name, '-1'), '0'), general_legal_name)|| '_' ||nvl(nullif(nullif(address_name_above_door, '-1'), '0'), general_name_above_door)
+
+  - kind: select
+    name: select_rcaccu_12_5_final
+    context_name: add_rcaccu_12_5
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        check_val: value_checked
+      distinct: true
+
+#SELECT rcaccu_12_6
+  - kind: select
+    name: select_rcaccu_12_6
+    context_name: left_join_dcg_dca_dccont
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: address_legal_name
+        general_legal_name: general_legal_name
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        source_cont: source
+        first_name_cont: first_name
+        last_name_cont: last_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: filter
+    name: filter_12_6_address
+    context_name: select_rcaccu_12_6
+    params:
+      - condition:
+          address_legal_name != '-1'
+
+  - kind: select
+    name: select_address_12_6
+    context_name: filter_12_6_address
+    params:
+      columns:
+        customer_code: customer_code
+        address_legal_name: legal_name
+        central_order_block_code: central_order_block_code
+        country_code: country_code
+        source: source
+        first_name: first_name
+        last_name: last_name
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: group
+    name: aggregation_12_6
+    context_name: select_address_12_6
+    params:
+      - aggs:
+          legal_name: max
+        by:
+        - customer_code
+        - sap_cluster
+
+#JOIN self join
+  - kind: join
+    name: join_dcg_dcc_cpgm_dch
+    context_name: select_rcaccu_12_6
+    params:
+      - other:
+          aggregation_12_6
+        how:
+          left
+        columns:
+          customer_code: customer_code
+          sap_cluster: sap_cluster
+
+#RULE 12_6
+  - kind: add
+    name: add_rcaccu_12_6
+    context_name: join_dcg_dcc_cpgm_dch
+    params:
+      - column: rule_code
+        expression: "'RCACCU_12.6'"
+      - column: check_val
+        expression: nvl(nullif(general_legal_name, '-1'), max_legal_name)
+      # - column: length_general
+      #   expression: if(general_legal_name != '-1' and general_legal_name != '0', length(general_legal_name) - ((length(general_legal_name) - length(regexp_replace(general_legal_name, '\\s+', ''))) + (length(general_legal_name) - length(regexp_replace(general_legal_name, '[\\x00-\\x1F\\x7F]', '')))), length(general_legal_name))
+      # - column: length_address
+      #   expression: if(address_legal_name != '-1' and address_legal_name != '0', length(address_legal_name) - ((length(address_legal_name) - length(regexp_replace(address_legal_name, '\\s+', ''))) + (length(address_legal_name) - length(regexp_replace(address_legal_name, '[\\x00-\\x1F\\x7F]', '')))), length(address_legal_name))
+      - column: check_status
+        expression: if(general_legal_name IS NULL OR general_legal_name = '' OR address_legal_name IS NULL OR address_legal_name = '' OR
+                    central_order_block_code IN ('E', 'G', 'SP', 'R', 'U') OR last_name IS NULL OR last_name = ''  OR source != 's4', '',
+                    if(upper(regexp_replace(check_val, '\\s+', '')) = upper(regexp_replace(last_name, '\\s+', '')), '0', '1'))
+      - column: value_checked
+        expression: check_val|| '_' || last_name
+
+  - kind: select
+    name: select_rcaccu_12_6_final
+    context_name: add_rcaccu_12_6
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+
+#RULE 12_7
+  - kind: add
+    name: add_rcaccu_12_7
+    context_name: join_dcg_dcc_cpgm_dch
+    params:
+      - column: rule_code
+        expression: "'RCACCU_12.7'"
+      - column: check_val
+        expression: nvl(nullif(general_legal_name, '-1'), max_legal_name)
+      # - column: length_general
+      #   expression: if(general_legal_name != '-1' and general_legal_name != '0', length(general_legal_name) - ((length(general_legal_name) - length(regexp_replace(general_legal_name, '\\s+', ''))) + (length(general_legal_name) - length(regexp_replace(general_legal_name, '[\\x00-\\x1F\\x7F]', '')))), length(general_legal_name))
+      # - column: length_address
+      #   expression: if(address_legal_name != '-1' and address_legal_name != '0', length(address_legal_name) - ((length(address_legal_name) - length(regexp_replace(address_legal_name, '\\s+', ''))) + (length(address_legal_name) - length(regexp_replace(address_legal_name, '[\\x00-\\x1F\\x7F]', '')))), length(address_legal_name))
+      - column: check_status
+        expression: if(general_legal_name IS NULL OR general_legal_name = '' OR address_legal_name IS NULL OR address_legal_name = '' OR
+                    central_order_block_code IN ('E', 'G', 'SP', 'R', 'U') OR first_name IS NULL OR first_name = ''  OR source != 's4', '',
+                    if(upper(regexp_replace(check_val, '\\s+', '')) = upper(regexp_replace(first_name, '\\s+', '')), '0', '1'))
+      - column: value_checked
+        expression: check_val|| '_' || first_name
+
+  - kind: select
+    name: select_rcaccu_12_7_final
+    context_name: add_rcaccu_12_7
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+      distinct: true
+  - kind: union
+    name: union_customer_company_conformity
+    context_name: select_rcaccu_12_5_final
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcaccu_12_6_final
+
+  - kind: union
+    name: union_customer_company_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcaccu_12_7_final
+
+
+  - kind: union
+    name: union_customer_company_conformity
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_rcaccu_61_13_final
+
+  - kind: add
+    name: add_final
+    params:
+      - column: check_date
+        expression: current_timestamp()
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        rule_code: rule_code
+        check_status: check_status
+        customer_code: customer_code
+        value_checked: value_checked
+        check_date: check_date
+      distinct: true
+
+  - kind: write_dataio
+    name: write_customer_company_conformity
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: customer_company_accuracy
+      process_run_id: '{{process_run_id}}'
+      schema_version: v1
+      refresh_mode: full

@@ -1,0 +1,156 @@
+transform:
+  name: dm_customer_partner
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_knvp
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: customer
+      object_name: knvp
+
+  - kind: filter
+    name: filter_knvp
+    params:
+      - condition:
+          (spart = '01' AND vtweg = '01') or (spart = '02' AND vtweg = '04') or (spart = '01' AND vtweg = '04')
+
+  - kind: select
+    name: select_knvp
+    params:
+      columns:
+        kunnr: kunnr
+        parvw: parvw
+        kunn2: kunn2
+        vkorg: vkorg
+        spart: spart
+        vtweg: vtweg
+        sap_cluster: sap_cluster
+
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_tpart
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_s4hana
+      namespace: reference_data
+      object_name: tpart
+
+  - kind: filter
+    name: filter_tpart
+    params:
+      - condition:
+          spras = 'E'
+
+  - kind: select
+    name: select_tpart
+    params:
+      columns:
+        parvw: parvw
+        vtext: vtext
+        sap_cluster: sap_cluster
+
+# Cluster_Config - CC
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_cluster_config
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: data_quality
+      namespace: data_control_center
+      object_name: cluster_config
+
+  - kind: filter
+    name: filter_cluster_config
+    params:
+      - condition:
+          flag = 'DM_sales_org'
+
+  - kind: select
+    name: select_cluster_config
+    params:
+      columns:
+        sales_org: sales_org_cc
+        cluster: cluster_cc
+      distinct: true
+
+  - kind: join
+    name: join_knvp_tpart
+    context_name: select_knvp
+    params:
+      - other:
+          select_tpart
+        how:
+          left
+        columns:
+          parvw: parvw
+          sap_cluster: sap_cluster
+      - other:
+          select_cluster_config
+        how:
+          inner
+        columns:
+          vkorg: sales_org_cc
+          sap_cluster: cluster_cc
+
+  - kind: add
+    name: add_dm_customer_partner
+    context_name: join_knvp_tpart
+    params:
+      - column: partner_function_code_alternative
+        expression: CASE parvw
+                      WHEN 'WE' THEN 'SH'
+                      WHEN 'RG' THEN 'PY'
+                      WHEN 'RE' THEN 'BP'
+                      WHEN 'AG' THEN 'SP'
+                      ELSE parvw
+                    END
+
+  - kind: select
+    name: select_dm_customer_partner
+    context_name: add_dm_customer_partner
+    params:
+      columns:
+        kunnr: customer_code
+        parvw: partner_function_code
+        vtext: partner_function_name
+        kunn2: partner_code
+        partner_function_code_alternative: partner_function_code_alternative
+        vkorg: sales_org_code
+        spart: division_code
+        vtweg: distribution_channel_code
+        sap_cluster: sap_cluster
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_customer_partner
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_customer_partner
+      process_run_id: '{{process_run_id}}'
+      schema_version: v2
+      refresh_mode: full

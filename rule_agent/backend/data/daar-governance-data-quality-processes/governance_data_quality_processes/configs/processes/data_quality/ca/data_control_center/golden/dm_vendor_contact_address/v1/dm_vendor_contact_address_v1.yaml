@@ -1,0 +1,218 @@
+transform:
+  name: dm_vendor_contact_address
+  operations:
+  - name: initialize_schema_configuration
+    kind: governance_data_quality_processes.operations.common.initialize_schema_configuration.InitializeSchemaConfigurationOperation
+    params:
+      module_name: governance_data_quality_processes
+      config_name: dcc_schema_versions
+
+# Read but020
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_but020
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: business_partner
+      object_name: but020
+
+  - kind: filter
+    name: filter_but020
+    params:
+      - condition:
+          (addr_valid_to='99991231235959')
+
+
+  - kind: select
+    name: select_but020
+    params:
+      columns:
+        partner: partner
+        addrnumber: addrnumber
+      distinct: true
+
+# Read adr2
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_adr2
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr2
+
+  - kind: select
+    name: select_adr2
+    params:
+      columns:
+        persnumber: persnumber
+        addrnumber: addrnumber
+        consnumber: consnumber
+        country: country
+        r3_user: r3_user
+        tel_number: tel_number
+        tel_extens: tel_extens
+        telnr_long: telnr_long
+        valid_to: valid_to
+      distinct: true
+
+# Read adr6
+
+  - kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperation
+    config_kind: governance_data_quality_processes.operations.common.read_dataio.CustomReadDataioOperationConfig
+    name: read_adr6
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: curated
+        storage_id: '{{dataio.storage_id}}'
+      source: sap_mdg
+      namespace: address_and_communication_data
+      object_name: adr6
+
+  - kind: select
+    name: select_adr6
+    params:
+      columns:
+        persnumber: persnumber
+        addrnumber: addrnumber
+        consnumber: consnumber
+        smtp_addr: smtp_addr
+        valid_to: valid_to
+      distinct: true
+
+
+  - kind: add
+    name: add_vendor_code
+    context_name: select_but020
+    params:
+      - column: vendor_code
+        expression: "CASE
+                    WHEN substring(partner,0,3) ='V43' THEN replace(partner,LEFT(partner,3),'430')
+                    WHEN substring(partner,0,3) ='V40' THEN replace(partner,LEFT(partner,3),'400')
+                    WHEN substring(partner,0,3) ='V90' THEN replace(partner,LEFT(partner,3),'900')
+                    ELSE partner END"
+
+  - kind: select
+    name: select_with_vendor_code
+    params:
+      columns:
+        partner: partner
+        vendor_code: vendor_code
+        addrnumber: addrnumber
+      distinct: true
+
+
+  - kind: add
+    name: add_ad2
+    context_name: select_adr2
+    params:
+      - column: contact_medium_type
+        expression: "CASE
+                    WHEN r3_user ='1' THEN 'fixed_tel_number'
+                    WHEN r3_user ='3' THEN 'mobile_tel_number'
+                    ELSE '' END"
+
+  - kind: select
+    name: select_adr2_union
+    params:
+      columns:
+        persnumber: persnumber
+        addrnumber: addrnumber
+        consnumber: consnumber
+        country: country
+        contact_medium_type: contact_medium_type
+        tel_number: tel_number
+        tel_extens: tel_extens
+        telnr_long: telnr_long
+        valid_to: valid_to
+      distinct: true
+
+  - kind: add
+    name: add_ad6
+    context_name: select_adr6
+    params:
+      - column: country
+        expression: ''''''
+      - column: contact_medium_type
+        expression: '''email_address'''
+      - column: tel_extens
+        expression: ''''''
+      - column: telnr_long
+        expression: ''''''
+
+  - kind: select
+    name: select_adr6_union
+    params:
+      columns:
+        persnumber: persnumber
+        addrnumber: addrnumber
+        consnumber: consnumber
+        country: country
+        contact_medium_type: contact_medium_type
+        smtp_addr: tel_number
+        tel_extens: tel_extens
+        telnr_long: telnr_long
+        valid_to: valid_to
+      distinct: true
+
+  - kind: union
+    name: union_ad2_ad6
+    context_name: select_adr2_union
+    params:
+      allow_missing: false
+      by_name: true
+      other: select_adr6_union
+
+  - kind: join
+    name: join_but20_ad2_ad6
+    context_name: select_with_vendor_code
+    params:
+      - other:
+          union_ad2_ad6
+        how:
+          inner
+        columns:
+          addrnumber: addrnumber
+
+  - kind: select
+    name: select_final
+    params:
+      columns:
+        partner: partner_code
+        vendor_code: vendor_code
+        addrnumber: address_number
+        persnumber: person_number
+        consnumber: sequence_number
+        country: country_code
+        contact_medium_type: contact_medium_type
+        tel_number: contact_medium_value
+        tel_extens: contact_medium_value_extension
+        telnr_long: complete_contact_medium_value
+        valid_to: valid_to
+      distinct: true
+
+  - kind: write_dataio
+    name: write_dm_vendor_contact_address
+    params:
+      dataio:
+        ad_id: '{{dataio.ad_id}}'
+        layer: application
+        storage_id: '{{dataio.storage_id}}'
+      application_name: data_quality
+      country: ca
+      module: data_control_center
+      namespace: golden
+      object_name: dm_vendor_contact_address
+      process_run_id: '{{process_run_id}}'
+      schema_version: v3
+      refresh_mode: full
